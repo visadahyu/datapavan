@@ -15,7 +15,7 @@ import java.util.List;
 
 /**
  * vpn-seen: what an app with ACCESS_NETWORK_STATE, a normal permission, sees of a VPN. The step names
- * the phase: "none" (no VPN), "inside" (in Watch's tunnel) or "left-out" (excluded from it). One line for
+ * the phase: "none" (no VPN), "inside" (in the network part's tunnel) or "left-out" (excluded from it). One line for
  * the app's own network, one for each network getAllNetworks lists, one for each interface.
  */
 final class VpnSeen {

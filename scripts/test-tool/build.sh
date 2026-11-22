@@ -14,7 +14,7 @@ OUT="$ROOT/build/test-tool"
 rm -rf "$OUT" && mkdir -p "$OUT/classes" "$OUT/dex"
 javac --release 17 -cp "$PLATFORM" -d "$OUT/classes" $(find "$HERE/src" -name '*.java')
 "$TOOLS/d8" --min-api 29 --lib "$PLATFORM" --output "$OUT/dex" $(find "$OUT/classes" -name '*.class')
-# Its one label (res/), which Watch's guide reads from this app by name (W8, part 3b).
+# Its one label (res/), which the network part's guide reads from this app by name (W8, part 3b).
 "$TOOLS/aapt2" compile --dir "$HERE/res" -o "$OUT/res.zip"
 "$TOOLS/aapt2" link -I "$PLATFORM" --manifest "$HERE/AndroidManifest.xml" \
     --min-sdk-version 29 --target-sdk-version 33 --version-code 1 --version-name test -o "$OUT/unsigned.apk" "$OUT/res.zip"

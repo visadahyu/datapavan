@@ -59,20 +59,20 @@ capture() {
     python3 -I "$ROOT/scripts/a11y-check.py" "$OUT/$1-$locale-$mode.xml" "$min_px" "$PKG" || passed=""
 }
 
-# Whether Watch's own account says its tunnel runs (--now).
+# Whether the network part's own account says its tunnel runs (--now).
 network_running() {
     grep -qx 'running true' <<<"$(adb shell dumpsys activity service "$PKG/org.visadahyu.datapavan.network.NetworkVpnService" | tr -d '\r' | sed 's/^ *//')"
 }
 
-# Whether Watch counts traffic of adb's shell, after one more request to the test server (--now).
+# Whether the network part counts traffic of adb's shell, after one more request to the test server (--now).
 shell_counted() {
     adb shell "printf 'GET /ping HTTP/1.0\r\n\r\n' | nc -w 5 $HOST $PORT" >/dev/null 2>&1 || true
     sleep 2
     grep -q '^activity-app 2000 ' <<<"$(adb shell dumpsys activity service "$PKG/org.visadahyu.datapavan.network.NetworkVpnService" | tr -d '\r' | sed 's/^ *//')"
 }
 
-# Advanced's "Now" and an app's history (--now): Watch's tunnel up for adb's shell, which asks a test server on
-# this computer for a page, so that "Now" has a row to show and to open.
+# Advanced's "Now" and an app's history (--now): the network part's tunnel up for adb's shell, which asks a test server
+# on this computer for a page, so that "Now" has a row to show and to open.
 now_screens() {
     local network=org.visadahyu.datapavan.network.MainActivity
     is_emulator || { echo "SCREENSHOTS FAILED: --now runs on an emulator only: it grants usage access and starts a VPN" >&2; exit 1; }
@@ -89,13 +89,14 @@ now_screens() {
             adb shell cmd locale set-app-locales "$PKG" --locales "$locale"
             adb shell am force-stop "$PKG"
             adb shell am start -W -n "$PKG/$network" --ez start true >/dev/null
-            within 20 network_running || { echo "SCREENSHOTS FAILED: Watch's tunnel did not come up in $locale" >&2; exit 1; }
+            within 20 network_running || { echo "SCREENSHOTS FAILED: the network part's tunnel did not come up in $locale" >&2; exit 1; }
             # The log kept for a week, so that the history shows the shell's entries and the days' buttons, not
             # only the line of a log that keeps nothing (review c1 of W5's third part, screens, nit 13).
             grep -q '^log-retention 7 set$' <<<"$(adb shell dumpsys activity service "$PKG/org.visadahyu.datapavan.network.NetworkVpnService" log-retention 7 | tr -d '\r' | sed 's/^ *//')" ||
                 { echo "SCREENSHOTS FAILED: the log's retention could not be set in $locale" >&2; exit 1; }
-            # The request again until Watch counts it: just after the tunnel starts, Android may not route it yet.
-            within 30 shell_counted || { echo "SCREENSHOTS FAILED: Watch did not count the shell's request in $locale" >&2; exit 1; }
+            # The request again until the network part counts it: just after the tunnel starts, Android may not route it
+            # yet.
+            within 30 shell_counted || { echo "SCREENSHOTS FAILED: the network part did not count the shell's request in $locale" >&2; exit 1; }
             # The shell's records written now, so that its history shows them, not "nothing kept yet".
             grep -q '^log-flushed$' <<<"$(adb shell dumpsys activity service "$PKG/org.visadahyu.datapavan.network.NetworkVpnService" log-flush | tr -d '\r' | sed 's/^ *//')" ||
                 { echo "SCREENSHOTS FAILED: the log's records were not written in $locale" >&2; exit 1; }

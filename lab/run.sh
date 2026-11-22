@@ -16,7 +16,7 @@
 #   --out      where the raw output goes (default docs/platform-gaps/runs/<date>-<behaviour>-api<api>)
 #
 # It creates an AVD of its own (under build/gaps-avd, apart from any other), boots it with -no-snapshot
-# -wipe-data -tcpdump, installs the probe, the fixture and Watch's Advanced debug build where the behaviour
+# -wipe-data -tcpdump, installs the probe, the fixture and the network part's Advanced debug build where the behaviour
 # needs them, runs the steps, records the image's identity, what else ran on the machine, and the capture's
 # SHA-256, then stops the emulator and deletes the AVD, also when a step fails. Every adb command names the
 # emulator's serial: a phone plugged into the machine is never touched.
@@ -96,7 +96,7 @@ fi
 case $BEHAVIOUR in
     vpn-seen | loopback | carried-by-system | short-lived | webview)
         [ -f "$NETWORK_APK" ] || {
-            echo "no Watch debug build at $NETWORK_APK; build it with:" >&2
+            echo "no debug build of Advanced at $NETWORK_APK; build it with:" >&2
             echo "  cd android && ./gradlew -Pdatapavan.edition=advanced --project-cache-dir .gradle-advanced :app:assembleDebug" >&2
             exit 2
         } ;;
@@ -205,7 +205,7 @@ cleanup() {
     [ -z "$IDENTIFIED" ] || a shell settings delete global hidden_api_policy >/dev/null 2>&1
     [ -z "$SERVER_PID" ] || kill "$SERVER_PID" 2>/dev/null
     [ -z "$LOGCAT_PID" ] || kill "$LOGCAT_PID" 2>/dev/null
-    # Watch's flows before redaction, left by a step that stopped half-way.
+    # The network part's flows before redaction, left by a step that stopped half-way.
     rm -f "$OUT/probe.raw" "$OUT"/flows-*.tmp "$OUT"/flows-*.before
     stop_emulator
     "$AVDMANAGER" delete avd -n "$AVD" >/dev/null 2>&1
@@ -379,10 +379,10 @@ fixture() {
 lan_permission() {
     [ "$SDK_INT" -lt 37 ] || a shell pm grant "$1" android.permission.ACCESS_LOCAL_NETWORK
 }
-# Watch's VPN is up: a connected VPN network whose owner is Watch's UID (Android 11 names no package in its
-# line, later versions do). Android 10 prints no owner at all: there, a connected VPN while Watch says its
-# tunnel runs; the emulator has no other VPN app. Read whole, then searched: under pipefail, a grep -q that
-# stops reading early fails the pipe.
+# The network part's VPN is up: a connected VPN network whose owner is the network part's UID (Android 11 names no
+# package in its line, later versions do). Android 10 prints no owner at all: there, a connected VPN while the network
+# part says its tunnel runs; the emulator has no other VPN app. Read whole, then searched: under pipefail, a grep -q
+# that stops reading early fails the pipe.
 vpn_up() {
     local uid vpn
     uid=$(a shell cmd package list packages -U "$ADVANCED" | tr -d '\r' | sed -n "s/^package:$ADVANCED uid:\([0-9]*\)$/\1/p")
@@ -395,7 +395,7 @@ vpn_up() {
     fi
 }
 network_start() {
-    # The emulator allows Watch's VPN without the consent dialog, as verify-network.sh does. Right after an
+    # The emulator allows the network part's VPN without the consent dialog, as verify-network.sh does. Right after an
     # install the setting can be lost (AppOps does not know the UID yet), so it is set until it reads back.
     local mode
     for _ in $(seq 1 15); do
@@ -414,17 +414,17 @@ network_start() {
     done
     a exec-out screencap -p >"$KEEP/network-not-up.png" 2>/dev/null || true
     a logcat -d >"$KEEP/network-not-up.log" 2>/dev/null || true
-    echo "Watch's tunnel did not come up (screen and logcat in $KEEP)" >&2
+    echo "the network part's tunnel did not come up (screen and logcat in $KEEP)" >&2
     return 1
 }
-# Watch's flows (debug builds keep the latest 512), into flows-$1.txt, each through lab/redact-flows.awk: a
+# The network part's flows (debug builds keep the latest 512), into flows-$1.txt, each through lab/redact-flows.awk: a
 # flow to anything but the lab's own addresses keeps its count, port and UID only.
 flows() {
     a shell dumpsys activity service "$NETWORK_SERVICE" | tr -d '\r' | sed -n 's/^ *flow //p' |
         awk -f "$ROOT/lab/redact-flows.awk" >"$OUT/flows-$1.txt"
 }
-# Starts the probe's step and reads Watch's flows every few seconds until the line $2 shows (at most $3
-# seconds): a step of many flows could push its first ones out of the 512 Watch keeps. flows-$1.txt gets the
+# Starts the probe's step and reads the network part's flows every few seconds until the line $2 shows (at most $3
+# seconds): a step of many flows could push its first ones out of the 512 the network part keeps. flows-$1.txt gets the
 # flows of the step's window only, those listed before it left out. The probe's arguments follow $3.
 flows_during() {
     local label=$1 line=$2 seconds=$3
@@ -455,8 +455,8 @@ vpn_seen() {
     network_start
     probe "$PROBE" vpn-seen inside
     wait_line "vpn-seen inside done" 30
-    # Left out as the user leaves an app out on Watch's screen (ADR 0041): Watch's own list of apps, which
-    # it reads when its tunnel starts. Debug builds let adb write into the app's files.
+    # Left out as the user leaves an app out on the network screen (ADR 0041): the network part's own list of apps,
+    # which it reads when its tunnel starts. Debug builds let adb write into the app's files.
     a shell am force-stop "$ADVANCED"
     a shell "run-as $ADVANCED sh -c 'mkdir -p shared_prefs && cat > shared_prefs/left_out.xml'" <<EOF
 <?xml version='1.0' encoding='utf-8' standalone='yes' ?>

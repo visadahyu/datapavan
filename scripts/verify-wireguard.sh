@@ -1,18 +1,18 @@
 #!/usr/bin/env bash
-# W7's emulator check (part 1, ADR 0035): Watch's WireGuard tunnels on a real Android, against the lab's two
+# W7's emulator check (part 1, ADR 0035): the network part's WireGuard tunnels on a real Android, against the lab's two
 # peers of the Linux kernel's WireGuard on this computer (Compose project datapavan-wglab, their ports
 # published on this computer's loopback alone, which the emulator reaches as 10.0.2.2). Through the debug
-# dump's way in, a configuration is set from a file in Watch's private storage and the workload app
+# dump's way in, a configuration is set from a file in the network part's private storage and the workload app
 # (scripts/workload-app) is routed through it: its lookup of a name only the peer's DNS server knows, its TCP
 # and its UDP reach the peer, which sees them come from the configuration's address, and the apps it names
-# reach Watch's side. An app not routed still goes directly. adb's shell, routed too, reaches the peer over
+# reach the network part's side. An app not routed still goes directly. adb's shell, routed too, reaches the peer over
 # IPv6 inside the tunnel, TCP and UDP. A second configuration routes the shell to the second peer at the same
 # time, the workload app still through the first. The network beneath switches from Wi-Fi to mobile data while
-# only the peer has more to send: it reaches the shell only where Watch told it the tunnel's new address. Then
-# the peers stop answering: the routed apps' packets and lookups go on well past the tunnel saying so, and none
-# leaves directly (a sentinel on this computer sees nothing, and Watch has no direct flow of theirs); the peers
-# come back, and the app's traffic goes through again. A tunnel whose configuration is removed keeps its apps
-# waiting. Nothing Watch shows or logs names a key or the endpoint.
+# only the peer has more to send: it reaches the shell only where the network part told it the tunnel's new address.
+# Then the peers stop answering: the routed apps' packets and lookups go on well past the tunnel saying so, and none
+# leaves directly (a sentinel on this computer sees nothing, and the network part has no direct flow of theirs); the
+# peers come back, and the app's traffic goes through again. A tunnel whose configuration is removed keeps its apps
+# waiting. Nothing the network part shows or logs names a key or the endpoint.
 #
 # Only where no lab peer can start here at all (no Docker, Docker not answering, or no wireguard module) is the
 # check skipped, with a line that says so, and it passes: it then proves nothing, and the run says it. With
@@ -84,7 +84,7 @@ flows_of() {
 }
 fail() {
     echo "WIREGUARD CHECK FAILED: $*" >&2
-    echo "Watch's tunnels and flows' routes:" >&2
+    echo "the network part's tunnels and flows' routes:" >&2
     grep -E '^ *(tunnel|flow-route) ' <<<"$(dump)" >&2 || true
     echo "The workload's lines:" >&2
     workload_log | tail -20 >&2 || true
@@ -109,7 +109,7 @@ workload() {
         sleep 1
     done
 }
-# Writes the configuration $2 into Watch's private storage as $1, sets it as the tunnel $3, and removes the
+# Writes the configuration $2 into the network part's private storage as $1, sets it as the tunnel $3, and removes the
 # file whatever the answer; the dump's lines are kept in $WORK/set.
 set_tunnel() {
     adb shell run-as "$PKG" sh -c "'mkdir -p files && cat > files/$1'" <<<"$2"
@@ -190,21 +190,21 @@ if ! wait_up 90 wifi; then
     if ! wait_up 90 wifi; then
         mobile_again || true
         wait_up 60 wifi || { wifi_again 60; wait_up 60 wifi; } ||
-            fail "the emulator did not have both Wi-Fi and mobile data ($(networks); $(wifi_state)), even after airplane mode, the modem registered again and a new boot; this is the emulator, not Watch"
+            fail "the emulator did not have both Wi-Fi and mobile data ($(networks); $(wifi_state)), even after airplane mode, the modem registered again and a new boot; this is the emulator, not the network part"
     fi
 fi
-wait_settled 60 || fail "the emulator's networks kept changing for 60 s ($(networks)); this is the emulator, not Watch"
+wait_settled 60 || fail "the emulator's networks kept changing for 60 s ($(networks)); this is the emulator, not the network part"
 allow_vpn "$PKG" || fail "Android did not take the VPN consent for $PKG"
 [ "$(adb shell getprop ro.build.version.sdk | tr -d '\r')" -lt 37 ] || adb shell pm grant "$PKG" android.permission.ACCESS_LOCAL_NETWORK
 adb shell am force-stop "$PKG"
 adb shell am start -W -n "$PKG/$NETWORK_SCREEN" --ez start true >/dev/null
 for _ in $(seq 1 20); do vpn_up && break; sleep 1; done
-vpn_up || fail "Watch's tunnel did not come up"
+vpn_up || fail "the network part's tunnel did not come up"
 
-# The first configuration names the workload app as its own (IncludedApplications): Watch's side reads it, for
-# part 2's import to offer, and the engine routes by Watch's own choice alone.
+# The first configuration names the workload app as its own (IncludedApplications): the network part's side reads it,
+# for part 2's import to offer, and the engine routes by the network part's own choice alone.
 set_tunnel wg1.conf "$(config "$WGLAB_PLAIN" 10.77.0.2 fd77::2 "$WGLAB_PORT" "$WGLAB_PEER_PUBLIC" "IncludedApplications = $WORKLOAD")" 1
-grep -q "tunnel-apps 1 only $WORKLOAD" "$WORK/set" || fail "the configuration's apps did not reach Watch's side: $(tr '\n' ' ' <"$WORK/set")"
+grep -q "tunnel-apps 1 only $WORKLOAD" "$WORK/set" || fail "the configuration's apps did not reach the network part's side: $(tr '\n' ' ' <"$WORK/set")"
 route "$WORKLOAD_UID" 1
 workload --es name lab.test --es tcp 10.77.0.1:80 --es udp 10.77.0.1:7
 lines=$(workload_log)
@@ -216,12 +216,12 @@ for what in dns http udp-echo; do
     grep -qE "^$what 10\.77\.0\.2 " <<<"$peer_saw" || fail "the peer saw no $what from the configuration's address 10.77.0.2"
 done
 [ "$(flows_of "$WORKLOAD_UID" direct)" = 0 ] || fail "the routed app has flows that went directly"
-echo "ok: the routed app's lookup, TCP and UDP reached the peer, which saw them from 10.77.0.2; the configuration's apps reached Watch's side"
+echo "ok: the routed app's lookup, TCP and UDP reached the peer, which saw them from 10.77.0.2; the configuration's apps reached the network part's side"
 
 # Another app goes directly beside it: the shell, routed nowhere, reaches this computer's test server.
 direct=$(device 10 "printf 'GET /ping HTTP/1.0\r\n\r\n' | toybox nc -w 6 $HOST $PORT")
 grep -q pong <<<"$direct" || fail "the shell did not reach this computer directly: $direct"
-[ "$(flows_of "$SHELL_UID" direct)" -gt 0 ] || fail "Watch has no direct flow of the shell"
+[ "$(flows_of "$SHELL_UID" direct)" -gt 0 ] || fail "the network part has no direct flow of the shell"
 echo "ok: an app not routed goes directly beside the routed one"
 
 route "$SHELL_UID" 1
@@ -247,7 +247,7 @@ echo "ok: two configurations at once, the workload app through the first peer an
 # The network beneath switches while only the peer has more to send. The shell asks the second peer's ticker
 # once; it answers at once, then, after 30 s of silence, ten times and "end". The shell sends nothing more, and
 # its tunnel nothing after the keepalive WireGuard owes ten seconds after the first answer; the switch comes 15 s
-# in, inside the silence. The peer's last answers reach the shell only where Watch tells it the tunnel's new
+# in, inside the silence. The peer's last answers reach the shell only where the network part tells it the tunnel's new
 # address: a new socket on the new network, and a packet from it.
 wait_up 30 wifi || fail "not both Wi-Fi and mobile data before the switch ($(networks)), so the switch has nowhere to go"
 # Wi-Fi goes off where it is the default; Android may already use mobile data as the default while Wi-Fi is up
@@ -271,7 +271,7 @@ for _ in $(seq 1 30); do
     sleep 1
 done
 [ -n "$moved" ] || fail "Android had no other default network 30 s after $radio went off ($(networks))"
-[ "$moved" -le 28 ] || fail "the default network moved only ${moved} s in, after the silence: the step proves nothing; this is the emulator, not Watch"
+[ "$moved" -le 28 ] || fail "the default network moved only ${moved} s in, after the silence: the step proves nothing; this is the emulator, not the network part"
 wait "$held" || true
 adb shell svc "$radio" enable
 if grep -qx end "$WORK/ticks" && grep -qx "tick 1" "$WORK/ticks"; then
@@ -281,13 +281,13 @@ else
 fi
 if ! wait_settled 90; then
     wifi_again 90
-    wait_settled 90 || fail "Wi-Fi did not come back, or the networks did not settle ($(networks); $(wifi_state)); this is the emulator, not Watch"
+    wait_settled 90 || fail "Wi-Fi did not come back, or the networks did not settle ($(networks); $(wifi_state)); this is the emulator, not the network part"
 fi
 
 # The peers stop answering: their WireGuard leaves its port, keeping its keys and clients. The routed apps go on
 # sending, TCP, UDP and lookups of names never asked before, well past the first tunnel saying it does not
-# answer; nothing of theirs leaves directly: the sentinel on this computer sees nothing, and Watch has no direct
-# flow of theirs. Then the peers come back, and the workload app's traffic goes through again.
+# answer; nothing of theirs leaves directly: the sentinel on this computer sees nothing, and the network part has no
+# direct flow of theirs. Then the peers come back, and the workload app's traffic goes through again.
 SENTINEL_MARK=$(wc -l <"$WORK/sentinel.log")
 shell_direct=$(flows_of "$SHELL_UID" direct)
 tunnelled=$(flows_of "$WORKLOAD_UID" tunnel:1)
@@ -330,8 +330,8 @@ done
 [ "$(awk '{print $4}' <<<"$(state_of 1)")" = 0 ] || fail "the peers came back, and the first tunnel still says its server does not answer"
 echo "ok: the peers came back, and the workload app's traffic went through its tunnel again"
 
-# A tunnel whose configuration is removed keeps the apps routed to it waiting: Watch shows it as routed and not
-# configured, and the workload app's traffic does not leave directly.
+# A tunnel whose configuration is removed keeps the apps routed to it waiting: the network part shows it as routed and
+# not configured, and the workload app's traffic does not leave directly.
 grep -q "tunnel-removed 1" <<<"$(dump tunnel-remove 1)" || fail "the first tunnel was not removed"
 state=$(state_of 1)
 [ "$(awk '{print $8}' <<<"$state")" = 0 ] || fail "a removed tunnel with its apps still routed is not shown as waiting for its configuration: $state"
@@ -346,13 +346,13 @@ device 10 "echo control | toybox nc -w 4 $HOST $((PORT + 3))" >/dev/null
 grep -q '^tcp$' <<<"$(sentinel_since)" || fail "the sentinel did not see the control's direct connection: the steps above prove nothing"
 echo "ok: with its configuration removed, the routed app waited and nothing of it left directly; the control's direct connection reached the sentinel"
 
-# Nothing Watch shows or logs names a key or the endpoint.
+# Nothing the network part shows or logs names a key or the endpoint.
 shown="$(dump)
 $(adb logcat -d | tr -d '\r')"
 for secret in "$WGLAB_PLAIN" "$WGLAB_SECOND" "$HOST:$WGLAB_PORT" "$HOST:$WGLAB_PORT2"; do
-    ! grep -qF -- "$secret" <<<"$shown" || fail "Watch's dump or the device's log shows a key or the endpoint"
+    ! grep -qF -- "$secret" <<<"$shown" || fail "the network part's dump or the device's log shows a key or the endpoint"
 done
-echo "ok: neither Watch's dump nor the device's log names a key or the endpoint"
+echo "ok: neither the network part's dump nor the device's log names a key or the endpoint"
 
 dump tunnel-remove 2 >/dev/null
 echo "== WireGuard upstream checked on the emulator"

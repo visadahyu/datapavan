@@ -2,12 +2,12 @@
 # SPDX-License-Identifier: Apache-2.0
 """W8 part 3a's blocking lab (scripts/verify-blocking.sh, ADR 0053): what stands for the internet while the
 emulator's fixture reaches a tracker's names, on this computer's loopback alone, which the emulator reaches as
-10.0.2.2. It is the witness of what left the phone through Watch:
+10.0.2.2. It is the witness of what left the phone through the network part:
 
-- a DNS server, which Watch's debug builds ask as the network's resolver (`dns-network-resolver`), and which knows
-  three names under home.arpa: tracker.blocklab.home.arpa (the debug builds' blocked row), cloaked.blocklab.home.arpa
-  (a CNAME to it, as CNAME cloaking does) and plain.blocklab.home.arpa (a control no row names), each A 10.0.2.2;
-  AAAA and other types have no data, other names do not exist;
+- a DNS server, which the network part's debug builds ask as the network's resolver (`dns-network-resolver`), and which
+  knows three names under home.arpa: tracker.blocklab.home.arpa (the debug builds' blocked row),
+  cloaked.blocklab.home.arpa (a CNAME to it, as CNAME cloaking does) and plain.blocklab.home.arpa (a control no row
+  names), each A 10.0.2.2; AAAA and other types have no data, other names do not exist;
 - a TCP echo server and a UDP echo server.
 
 Every question, connection accepted, byte received and datagram is written to the event log, one line each:

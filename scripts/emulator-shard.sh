@@ -24,7 +24,7 @@ SHARDS="network audit screens dns proxies blocking wireguard"
 # The checks of shard $1, in order.
 checks_of() {
     case $1 in
-        # Watch in Datapavan Advanced: its smoke test, its engine end to end, its chaining through a test
+        # The network part in Datapavan Advanced: its smoke test, its engine end to end, its chaining through a test
         # tool, the live counters by the apps' states, its connection log, and its release build as users get it.
         network) echo smoke-network.sh verify-network.sh verify-chain.sh verify-activity.sh verify-log.sh verify-network-release.sh ;;
         # Basic: its smoke test, which installs it, then the audit with its fixture, the remediation plan,
@@ -34,14 +34,14 @@ checks_of() {
         audit) echo smoke.sh verify-audit.sh verify-plan.sh verify-shortcuts.sh verify-datapack.sh verify-labels.sh ;;
         # Basic's screens in every language with the accessibility check.
         screens) echo screenshots.sh ;;
-        # Watch's WireGuard upstream against the lab's peers of the kernel's WireGuard, and the import of its
+        # The network part's WireGuard upstream against the lab's peers of the kernel's WireGuard, and the import of its
         # configurations through Android's own documents screen, photo picker and camera (W7; a shard of their own
         # since part 3a, which CI runs where the WireGuard code or its checks changed, and every week): each skipped,
         # and saying so, where no peer can start, unless WGLAB_REQUIRED=1, as on CI.
         wireguard) echo verify-wireguard.sh verify-wireguard-import.sh ;;
-        # Watch's encrypted resolver for direct apps' names against the DNS lab (W8, part 1; a shard of its own
-        # since the fix round, review R-M4): Watch asks the lab's resolver as the network's through a debug
-        # command, so any emulator serves; skipped, and saying so, where Docker does not run, unless
+        # The network part's encrypted resolver for direct apps' names against the DNS lab (W8, part 1; a shard of its
+        # own since the fix round, review R-M4): the network part asks the lab's resolver as the network's through a
+        # debug command, so any emulator serves; skipped, and saying so, where Docker does not run, unless
         # DNSLAB_REQUIRED=1, as on CI.
         dns) echo verify-dns.sh ;;
         # Apps' built-in proxies named (W8, part 2a, ADR 0052): the project's proxy fixture through the proxy lab's

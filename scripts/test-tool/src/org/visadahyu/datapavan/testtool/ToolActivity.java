@@ -6,7 +6,7 @@ import android.content.ClipboardManager;
 import android.os.Bundle;
 
 /**
- * A launcher entry, so that Watch can see the test tool as it sees the apps a user can open. With the
+ * A launcher entry, so that the network part can see the test tool as it sees the apps a user can open. With the
  * extra "clip64" (Base64), it puts that text on the clipboard first, as a user copying a configuration would, so
  * that a real tool can import it (W6's lab, docs/spikes/2026-11-real-tools.md): only an app on screen
  * may write the clipboard.

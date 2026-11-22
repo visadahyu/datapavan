@@ -1,8 +1,9 @@
 #!/usr/bin/env python3
 """The per-tool guides for proxy mode (W8, part 3b; ADR 0041, "How the per-tool guides are built").
 
-Checks data/tools/guides.tsv, guide-steps.tsv and guide-labels.tsv against tools.tsv, sources.tsv and Watch's English
-strings, and writes the website's pages from the same data and words, so that the site says what Watch says.
+Checks data/tools/guides.tsv, guide-steps.tsv and guide-labels.tsv against tools.tsv, sources.tsv and the network part's
+English strings, and writes the website's pages from the same data and words, so that the site says what the network
+part says.
 
   scripts/guides.py                 the data check (scripts/check.sh data runs it)
   scripts/guides.py --site DIR      the check, then the pages into DIR (scripts/build-site.sh: site/content/guides)
@@ -15,7 +16,8 @@ What it holds the data to:
 - a proxy page's tools have a settled proxy mode (no '?') and the page's listener and auth are tools.tsv's; where
   tools.tsv says the profile sets the listener, the steps set the port the page names;
 - each tool's proxy label (tools.tsv) is one of its guide's labels;
-- every step's words are a string of Watch's with as many places as the step fills, and every label it names exists;
+- every step's words are a string of the network part's with as many places as the step fills, and every label it names
+  exists;
 - every step, label, listener and auth has its source: a line of the tool's code at the guide's commit (or a line of
   another repository at a full commit), or tools.tsv's own evidence for the pages without steps; navigation steps alone
   need none; no source is a release, a store listing or a file to install;
@@ -56,7 +58,7 @@ def table(path):
 
 
 def strings(path=STRINGS):
-    """Watch's English strings by name, Android's escapes undone."""
+    """the network part's English strings by name, Android's escapes undone."""
     out = {}
     for element in ET.parse(path).getroot():
         if element.tag == "string":
@@ -191,7 +193,7 @@ def check_page(data, g, tools):
             if page in ("vpn", "wireguard") and not only_vpn:
                 bad.append(f"{name}: {t[0]} does not run only as a VPN (modes {t[2]})")
             if page == "wireguard" and ("provider" not in t[11] and "export" not in t[11] or t[0].startswith(AMNEZIA)):
-                bad.append(f"{name}: {t[0]}'s WireGuard ({t[11]}) gives no configuration Watch can carry")
+                bad.append(f"{name}: {t[0]}'s WireGuard ({t[11]}) gives no configuration the network part can carry")
             if page == "vpn" and "provider" in t[11]:
                 bad.append(f"{name}: {t[0]}'s provider gives WireGuard configurations: the WireGuard page")
         if page == "waiting" and not any(s["string"].startswith("guide_waiting_") for s in steps):
@@ -226,7 +228,7 @@ def check_steps(data):
             bad.append(f"{where}: part {s['part']}")
         text = data.words.get(s["string"])
         if text is None or not s["string"].startswith("guide_"):
-            bad.append(f"{where}: no such string of Watch's")
+            bad.append(f"{where}: no such string of the network part's")
             continue
         args = [] if s["labels"] == "-" else s["labels"].split(",")
         want = places(text)
@@ -343,8 +345,8 @@ def against(data, clones):
     return bad, verified, sorted(missing)
 
 
-# The website's pages, from the data and Watch's English words: the same blocks in the same order as Watch's screen
-# (guides/GuidePage.kt).
+# The website's pages, from the data and the network part's English words: the same blocks in the same order as the
+# network screen (guides/GuidePage.kt).
 
 def blocks(data, g):
     """The page of guide [g] as (kind, string, args) blocks: kind is heading, text or step; an arg is ('label', key),
@@ -497,7 +499,7 @@ def self_test():
         breaks(d)
         problems = check(d)
         assert any(expect in p for p in problems), f"{name}: expected '{expect}' in {problems}"
-    # The site's words are Watch's, filled in: a page names the tool, its version and its labels.
+    # The site's words are the network part's, filled in: a page names the tool, its version and its labels.
     page = page_markdown(good, good.guide("v2rayng"))
     assert 'choose "[Proxy only](https://github.com/2dust/v2rayNG/blob/' in page, page
     assert "[2.3.15](https://github.com/2dust/v2rayNG/tree/2.3.15)" in page

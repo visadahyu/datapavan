@@ -2,7 +2,7 @@
 # Builds W8 part 2a's proxy fixture with the SDK's build tools only, like scripts/workload-app/build.sh. Output:
 # build/proxy-fixture/proxy-fixture.apk under the repository root, signed with a throwaway key, and the same app under
 # three more package names, proxy-fixture-telegram.apk, -whatsapp.apk and -signal.apk, each an app of its own that
-# Watch's debug builds add to that messenger's clients (scripts/verify-proxies.sh).
+# the network part's debug builds add to that messenger's clients (scripts/verify-proxies.sh).
 set -euo pipefail
 
 HERE="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"

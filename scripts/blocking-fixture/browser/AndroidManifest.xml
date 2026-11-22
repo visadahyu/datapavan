@@ -1,8 +1,8 @@
 <?xml version="1.0" encoding="utf-8"?>
 <!--
     The blocking fixture as a browser (scripts/verify-blocking.sh): the same app, which also takes any browsable https
-    link, by a filter with no host, as browsers do. Watch tells browsers so, and leaves them out of blocking unless
-    the user includes them (ADR 0053, decision 5).
+    link, by a filter with no host, as browsers do. The network part tells browsers so, and leaves them out of blocking
+    unless the user includes them (ADR 0053, decision 5).
 -->
 <manifest xmlns:android="http://schemas.android.com/apk/res/android"
     package="org.visadahyu.datapavan.blockfixture.browser">

@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
-# W8's DNS lab (scripts/dnslab): every way Watch may send an app's DNS, in the Compose project datapavan-dnslab, for
-# the emulator checks and the engine's tests. Each way answers probe.dnslab.test with its own address, so that a
-# check can tell which one answered:
+# W8's DNS lab (scripts/dnslab): every way the network part may send an app's DNS, in the Compose project
+# datapavan-dnslab, for the emulator checks and the engine's tests. Each way answers probe.dnslab.test with its own
+# address, so that a check can tell which one answered:
 #   ODoH target of odoh-rs (DNSCrypt's doh-proxy), through the relay   10.53.1.1
 #   ODoH target of odoh-server-go, through the relay                   10.53.2.2
 #   plain DoH (doh-proxy)                                              10.53.3.3

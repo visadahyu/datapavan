@@ -1,7 +1,7 @@
 <?xml version="1.0" encoding="utf-8"?>
 <!--
     W6's workload app (scripts/verify-chain.sh): an ordinary installed app with a UID of its own, which the
-    check picks on Watch's chain screen as a user would. On request it looks a name up through Android's
+    check picks on the network part's chain screen as a user would. On request it looks a name up through Android's
     resolver, sends an HTTP request over TCP and a UDP datagram, and logs what came back. W5's live view
     (scripts/verify-activity.sh) builds it under two more package names, each an app of its own, which send
     while on screen, in the background, and from a foreground service with its notification. Emulators only;
@@ -16,7 +16,7 @@
     <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
 
     <application android:label="Datapavan workload" android:hasCode="true">
-        <!-- A launcher entry: Watch offers the apps a user can open (ADR 0034). -->
+        <!-- A launcher entry: the network part offers the apps a user can open (ADR 0034). -->
         <activity android:name="org.visadahyu.datapavan.workload.WorkActivity" android:exported="true">
             <intent-filter>
                 <action android:name="android.intent.action.MAIN" />

@@ -2,7 +2,7 @@
 # The ports of this computer that an emulator check's test server takes (scripts/network-lab/server.py),
 # found free and then held for the whole check. Another program on one of them, even on 127.0.0.1 alone,
 # which the emulator reaches as 10.0.2.2, answers in the server's place: a check that wants a connection
-# refused, or an echo, then fails as if Watch were at fault (2026-11-18: a program on 127.0.0.1:8791 made
+# refused, or an echo, then fails as if the network part were at fault (2026-11-18: a program on 127.0.0.1:8791 made
 # verify-network.sh's "refused" step read an empty answer).
 #
 #   . scripts/host-ports.sh; host_server [--sentinel FILE]

@@ -27,8 +27,9 @@ mkdir -p "$ROOT/site/content/privacy"
     sed -E '1d; s#\]\(([^):]+)\)#](https://github.com/visadahyu/datapavan/blob/main/\1)#g' "$ROOT/PRIVACY.md"
 } >"$ROOT/site/content/privacy/index.en.md"
 
-# The per-tool guides for proxy mode (W8, part 3b), one page per tool: written from data/tools/guide*.tsv and Watch's
-# English strings by scripts/guides.py, which checks the data first, so that the site says what Watch says.
+# The per-tool guides for proxy mode (W8, part 3b), one page per tool: written from data/tools/guide*.tsv and the
+# network part's English strings by scripts/guides.py, which checks the data first, so that the site says what the
+# network part says.
 python3 -I "$ROOT/scripts/guides.py" --site "$ROOT/site/content/guides" >/dev/null
 
 # The current release's store changelog in each language, for the download section: fastlane/ holds it,

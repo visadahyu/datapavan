@@ -12,7 +12,7 @@ import java.nio.charset.StandardCharsets;
 /**
  * loopback: two apps exchange a fixed payload over 127.0.0.1 and ::1. The probe runs "listen" and
  * answers one connection on each address; the same code built as a second app (build.sh --peer, its
- * own UID) runs "connect". The run checks Watch's flows and the emulator's capture for the payload.
+ * own UID) runs "connect". The run checks the network part's flows and the emulator's capture for the payload.
  */
 final class LoopbackExchange {
     static final int PORT_V4 = 8794;

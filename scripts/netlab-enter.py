@@ -3,7 +3,7 @@
 # `unshare --user --map-root-user --net`, builds the network the engine sees on Android and runs one
 # test with the tunnel as its standard input.
 #
-# - tun0 holds the tunnel's common addresses (10.1.10.1/32), as Watch's tunnel does; the fake peer
+# - tun0 holds the tunnel's common addresses (10.1.10.1/32), as the network part's tunnel does; the fake peer
 #   (10.1.10.2) and the tunnel's DNS address (10.1.10.3) are routed into it.
 # - The "internet" is 198.51.100.9 on the loopback (a documentation address, RFC 5737), and
 #   198.51.100.10 beside it: a second server, or a stranger to the apps, for the UDP mapping's tests.
@@ -29,7 +29,7 @@
 #   it, and packets that come in on "far" are delivered there, by the local table after it. So the
 #   engine's sockets meet a first hop of 1,280 (IP_MTU says so, also for IPv6), their datagrams leave
 #   "near" as fragments, and the server gets them whole; and an app of the namespace's own addresses
-#   meets that network as an app meets its link without Watch. A permanent neighbour entry spares the
+#   meets that network as an app meets its link without the network part. A permanent neighbour entry spares the
 #   neighbour discovery; "far" takes packets from addresses of the namespace's own.
 #
 # - A tunnel set up again (ADR 0044, unit 12b): a test that hands the running engine a new tunnel needs a

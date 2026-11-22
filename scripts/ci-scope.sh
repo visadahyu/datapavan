@@ -52,9 +52,9 @@ tier() {
 
 # data/: both editions bundle every file of every dataset but the scripts that make them and hidden files
 # (BundledDataTask in android/app/build.gradle.kts), and the data pack's header from data/PACK. The audit's
-# pack leaves out data/dbip-asn, data/resolvers and data/messengers, of which Watch's build reads only asn.bin,
-# resolvers.tsv and the messengers' three tables (android/network/build.gradle.kts); files at data/'s top other than PACK
-# are not bundled.
+# pack leaves out data/dbip-asn, data/resolvers and data/messengers, of which the network part's build reads only
+# asn.bin, resolvers.tsv and the messengers' three tables (android/network/build.gradle.kts); files at data/'s top other
+# than PACK are not bundled.
 data_tier() {
     local rest=${1#data/} name=${1##*/}
     case $rest in
@@ -72,8 +72,8 @@ data_tier() {
 
 rank() { case $1 in none) echo 0 ;; build) echo 1 ;; *) echo 2 ;; esac; }
 
-# Whether the WireGuard checks read path $1: the engine and its bridge with their build, the apps (Watch's screens and
-# store run inside Advanced, which the app module builds with Basic's code), the lab's peers, the checks and what
+# Whether the WireGuard checks read path $1: the engine and its bridge with their build, the apps (the network screens
+# and store run inside Advanced, which the app module builds with Basic's code), the lab's peers, the checks and what
 # they share, and CI and this rule. Basic's native library, the fuzz targets, the lab's probe, the datasets and the
 # documents they do not read.
 wireguard_path() {

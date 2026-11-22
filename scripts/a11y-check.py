@@ -8,7 +8,7 @@ visible part and leaves out the children that are off screen, label included.
 
     python3 -I scripts/a11y-check.py DUMP.xml MIN_SIZE_PX [PACKAGE]
 
-PACKAGE is Basic's by default; Datapavan Advanced's screens, Watch's "Now" included, give their own.
+PACKAGE is Basic's by default; Datapavan Advanced's screens, the network part's "Now" included, give their own.
 """
 import re
 import sys

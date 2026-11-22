@@ -1,15 +1,15 @@
 #!/usr/bin/env bash
-# End-to-end check of Watch's connection log, milestone W4 (docs/DESIGN.md 13.2, ADR 0037), on an
+# End-to-end check of the network part's connection log, milestone W4 (docs/DESIGN.md 13.2, ADR 0037), on an
 # emulator only: it sets a screen-lock PIN and locks the screen, which a phone's owner would not want.
 # It starts the test server (scripts/network-lab/server.py), carries a TCP and a UDP flow of adb's shell
-# (UID 2000) through Watch, has the engine hand over its records at once (a debug command), and checks:
+# (UID 2000) through the network part, has the engine hand over its records at once (a debug command), and checks:
 # that the log holds both flows with their bytes; that the database files hold no destination in the
-# clear; that Watch's log output names no destination; that an earlier day cannot be opened while the
+# clear; that the network part's log output names no destination; that an earlier day cannot be opened while the
 # phone is locked and can once it is unlocked; that the wipe leaves no file and no key; that over a
 # scripted session the shell's bytes in the log are within 5 % of Android's own count (M4's bar), both
 # counted as IP packets on the tunnel; that expiry does not wait for traffic (a day past retention is
-# never read, and leaves the file when Watch starts again; a shorter retention deletes at once; "none"
-# leaves no file and no key); and then runs the log's model test (LogModel, debug builds) inside Watch.
+# never read, and leaves the file when the network part starts again; a shorter retention deletes at once; "none"
+# leaves no file and no key); and then runs the log's model test (LogModel, debug builds) inside the network part.
 #
 #   scripts/verify-log.sh [path/to/Datapavan-Advanced-debug.apk]
 #
@@ -20,7 +20,7 @@ set -euo pipefail
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 APK="${1:-$ROOT/android/app/build-advanced/outputs/apk/debug/app-debug.apk}"
 PKG=org.visadahyu.datapavan.advanced
-# Watch's screen in Datapavan Advanced (ADR 0045); debug builds export it for these checks.
+# The network screen in Datapavan Advanced (ADR 0045); debug builds export it for these checks.
 NETWORK_SCREEN=org.visadahyu.datapavan.network.MainActivity
 SHELL_UID=2000
 PIN=4826
@@ -51,13 +51,13 @@ host_server || exit 1
 fail() {
     echo "LOG CHECK FAILED: $*" >&2
     adb logcat -d -b crash 2>/dev/null | tail -40 >&2 || true
-    # A process Android ended leaves no crash: how Watch's last ones ended, with no destination.
-    echo "How Watch's process last ended:" >&2
+    # A process Android ended leaves no crash: how the network part's last ones ended, with no destination.
+    echo "How the network process last ended:" >&2
     adb shell dumpsys activity exit-info "$PKG" 2>/dev/null | tr -d '\r' | grep -E 'timestamp=|reason=' | head -6 >&2 || true
     exit 1
 }
 
-# Watch's own account, with debug commands (NetworkVpnService.debugLog).
+# The network part's own account, with debug commands (NetworkVpnService.debugLog).
 network_dump() {
     adb shell dumpsys activity service "$PKG/org.visadahyu.datapavan.network.NetworkVpnService" "$@" | tr -d '\r' | sed 's/^ *//'
 }
@@ -76,7 +76,7 @@ table = fields[fields.index(sys.argv[1]) + 1] if sys.argv[1] in fields else "-"
 print("\n".join(day.split(":")[0] for day in table.split(",") if day != "-"))' "$1"
 }
 
-# What Watch's screen says of the log's earlier days now: the sentence after "Watch keeps a record of
+# What the network screen says of the log's earlier days now: the sentence after "the network part keeps a record of
 # each connection", or "none". The screen is in English for the test (set below).
 lock_sentence() {
     adb shell input keyevent KEYCODE_WAKEUP
@@ -91,7 +91,7 @@ lock_sentence() {
 start_network() {
     adb shell am start -W -n "$PKG/$NETWORK_SCREEN" --ez start true >/dev/null
     for _ in $(seq 1 20); do vpn_up && break; sleep 1; done
-    vpn_up || fail "Watch's tunnel did not come up"
+    vpn_up || fail "the network part's tunnel did not come up"
 }
 
 vpn_up() {
@@ -133,13 +133,13 @@ for line in sys.stdin:
 print(up, down)' "$SHELL_UID"
 }
 
-# The phone's local day, as days since 1970, as Watch counts it.
+# The phone's local day, as days since 1970, as the network part counts it.
 local_day() {
     python3 -I -c 'import sys; s, z = int(sys.argv[1]), sys.argv[2]; o = (1 if z[0] == "+" else -1) * (int(z[1:3]) * 3600 + int(z[3:5]) * 60); print((s + o) // 86400)' \
         "$(adb shell date +%s | tr -d '\r')" "$(adb shell date +%z | tr -d '\r')"
 }
 
-echo "== Watch's connection log, end to end, on $(adb shell getprop ro.product.model | tr -d '\r'), Android $(adb shell getprop ro.build.version.release | tr -d '\r')"
+echo "== The network part's connection log, end to end, on $(adb shell getprop ro.product.model | tr -d '\r'), Android $(adb shell getprop ro.build.version.release | tr -d '\r')"
 adb wait-for-device
 adb install -r "$APK" >/dev/null
 # As a new install: the log's default is then what a new user gets (ADR 0040).
@@ -147,7 +147,7 @@ adb shell pm clear "$PKG" >/dev/null
 allow_vpn "$PKG" || fail "Android did not take the VPN consent for $PKG"
 [ "$(adb shell getprop ro.build.version.sdk | tr -d '\r')" -lt 37 ] || adb shell pm grant "$PKG" android.permission.ACCESS_LOCAL_NETWORK
 adb shell am force-stop "$PKG"
-# The screen checks read English. Android 13 and later can set Watch's language alone; before, the
+# The screen checks read English. Android 13 and later can set the network part's language alone; before, the
 # phone's own language must be English, or the screen checks are skipped.
 english=""
 if adb shell cmd locale set-app-locales "$PKG" --locales en-US >/dev/null 2>&1; then
@@ -158,9 +158,9 @@ fi
 adb logcat -c
 adb shell am start -W -n "$PKG/$NETWORK_SCREEN" --ez start true >/dev/null
 for _ in $(seq 1 20); do vpn_up && break; sleep 1; done
-vpn_up || fail "Watch's tunnel did not come up"
+vpn_up || fail "the network part's tunnel did not come up"
 echo "ok: the tunnel is up"
-# Watch's debug commands need its service running; the test starts from an empty log.
+# The network part's debug commands need its service running; the test starts from an empty log.
 network_dump log-wipe | grep -q '^log-wiped true$' || fail "the log could not be wiped before the test"
 # The log keeps nothing until the user chooses (ADR 0040). The checks below keep 30 days.
 log_line | grep -qE '^0 days ' || fail "a new install's log keeps records: $(log_line)"
@@ -199,25 +199,25 @@ else
 fi
 
 # A flow open when the tunnel stops still reaches the log: the engine hands over its last records. The
-# tunnel stops once Watch lists the new connection, which stays open for 8 s.
+# tunnel stops once the network part lists the new connection, which stays open for 8 s.
 shell_tcp_flows() { network_dump </dev/null | grep -cE "^flow tcp [^ ]+ ${HOST//./\\.}:$PORT $SHELL_UID opened " || true; }
 flows_before=$(shell_tcp_flows)
 more_tcp_flows() { [ "$(shell_tcp_flows)" -gt "$flows_before" ]; }
 timeout 20 adb shell "sleep 8 | nc -w 10 $HOST $PORT" </dev/null >/dev/null 2>&1 &
 talking=$!
-within 6 more_tcp_flows || fail "Watch did not list the shell's open connection within 6 s, before the tunnel was to stop"
+within 6 more_tcp_flows || fail "the network part did not list the shell's open connection within 6 s, before the tunnel was to stop"
 adb shell am start -W -n "$PKG/$NETWORK_SCREEN" --ez stop true >/dev/null
 for _ in $(seq 1 20); do vpn_up || break; sleep 1; done
 wait "$talking" 2>/dev/null || true
 adb shell am start -W -n "$PKG/$NETWORK_SCREEN" --ez start true >/dev/null
 for _ in $(seq 1 20); do vpn_up && break; sleep 1; done
-vpn_up || fail "Watch's tunnel did not come up again"
+vpn_up || fail "the network part's tunnel did not come up again"
 stopped_flow_logged() { grep -qE "^log-record tcp $SHELL_UID $HOST:$PORT up=0 down=0 ended " <<<"$(network_dump log-today)"; }
 within 15 stopped_flow_logged || fail "a flow open when the tunnel stopped did not reach the log within 15 s"
 echo "ok: a flow open when the tunnel stops reaches the log"
 
 # Over a scripted session, the log's bytes for the shell match Android's own count within 5 %: downloads,
-# an upload, small UDP flows, and names looked up (no ping: Watch does not carry ICMP yet).
+# an upload, small UDP flows, and names looked up (no ping: the network part does not carry ICMP yet).
 read -r android_up0 android_down0 <<<"$(android_bytes)"
 read -r log_up0 log_down0 <<<"$(log_bytes)"
 for _ in 1 2 3; do
@@ -273,7 +273,7 @@ sys.exit(1 if short or len([f for f in down if down[f] >= 1_000_000]) < 3 else 0
     fail "a download's packets on the tunnel are fewer than its payload"
 echo "ok: each download's packets on the tunnel hold its whole payload"
 
-# The database and its journal, read as Watch itself could, hold no destination in the clear.
+# The database and its journal, read as the network part itself could, hold no destination in the clear.
 files=$(mktemp -d)
 for file in log.db log.db-journal log.db-wal; do
     adb exec-out run-as "$PKG" cat "databases/$file" >"$files/$file" 2>/dev/null || true
@@ -293,7 +293,7 @@ uid=$(adb shell cmd package list packages -U "$PKG" | tr -d '\r' | sed -n "s/^pa
 if adb logcat -d --uid="$uid" 2>/dev/null | grep -qE "10\.0\.2\.2|network\.test|example\.(com|org)|8\.8\.8\.8"; then
     fail "a destination reached logcat"
 fi
-echo "ok: no destination in Watch's logcat"
+echo "ok: no destination in the network part's logcat"
 
 # An earlier day opens only on an unlocked phone. Only today's day key stays in memory.
 earlier=$(($(local_day) - 3))
@@ -330,7 +330,7 @@ keyguard_is false || fail "the phone stayed locked after its PIN was typed"
 sleep 2
 result=$(earlier_day)
 [ "$result" = "open 1" ] || fail "the earlier day was '$result' once the phone was unlocked"
-# Watch's screen, back in front after the unlock, reads the screen lock again.
+# The network screen, back in front after the unlock, reads the screen lock again.
 if [ -n "$english" ]; then
     said=$(lock_sentence)
     case "$said" in "Records of earlier days can be opened only while the phone is unlocked."*) ;; *) fail "with a PIN, the screen said: $said" ;; esac
@@ -347,7 +347,7 @@ log_line | grep -qE ' records 0 key-rows 0 key false ' || fail "the wipe left re
 echo "ok: the wipe leaves no file and no key"
 
 # Expiry does not wait for traffic (ADR 0037). A record put back past retention (30
-# days) is never read, and leaves the file, with its key row, when Watch's process starts again.
+# days) is never read, and leaves the file, with its key row, when the network process starts again.
 now=$(local_day)
 past=$((now - 40))
 network_dump log-put-day "$past" | grep -q "^log-put-day $past written$" || fail "no record put back for day $past"
@@ -357,8 +357,8 @@ result=$(network_dump log-day "$past" | sed -n "s/^log-day $past //p")
 raw_days records | grep -qx "$past" || fail "reading day $past deleted it: the read alone must not be what keeps it out"
 adb shell am force-stop "$PKG"
 start_network
-! raw_days records | grep -qx "$past" && ! raw_days keys | grep -qx "$past" || fail "day $past, past retention, is still in the file after Watch started again"
-echo "ok: a day past retention is never read, and leaves the file when Watch starts again"
+! raw_days records | grep -qx "$past" && ! raw_days keys | grep -qx "$past" || fail "day $past, past retention, is still in the file after the network part started again"
+echo "ok: a day past retention is never read, and leaves the file when the network part starts again"
 
 # A shorter retention deletes at once what it no longer keeps; "none" leaves no file and no key.
 earlier=$((now - 3))
@@ -392,7 +392,7 @@ grep -q '^log-model passed ' <<<"$result" || fail "the log's model test did not 
 echo "ok: the log's model test passed $steps steps"
 
 if adb logcat -d -b crash 2>/dev/null | grep -q "$PKG"; then
-    fail "Watch crashed"
+    fail "the network part crashed"
 fi
 echo "ok: no crash"
-echo "== Watch's connection log passed"
+echo "== The network part's connection log passed"

@@ -2,10 +2,10 @@
 # W8 part 3a's emulator check (ADR 0053): tracker blocking and its undo on a real Android, through Android's own
 # resolver and TCP stack, against the blocking lab on this computer (scripts/blocklab.py, on its loopback alone, which
 # the emulator reaches as 10.0.2.2). The project's own fixture (scripts/blocking-fixture), installed as two apps, A and
-# B, and as a browser, looks up and reaches the lab's names under home.arpa, which only Watch's debug builds block (a
-# row of their own, never a real tracker's). Watch asks the lab's DNS server as the network's resolver (its debug
-# command `dns-network-resolver`); local names go there in every setting. The lab is the witness of what left: it
-# logs every question, connection, byte and datagram. The check:
+# B, and as a browser, looks up and reaches the lab's names under home.arpa, which only the network part's debug builds
+# block (a row of their own, never a real tracker's). The network part asks the lab's DNS server as the network's
+# resolver (its debug command `dns-network-resolver`); local names go there in every setting. The lab is the witness of
+# what left: it logs every question, connection, byte and datagram. The check:
 #   1. a blocked lookup gets no address, and the lab is never asked; two apps, one name, within a second: the blocked
 #      one gets none and the allowed one the lab's address, and the blocked one still gets none after (Android's one
 #      cache per network carried nothing);
@@ -15,7 +15,7 @@
 #   3. a name whose CNAME leads to the blocked one is blocked;
 #   4. the undo, timed and by taps on the screen: "Allow trackers in this app" in "Now" lets B's next lookup through
 #      within seconds, and "Block trackers again" stops it again;
-#   5. the pause on Watch's screen lifts every block, "Block again now" ends it;
+#   5. the pause on the network screen lifts every block, "Block again now" ends it;
 #   6. the browser is left out by default and said so, and blocked once included;
 #   7. no notification names an app or a name of the run.
 # Where the lab cannot start here (no python3), the check is skipped, with a line that says so; with BLOCKING_REQUIRED=1,
@@ -61,7 +61,7 @@ dump() { adb shell dumpsys activity service "$PKG/org.visadahyu.datapavan.networ
 fixture_log() { adb logcat -d -s DatapavanBlockingFixture | tr -d '\r' | sed -n 's/.*DatapavanBlockingFixture: //p'; }
 fail() {
     echo "BLOCKING CHECK FAILED: $*" >&2
-    echo "Watch's blocking:" >&2
+    echo "the network part's blocking:" >&2
     dump | grep -E '^ *(blocking|blocked)' >&2 || true
     echo "The lab's last events:" >&2
     tail -20 "$WORK/events.log" >&2 || true
@@ -135,18 +135,18 @@ allow_vpn "$PKG" || fail "Android did not take the VPN consent for $PKG"
 [ "$(adb shell getprop ro.build.version.sdk | tr -d '\r')" -lt 37 ] || adb shell pm grant "$PKG" android.permission.ACCESS_LOCAL_NETWORK
 adb shell am start -W -n "$PKG/$NETWORK_SCREEN" --ez start true >/dev/null
 for _ in $(seq 1 20); do vpn_up && break; sleep 1; done
-vpn_up || fail "Watch's tunnel did not come up"
+vpn_up || fail "the network part's tunnel did not come up"
 set_resolver=$(sed -n 's/^ *dns-network-resolver-set //p' <<<"$(dump dns-network-resolver "$HOST:$DNS_PORT")")
-[ "$set_resolver" = "/$HOST:$DNS_PORT" ] || fail "Watch did not take the lab as the network's resolver: '$set_resolver'"
+[ "$set_resolver" = "/$HOST:$DNS_PORT" ] || fail "the network part did not take the lab as the network's resolver: '$set_resolver'"
 # The precheck, blocking off: a failure, never a skip.
 # Only the control name: an answer for the blocked name now would wait in Android's cache for its time to live,
 # which no app can flush, and stand for the lookups after blocking is on (an accepted limit, ADR 0053).
-[ "$(lookup "$A" "$PLAIN")" = "ok $HOST" ] || fail "the lab's control name did not resolve through Watch"
-ok "with blocking off, the lab's names resolve through Watch"
+[ "$(lookup "$A" "$PLAIN")" = "ok $HOST" ] || fail "the lab's control name did not resolve through the network part"
+ok "with blocking off, the lab's names resolve through the network part"
 
-# Blocking on, by its switch on Watch's screen; the browser is said to be left out.
+# Blocking on, by its switch on the network screen; the browser is said to be left out.
 adb shell am start -W -n "$PKG/$NETWORK_SCREEN" --activity-clear-top >/dev/null
-tap_text "Block trackers" || fail "Watch's screen has no switch \"Block trackers\""
+tap_text "Block trackers" || fail "the network screen has no switch \"Block trackers\""
 state=""
 for _ in $(seq 1 10); do
     state=$(dump | sed -n 's/^ *blocking \(on\|off\) .*/\1/p' | head -1)
@@ -155,7 +155,7 @@ for _ in $(seq 1 10); do
 done
 [ "$state" = on ] || fail "the switch did not turn blocking on"
 line=$(dump | grep -E '^ *blocking on ' | head -1)
-grep -qE 'table [1-9][0-9]* ' <<<"$line" || fail "Watch holds no graded table: $line"
+grep -qE 'table [1-9][0-9]* ' <<<"$line" || fail "the network part holds no graded table: $line"
 grep -qE "^ *blocking-browser $BROWSER\$" <<<"$(dump)" || fail "the fixture's browser is not told as a browser"
 scroll_to "Browsers are not blocked" || fail "the screen does not say that browsers are left out"
 ok "blocking is on ($line), and the browser is left out and said so"
@@ -165,7 +165,7 @@ asked=$(events "^dns $TRACKER ")
 [ "$(lookup "$A" "$TRACKER")" = none ] || fail "A's lookup of the blocked name got an address"
 [ "$(lookup "$B" "$TRACKER")" = none ] || fail "B's lookup of the blocked name got an address"
 [ "$(events "^dns $TRACKER ")" = "$asked" ] || fail "the lab was asked the blocked name"
-grep -qE "^ *blocked $A_UID $TRACKER [1-9]" <<<"$(dump)" || fail "Watch counted no blocked lookup of A"
+grep -qE "^ *blocked $A_UID $TRACKER [1-9]" <<<"$(dump)" || fail "the network part counted no blocked lookup of A"
 ok "a blocked name gets no address, and nothing leaves the phone for it"
 
 # 4. The undo, timed: one tap on B's row in "Now", which its bytes to the lab's control name put there.
@@ -179,7 +179,7 @@ for _ in $(seq 1 20); do
     [ "$(lookup "$B" "$TRACKER")" = "ok $HOST" ] && { through=$((SECONDS - tapped)); break; }
 done
 [ -n "$through" ] || fail "B's lookup did not get through after the allow"
-grep -qE "^ *blocking-allowed $B " <<<"$(dump)" || fail "Watch does not hold B's allowance"
+grep -qE "^ *blocking-allowed $B " <<<"$(dump)" || fail "the network part does not hold B's allowance"
 ok "one tap allowed B: its lookup went through ${through} s after the tap"
 
 # 1 (cont.). Two apps, one name, within a second: each gets its own answer, and A still none after.
@@ -232,12 +232,12 @@ ok "one tap blocked B again: its lookup got none ${stopped} s after the tap"
 
 # 5. The pause, which names no app.
 adb shell am start -W -n "$PKG/$NETWORK_SCREEN" --activity-clear-top >/dev/null
-tap_text "Pause blocking for 10 minutes" || fail "Watch's screen has no \"Pause blocking for 10 minutes\""
+tap_text "Pause blocking for 10 minutes" || fail "the network screen has no \"Pause blocking for 10 minutes\""
 paused=""
 for _ in $(seq 1 20); do [ "$(lookup "$A" "$TRACKER")" = "ok $HOST" ] && { paused=yes; break; }; done
 [ -n "$paused" ] || fail "the pause did not lift A's block"
 adb shell am start -W -n "$PKG/$NETWORK_SCREEN" --activity-clear-top >/dev/null
-tap_text "Block again now" || fail "Watch's screen has no \"Block again now\" while paused"
+tap_text "Block again now" || fail "the network screen has no \"Block again now\" while paused"
 again=""
 for _ in $(seq 1 20); do [ "$(lookup "$A" "$TRACKER")" = none ] && { again=yes; break; }; done
 [ -n "$again" ] || fail "\"Block again now\" did not end the pause"
@@ -246,7 +246,7 @@ ok "the pause lifted every block, and \"Block again now\" ended it"
 # 6. The browser: left out by default, blocked once included.
 [ "$(lookup "$BROWSER" "$TRACKER")" = "ok $HOST" ] || fail "the browser was blocked though browsers are left out"
 adb shell am start -W -n "$PKG/$NETWORK_SCREEN" --activity-clear-top >/dev/null
-tap_text "Also block in browsers" || fail "Watch's screen has no \"Also block in browsers\""
+tap_text "Also block in browsers" || fail "the network screen has no \"Also block in browsers\""
 included=""
 for _ in $(seq 1 20); do [ "$(lookup "$BROWSER" "$TRACKER")" = none ] && { included=yes; break; }; done
 [ -n "$included" ] || fail "the browser was not blocked once included"

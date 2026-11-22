@@ -1,13 +1,13 @@
 #!/usr/bin/env bash
-# End-to-end check of Watch's packet engine, milestones W2 and W3 (docs/DESIGN.md, 13.2), on an
+# End-to-end check of the network part's packet engine, milestones W2 and W3 (docs/DESIGN.md, 13.2), on an
 # emulator or a phone: starts the test server (scripts/network-lab/server.py) on this computer, starts
-# Watch's tunnel for every app through its debug entry, and plays the app with adb's own shell (UID 2000) and its nc.
-# Through Watch it checks that TCP and UDP reach the server and come back; that a connection closed at
-# once, a refused one and an unreachable one each get their owner named; that the app sees the refusal
+# the network part's tunnel for every app through its debug entry, and plays the app with adb's own shell (UID 2000) and
+# its nc. Through the network part it checks that TCP and UDP reach the server and come back; that a connection closed
+# at once, a refused one and an unreachable one each get their owner named; that the app sees the refusal
 # as "refused" and an unreachable IPv6 address as "no route", as without a VPN; that names resolve
 # through the tunnel's DNS, and flows are named after a DNS answer, a TLS server name or a QUIC one,
 # with the ECH a hello offers noted, an app's own DNS is recognised, and strict Private DNS is
-# detected (W3); that a connection straight to Watch's own listener is closed and counted; that a
+# detected (W3); that a connection straight to the network part's own listener is closed and counted; that a
 # connection kept open goes on when the tunnel is set up again with the same addresses and apps; and that
 # all of it still works after the network beneath switches from Wi-Fi to mobile data. Nothing is left
 # running: the tunnel and the server stop at the end.
@@ -27,7 +27,7 @@ set -euo pipefail
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 APK="${1:-$ROOT/android/app/build-advanced/outputs/apk/debug/app-debug.apk}"
 PKG=org.visadahyu.datapavan.advanced
-# Watch's screen in Datapavan Advanced (ADR 0045); debug builds export it for these checks.
+# The network screen in Datapavan Advanced (ADR 0045); debug builds export it for these checks.
 NETWORK_SCREEN=org.visadahyu.datapavan.network.MainActivity
 SHELL_UID=2000
 # shellcheck source=scripts/adb-ui.sh
@@ -105,17 +105,17 @@ host_server || exit 1
 fail() {
     echo "NETWORK CHECK FAILED: $*" >&2
     adb logcat -d -b crash 2>/dev/null | tail -40 >&2 || true
-    # A process Android ended leaves no crash: how Watch's last ones ended, with no destination.
-    echo "How Watch's process last ended:" >&2
+    # A process Android ended leaves no crash: how the network part's last ones ended, with no destination.
+    echo "How the network process last ended:" >&2
     adb shell dumpsys activity exit-info "$PKG" 2>/dev/null | tr -d '\r' | grep -E 'timestamp=|reason=' | head -6 >&2 || true
     # On a phone the flows name other apps' destinations, which stay on the phone: counters only. On an
     # emulator, every flow of the shell (the test's own), then the last of the others.
     local account
     account=$(adb shell dumpsys activity service "$PKG/org.visadahyu.datapavan.network.NetworkVpnService" 2>/dev/null | tr -d '\r' | sed -n 's/^ *//p' || true)
-    echo "Watch's own account:" >&2
+    echo "the network part's own account:" >&2
     grep -E '^(running|counters|mtu|setups)' <<<"$account" >&2 || true
-    # Watch's own log: how each setup went, and its warnings. It names no destination.
-    echo "Watch's log:" >&2
+    # The network part's own log: how each setup went, and its warnings. It names no destination.
+    echo "the network part's log:" >&2
     adb logcat -d -s Network:I 2>/dev/null | tr -d '\r' | tail -15 >&2 || true
     if is_emulator; then
         echo "The shell's flows:" >&2
@@ -138,7 +138,7 @@ flows() {
 # has named its app, which on CI after a network switch took a few seconds. The list is read whole, then
 # searched: under pipefail, a grep -q that stops reading early fails the pipe, so a flow that was there
 # could look missing.
-# The tunnel's addresses that Watch chose (ADR 0041), from its dump: "<set> <tun4> <dns4> <tun6> <dns6>".
+# The tunnel's addresses that the network part chose (ADR 0041), from its dump: "<set> <tun4> <dns4> <tun6> <dns6>".
 # adb reads nothing from stdin here: called inside a pipeline, it would swallow the pipe's input.
 addresses_line() { adb shell dumpsys activity service "$PKG/org.visadahyu.datapavan.network.NetworkVpnService" </dev/null | tr -d '\r' | sed -n 's/^ *addresses //p'; }
 tunnel_address() { addresses_line | awk '{print $2}'; }
@@ -166,7 +166,7 @@ has_named_flow() {
     flow_listed "^$1 [^ ]+ [^ ]+:$2 $SHELL_UID opened $4 ${5:-[^ ]+} [^ ]+ [^ ]+ [^ ]+ ${3//./\\.}\$"
 }
 
-# What Watch says of Private DNS on its network: plain, network, or strict and the provider (debug).
+# What the network part says of Private DNS on its network: plain, network, or strict and the provider (debug).
 private_dns() {
     adb shell dumpsys activity service "$PKG/org.visadahyu.datapavan.network.NetworkVpnService" | tr -d '\r' | sed -n 's/^ *private-dns //p'
 }
@@ -179,7 +179,7 @@ wait_private_dns() {
     return 1
 }
 
-# What Android itself says of Private DNS on each network, for a failure: whether Watch or Android lags.
+# What Android itself says of Private DNS on each network, for a failure: whether the network part or Android lags.
 android_private_dns() {
     adb shell dumpsys connectivity | tr -d '\r' |
         grep -oE 'NetworkAgentInfo\{network\{[0-9]+\}|InterfaceName: [a-z0-9]+|UsePrivateDns: [a-z]+|PrivateDnsServerName: [^ ]+' |
@@ -194,8 +194,8 @@ vpn_up() {
     [ -n "$uid" ] && grep -q "OwnerUid: $uid " <<<"$vpns"
 }
 
-# True when Watch says its tunnel runs with the address set $1 (common or spare) and Android lists its
-# VPN. Watch names the new set as it starts setting the tunnel up again, before its engine runs: the set
+# True when the network part says its tunnel runs with the address set $1 (common or spare) and Android lists its
+# VPN. The network part names the new set as it starts setting the tunnel up again, before its engine runs: the set
 # alone does not say that the tunnel carries traffic.
 tunnel_on() {
     local dump
@@ -232,7 +232,7 @@ traffic() {
     answer=$(device 15 "printf 'GET /ping HTTP/1.0\r\n\r\n' | nc -w 5 $HOST $PORT")
     grep -q '^pong$' <<<"$answer" || fail "$round: no answer over TCP from the test server"
     has_flow tcp "$HOST:$PORT" opened || fail "$round: no TCP flow of the shell to the server"
-    echo "ok: $round: TCP through Watch, owner named"
+    echo "ok: $round: TCP through the network part, owner named"
 
     device 10 "nc -w 2 $HOST $PORT </dev/null" >/dev/null
     [ "$(flows | grep -cE "^tcp [^ ]+ ${HOST//./\\.}:$PORT $SHELL_UID opened ")" -ge 2 ] ||
@@ -249,7 +249,7 @@ traffic() {
     answer=$(device 8 "echo probe-$round | nc -u -w 3 $HOST $((PORT + 1))")
     grep -q "^probe-$round\$" <<<"$answer" || fail "$round: no UDP echo"
     has_flow udp "$HOST:$((PORT + 1))" opened || fail "$round: no UDP flow of the shell"
-    echo "ok: $round: UDP through Watch, owner named"
+    echo "ok: $round: UDP through the network part, owner named"
 
     # ping resolves the name first, through the tunnel's DNS; its ICMP itself is not forwarded yet.
     answer=$(device 15 "ping -c 1 -W 2 example.com")
@@ -271,7 +271,7 @@ traffic() {
         fail "$round: a QUIC connection was not named after its server name, with ECH offered; its flows: $(flows | grep -E ":$((PORT + 1)) ")"
     echo "ok: $round: a flow named from its QUIC server name, put together from two datagrams"
 
-    # An app's own DNS, past Watch's resolver (ADR 0029): plain DNS to Google's public resolver, and a
+    # An app's own DNS, past the network part's resolver (ADR 0029): plain DNS to Google's public resolver, and a
     # TLS hello for its DNS-over-HTTPS name. Neither needs an answer to be recognised. nc quits 3 s after
     # its input ends (-q), so that od sees the end of the answer.
     answer=$(device 10 "nc -u -q 3 8.8.8.8 53 < $DNS_ON_DEVICE | od -An -tx1")
@@ -280,7 +280,7 @@ traffic() {
     echo "ok: $round: an app's own plain DNS, to a known resolver"
     # The answer of a resolver the app asked itself names that app's next flow, and only its flows. Where
     # a network filters public resolvers, an emulator's own DNS server, asked directly instead of through
-    # Watch's, answers instead.
+    # the network part's, answers instead.
     if [ -z "$answer" ] && is_emulator; then
         answer=$(device 10 "nc -u -q 3 10.0.2.3 53 < $DNS_ON_DEVICE | od -An -tx1")
     fi
@@ -332,7 +332,7 @@ PY
     fi
 }
 
-echo "== Watch's engine, end to end, on $(adb shell getprop ro.product.model | tr -d '\r'), Android $(adb shell getprop ro.build.version.release | tr -d '\r')"
+echo "== The network part's engine, end to end, on $(adb shell getprop ro.product.model | tr -d '\r'), Android $(adb shell getprop ro.build.version.release | tr -d '\r')"
 adb wait-for-device
 adb install -r "$APK" >/dev/null
 hello=$(mktemp)
@@ -346,9 +346,9 @@ handshake = b"\x01\x00" + struct.pack("!H", len(body)) + body
 open(sys.argv[1], "wb").write(b"\x16\x03\x01" + struct.pack("!H", len(handshake)) + handshake)
 PY
 adb push "$hello" "$HELLO_ON_DEVICE" >/dev/null 2>&1
-# The QUIC Initial packets are protected with Python's HMAC and OpenSSL's AES, apart from Watch's own
+# The QUIC Initial packets are protected with Python's HMAC and OpenSSL's AES, apart from the network part's own
 # code (RFC 9001 5): the keys from the connection ID, AES-CTR with GCM's counter, GCM's tag over the
-# header and the payload (Watch reads a hello only from a packet whose tag checks, ADR 0044, unit 9b),
+# header and the payload (the network part reads a hello only from a packet whose tag checks, ADR 0044, unit 9b),
 # then the header protection. OpenSSL's command line has no GCM, so GHASH is written out here from
 # NIST SP 800-38D, checked against its test cases 2 and 4 before any packet is built.
 python3 -I - "$hello" <<'PY'
@@ -444,7 +444,7 @@ adb push "$hello-dns.bin" "$DNS_ON_DEVICE" >/dev/null 2>&1
 adb push "$hello-doh.bin" "$DOH_ON_DEVICE" >/dev/null 2>&1
 rm -f "$hello" "$hello-1.bin" "$hello-2.bin" "$hello-dns.bin" "$hello-doh.bin"
 if is_emulator; then allow_vpn "$PKG" || fail "Android did not take the VPN consent for $PKG"; fi
-# Android 17: the server is on the local network, which Watch reaches for every app (ADR 0034).
+# Android 17: the server is on the local network, which the network part reaches for every app (ADR 0034).
 [ "$(adb shell getprop ro.build.version.sdk | tr -d '\r')" -lt 37 ] || adb shell pm grant "$PKG" android.permission.ACCESS_LOCAL_NETWORK
 adb shell am force-stop "$PKG"
 if is_emulator; then
@@ -454,7 +454,7 @@ if is_emulator; then
     . "$ROOT/scripts/emulator-networks.sh"
     # Mobile data stays up beside Wi-Fi, as on most phones, so that the switch has a network to go to: on
     # CI, mobile data brought up only after Wi-Fi went off was not there 40 s later ("Active default
-    # network: none"). It is brought up here, before Watch starts, where restarting the radios touches no
+    # network: none"). It is brought up here, before the network part starts, where restarting the radios touches no
     # tunnel: on CI it was sometimes not up at all minutes later (2026-11-11, twice, and 2026-11-12, twice:
     # Wi-Fi only), and turning data off and on did not always bring it.
     DATA_ALWAYS_ON=$(adb shell settings get global mobile_data_always_on | tr -d '\r')
@@ -476,15 +476,15 @@ if is_emulator; then
     if ! wait_up 90 wifi; then
         wifi_again 90
         wait_up 90 wifi ||
-            fail "the emulator did not have both Wi-Fi and mobile data before Watch started ($(networks); $(wifi_state)), even after airplane mode and Wi-Fi told to join its network, so the network switch would have nowhere to go; this is the emulator, not Watch"
+            fail "the emulator did not have both Wi-Fi and mobile data before the network part started ($(networks); $(wifi_state)), even after airplane mode and Wi-Fi told to join its network, so the network switch would have nowhere to go; this is the emulator, not the network part"
     fi
     wait_settled 60 ||
-        fail "the emulator's networks kept changing for 60 s before Watch started ($(networks)); this is the emulator, not Watch"
-    echo "  networks before Watch starts: $(networks)"
+        fail "the emulator's networks kept changing for 60 s before the network part started ($(networks)); this is the emulator, not the network part"
+    echo "  networks before the network part starts: $(networks)"
 fi
 # The device's network or the test server may not be ready yet: on CI the first check below once found
-# no answer (2026-11-11). Wait until the device reaches the server without Watch, so that a failure below
-# is Watch's.
+# no answer (2026-11-11). Wait until the device reaches the server without the network part, so that a failure below
+# is the network part's.
 direct() {
     grep -q '^pong$' <<<"$(device 8 "printf 'GET /ping HTTP/1.0\r\n\r\n' | nc -w 3 $HOST $PORT")"
 }
@@ -492,11 +492,11 @@ for _ in $(seq 1 30); do
     direct && break
     sleep 2
 done
-direct || fail "the device does not reach the test server at $HOST:$PORT even without Watch"
+direct || fail "the device does not reach the test server at $HOST:$PORT even without the network part"
 adb logcat -c
 adb shell am start -W -n "$PKG/$NETWORK_SCREEN" --ez start true >/dev/null
 for _ in $(seq 1 20); do vpn_up && break; sleep 1; done
-vpn_up || fail "Watch's tunnel did not come up (on a phone, allow the VPN request on its screen first)"
+vpn_up || fail "the network part's tunnel did not come up (on a phone, allow the VPN request on its screen first)"
 echo "ok: the tunnel is up for every app"
 # The tunnel's addresses are the common ones (ADR 0041): the emulator's network, 10.0.2.0/24, does not
 # use them.
@@ -531,7 +531,7 @@ echo "ok: an unreachable IPv6 address gets the app an ICMPv6 error"
 
 # Ping through the tunnel (ADR 0044, decision 5): the shell's ping uses an unprivileged ICMP socket, and the
 # engine carries each echo request through one of its own, protected. The 34th counter counts requests carried,
-# the 35th replies, the 37th requests dropped because Android gave Watch no ICMP socket. A reply needs the
+# the 35th replies, the 37th requests dropped because Android gave the network part no ICMP socket. A reply needs the
 # network beneath to carry ICMP, which a CI runner may not, so it is reported, not required.
 echo_counters() {
     adb shell dumpsys activity service "$PKG/org.visadahyu.datapavan.network.NetworkVpnService" | tr -d '\r' | sed -n 's/^ *counters //p' | awk '{print $34, $35, $37}'
@@ -540,31 +540,32 @@ read -r carried0 replies0 unsupported0 <<<"$(echo_counters)"
 device 12 "ping -c 2 -W 3 1.1.1.1" >/dev/null 2>&1 || true
 read -r carried1 replies1 unsupported1 <<<"$(echo_counters)"
 if [ "${unsupported1:-0}" != "${unsupported0:-0}" ]; then
-    if is_emulator; then fail "Android gave Watch no ICMP socket on the emulator: ping was dropped"; fi
-    echo "skipped: ping, as this phone gives Watch no ICMP socket (dropped and counted)"
+    if is_emulator; then fail "Android gave the network part no ICMP socket on the emulator: ping was dropped"; fi
+    echo "skipped: ping, as this phone gives the network part no ICMP socket (dropped and counted)"
 else
     [ "${carried1:-0}" -gt "${carried0:-0}" ] || fail "the shell's ping was not carried: $carried0, then $carried1"
     if [ "${replies1:-0}" -gt "${replies0:-0}" ]; then
-        echo "ok: ping passes the tunnel through Watch's own ICMP socket, and its replies came back"
+        echo "ok: ping passes the tunnel through the network part's own ICMP socket, and its replies came back"
     else
-        echo "ok: ping passes the tunnel through Watch's own ICMP socket (no reply: the network beneath carries no ICMP here)"
+        echo "ok: ping passes the tunnel through the network part's own ICMP socket (no reply: the network beneath carries no ICMP here)"
     fi
 fi
 
-# A traceroute's first hop through Watch (ADR 0044, unit 11b). Watch is not a hop: the shell's ping with a time to live
-# of 1 leaves the phone with 1, and the first router's "time to live exceeded" reaches the shell from that router, as
-# without Watch. It must come from an address other than 1.1.1.1, and the 42nd counter, the "time exceeded" Watch passed
-# on, must grow: before, every error from the path was dropped, and Watch's request left with its own 64. ping prints the
-# sender on the error's line, as "From 10.0.2.2: icmp_seq=1 Time to live exceeded" or with a name before the address in
-# brackets; the last address on that line is the sender. On a phone, a reply from 1.1.1.1 ("bytes from") fails: no path
-# reaches it in one hop, so the request left with a time to live other than the app's (the second review of unit 11b
-# found the check passed so). The emulator's NAT answers ICMP itself, a TTL-1 ping included, so there it is reported, as
-# is a network that sends no "time exceeded". Each output is read whole before it is parsed.
+# A traceroute's first hop through the network part (ADR 0044, unit 11b). The network part is not a hop: the shell's
+# ping with a time to live of 1 leaves the phone with 1, and the first router's "time to live exceeded" reaches the
+# shell from that router, as without the network part. It must come from an address other than 1.1.1.1, and the 42nd
+# counter, the "time exceeded" the network part passed on, must grow: before, every error from the path was dropped, and
+# the network part's request left with its own 64. ping prints the sender on the error's line, as "From 10.0.2.2:
+# icmp_seq=1 Time to live exceeded" or with a name before the address in brackets; the last address on that line is the
+# sender. On a phone, a reply from 1.1.1.1 ("bytes from") fails: no path reaches it in one hop, so the request left with
+# a time to live other than the app's (the second review of unit 11b found the check passed so). The emulator's NAT
+# answers ICMP itself, a TTL-1 ping included, so there it is reported, as is a network that sends no "time exceeded".
+# Each output is read whole before it is parsed.
 exceeded_counter() {
     adb shell dumpsys activity service "$PKG/org.visadahyu.datapavan.network.NetworkVpnService" | tr -d '\r' | sed -n 's/^ *counters //p' | awk '{print $42}'
 }
 if [ "${unsupported1:-0}" != "${unsupported0:-0}" ]; then
-    echo "skipped: a ping with a time to live of 1, as this phone gives Watch no ICMP socket"
+    echo "skipped: a ping with a time to live of 1, as this phone gives the network part no ICMP socket"
 else
     exceeded0=$(exceeded_counter)
     traced=$(device 12 "ping -c 1 -t 1 -W 3 1.1.1.1")
@@ -576,23 +577,24 @@ else
         [ -n "$router" ] && [ "$router" != 1.1.1.1 ] ||
             fail "a ping with a time to live of 1 was told its time ran out by ${router:-no address}, not by a router on the path: $exceeded_line"
         [ "${exceeded1:-0}" -gt "${exceeded0:-0}" ] ||
-            fail "a ping with a time to live of 1 was told its time ran out by $router, but Watch counted no \"time exceeded\" passed on (${exceeded0:-?}, then ${exceeded1:-?}): the error did not come through Watch"
-        echo "ok: a ping with a time to live of 1 is told its time ran out by the first router, $router, as without Watch (counted: $exceeded0, then $exceeded1)"
+            fail "a ping with a time to live of 1 was told its time ran out by $router, but the network part counted no \"time exceeded\" passed on (${exceeded0:-?}, then ${exceeded1:-?}): the error did not come through the network part"
+        echo "ok: a ping with a time to live of 1 is told its time ran out by the first router, $router, as without the network part (counted: $exceeded0, then $exceeded1)"
     elif grep -q 'bytes from' <<<"$traced"; then
         if is_emulator; then
             echo "reported: the emulator's NAT answers a ping with a time to live of 1 itself, so no router's \"time exceeded\" can be seen here (counted: ${exceeded0:-?}, then ${exceeded1:-?}); the shell's ping said: $said"
         else
-            fail "a ping with a time to live of 1 got a reply from 1.1.1.1, which no path reaches in one hop: Watch sent it with another time to live than the shell's, or this network answers pings itself; the shell's ping said: $said"
+            fail "a ping with a time to live of 1 got a reply from 1.1.1.1, which no path reaches in one hop: the network part sent it with another time to live than the shell's, or this network answers pings itself; the shell's ping said: $said"
         fi
     else
         echo "not seen: this network sends no \"time to live exceeded\" for a time to live of 1 (counted: ${exceeded0:-?}, then ${exceeded1:-?}); the shell's ping said: $said"
     fi
 fi
 
-# The tunnel's MTU follows the network beneath (ADR 0044, decision 5 as amended): Watch reads the first hop's MTU of each IP
-# version from the kernel and gives the tunnel the smaller, within 1,280 and 1,500; its dump says what it chose and what it
-# read. The interface that holds the tunnel's address must carry that MTU. On the emulator both networks are 1,500. Each
-# output is read whole before it is parsed: under pipefail, a reader that stops early would fail the pipe.
+# The tunnel's MTU follows the network beneath (ADR 0044, decision 5 as amended): the network part reads the first hop's
+# MTU of each IP version from the kernel and gives the tunnel the smaller, within 1,280 and 1,500; its dump says what it
+# chose and what it read. The interface that holds the tunnel's address must carry that MTU. On the emulator both
+# networks are 1,500. Each output is read whole before it is parsed: under pipefail, a reader that stops early would
+# fail the pipe.
 mtu_line=$(adb shell dumpsys activity service "$PKG/org.visadahyu.datapavan.network.NetworkVpnService" </dev/null | tr -d '\r' | sed -n 's/^ *mtu //p')
 read -r chosen _ first4 first6 <<<"$mtu_line"
 links=$(adb shell ip -o -4 addr show </dev/null | tr -d '\r')
@@ -608,35 +610,35 @@ if [ -z "$link_mtu" ]; then
     link_mtu=$(sed -n 's/.* MTU: \([0-9]*\).*/\1/p' <<<"$vpn_line")
 fi
 if is_emulator && [ "$chosen" != 1500 ]; then
-    fail "on the emulator, whose networks are 1,500, Watch chose a tunnel MTU of $chosen (first hop: IPv4 $first4, IPv6 $first6)"
+    fail "on the emulator, whose networks are 1,500, the network part chose a tunnel MTU of $chosen (first hop: IPv4 $first4, IPv6 $first6)"
 fi
 if [ -z "$link_mtu" ]; then
-    echo "skipped: the MTU of the tunnel's interface $interface, which this shell can read neither with ip nor from dumpsys (Watch chose $chosen; first hop: IPv4 $first4, IPv6 $first6)"
+    echo "skipped: the MTU of the tunnel's interface $interface, which this shell can read neither with ip nor from dumpsys (the network part chose $chosen; first hop: IPv4 $first4, IPv6 $first6)"
     echo "  the VPN network's record: ${vpn_line:-none}" | cut -c1-400
 else
-    [ "$link_mtu" = "$chosen" ] || fail "the tunnel's interface $interface carries an MTU of $link_mtu, not the ${chosen:-none} Watch chose (first hop: IPv4 $first4, IPv6 $first6)"
+    [ "$link_mtu" = "$chosen" ] || fail "the tunnel's interface $interface carries an MTU of $link_mtu, not the ${chosen:-none} the network part chose (first hop: IPv4 $first4, IPv6 $first6)"
     echo "ok: the tunnel's MTU is $chosen, the first hop's (IPv4 $first4, IPv6 $first6)"
 fi
 
 # A tunnel set up again with the same addresses and apps, as for a new MTU, keeps its VPN network on Android and is
 # handed to the running engine, which keeps its flows (ADR 0044, unit 12b). A connection to the test server is opened
-# through Watch and kept open: one nc sends an HTTP request, waits until a marker file is there (at most 60 s),
-# then, only if it is there, sends a second on the same connection, kept alive, and writes the answers to a file.
+# through the network part and kept open: one nc sends an HTTP request, waits until a marker file is there (at most 60
+# s), then, only if it is there, sends a second on the same connection, kept alive, and writes the answers to a file.
 # Android 15's shell may not make a FIFO in /data/local/tmp, so the requests come from one shell's output. A debug
 # command sets the tunnel up again with nothing changed: Android makes a new interface, and the old one goes once
 # the engine has closed it. Then the marker lets the second request go: it must be answered on the same nc
-# connection, and the tunnel keep the MTU Watch chose (the first-hop values beside it may change with a measure).
-# Each output is read whole before it is parsed.
+# connection, and the tunnel keep the MTU the network part chose (the first-hop values beside it may change with a
+# measure). Each output is read whole before it is parsed.
 #
 # Android's netd destroys every TCP socket on an address it believes was removed. The old interface's reset removes
 # the tunnel's address there while the new interface holds it, and netd's count of the interfaces that hold it can
 # race (the Android 15 emulator, 2026-11-16: "Destroyed 5 sockets on 10.1.10.1" right after the new tunnel was
-# established): the kept connection's sockets go then, the shell's own among them, and no VPN could keep it. Watch's
-# engine lost its listener with them, and refused every connection after, until it bound its listener anew (ADR 0044,
-# unit 12b). So when the kept connection carries no second answer, a new connection through Watch must pass right
-# after, and Android's log tells a destroy by netd, which is reported and passes, from a stall, which fails. A destroy
-# passes only if the running engine took the tunnel, as Watch's dump counts ("setups kept N"): a new engine, the
-# fallback when a swap fails, ends the connections itself, which a destroy by netd must not hide.
+# established): the kept connection's sockets go then, the shell's own among them, and no VPN could keep it. The network
+# part's engine lost its listener with them, and refused every connection after, until it bound its listener anew (ADR
+# 0044, unit 12b). So when the kept connection carries no second answer, a new connection through the network part must
+# pass right after, and Android's log tells a destroy by netd, which is reported and passes, from a stall, which fails.
+# A destroy passes only if the running engine took the tunnel, as the network part's dump counts ("setups kept N"): a
+# new engine, the fallback when a swap fails, ends the connections itself, which a destroy by netd must not hide.
 KEPT_REQUEST='GET /ping HTTP/1.1\r\nHost: probe\r\n\r\n'
 kept_ask() { device 5 "touch $KEPT_GO" >/dev/null; }
 # Waits up to 10 s until the kept connection has had $1 answers.
@@ -649,7 +651,7 @@ kept_answered() {
     done
     return 1
 }
-# A new connection through Watch, as the first traffic check makes one: whether it is answered.
+# A new connection through the network part, as the first traffic check makes one: whether it is answered.
 new_connection_passes() {
     local answer
     answer=$(device 15 "printf 'GET /ping HTTP/1.0\r\n\r\n' | nc -w 5 $HOST $PORT")
@@ -664,7 +666,7 @@ netd_destroyed() {
     pattern="Destroyed [0-9]+ sockets on ${2//./\\.}([^0-9.]|\$)"
     grep -oE "$pattern.*" <<<"$log" | head -3 | paste -sd ';' - | sed 's/;/; /g' || true
 }
-# Watch's count of setups, "kept N anew M": those the running engine took, and those a new engine took.
+# The network part's count of setups, "kept N anew M": those the running engine took, and those a new engine took.
 setups_line() {
     adb shell dumpsys activity service "$PKG/org.visadahyu.datapavan.network.NetworkVpnService" </dev/null | tr -d '\r' | sed -n 's/^ *setups //p'
 }
@@ -679,8 +681,8 @@ adb shell "(printf '$KEPT_REQUEST'; i=0; while [ ! -e $KEPT_GO ] && [ \$i -lt 30
 KEPT=$!
 # The device waits 60 s at most for the marker (300 times 0.2 s), from about now.
 kept_since=$SECONDS
-kept_answered 1 || fail "a connection kept open through Watch got no answer to its first request; the device has: $(device 5 "ls -l $KEPT_OUT; head -c 300 $KEPT_OUT; ps -A -o PID,NAME | grep -E ' (nc|sleep)\$'" | tr '\n' ' ')"
-# Android's log is read from here on, by the device's own clock, and Watch's count of setups.
+kept_answered 1 || fail "a connection kept open through the network part got no answer to its first request; the device has: $(device 5 "ls -l $KEPT_OUT; head -c 300 $KEPT_OUT; ps -A -o PID,NAME | grep -E ' (nc|sleep)\$'" | tr '\n' ' ')"
+# Android's log is read from here on, by the device's own clock, and the network part's count of setups.
 setup_since=$(adb shell date +%s </dev/null | tr -d '\r')
 setups_before=$(setups_line)
 adb shell dumpsys activity service "$PKG/org.visadahyu.datapavan.network.NetworkVpnService" setup-again </dev/null | grep -q '^ *setup-again' ||
@@ -696,7 +698,7 @@ for _ in $(seq 1 20); do
 done
 [ -n "$moved" ] || fail "the tunnel was not set up again within 20 s, or its old interface $interface stayed: $(tunnel_interfaces | paste -sd ' ')"
 # Still one answer: the second request goes only once the marker is there, never when the device's wait ends.
-kept_answered 1 || fail "the connection kept open through Watch had other than one answer before its second request: $(device 5 "grep -o pong $KEPT_OUT | wc -l")"
+kept_answered 1 || fail "the connection kept open through the network part had other than one answer before its second request: $(device 5 "grep -o pong $KEPT_OUT | wc -l")"
 asked=$((SECONDS - kept_since))
 kept_ask
 # What netd destroyed on the tunnel's address, when the kept connection ended with it.
@@ -706,15 +708,15 @@ if ! kept_answered 2; then
         fail "the kept connection's second request was never sent: the marker came $asked s after the connection opened, after the device's 60 s wait for it had ended, as the steps before took that long; this says nothing of the swap"
     kept_destroyed=$(netd_destroyed "$setup_since" "$(tunnel_address)")
     new_connection_passes ||
-        fail "the connection kept open through Watch carried no answer after the tunnel was set up again with the same addresses (interface $interface, then $moved), and a new connection through Watch right after got none either: the engine did not take it (netd's destroys on the tunnel's address: ${kept_destroyed:-none})"
+        fail "the connection kept open through the network part carried no answer after the tunnel was set up again with the same addresses (interface $interface, then $moved), and a new connection through the network part right after got none either: the engine did not take it (netd's destroys on the tunnel's address: ${kept_destroyed:-none})"
     [ -n "$kept_destroyed" ] ||
-        fail "the connection kept open through Watch carried no answer after the tunnel was set up again with the same addresses (interface $interface, then $moved; the marker came after $asked s, within the device's 60 s wait for it), and netd destroyed no socket on the tunnel's address: a stall (a new connection through Watch passed)"
+        fail "the connection kept open through the network part carried no answer after the tunnel was set up again with the same addresses (interface $interface, then $moved; the marker came after $asked s, within the device's 60 s wait for it), and netd destroyed no socket on the tunnel's address: a stall (a new connection through the network part passed)"
     read -r _ kept0 _ anew0 <<<"$setups_before"
     setups_after=$(setups_line)
     read -r _ kept1 _ anew1 <<<"$setups_after"
     [ -n "$kept0" ] && [ "${kept1:-}" = "$((kept0 + 1))" ] && [ "${anew1:-}" = "$anew0" ] ||
-        fail "netd destroyed the sockets on the tunnel's address ($kept_destroyed), but the running engine did not take the tunnel set up again: Watch's setups went from '$setups_before' to '$setups_after', so the kept connection may have ended with a new engine"
-    note="netd destroyed the sockets on the tunnel's address when the tunnel was set up again with the same addresses ($kept_destroyed): the connection kept open through Watch ended with them, as Android ends it; a new connection through Watch passed right after"
+        fail "netd destroyed the sockets on the tunnel's address ($kept_destroyed), but the running engine did not take the tunnel set up again: the network part's setups went from '$setups_before' to '$setups_after', so the kept connection may have ended with a new engine"
+    note="netd destroyed the sockets on the tunnel's address when the tunnel was set up again with the same addresses ($kept_destroyed): the connection kept open through the network part ended with them, as Android ends it; a new connection through the network part passed right after"
     echo "::warning title=netd destroyed the tunnel's sockets::$note"
     [ -z "${GITHUB_STEP_SUMMARY:-}" ] || echo "- verify-network.sh: $note (ADR 0044, unit 12b)" >>"$GITHUB_STEP_SUMMARY"
 fi
@@ -727,9 +729,9 @@ KEPT=""
 device 5 "rm -f $KEPT_GO $KEPT_OUT" >/dev/null
 interface=$moved
 if [ -n "$kept_destroyed" ]; then
-    echo "ok: set up again with the same addresses (interface $interface now), the tunnel kept its MTU; netd destroyed the kept connection's sockets ($kept_destroyed), and a new connection through Watch passed right after"
+    echo "ok: set up again with the same addresses (interface $interface now), the tunnel kept its MTU; netd destroyed the kept connection's sockets ($kept_destroyed), and a new connection through the network part passed right after"
 else
-    echo "ok: set up again with the same addresses (interface $interface now), the tunnel kept a connection open through Watch, both ways, and its MTU"
+    echo "ok: set up again with the same addresses (interface $interface now), the tunnel kept a connection open through the network part, both ways, and its MTU"
 fi
 
 # Fragments (ADR 0044, decision 5 as amended): a ping of 2,000 bytes of data is a 2,028-byte request, which the
@@ -755,10 +757,10 @@ else
     echo "not seen: this phone's shell sent no fragmented ping, or the engine did not put it together ($rebuilt0, then $rebuilt1)"
 fi
 
-# Watch's listener is on the tunnel's own address, which any app can reach directly, from a port it
+# The network part's listener is on the tunnel's own address, which any app can reach directly, from a port it
 # picks. A connection that does not come from the address the engine rewrites the apps' connections to
 # come from is closed at once and counted (the 19th counter): it never takes another app's waiting
-# upstream connection. The listener's port is in /proc/net/tcp: listening (0A), Watch's UID, on the
+# upstream connection. The listener's port is in /proc/net/tcp: listening (0A), the network part's UID, on the
 # tunnel's IPv4 address, which the kernel prints as hex in reverse byte order.
 strangers() {
     adb shell dumpsys activity service "$PKG/org.visadahyu.datapavan.network.NetworkVpnService" | tr -d '\r' | sed -n 's/^ *counters //p' | awk '{print $19}'
@@ -775,18 +777,18 @@ for line in sys.stdin:
 if [ -n "$listener" ]; then
     before=$(strangers)
     answer=$(device 8 "echo hello | nc -w 5 $(tunnel_address) $listener")
-    [ -z "$answer" ] || fail "a connection straight to Watch's listener got an answer: $answer"
+    [ -z "$answer" ] || fail "a connection straight to the network part's listener got an answer: $answer"
     after=$(strangers)
-    [ "$after" = $((before + 1)) ] || fail "a connection straight to Watch's listener was not counted: $before, then $after"
-    echo "ok: a connection straight to Watch's listener is closed at once and counted"
+    [ "$after" = $((before + 1)) ] || fail "a connection straight to the network part's listener was not counted: $before, then $after"
+    echo "ok: a connection straight to the network part's listener is closed at once and counted"
 elif is_emulator; then
-    fail "Watch's listener is not in /proc/net/tcp"
+    fail "the network part's listener is not in /proc/net/tcp"
 else
     echo "skipped: the listener check, as this phone does not show /proc/net/tcp"
 fi
 
 if is_emulator; then
-    # Switching Wi-Fi off moves the tunnel to mobile data, which came up before Watch started. If it went
+    # Switching Wi-Fi off moves the tunnel to mobile data, which came up before the network part started. If it went
     # down since, turning it off and on once more.
     if ! wait_up 30; then
         echo "  no mobile data before the switch ($(networks)): turning it off and on"
@@ -794,7 +796,7 @@ if is_emulator; then
         sleep 2
         adb shell svc data enable
     fi
-    wait_up 60 || fail "the emulator's mobile data went down after Watch started ($(networks)), so the switch has nowhere to go"
+    wait_up 60 || fail "the emulator's mobile data went down after the network part started ($(networks)), so the switch has nowhere to go"
     before=$(default_network)
     wifi=$(sed -n 's/\(^\|.*;\)\([0-9]*\) WIFI[^ ;]* CONNECTED.*/\2/p' <<<"$(networks)")
     echo "  networks before the switch: $(networks); default $before"
@@ -811,7 +813,7 @@ if is_emulator; then
     echo "  networks after the switch: $(networks); default $(default_network)"
     now=$(default_network)
     [[ "$now" =~ ^[0-9]+$ && "$now" != "$wifi" ]] ||
-        fail "Android had no network but Wi-Fi 60 s after Wi-Fi went off, so nothing could pass, with Watch or without"
+        fail "Android had no network but Wi-Fi 60 s after Wi-Fi went off, so nothing could pass, with the network part or without"
     sleep 3
     vpn_up || fail "the tunnel went down when the network beneath switched"
     # As without a VPN, a connection during the switch may fail (ADR 0012); the next ones must pass.
@@ -828,18 +830,18 @@ if is_emulator; then
     if ! wait_settled 90; then
         wifi_again 90
         wait_settled 90 ||
-            fail "Wi-Fi did not come back, or the networks did not settle, within 90 s, nor in 90 s more after Wi-Fi was told to join its network and turned off and on ($(networks); $(wifi_state)); this is the emulator, not Watch"
+            fail "Wi-Fi did not come back, or the networks did not settle, within 90 s, nor in 90 s more after Wi-Fi was told to join its network and turned off and on ($(networks); $(wifi_state)); this is the emulator, not the network part"
     fi
 else
     echo "skipped: the network switch, on a phone"
 fi
 
-# Strict Private DNS sends every app's lookups past Watch's resolver; Watch says so on its screen. Only
-# on an emulator: a phone's settings are its owner's. Android needs no answer from the provider to
+# Strict Private DNS sends every app's lookups past the network part's resolver; the network part says so on its screen.
+# Only on an emulator: a phone's settings are its owner's. Android needs no answer from the provider to
 # report the setting, and the setting is restored at once. It runs last: Android then looks up
-# dns.google through Watch, which names 8.8.8.8 after it from then on.
+# dns.google through the network part, which names 8.8.8.8 after it from then on.
 if is_emulator; then
-    wait_private_dns plain || fail "Watch reads Private DNS as '$(private_dns)', not plain, before the test"
+    wait_private_dns plain || fail "the network part reads Private DNS as '$(private_dns)', not plain, before the test"
     DNS_MODE=$(adb shell settings get global private_dns_mode | tr -d '\r')
     DNS_HOST=$(adb shell settings get global private_dns_specifier | tr -d '\r')
     adb shell settings put global private_dns_specifier dns.google
@@ -848,24 +850,24 @@ if is_emulator; then
     mode=$DNS_MODE
     host=$DNS_HOST
     restore_private_dns
-    # Right after the network switch, Watch has twice still read strict mode long after the restore (once
+    # Right after the network switch, the network part has twice still read strict mode long after the restore (once
     # 20 s, and on CI on 2026-11-14 a minute, while Android itself still named the provider on the
-    # tunnel's network): Watch reads what Android says. If after 20 s Android itself still names the
+    # tunnel's network): the network part reads what Android says. If after 20 s Android itself still names the
     # provider, the specifier is written once more and restored, which makes Android read the setting
-    # again; the mode stays restored throughout. If Android no longer names it and Watch still reads strict
-    # mode, that is Watch's failure, and nothing is written again.
+    # again; the mode stays restored throughout. If Android no longer names it and the network part still reads strict
+    # mode, that is the network part's failure, and nothing is written again.
     if ! wait_private_dns plain 20; then
         said=$(android_private_dns)
         grep -q 'PrivateDnsServerName: dns\.google' <<<"$said" ||
-            fail "Watch still reads Private DNS as '$(private_dns)' 20 s after the restore, while Android no longer names the provider: $said"
-        echo "  Watch reads Private DNS as '$(private_dns)' 20 s after the restore, and Android still names the provider: $said; writing the setting again"
+            fail "the network part still reads Private DNS as '$(private_dns)' 20 s after the restore, while Android no longer names the provider: $said"
+        echo "  the network part reads Private DNS as '$(private_dns)' 20 s after the restore, and Android still names the provider: $said; writing the setting again"
         DNS_MODE=$mode
         DNS_HOST=$host
         adb shell settings put global private_dns_specifier restore.invalid
         sleep 1
         restore_private_dns
         wait_private_dns plain 60 ||
-            fail "Watch still reads Private DNS as '$(private_dns)' once it was restored, also after the setting was written again; Android says: $(android_private_dns)"
+            fail "the network part still reads Private DNS as '$(private_dns)' once it was restored, also after the setting was written again; Android says: $(android_private_dns)"
     fi
     echo "ok: strict Private DNS is detected, and its end"
 else
@@ -876,7 +878,7 @@ if flows | awk -v host="$HOST" 'index($3, host) && $4 == "-"' | grep -q .; then
     fail "a flow to the test server has no owner"
 fi
 if adb logcat -d -b crash 2>/dev/null | grep -q "$PKG"; then
-    fail "Watch crashed"
+    fail "the network part crashed"
 fi
 echo "ok: no crash"
-echo "== Watch's engine passed"
+echo "== The network part's engine passed"

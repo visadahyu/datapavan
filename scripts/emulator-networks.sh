@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
-# The emulator's networks, for the checks that switch the network beneath Watch (scripts/verify-network.sh, and since
-# W7's fix round scripts/verify-wireguard.sh): Android's default network and its list, whether a type is up, waits
-# until mobile data and Wi-Fi are up and settled, and Wi-Fi brought back where the emulator lost it. Sourced; uses
+# The emulator's networks, for the checks that switch the network beneath the network part (scripts/verify-network.sh,
+# and since W7's fix round scripts/verify-wireguard.sh): Android's default network and its list, whether a type is up,
+# waits until mobile data and Wi-Fi are up and settled, and Wi-Fi brought back where the emulator lost it. Sourced; uses
 # adb on the device ANDROID_SERIAL names.
 #
 #   . scripts/emulator-networks.sh
@@ -29,8 +29,8 @@ wait_up() {
 }
 # Waits up to $1 seconds until mobile data and Wi-Fi are both up and Android's list of networks has
 # stayed the same over four reads two seconds apart. After airplane mode the radios came back and then
-# replaced their networks once more while Watch ran (CI, 2026-11-14); Watch starts over networks that
-# have stopped changing.
+# replaced their networks once more while the network part ran (CI, 2026-11-14); the network part starts over networks
+# that have stopped changing.
 wait_settled() {
     local deadline=$((SECONDS + $1)) last="" now steady=0
     while :; do
@@ -51,7 +51,7 @@ wifi_state() {
     adb shell cmd wifi status 2>/dev/null | tr -d '\r' | grep -E '^Wifi is (enabled|disabled|connected|not connected)' |
         paste -sd ';' || true
 }
-# The emulator's Wi-Fi did not come up before Watch started once (CI, 2026-11-14), and did not come back
+# The emulator's Wi-Fi did not come up before the network part started once (CI, 2026-11-14), and did not come back
 # after the switch turned it on again three times (CI, 2026-11-16, 2026-11-18 and 2026-11-19): Android
 # listed mobile data and no Wi-Fi, and the next attempt passed. So before either check fails, Wi-Fi is
 # brought back, waited for again within the same bound, and the run says so (docs/ci-flakes.md). Only when
@@ -82,8 +82,8 @@ wifi_again() {
 # 44905337897, in the WireGuard check; docs/ci-flakes.md). So before a check fails for it, the radios are restarted
 # with airplane mode, as verify-network.sh has done since 2026-11-12; then the emulator's modem is told to register
 # again through the emulator's console (`gsm voice home`, `gsm data home`); and only if mobile data is still not up
-# is the emulator booted anew, once, and waited for. Only where mobile data is not up, and only before Watch starts:
-# nothing of Watch's state is lost by it. Returns whether mobile data came up.
+# is the emulator booted anew, once, and waited for. Only where mobile data is not up, and only before the network part
+# starts: nothing of the network part's state is lost by it. Returns whether mobile data came up.
 mobile_again() {
     up MOBILE && return 0
     echo "  no mobile data ($(networks)): restarting the radios with airplane mode"

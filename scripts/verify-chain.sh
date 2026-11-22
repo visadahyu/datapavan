@@ -1,14 +1,14 @@
 #!/usr/bin/env bash
 # W6's end-to-end check of chaining (docs/DESIGN.md, 13.2; docs/VPN.md; ADR 0038), on an emulator.
 # The test tool (scripts/test-tool) runs a SOCKS5 proxy with a password on the phone's loopback, as a
-# circumvention tool does in proxy mode. Watch must find it by itself: its package, its port, that
+# circumvention tool does in proxy mode. The network part must find it by itself: its package, its port, that
 # Android names it as the port's owner, and that it wants a password. With adb's shell (UID 2000)
 # chained through it, TCP reaches the test server on this computer by address and by a name only the
 # tool can resolve (the shell gets a stand-in address for it), UDP goes through the tool's relay, the
 # tool's own connections go directly and are counted under the tool, and a wrong password is refused.
 # Then the tool stops: the shell's connections fail, and a sentinel on this computer, outside Android,
 # sees none of them reach it directly, while it does see a control's direct connection. Last, the user's
-# own path on the chain screen: Watch offers its password, which is set in the tool; one installed app
+# own path on the chain screen: the network part offers its password, which is set in the tool; one installed app
 # (scripts/workload-app) is picked and the chain turned on; that app's lookup and TCP go through the
 # tool under its own UID, its UDP goes nowhere until the user allows UDP on the screen and then through
 # the tool, and adb's shell, not picked, goes directly. The screen says what the tool's proxy lets other
@@ -16,9 +16,9 @@
 # on: the screen says the apps wait, its switch still turns the chain off, and the picked app then goes
 # directly. With UDP allowed, the picked app also sends STUN requests from one socket to two names on one
 # port at once, and both answers must reach it (ADR 0044, unit 9b). Last, that app is left out of the
-# tunnel on the screen (ADR 0041): Watch sets its tunnel up again, the app reaches the server and Watch
-# no longer sees it; taken back, Watch sees it again. On the way, the chain section links the test tool's guide (W8,
-# part 3b), which quotes the label read from the installed tool's own resources. Nothing
+# tunnel on the screen (ADR 0041): the network part sets its tunnel up again, the app reaches the server and the network
+# part no longer sees it; taken back, the network part sees it again. On the way, the chain section links the test
+# tool's guide (W8, part 3b), which quotes the label read from the installed tool's own resources. Nothing
 # is left running: the tunnel, the tool and the server stop at the end, and the tool is uninstalled.
 #
 #   scripts/verify-chain.sh [path/to/Datapavan-Advanced-debug.apk]
@@ -27,7 +27,7 @@ set -euo pipefail
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 APK="${1:-$ROOT/android/app/build-advanced/outputs/apk/debug/app-debug.apk}"
 PKG=org.visadahyu.datapavan.advanced
-# Watch's screen in Datapavan Advanced (ADR 0045); debug builds export it for these checks.
+# The network screen in Datapavan Advanced (ADR 0045); debug builds export it for these checks.
 NETWORK_SCREEN=org.visadahyu.datapavan.network.MainActivity
 TOOL=org.visadahyu.datapavan.testtool
 WORKLOAD=org.visadahyu.datapavan.workload
@@ -60,8 +60,8 @@ trap cleanup EXIT
 host_server --sentinel "$WORK/sentinel.log" || exit 1
 
 dump() { adb shell dumpsys activity service "$PKG/org.visadahyu.datapavan.network.NetworkVpnService" "$@" | tr -d '\r'; }
-# When the engine's counters began, then its counter at place $1, counting from 1, as Watch's dump prints
-# them, from one dump: two reads with another beginning span an engine Watch started afresh, whose
+# When the engine's counters began, then its counter at place $1, counting from 1, as the network part's dump prints
+# them, from one dump: two reads with another beginning span an engine the network part started afresh, whose
 # counters began again at 0 (unit 9b, fix round 2).
 counter_since() { dump | awk -v n="$1" '/^ *counters-since /{since=$2} /^ *counters /{sub(/^ *counters /, ""); split($0, c, " ")} END{print since, c[n]}'; }
 flows() { dump | sed -n 's/^ *flow //p'; }
@@ -85,13 +85,13 @@ fail() {
     tool_log | tail -20 >&2 || true
     echo "The flows of the shell and the tool:" >&2
     flows | grep -E " ($SHELL_UID|${TOOL_UID:-x}) " | tail -20 >&2 || true
-    echo "Watch's searches for the tool (debug log):" >&2
+    echo "the network part's searches for the tool (debug log):" >&2
     search_log | tail -20 >&2 || true
     adb logcat -d -b crash 2>/dev/null | tail -30 >&2 || true
     exit 1
 }
 
-# The steps of Watch's searches for the tool, which a debug build logs (Tools.search).
+# The steps of the network part's searches for the tool, which a debug build logs (Tools.search).
 search_log() { adb logcat -d -s NetworkChain | tr -d '\r' | sed -n 's/.*NetworkChain: //p'; }
 
 vpn_up() {
@@ -126,7 +126,7 @@ allow_vpn "$PKG" || fail "Android did not take the VPN consent for $PKG"
 adb shell am force-stop "$PKG"
 adb shell am start -W -n "$PKG/$NETWORK_SCREEN" --ez start true >/dev/null
 for _ in $(seq 1 20); do vpn_up && break; sleep 1; done
-vpn_up || fail "Watch's tunnel did not come up"
+vpn_up || fail "the network part's tunnel did not come up"
 echo "ok: the tunnel is up for every app"
 
 expected="tool answering $TOOL 127.0.0.1:$TOOL_PORT uid $TOOL_UID password yes owner yes"
@@ -136,11 +136,11 @@ for attempt in 1 2 3 4 5; do
     echo "  search $attempt: $found" >&2
     sleep 2
 done
-[ "$found" = "$expected" ] || fail "Watch did not find the tool as expected: $found"
-echo "ok: Watch found the tool, its port, its owner and that it wants a password"
+[ "$found" = "$expected" ] || fail "the network part did not find the tool as expected: $found"
+echo "ok: the network part found the tool, its port, its owner and that it wants a password"
 
 chained=$(dump chain 127.0.0.1 "$TOOL_PORT" "$TOOL_UID" udp "$SHELL_UID" datapavan "$PASSWORD")
-grep -q "chain on" <<<"$chained" || fail "the chain did not turn on; Watch's dump said: ${chained:-nothing}"
+grep -q "chain on" <<<"$chained" || fail "the chain did not turn on; the network part's dump said: ${chained:-nothing}"
 
 answer=$(ping_from_shell "$HOST")
 grep -q pong <<<"$answer" || fail "TCP by address through the tool: no answer ($answer)"
@@ -164,23 +164,24 @@ grep -q "^associate$" <<<"$(tool_log)" || fail "the tool was not asked for a UDP
 echo "ok: UDP through the tool's relay, by name"
 
 chained=$(dump chain 127.0.0.1 "$TOOL_PORT" "$TOOL_UID" udp "$SHELL_UID" datapavan wrong-password)
-grep -q "chain on" <<<"$chained" || fail "the chain with a wrong password did not turn on; Watch's dump said: ${chained:-nothing}"
+grep -q "chain on" <<<"$chained" || fail "the chain with a wrong password did not turn on; the network part's dump said: ${chained:-nothing}"
 grep -q pong <<<"$(ping_from_shell "$HOST")" && fail "a wrong password was let through"
 grep -q "^password refused$" <<<"$(tool_log)" || fail "the tool did not see the wrong password"
 echo "ok: a wrong password is refused, and nothing goes directly instead"
 
-# Watch never logs SOCKS credentials (DESIGN.md, 13.2): neither password is in Android's log or in
-# Watch's account of itself. (The passwords reached Watch only through the debug dump's command line.)
+# The network part never logs SOCKS credentials (DESIGN.md, 13.2): neither password is in Android's log or in
+# the network part's account of itself. (The passwords reached the network part only through the debug dump's command
+# line.)
 seen=$( (adb logcat -d -b main -b system -b crash; dump) 2>/dev/null | tr -d '\r')
-grep -qF "$PASSWORD" <<<"$seen" && fail "the tool's password is in Android's log or Watch's dump"
-grep -qF "wrong-password" <<<"$seen" && fail "a password Watch was given is in Android's log or Watch's dump"
-echo "ok: no password in Android's log or in Watch's dump"
+grep -qF "$PASSWORD" <<<"$seen" && fail "the tool's password is in Android's log or the network part's dump"
+grep -qF "wrong-password" <<<"$seen" && fail "a password the network part was given is in Android's log or the network part's dump"
+echo "ok: no password in Android's log or in the network part's dump"
 
 # The tool stops. A sentinel on this computer, outside Android, notes every TCP connection and UDP
 # datagram that reaches its port: the emulator's own capture does not see what goes over its Wi-Fi.
-# A control from Watch's own UID, which goes directly, shows that the sentinel sees what leaves.
+# A control from the network part's own UID, which goes directly, shows that the sentinel sees what leaves.
 chained=$(dump chain 127.0.0.1 "$TOOL_PORT" "$TOOL_UID" udp "$SHELL_UID" datapavan "$PASSWORD")
-grep -q "chain on" <<<"$chained" || fail "the chain did not turn on again; Watch's dump said: ${chained:-nothing}"
+grep -q "chain on" <<<"$chained" || fail "the chain did not turn on again; the network part's dump said: ${chained:-nothing}"
 adb shell am force-stop "$TOOL"
 SENTINEL_PORT=$((PORT + 3))
 # The test server's sentinel, held since the check began, writes a line for each connection and datagram;
@@ -199,24 +200,24 @@ grep -q '^tcp$' <<<"$(sentinel_since)" || fail "the sentinel did not see the con
 echo "ok: with the tool stopped, the shell's TCP and UDP failed, and a sentinel on this computer saw none of them, only the control's direct connection"
 
 unchained=$(dump unchain)
-grep -q "chain off" <<<"$unchained" || fail "the chain did not turn off; Watch's dump said: ${unchained:-nothing}"
+grep -q "chain off" <<<"$unchained" || fail "the chain did not turn off; the network part's dump said: ${unchained:-nothing}"
 
-# The user's own path, on the chain screen in English. The tool starts without a password; Watch finds it
+# The user's own path, on the chain screen in English. The tool starts without a password; the network part finds it
 # and offers its own user name and password, which go into the tool as a user would set them.
 adb shell cmd locale set-app-locales "$PKG" --locales en-US >/dev/null 2>&1 || true
 listening=$(tool_log | grep -c "^listening")
 adb shell am start-foreground-service -n "$TOOL/.ToolService" --ei port "$TOOL_PORT" --es map "network.test=$HOST" >/dev/null
 for _ in $(seq 1 10); do [ "$(tool_log | grep -c "^listening")" -gt "$listening" ] && break; sleep 1; done
-# Back to Watch as a user comes back to it, which makes it look for the tool again.
+# Back to the network part as a user comes back to it, which makes it look for the tool again.
 adb shell input keyevent KEYCODE_HOME
 sleep 1
 adb shell am start -W -n "$PKG/$NETWORK_SCREEN" >/dev/null
 SWITCH="Send apps through Datapavan test tool"
-# A search that missed the listening tool is a defect of Watch's, which a user sees as "not answering"
+# A search that missed the listening tool is a defect of the network part's, which a user sees as "not answering"
 # (docs/ci-flakes.md, "Defects found by flakes"): the check looks once more, so that the rest of the screen
 # is still checked, but every second look is a warning on the run and a line in its summary.
 searched_again() {
-    echo "::warning title=Watch's tool search::$1"
+    echo "::warning title=the network part's tool search::$1"
     [ -z "${GITHUB_STEP_SUMMARY:-}" ] || echo "- verify-chain.sh: $1 (a known defect, docs/ci-flakes.md)" >>"$GITHUB_STEP_SUMMARY"
     search_log | grep '^screen: ' | tail -3 | sed 's/^/    /' >&2 || true
 }
@@ -265,7 +266,7 @@ screen_has "Datapavan test tool has no setting for a password" && fail "the chai
 echo "ok: the screen says that any app can use the tool's proxy while it asks for no password"
 # W8, part 3b: the chain section links the guide of each tool of the table installed here, the test tool's among
 # them (src/debug/assets/test-guides.tsv). The guide quotes the tool's label as the tool's own resources have it
-# (scripts/test-tool/res), not as the data records it: Watch read it from the installed tool by its name.
+# (scripts/test-tool/res), not as the data records it: the network part read it from the installed tool by its name.
 GUIDE_LINK="Datapavan test tool in proxy mode"
 # Read whole, then searched: under pipefail, a grep -q that stops reading early would fail the pipe.
 guide_says() {
@@ -413,11 +414,11 @@ grep -qE "^tcp [^ ]+ 198\.1[89]\.[0-9]+\.[0-9]+:$PORT $WORKLOAD_UID opened" <<<"
 through=$(tool_log | grep -c "^connect $HOST $PORT$")
 grep -q pong <<<"$(ping_from_shell "$HOST")" || fail "adb's shell, not picked, did not reach the server"
 [ "$(tool_log | grep -c "^connect $HOST $PORT$")" = "$through" ] || fail "adb's shell, not picked, went through the tool"
-echo "ok: on the chain screen: Watch's password set in the tool, one picked app's lookup and TCP through the tool, its UDP nowhere until allowed, the shell directly"
+echo "ok: on the chain screen: the network part's password set in the tool, one picked app's lookup and TCP through the tool, its UDP nowhere until allowed, the shell directly"
 
 # The live view "Now" (ADR 0046, decision 6, item 5): with "Log where these apps connect" off, it keeps no
 # destination of the picked app, only its bytes, marked as through the tool; it marks the tool; and it keeps
-# the destinations of the shell, which goes directly. Watch's debug dump prints counts, no destination.
+# the destinations of the shell, which goes directly. The network part's debug dump prints counts, no destination.
 grep -q 'activity-read true' <<<"$(dump activity-read)" || fail "the tracker of the apps' states did not read"
 activity_line() { grep "^activity-app $1 " <<<"$(dump | sed 's/^ *//')" || true; }
 chained=$(activity_line "$WORKLOAD_UID")
@@ -470,7 +471,7 @@ echo "ok: the screen says the proxy asks for a password; with UDP allowed, the p
 # resolved the second name between the two sends, and passed with the counter at 0, as unit 9 would
 # have: it showed nothing of unit 9b. The app sends each request again until it is answered, with its
 # transaction ID, as RFC 8489 6.2.1 has a client do, for up to 39.5 s (fix round 2). The counter is read
-# with when the engine's counters began: an engine Watch started afresh between the two reads counted from
+# with when the engine's counters began: an engine the network part started afresh between the two reads counted from
 # 0 again, which says nothing of this step either way, so the step runs once more, and a second such
 # start fails the run as that, never as a pass or as unit 9b's failure.
 for attempt in 1 2; do
@@ -479,9 +480,9 @@ for attempt in 1 2; do
     after=$(counter_since 48)
     [ "${before%% *}" = "${after%% *}" ] && break
     [ "$attempt" = 2 ] &&
-        fail "Watch's engine started afresh during the STUN step, twice (counters since ${before%% *}, then ${after%% *}): whether unit 9b told the answers apart cannot be read"
-    restarted="Watch's engine started afresh during the STUN step (counters since ${before%% *}, then ${after%% *}); the step runs once more"
-    echo "::warning title=Watch's engine::$restarted"
+        fail "the network part's engine started afresh during the STUN step, twice (counters since ${before%% *}, then ${after%% *}): whether unit 9b told the answers apart cannot be read"
+    restarted="the network part's engine started afresh during the STUN step (counters since ${before%% *}, then ${after%% *}); the step runs once more"
+    echo "::warning title=the network part's engine::$restarted"
     [ -z "${GITHUB_STEP_SUMMARY:-}" ] || echo "- verify-chain.sh: $restarted" >>"$GITHUB_STEP_SUMMARY"
 done
 grep -qE "^stun stun-a\.test,stun-b\.test:$STUN_PORT both after [0-9]+ sendings$" <<<"$log" ||
@@ -519,9 +520,9 @@ for _ in $(seq 1 20); do [ "$(workload_log | grep -c "^tcp $HOST:$PORT pong$" ||
     fail "after the chain was turned off with the tool stopped, the picked app did not reach the server: $(workload_log | tail -3 | tr '\n' ' ')"
 echo "ok: with the tool stopped, the screen says the apps wait, and its switch turns the chain off; the picked app then goes directly"
 
-# An app left out of the tunnel (ADR 0041), chosen on the screen as a user would: Watch sets its tunnel up
-# again, the app still reaches the server, and Watch sees no new traffic of it. Taken back, Watch sees it
-# again. Whichever way the setup went, a new engine (the apps left out changed, so Android brings up a new VPN
+# An app left out of the tunnel (ADR 0041), chosen on the screen as a user would: the network part sets its tunnel up
+# again, the app still reaches the server, and the network part sees no new traffic of it. Taken back, the network part
+# sees it again. Whichever way the setup went, a new engine (the apps left out changed, so Android brings up a new VPN
 # network, ADR 0044, unit 12b) or the running one keeping its flows, only a flow that was not there before
 # counts, by its protocol, the app's end and the destination, so that a UDP socket reused toward another
 # destination counts too.
@@ -545,22 +546,22 @@ tap_text "Choose apps to leave out" || fail "the screen has no button to leave a
 tap_text "Datapavan workload" || fail "the workload app is not in the list of apps to leave out"
 sleep 2
 for _ in $(seq 1 20); do vpn_up && break; sleep 1; done
-vpn_up || fail "Watch's tunnel did not come back after an app was left out"
+vpn_up || fail "the network part's tunnel did not come back after an app was left out"
 scroll_to_top
 scroll_to "1 app is left out." || fail "the screen does not say that one app is left out"
 workload_reaches || fail "the app left out did not reach the server"
 fresh=$(new_workload_flows "$seen")
-[ -z "$fresh" ] || fail "Watch still saw the left-out app's traffic: $(head -3 <<<"$fresh" | tr '\n' ';')"
-echo "ok: an app left out on the screen reaches the server without Watch seeing it"
+[ -z "$fresh" ] || fail "the network part still saw the left-out app's traffic: $(head -3 <<<"$fresh" | tr '\n' ';')"
+echo "ok: an app left out on the screen reaches the server without the network part seeing it"
 seen=$(workload_flows_now)
 tap_text "Datapavan workload" || fail "the workload app could not be taken back"
 sleep 2
 for _ in $(seq 1 20); do vpn_up && break; sleep 1; done
-vpn_up || fail "Watch's tunnel did not come back after the app was taken back"
+vpn_up || fail "the network part's tunnel did not come back after the app was taken back"
 scroll_to_top
 scroll_to "No app is left out." || fail "the screen does not say that no app is left out"
 workload_reaches || fail "the app taken back did not reach the server"
 for _ in $(seq 1 10); do [ -n "$(new_workload_flows "$seen")" ] && break; sleep 1; done
-[ -n "$(new_workload_flows "$seen")" ] || fail "Watch did not see the app's traffic after it was taken back"
-echo "ok: taken back, the app passes through Watch again"
+[ -n "$(new_workload_flows "$seen")" ] || fail "the network part did not see the app's traffic after it was taken back"
+echo "ok: taken back, the app passes through the network part again"
 echo "== chain check passed"

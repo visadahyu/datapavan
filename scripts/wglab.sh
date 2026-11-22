@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
-# W7's interoperation lab through the engine itself (ADR 0035, "Tests without a provider"): Watch's engine, with
-# its WireGuard tunnels, against peers of both reference implementations in the Compose project datapavan-wglab
+# W7's interoperation lab through the engine itself (ADR 0035, "Tests without a provider"): the network part's engine,
+# with its WireGuard tunnels, against peers of both reference implementations in the Compose project datapavan-wglab
 # (spikes/wireguard-core/peer): two of the Linux kernel's WireGuard and, since W7's part 3a, two of wireguard-go, a
 # second code base by WireGuard's authors. It starts the peers, gives them the lab's clients with keys from the
 # peers' own `wg genkey`, and runs core/net/tests/wglab.rs, ignored by default, against each implementation in

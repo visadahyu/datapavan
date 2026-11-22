@@ -52,8 +52,8 @@ data_gates() {
     # What the public documents say, against the code and the record (ADR 0039), and the check's own test.
     python3 -I "$ROOT/scripts/check-truth.py" || failed=1
     python3 -I "$ROOT/scripts/check-truth-test.py" || failed=1
-    # The per-tool guides for proxy mode against the table of tools and Watch's strings (W8, part 3b), and the check's
-    # own test; build-site.sh below writes their pages from the same data.
+    # The per-tool guides for proxy mode against the table of tools and the network part's strings (W8, part 3b), and
+    # the check's own test; build-site.sh below writes their pages from the same data.
     python3 -I "$ROOT/scripts/guides.py" || failed=1
     python3 -I "$ROOT/scripts/guides.py" --self-test || failed=1
     # Android's own labels (ADR 0054): the rows of data/android-labels and every android_label_* fallback, in eight
@@ -219,7 +219,7 @@ android_gates() {
     for pending in "$ROOT"/android/*/src/main/res/values/strings_untranslated.xml; do
         [ ! -f "$pending" ] || python3 -I "$ROOT/scripts/plain-language.py" "$pending"
     done
-    echo "== Android: Watch's colours are the audit app's (network/.../ui/Theme.kt)"
+    echo "== Android: the network part's colours are the audit app's (network/.../ui/Theme.kt)"
     diff <(grep -o 'Color(0x[0-9A-F]*)' "$ROOT/android/app/src/main/java/org/visadahyu/datapavan/ui/Theme.kt") \
         <(grep -o 'Color(0x[0-9A-F]*)' "$ROOT/android/network/src/main/java/org/visadahyu/datapavan/network/ui/Theme.kt")
     echo "== Android: lint, unit tests, APK and bundle builds of Basic, its allowlist, native-library check"
@@ -228,7 +228,7 @@ android_gates() {
         lintDebug lintRelease testDebugUnitTest \
         assembleDebug assembleRelease bundleRelease \
         verifyApkDebug verifyApkRelease
-    # Advanced builds in android/app/build-advanced, with a task history of its own; lint covers Watch's
+    # Advanced builds in android/app/build-advanced, with a task history of its own; lint covers the network part's
     # library through the app.
     echo "== Android: lint, APK and bundle builds of Advanced, its allowlist, native-library check (ADR 0045)"
     ./gradlew --no-daemon --stacktrace -Pdatapavan.edition=advanced --project-cache-dir .gradle-advanced \
@@ -238,11 +238,11 @@ android_gates() {
     echo "== Android: no release APK or bundle holds a class or a package of the lab (ADR 0048)"
     local out
     out="$ROOT/android/app"
-    # Watch's native library, as Advanced's release APK ships it (stripped), stays within its budget per ABI:
+    # The network part's native library, as Advanced's release APK ships it (stripped), stays within its budget per ABI:
     # 2 MB, set by the maintainer on 2026-11-19 after W7's spike measured 1.22 to 1.59 MB today and about 1.35 to
     # 1.80 with WireGuard's core (ADR 0035, question 3; VPN.md). Nothing held the earlier target of 1 MB, and the
     # library grew past it unnoticed.
-    echo "== Android: Watch's native library within 2 MB per ABI (ADR 0035)"
+    echo "== Android: the network part's native library within 2 MB per ABI (ADR 0035)"
     native_budget "$out/build-advanced/outputs/apk/release/app-release-unsigned.apk" libdatapavan_network.so 2097152
     # The table of the Java and Kotlin libraries comes along, held by the build to each variant's classpath
     # (checkJvmComponents): the licence screen reads its list from these files (W7, part 2).

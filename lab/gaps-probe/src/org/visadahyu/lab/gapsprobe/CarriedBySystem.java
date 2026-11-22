@@ -14,7 +14,7 @@ import java.net.UnknownHostException;
  * carried-by-system: traffic that a component of Android carries for this app. "download" has the
  * download service fetch a fixed file from the lab's server; "tab" opens a page of the lab's server as
  * a Custom Tab, which the image's browser loads; "resolve" looks up names under .example (RFC 2606),
- * a new one each trial, so that no answer comes from a cache. The run reads which UID Watch was given
+ * a new one each trial, so that no answer comes from a cache. The run reads which UID the network part was given
  * for each, against the capture.
  */
 final class CarriedBySystem {

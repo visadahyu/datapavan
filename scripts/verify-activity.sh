@@ -1,10 +1,10 @@
 #!/usr/bin/env bash
-# End-to-end check of the live counters behind Watch's view "Now" (W5, ADR 0046, decision 6, items 1 and 6;
+# End-to-end check of the live counters behind the network part's view "Now" (W5, ADR 0046, decision 6, items 1 and 6;
 # item 5 is in verify-chain.sh, which has the tool), on an emulator only: it installs three copies of the
 # workload app (scripts/workload-app), grants usage access and keeps the screen on with adb, and puts both
 # back at the end. It starts the test server (scripts/network-lab/server.py) on ports of this computer found
-# free (scripts/host-ports.sh), starts Watch's tunnel, and checks, from Watch's debug dump, which prints no
-# destination:
+# free (scripts/host-ports.sh), starts the network part's tunnel, and checks, from the network part's debug dump, which
+# prints no destination:
 #
 # - item 1: one app sends in the background, on a long connection it opened while on screen and on a timer,
 #   while another app is on screen sending: the first's bytes in the background are within 5 % of what it
@@ -70,7 +70,7 @@ fail() {
     exit 1
 }
 
-# Watch's own account, with debug commands (NetworkVpnService.debugActivity).
+# The network part's own account, with debug commands (NetworkVpnService.debugActivity).
 network_dump() {
     adb shell dumpsys activity service "$PKG/org.visadahyu.datapavan.network.NetworkVpnService" "$@" | tr -d '\r' | sed 's/^ *//'
 }
@@ -89,7 +89,7 @@ vpn_up() {
     vpns=$(adb shell dumpsys connectivity | tr -d '\r' | grep -E 'ni\{(VPN |\[type: VPN)' || true)
     [ -n "$uid" ] || return 1
     grep -q "OwnerUid: $uid " <<<"$vpns" && return 0
-    # Android 10 names no VPN's owner there: a VPN connected, and Watch's own account that its tunnel runs.
+    # Android 10 names no VPN's owner there: a VPN connected, and the network part's own account that its tunnel runs.
     [ "$(adb shell getprop ro.build.version.sdk | tr -d '\r')" -lt 30 ] && grep -q 'state: CONNECTED/CONNECTED' <<<"$vpns" &&
         grep -qx 'running true' <<<"$(network_dump)"
 }
@@ -143,11 +143,11 @@ adb shell wm dismiss-keyguard >/dev/null 2>&1 || true
 adb shell am force-stop "$PKG"
 adb shell am start -W -n "$PKG/$NETWORK_SCREEN" --ez start true >/dev/null
 for _ in $(seq 1 20); do vpn_up && break; sleep 1; done
-vpn_up || fail "Watch's tunnel did not come up"
+vpn_up || fail "the network part's tunnel did not come up"
 echo "ok: the tunnel is up, with usage access"
 # The table of trackers "Now" marks with (ADR 0046, decision 2 (d)): the εxodus network signatures of the data
-# pack the audit verifies, read in Watch's process by Watch's own library, one alternative outside the subset
-# refused; and a test's own name, not traffic of the run, found as the two trackers whose signatures name it.
+# pack the audit verifies, read in the network process by the network part's own library, one alternative outside the
+# subset refused; and a test's own name, not traffic of the run, found as the two trackers whose signatures name it.
 trackers=$(network_dump activity-tracker x.doubleclick.net 443)
 read -r _ with_signature alternatives refused <<<"$(grep '^activity-trackers ' <<<"$trackers")"
 [ "${alternatives:-0}" -gt 600 ] && [ "${refused:-}" = 1 ] ||
@@ -288,13 +288,13 @@ within 15 screen_has "History of" || fail "a rotation back closed the app's hist
 adb shell input keyevent KEYCODE_BACK
 within 10 window_chosen "The last hour" || fail "back from the history, \"Now\" lost the window chosen"
 echo "ok: the history stays open over a rotation, and \"Now\" keeps its window after it"
-# Back on Watch's screen, its screenshot setting acts on its own window, after "Now" closed (review c1, m1).
+# Back on the network screen, its screenshot setting acts on its own window, after "Now" closed (review c1, m1).
 adb shell input keyevent KEYCODE_BACK
-within 10 window_secure "$PKG" || fail "Watch's screen is not protected from screenshots after \"Now\" closed"
-tap_text "Allow screenshots for one minute" || fail "no screenshot setting on Watch's screen"
-within 10 window_unprotected "$PKG" || fail "allowing screenshots left Watch's screen protected after \"Now\" closed"
+within 10 window_secure "$PKG" || fail "the network screen is not protected from screenshots after \"Now\" closed"
+tap_text "Allow screenshots for one minute" || fail "no screenshot setting on the network screen"
+within 10 window_unprotected "$PKG" || fail "allowing screenshots left the network screen protected after \"Now\" closed"
 tap_text "Block screenshots now" >/dev/null 2>&1 || true
-echo "ok: Watch's screen allows screenshots on its own window after \"Now\" closed"
+echo "ok: the network screen allows screenshots on its own window after \"Now\" closed"
 
 # The window while the screen was off (the open list's fourth item): the screen turns off soon after the app
 # leaves it, the app sends in the background meanwhile, and the screen comes on again. The window holds those
@@ -339,9 +339,9 @@ print(apps, total)')"
 echo "ok: the window while the screen was off holds the app's bytes in the background, and \"Now\" says so"
 
 # The audit's page of an app opens "Now" for that app alone (ADR 0046, decision 2 (d); Advanced only).
-# The audit's screen in the package's main process; Watch's process, and its tunnel, run on. On CI the emulator
-# stopped answering adb here three times on 2026-11-19, about 30 s after the audit started its scan beside Watch
-# and the workload apps (docs/ci-flakes.md): every adb call of this step waits for the device when it drops off,
+# The audit's screen in the package's main process; the network process, and its tunnel, run on. On CI the emulator
+# stopped answering adb here three times on 2026-11-19, about 30 s after the audit started its scan beside the network
+# part and the workload apps (docs/ci-flakes.md): every adb call of this step waits for the device when it drops off,
 # says what it was doing (memory, crashes, kills), and is made once more.
 adb_again shell am start -n "$PKG/org.visadahyu.datapavan.MainActivity" >/dev/null ||
     fail "the audit could not be started, or the emulator stopped answering adb; see the lines above"
@@ -417,7 +417,7 @@ grep -q 'Allow usage access' <<<"$(grep '^texts ' <<<"$shell_screen")" || fail "
 echo "ok: on the screen, without usage access, the app's row has no state and says why"
 
 # Item 4, for what this part adds: no notification of Advanced names an app or a destination of the run
-# (dumpsys notification, against every package and destination of the run). Watch posts none yet; W9's
+# (dumpsys notification, against every package and destination of the run). The network part posts none yet; W9's
 # summary will be held to the same.
 notifications=$(adb shell dumpsys notification --noredact | tr -d '\r' | python3 -I -c '
 import sys

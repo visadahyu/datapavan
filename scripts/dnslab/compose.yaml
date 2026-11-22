@@ -1,6 +1,6 @@
 # SPDX-License-Identifier: Apache-2.0
-# W8's DNS lab (scripts/dnslab.sh): every way Watch may send an app's DNS, each answering probe.dnslab.test with
-# its own address, behind a censor that a check sets per server.
+# W8's DNS lab (scripts/dnslab.sh): every way the network part may send an app's DNS, each answering probe.dnslab.test
+# with its own address, behind a censor that a check sets per server.
 #
 #   relay         ODoH relay (odoh-server-go, /proxy), relay.dnslab.test
 #   caddy-relay   Datapavan's own relay as its server runs it (Debian 13's Caddy with server/'s files, /odoh/proxy,

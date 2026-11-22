@@ -90,8 +90,8 @@ def main(base):
 
 
 def self_test():
-    """The redaction and this check read the dump's flows as Watch writes them since W5's first part, with a DNS
-    name before the name: a flow to the lab whose name is reserved and whose DNS name is not leaked through both
+    """The redaction and this check read the dump's flows as the network part writes them since W5's first part, with a
+    DNS name before the name: a flow to the lab whose name is reserved and whose DNS name is not leaked through both
     while they read the two as one name (review 1 of W5's first part, names, finding 3)."""
     import subprocess
     import tempfile

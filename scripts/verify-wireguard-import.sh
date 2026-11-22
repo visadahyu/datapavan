@@ -2,24 +2,24 @@
 # W7's second emulator check (part 2, ADR 0035): the way in a user has, against the lab's two peers of the Linux
 # kernel's WireGuard (Compose project datapavan-wglab, as scripts/verify-wireguard.sh has them). A configuration is
 # imported through Android's own documents screen and another from a picture of its QR code through the photo
-# picker, each confirmed on Watch's screen, which proposes the app the first names; the workload app goes through
+# picker, each confirmed on the network screen, which proposes the app the first names; the workload app goes through
 # the first, is moved to the second through "Each app's way" and back, and reaches each peer from that
 # configuration's address. The first confirmation survives the screen made anew for a rotation, a dark-mode switch
-# and a larger font, with the name typed into it. Watch's process is killed and started again: the tunnels come back
+# and a larger font, with the name typed into it. The network process is killed and started again: the tunnels come back
 # from the store. The workload app is installed again, so that it has a new UID, and still goes through its
-# configuration, never directly. No file of Watch's holds a key or a configuration's text in plain form, which a
-# search that finds the store's own word proves it can see. The camera path: the phone's own camera takes a photo
-# for Watch with the virtual scene's wall showing the second configuration's QR code, which Watch reads in the
-# decoder's isolated process; the scene's picture is small and seen at an angle, so either the confirmation shows,
-# and is cancelled, or Watch says it found no code; the photo is deleted either way and leaves no copy in
-# MediaStore. Where the emulator has no camera, the cancel path alone is checked, and the run says so. ADR 0047's
-# profile, turned on through the debug builds' dump, puts the configurations under key B: Watch started again on a
-# locked phone holds the app and asks for the unlock in one notification, and the tunnel comes back at the unlock. A
-# configuration removed with its apps waiting holds the app: nothing of it leaves directly. Then the measure ADR
-# 0035 asks of setUnlockedDeviceRequired: a key that needs an unlocked phone does not open while the phone is
-# locked, Watch's own key does, and the time each takes. With the package receiver off, the app installed again is
-# asked of Watch at its first packet and goes through its configuration. Last, key A deleted: Watch holds every app
-# with one notification until the user lets them go on its screen.
+# configuration, never directly. No file of the network part's holds a key or a configuration's text in plain form,
+# which a search that finds the store's own word proves it can see. The camera path: the phone's own camera takes a
+# photo for the network part with the virtual scene's wall showing the second configuration's QR code, which the network
+# part reads in the decoder's isolated process; the scene's picture is small and seen at an angle, so either the
+# confirmation shows, and is cancelled, or the network part says it found no code; the photo is deleted either way and
+# leaves no copy in MediaStore. Where the emulator has no camera, the cancel path alone is checked, and the run says so.
+# ADR 0047's profile, turned on through the debug builds' dump, puts the configurations under key B: the network part
+# started again on a locked phone holds the app and asks for the unlock in one notification, and the tunnel comes back
+# at the unlock. A configuration removed with its apps waiting holds the app: nothing of it leaves directly. Then the
+# measure ADR 0035 asks of setUnlockedDeviceRequired: a key that needs an unlocked phone does not open while the phone
+# is locked, the network part's own key does, and the time each takes. With the package receiver off, the app installed
+# again is asked of the network part at its first packet and goes through its configuration. Last, key A deleted: the
+# network part holds every app with one notification until the user lets them go on its screen.
 #
 # Skipped, with a line that says so, only where no lab peer can start (no Docker, Docker not answering, or no
 # wireguard module), as verify-wireguard.sh is, and failed then too with WGLAB_REQUIRED=1, which CI sets (W7, part
@@ -54,8 +54,8 @@ cleanup() {
     adb shell "rm -f /sdcard/Download/wg-import-one.conf /sdcard/Pictures/wg-import-two-*.png" >/dev/null 2>&1 || true
     adb shell "content delete --uri content://media/external/file --where \"_display_name LIKE 'wg-import-%'\"" >/dev/null 2>&1 || true
     adb emu virtualscene-image wall >/dev/null 2>&1 || true
-    # Watch's data goes with the run: a route left waiting for a removed configuration would hold the workload app,
-    # which the checks after this one install again, as it holds any app the user left so.
+    # The network part's data goes with the run: a route left waiting for a removed configuration would hold the
+    # workload app, which the checks after this one install again, as it holds any app the user left so.
     adb shell pm clear "$PKG" >/dev/null 2>&1 || true
     adb uninstall "$WORKLOAD" >/dev/null 2>&1 || true
     [ -z "$SERVER" ] || kill "$SERVER" 2>/dev/null || true
@@ -90,7 +90,7 @@ screen_text() { dump_screen >/dev/null 2>&1 || true; adb shell cat "$DUMP" 2>/de
 fail() {
     echo "WIREGUARD IMPORT CHECK FAILED: $*" >&2
     echo "The last tap: ${LAST_TAP:-none}; the screen's navigation: $(adb shell cmd overlay list 2>/dev/null | tr -d '\r' | grep -o '\[x\] [^ ]*navbar[^ ]*' | head -1)" >&2
-    echo "Watch's store, tunnels and flows' routes:" >&2
+    echo "the network part's store, tunnels and flows' routes:" >&2
     grep -E '^ *(tunnel|flow-route)' <<<"$(dump tunnel-store)" >&2 || true
     echo "On screen:" >&2
     screen_text | grep -o 'text="[^"]\+"' | head -30 >&2 || true
@@ -121,7 +121,7 @@ network_screen() {
     sleep 1
     scroll_to_top
 }
-# Scrolls Watch's screen until the element whose resource-id is $1 shows, and taps it. One in the screen's lowest
+# Scrolls the network screen until the element whose resource-id is $1 shows, and taps it. One in the screen's lowest
 # eighth is moved up first, as tap_text does: CI's emulator has Android's gesture bar at the bottom edge, which takes a
 # tap there, where the local AVD has none (W7, part 3a: the check's first runs on CI failed at a way to choose and,
 # on an emulator like CI's, at the button that lets the apps go). The tap is kept in $LAST_TAP for the failure's account.
@@ -251,7 +251,7 @@ allow_vpn "$PKG" || fail "Android did not take the VPN consent for $PKG"
 adb shell cmd locale set-app-locales "$PKG" --locales en >/dev/null 2>&1 || true
 adb shell am force-stop "$PKG"
 adb shell am start -W -n "$PKG/$NETWORK_SCREEN" --ez start true >/dev/null
-within 20 vpn_up || fail "Watch's tunnel did not come up"
+within 20 vpn_up || fail "the network part's tunnel did not come up"
 
 # 1. A file, through Android's documents screen: the confirmation says what it does and proposes the app it names.
 config "$WGLAB_PLAIN" 10.77.0.2 fd77::2 "$WGLAB_PORT" "$WGLAB_PEER_PUBLIC" "IncludedApplications = $WORKLOAD" >"$WORK/wg-import-one.conf"
@@ -259,7 +259,7 @@ adb push "$WORK/wg-import-one.conf" /sdcard/Download/wg-import-one.conf >/dev/nu
 adb shell am broadcast -a android.intent.action.MEDIA_SCANNER_SCAN_FILE -d file:///sdcard/Download/wg-import-one.conf >/dev/null
 rm -f "$WORK/wg-import-one.conf"
 network_screen
-tap_tag tunnel-add-file || fail "Watch's screen has no way to add a file"
+tap_tag tunnel-add-file || fail "the network screen has no way to add a file"
 within 20 screen_has "wg-import-one.conf" || fail "the documents screen does not show the configuration's file"
 tap_text "wg-import-one.conf" || fail "the configuration's file could not be picked"
 within 20 has_id tunnel-confirm || fail "no confirmation after the file was picked"
@@ -272,7 +272,8 @@ for _ in $(seq 1 8); do has_id "tunnel-app-$WORKLOAD" && break; swipe_up; done
 ticked "tunnel-app-$WORKLOAD" || fail "the app the file names is not proposed"
 screen_has "Its way now: Directly" || fail "the proposed app's way now is not shown"
 # The confirmation survives the screen made anew (review M1 of the fix round): a name typed into it, then a rotation,
-# dark mode and a larger font, each of which makes Watch's screen anew; the confirmation, the name and the tick stay.
+# dark mode and a larger font, each of which makes the network screen anew; the confirmation, the name and the tick
+# stay.
 scroll_to_top
 tap_tag tunnel-name || fail "the confirmation has no name field"
 adb shell input keyevent KEYCODE_MOVE_END
@@ -347,7 +348,7 @@ adb push "$WORK/$PICTURE" "/sdcard/Pictures/$PICTURE" >/dev/null
 adb shell am broadcast -a android.intent.action.MEDIA_SCANNER_SCAN_FILE -d "file:///sdcard/Pictures/$PICTURE" >/dev/null
 adb logcat -c
 network_screen
-tap_tag tunnel-add-picture || fail "Watch's screen has no way to choose a picture"
+tap_tag tunnel-add-picture || fail "the network screen has no way to choose a picture"
 # The picker names each picture by when it was taken, which for a pushed file is its time: this run's is the one
 # taken at its file's time, whatever else the picker holds.
 taken=$(adb shell stat -c %Y "/sdcard/Pictures/$PICTURE" | tr -d '\r')
@@ -402,22 +403,22 @@ route_to tunnel-1
 within 10 store_has 1 "routes 1$" || fail "the app's way did not move back to the first configuration"
 echo "ok: the app moved to the second configuration under Each app's way, reached the second peer from 10.77.0.4, and moved back"
 
-# 3. Watch's process killed and started again: the tunnels come back from the store, and the app through its own.
+# 3. The network process killed and started again: the tunnels come back from the store, and the app through its own.
 pid=$(adb shell pidof "$PKG:network" | tr -d '\r')
-[ -n "$pid" ] || fail "no process of Watch's"
-adb shell run-as "$PKG" kill -9 "$pid" || fail "Watch's process could not be killed"
-within 20 vpn_down || fail "Watch's VPN stayed up with its process killed"
+[ -n "$pid" ] || fail "no process of the network part's"
+adb shell run-as "$PKG" kill -9 "$pid" || fail "the network process could not be killed"
+within 20 vpn_down || fail "the network part's VPN stayed up with its process killed"
 adb shell am start -S -W -n "$PKG/$NETWORK_SCREEN" --ez start true >/dev/null
-within 20 vpn_up || fail "Watch's tunnel did not come up again"
+within 20 vpn_up || fail "the network part's tunnel did not come up again"
 within 10 store_has 1 " set routes 1$" && within 10 store_has 2 " set " ||
     fail "the configurations did not come back from the store: $(store_line 1); $(store_line 2)"
 workload --es tcp 10.77.0.1:80
 grep -qx "tcp 10.77.0.1:80 pong" <<<"$(workload_log)" || fail "after the restart the app's TCP did not reach the peer"
-echo "ok: Watch's process killed and started again, the configurations came back from the store and the app went through again"
+echo "ok: the network process killed and started again, the configurations came back from the store and the app went through again"
 
-# 3b. The workload app installed again (review M1 of the fix round): Android gives it a new UID, and Watch, which routes
-# by UID, hands the engine its route again when the app comes, so that it goes through its configuration, never its
-# other way.
+# 3b. The workload app installed again (review M1 of the fix round): Android gives it a new UID, and the network part,
+# which routes by UID, hands the engine its route again when the app comes, so that it goes through its configuration,
+# never its other way.
 adb uninstall "$WORKLOAD" >/dev/null
 adb install "$ROOT/build/workload-app/workload-app.apk" >/dev/null
 again=$(adb shell cmd package list packages -U "$WORKLOAD" | tr -d '\r' | sed -n "s/^package:$WORKLOAD uid:\([0-9]*\)$/\1/p")
@@ -433,11 +434,11 @@ workload --es tcp 10.77.0.1:80
 grep -qx "tcp 10.77.0.1:80 pong" <<<"$(workload_log)" || fail "installed again, the app's TCP did not reach the peer"
 [ "$(grep -c "^http 10\.77\.0\.2 " <<<"$(seen peer)" || true)" -gt "$peer_before" ] || fail "installed again, the peer saw nothing from 10.77.0.2"
 [ "$(flows_of "$WORKLOAD_UID" direct)" = 0 ] || fail "installed again, the app has flows that went directly"
-echo "ok: the workload app installed again had a new UID ($WORKLOAD_UID), which Watch routed at once, and went through its configuration to the peer"
+echo "ok: the workload app installed again had a new UID ($WORKLOAD_UID), which the network part routed at once, and went through its configuration to the peer"
 
 # 3c. The same with the package receiver off (the maintainer's word of 2026-11-20): no hand-over names the new UID,
-# and the engine, at the app's first packet, asks Watch where it goes and holds the flow until Watch answers its
-# configuration; nothing of it goes on a default way meanwhile.
+# and the engine, at the app's first packet, asks the network part where it goes and holds the flow until the network
+# part answers its configuration; nothing of it goes on a default way meanwhile.
 grep -qE "^ *packages-follow off$" <<<"$(dump packages-follow off)" || fail "the package receiver could not be turned off"
 adb uninstall "$WORKLOAD" >/dev/null
 adb install "$ROOT/build/workload-app/workload-app.apk" >/dev/null
@@ -450,60 +451,62 @@ workload --es tcp 10.77.0.1:80
 grep -qx "tcp 10.77.0.1:80 pong" <<<"$(workload_log)" || fail "with the receiver off, the app installed again did not reach the peer"
 [ "$(grep -c "^http 10\.77\.0\.2 " <<<"$(seen peer)" || true)" -gt "$peer_before" ] || fail "with the receiver off, the peer saw nothing from 10.77.0.2"
 [ "$(flows_of "$asked" direct)" = 0 ] || fail "with the receiver off, the app installed again had flows that went directly"
-grep -qE "^ *tunnel-asked $asked tunnel:1$" <<<"$(dump tunnel-store)" || fail "the engine did not ask Watch where the new UID goes"
+grep -qE "^ *tunnel-asked $asked tunnel:1$" <<<"$(dump tunnel-store)" || fail "the engine did not ask the network part where the new UID goes"
 ! engine_route "$asked" 1 || fail "the engine was handed the new UID's route meanwhile: this step proves nothing"
 grep -qE "^ *packages-follow on$" <<<"$(dump packages-follow on)" || fail "the package receiver could not be turned on again"
 WORKLOAD_UID=$asked
-echo "ok: with the receiver off, the app installed again (UID $WORKLOAD_UID) was asked of Watch at its first packet and went through its configuration, none of it directly"
+echo "ok: with the receiver off, the app installed again (UID $WORKLOAD_UID) was asked of the network part at its first packet and went through its configuration, none of it directly"
 
-# 4. No file of Watch's holds a key or a configuration's text in plain form, nor, in the store, an app it routes: the
-# state is wrapped under key A. The search must first find a file of its own among Watch's (review m4 of the fix
-# round): a search that cannot read Watch's files finds nothing either.
+# 4. No file of the network part's holds a key or a configuration's text in plain form, nor, in the store, an app it
+#   routes: the
+# state is wrapped under key A. The search must first find a file of its own among the network part's (review m4 of the
+# fix round): a search that cannot read the network part's files finds nothing either.
 adb shell run-as "$PKG" sh -c "'mkdir -p no_backup/tunnels-control && echo datapavan-search-control > no_backup/tunnels-control/file'"
 control=$(adb shell run-as "$PKG" sh -c "'grep -rlF -- datapavan-search-control . 2>/dev/null'" | tr -d '\r' || true)
 adb shell run-as "$PKG" rm -r no_backup/tunnels-control
-grep -q "no_backup/tunnels-control/file" <<<"$control" || fail "the search for keys cannot see a file it put among Watch's: it would prove nothing"
+grep -q "no_backup/tunnels-control/file" <<<"$control" || fail "the search for keys cannot see a file it put among the network part's: it would prove nothing"
 for plain in "$WORKLOAD" "route " "order "; do
     found=$(adb shell run-as "$PKG" sh -c "'grep -rlF -- \"$plain\" no_backup/tunnels 2>/dev/null'" | tr -d '\r' || true)
     [ -z "$found" ] || fail "the store holds what decides a route in plain form ($plain): $found"
 done
 for secret in "$WGLAB_PLAIN" "$WGLAB_SECOND" "PrivateKey" "Endpoint = $HOST"; do
     found=$(adb shell run-as "$PKG" sh -c "'grep -rlF -- \"$secret\" . 2>/dev/null'" | tr -d '\r' || true)
-    [ -z "$found" ] || fail "Watch's files hold a key or a configuration in plain form: $found"
+    [ -z "$found" ] || fail "the network part's files hold a key or a configuration in plain form: $found"
 done
-no_capture || fail "a photo is left in Watch's cache: $(capture_left)"
+no_capture || fail "a photo is left in the network part's cache: $(capture_left)"
 shown_log="$(dump tunnel-store)
 $(adb logcat -d | tr -d '\r')"
 for secret in "$WGLAB_PLAIN" "$WGLAB_SECOND" "$HOST:$WGLAB_PORT" "$HOST:$WGLAB_PORT2"; do
-    ! grep -qF -- "$secret" <<<"$shown_log" || fail "Watch's dump or the device's log shows a key or the endpoint"
+    ! grep -qF -- "$secret" <<<"$shown_log" || fail "the network part's dump or the device's log shows a key or the endpoint"
 done
-echo "ok: no file of Watch's, its dump or the device's log holds a key or a configuration's text"
+echo "ok: no file of the network part's, its dump or the device's log holds a key or a configuration's text"
 
-# 5. The camera path: the phone's own camera writes the photo to Watch's file, which is read in the isolated decoder and
+# 5. The camera path: the phone's own camera writes the photo to the network part's file, which is read in the isolated
+#   decoder and
 # deleted, with no copy in MediaStore. The scene's wall shows the second configuration's QR code, small and at an
-# angle, so Watch either shows its confirmation, which is cancelled, or says no code could be read; with no camera,
-# the cancel deletes the file.
+# angle, so the network part either shows its confirmation, which is cancelled, or says no code could be read; with no
+# camera, the cancel deletes the file.
 before=$(images)
 adb emu virtualscene-image wall "$WORK/$PICTURE" >/dev/null 2>&1 || true
 network_screen
-tap_tag tunnel-add-camera || fail "Watch's screen has no way to take a photo"
+tap_tag tunnel-add-camera || fail "the network screen has no way to take a photo"
 if within 15 has_id "$CAMERA_SHUTTER"; then
     tap_dumped_id "$CAMERA_SHUTTER"
     within 15 has_id "$CAMERA_DONE" || fail "the camera did not offer its photo"
-    [ -n "$(capture_left)" ] || fail "no file of Watch's waits for the camera's photo"
+    [ -n "$(capture_left)" ] || fail "no file of the network part's waits for the camera's photo"
     tap_dumped_id "$CAMERA_DONE"
-    within 30 confirmation_or_refusal || fail "Watch did not read the camera's photo"
+    within 30 confirmation_or_refusal || fail "the network part did not read the camera's photo"
     if has_id tunnel-confirm; then
         # Cancel at the screen's bottom edge would lie under the navigation bar: one swipe more lifts it.
         confirmation_end && swipe_up && has_id tunnel-cancel && tap_dumped_id tunnel-cancel
     fi
-    echo "ok: the phone's camera wrote the photo to Watch's own file, which was read in the isolated decoder"
+    echo "ok: the phone's camera wrote the photo to the network part's own file, which was read in the isolated decoder"
 else
     echo "SKIPPED the camera's photo: this emulator has no camera (CI's and the shards' run with -camera-back none); the cancel path alone is checked"
     adb shell input keyevent KEYCODE_BACK
     sleep 2
-    # The camera app, with no camera, stops; Android hands Watch its answer when Watch's screen is in front again
-    # (an emulator of Android 15 showed the launcher instead), and only then is the photo's file deleted.
+    # The camera app, with no camera, stops; Android hands the network part its answer when the network screen is in
+    # front again (an emulator of Android 15 showed the launcher instead), and only then is the photo's file deleted.
     network_screen
 fi
 within 10 no_capture || fail "the camera's photo was not deleted: $(capture_left)"
@@ -511,9 +514,9 @@ within 10 no_capture || fail "the camera's photo was not deleted: $(capture_left
 echo "ok: the photo was deleted, and MediaStore holds no copy ($before images before and after)"
 
 # 5b. ADR 0047's profile, the maintainer's decision of 2026-11-20 (ADR 0035): the configurations go under key B, which
-# opens only on an unlocked phone, and what decides the routes stays under key A. Watch started again on a locked
-# phone holds the routed app, which sends nothing directly, and one notification, naming no configuration, asks for
-# the unlock; at the unlock the tunnel comes back and the notification goes. W9 wires the profile's switch; the
+# opens only on an unlocked phone, and what decides the routes stays under key A. The network part started again on a
+# locked phone holds the routed app, which sends nothing directly, and one notification, naming no configuration, asks
+# for the unlock; at the unlock the tunnel comes back and the notification goes. W9 wires the profile's switch; the
 # debug builds' dump turns it on and off here.
 [ "$(adb shell getprop ro.build.version.sdk | tr -d '\r')" -lt 33 ] || adb shell pm grant "$PKG" android.permission.POST_NOTIFICATIONS
 moved=$(sed -n 's/^ *tunnel-profile on moved //p' <<<"$(dump tunnel-profile on)")
@@ -525,11 +528,11 @@ adb shell locksettings set-pin "$PIN" >/dev/null
 adb shell input keyevent KEYCODE_SLEEP
 sleep 3
 pid=$(adb shell pidof "$PKG:network" | tr -d '\r')
-[ -n "$pid" ] || fail "no process of Watch's"
-adb shell run-as "$PKG" kill -9 "$pid" || fail "Watch's process could not be killed"
-within 20 vpn_down || fail "Watch's VPN stayed up with its process killed"
+[ -n "$pid" ] || fail "no process of the network part's"
+adb shell run-as "$PKG" kill -9 "$pid" || fail "the network process could not be killed"
+within 20 vpn_down || fail "the network part's VPN stayed up with its process killed"
 adb shell am start -S -W -n "$PKG/$NETWORK_SCREEN" --ez start true >/dev/null
-within 20 vpn_up || fail "Watch's tunnel did not come up on the locked phone"
+within 20 vpn_up || fail "the network part's tunnel did not come up on the locked phone"
 within 10 store_has 1 "name locked unset routes 1$" ||
     fail "on the locked phone the first configuration is not held unset with its app: $(store_line 1)"
 within 10 state_field 1 8 0 || fail "the engine does not hold the app for the configuration it cannot open: $(state_of 1)"
@@ -560,7 +563,7 @@ grep -qx "tcp 10.77.0.1:80 pong" <<<"$(workload_log)" || fail "after the unlock 
 moved=$(sed -n 's/^ *tunnel-profile off moved //p' <<<"$(dump tunnel-profile off)")
 [ "$moved" = "2 unmoved 0" ] || fail "the profile turned off did not move both configurations back under key A: ${moved:-nothing said}"
 adb shell locksettings clear --old "$PIN" >/dev/null && PIN=""
-echo "ok: under key B, Watch started again on the locked phone held the app, which sent nothing directly, and asked for the unlock in one notification naming no configuration; at the unlock the tunnel came back and the notification went"
+echo "ok: under key B, the network part started again on the locked phone held the app, which sent nothing directly, and asked for the unlock in one notification naming no configuration; at the unlock the tunnel came back and the notification went"
 
 # 6. A configuration removed with its apps waiting holds the app: nothing of it leaves directly.
 network_screen
@@ -580,7 +583,8 @@ device 10 "echo control | toybox nc -w 4 $HOST $((PORT + 3))" >/dev/null
 grep -q '^tcp$' <<<"$(sentinel_since)" || fail "the sentinel did not see the control's direct connection: the step above proves nothing"
 echo "ok: removed with its apps waiting, the configuration's app sent nothing out directly; the control's direct connection reached the sentinel"
 
-# 7. The measure of setUnlockedDeviceRequired (ADR 0035, W7, part 2): a key that needs an unlocked phone, and Watch's.
+# 7. The measure of setUnlockedDeviceRequired (ADR 0035, W7, part 2): a key that needs an unlocked phone, and the
+#   network part's.
 probe() { sed -n "s/^ *tunnel-key-probe //p" <<<"$(dump tunnel-key-probe "$1")"; }
 made=$(probe make)
 opened=$(sed -n 's/^ *tunnel-opened 2 //p' <<<"$(dump tunnel-key-time)")
@@ -600,28 +604,28 @@ unlocked=$(probe open)
 probe clear >/dev/null
 adb shell locksettings clear --old "$PIN" >/dev/null && PIN=""
 echo "measure: a key that needs an unlocked phone: $made; locked: $locked; unlocked again: $unlocked"
-echo "measure: Watch's own key opens a configuration in ${opened:-?} ms unlocked, ${own_locked:-?} ms locked"
+echo "measure: the network part's own key opens a configuration in ${opened:-?} ms unlocked, ${own_locked:-?} ms locked"
 [[ $locked == "open locked "* ]] || fail "a key that needs an unlocked phone opened while it was locked: $locked"
 [[ $unlocked == "open ok "* ]] || fail "a key that needs an unlocked phone did not open once it was unlocked: $unlocked"
-[ -n "$own_locked" ] || fail "Watch's own key did not open a configuration while the phone was locked"
+[ -n "$own_locked" ] || fail "the network part's own key did not open a configuration while the phone was locked"
 
 # 8. Key A lost for good (the maintainer's word of 2026-11-20), deleted through the debug dump as a Keystore reset
-# would: the marker says the store held routes (step 6 left the app waiting), so Watch started again holds every app,
-# sends nothing directly, and shows one notification, naming no configuration, that opens its screen; there the
-# user lets the apps go their way, which forgets the store, and the app goes directly again.
+# would: the marker says the store held routes (step 6 left the app waiting), so the network part started again holds
+# every app, sends nothing directly, and shows one notification, naming no configuration, that opens its screen; there
+# the user lets the apps go their way, which forgets the store, and the app goes directly again.
 grep -qE "^ *tunnel-key-deleted a$" <<<"$(dump tunnel-key-delete a)" || fail "key A could not be deleted"
 pid=$(adb shell pidof "$PKG:network" | tr -d '\r')
-[ -n "$pid" ] || fail "no process of Watch's"
-adb shell run-as "$PKG" kill -9 "$pid" || fail "Watch's process could not be killed"
-within 20 vpn_down || fail "Watch's VPN stayed up with its process killed"
+[ -n "$pid" ] || fail "no process of the network part's"
+adb shell run-as "$PKG" kill -9 "$pid" || fail "the network process could not be killed"
+within 20 vpn_down || fail "the network part's VPN stayed up with its process killed"
 adb shell am start -S -W -n "$PKG/$NETWORK_SCREEN" --ez start true >/dev/null
-within 20 vpn_up || fail "Watch's tunnel did not come up with key A gone"
+within 20 vpn_up || fail "the network part's tunnel did not come up with key A gone"
 lost_state() { grep -qE "^ *tunnel-state lost$" <<<"$(dump tunnel-store)"; }
 lost_notice() { [ "$(sed -n 's/^ *tunnel-lost notice //p' <<<"$(dump tunnel-store)")" = "$1" ]; }
 within 10 lost_state || fail "with key A gone the store's state is not lost: $(dump tunnel-store | grep -E 'tunnel-(state|slot)' | tr '\n' ' ')"
-within 10 lost_notice shown || fail "no notification says Watch holds the apps"
+within 10 lost_notice shown || fail "no notification says the network part holds the apps"
 record=$(adb shell dumpsys notification --noredact | tr -d '\r' | grep -A30 "NotificationRecord.*pkg=$PKG.*id=7202" || true)
-grep -qF "Watch is holding your apps" <<<"$record" || fail "the notification does not say Watch holds the apps"
+grep -qF "Watch is holding your apps" <<<"$record" || fail "the notification does not say the network part holds the apps"
 for word in wg-import "WireGuard" "$HOST" 10.77.0; do
     ! grep -qF -- "$word" <<<"$record" || fail "the notification names a configuration or a server ($word)"
 done
@@ -633,13 +637,13 @@ sleep 3
 [ "$(flows_of "$WORKLOAD_UID" direct)" = "$direct_before" ] || fail "with key A gone, the app has flows that went directly"
 grep -qx done <<<"$(workload_log)" || fail "the workload app did not run: the step above proves nothing"
 network_screen
-tap_tag tunnel-lost-let-go || fail "Watch's screen does not offer to let the apps go their way"
+tap_tag tunnel-lost-let-go || fail "the network screen does not offer to let the apps go their way"
 within 10 lost_notice none || fail "the notification stayed after the choice"
 lost_state && fail "the store was not forgotten after the choice"
 SENTINEL_MARK=$(wc -l <"$WORK/sentinel.log")
 workload --es tcp "$HOST:$((PORT + 3))"
 sentinel_saw_tcp() { grep -q '^tcp$' <<<"$(sentinel_since)"; }
 within 10 sentinel_saw_tcp || fail "after the choice the app did not go its way: nothing reached the sentinel directly"
-echo "ok: with key A gone and the marker present, Watch held every app with one notification naming no configuration; let go on its screen, the app went its way"
+echo "ok: with key A gone and the marker present, the network part held every app with one notification naming no configuration; let go on its screen, the app went its way"
 
 echo "== WireGuard import checked on the emulator"

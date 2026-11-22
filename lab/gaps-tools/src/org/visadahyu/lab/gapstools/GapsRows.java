@@ -103,7 +103,7 @@ public final class GapsRows {
             return out;
         }
 
-        /** Watch's flows: protocol, app, destination, uid, outcome, ... */
+        /** The network part's flows: protocol, app, destination, uid, outcome, ... */
         List<String[]> flows(String label) throws IOException {
             List<String[]> out = new ArrayList<>();
             for (String line : lines(dir.resolve("flows-" + label + ".txt"))) out.add(line.split(" "));

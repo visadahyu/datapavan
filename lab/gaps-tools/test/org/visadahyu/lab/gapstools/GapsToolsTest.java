@@ -138,7 +138,7 @@ public final class GapsToolsTest {
         for (int i = 0; i < 100; i++) {
             log.append("short-lived udp-closed trial=").append(i).append(" local=").append(40000 + i).append('\n');
             log.append("short-lived udp-open trial=").append(i).append(" local=").append(50000 + i).append('\n');
-            // 90 closed sockets lost their owner, 8 kept it, 2 never reached Watch.
+            // 90 closed sockets lost their owner, 8 kept it, 2 never reached the network part.
             if (i < 98) closed.append("udp 10.1.10.1:").append(40000 + i).append(" 10.0.2.2:8796 ").append(i < 90 ? "-" : "10210").append(" opened - - - - -\n");
             // One kept-open trial whose flow the run did not read: missing, which is not a flow without owner.
             if (i != 7) open.append("udp 10.1.10.1:").append(50000 + i).append(" 10.0.2.2:8796 10210 opened - - - - -\n");

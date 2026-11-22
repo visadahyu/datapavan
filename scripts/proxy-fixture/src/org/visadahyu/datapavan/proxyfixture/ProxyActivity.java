@@ -87,8 +87,9 @@ public class ProxyActivity extends Activity {
     }
 
     /**
-     * A lookup through Android's resolver, which Watch passes on: a messenger's lookups seen through Watch make a hello
-     * no DNS answer tied to its address evidence of its proxy (ADR 0052, fix round). The answer may be none.
+     * A lookup through Android's resolver, which the network part passes on: a messenger's lookups seen through the
+     * network part make a hello no DNS answer tied to its address evidence of its proxy (ADR 0052, fix round). The
+     * answer may be none.
      */
     private String lookup(String name) {
         try {

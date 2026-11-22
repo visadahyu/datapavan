@@ -26,6 +26,6 @@ target/
 .DS_Store
 *.swp
 
-# Watch's IP-to-organisation table (data/dbip-asn/update.py, ADR 0036): about 10 MB a month, so it is
+# The network part's IP-to-organisation table (data/dbip-asn/update.py, ADR 0036): about 10 MB a month, so it is
 # not committed until the size question of ADR 0036 is settled; SOURCE records each build.
 data/dbip-asn/asn.bin

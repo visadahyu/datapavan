@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-# The test server for Watch's end-to-end check (scripts/verify-network.sh), from the packet-engine
+# The test server for the network part's end-to-end check (scripts/verify-network.sh), from the packet-engine
 # spike: GET /bytes/N sends N bytes, POST /sink reads and drops the body, GET /ping answers four bytes.
 # UDP on the next port echoes every datagram. The emulator reaches it at 10.0.2.2, a phone on the
 # same Wi-Fi at the computer's address. Nothing it receives is kept.

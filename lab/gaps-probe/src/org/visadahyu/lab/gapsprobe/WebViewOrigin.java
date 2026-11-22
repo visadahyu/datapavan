@@ -6,7 +6,7 @@ import android.webkit.WebViewClient;
 
 /**
  * webview: a WebView in this app loads a page of the lab's server whose image and fetch come from a
- * second origin (the server's other port). The run reads which UID Watch was given for each origin.
+ * second origin (the server's other port). The run reads which UID the network part was given for each origin.
  */
 final class WebViewOrigin {
     private WebViewOrigin() {}

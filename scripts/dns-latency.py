@@ -1,8 +1,8 @@
 # SPDX-License-Identifier: Apache-2.0
 """The speed budget's measure for the names of direct apps (W8, part 1; ADR 0039): warm p50 and p95 of each way
-Watch's encrypted resolver uses, against plain DNS to this network's resolver, from this computer on the same
-network, with clients independent of the app. Each way keeps one connection, as Watch does, and asks a fixed list
-of public names once each after a first query that opens the connection; the names are the same for every way.
+The network part's encrypted resolver uses, against plain DNS to this network's resolver, from this computer on the same
+network, with clients independent of the app. Each way keeps one connection, as the network part does, and asks a fixed
+list of public names once each after a first query that opens the connection; the names are the same for every way.
 Endpoints and their addresses come from the data pack's tables (data/odoh, data/dns-presets); no name of a server
 is looked up. Nothing is sent but the public names below, and no way is asked more than len(NAMES) + 1 times.
 

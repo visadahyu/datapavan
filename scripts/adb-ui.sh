@@ -309,9 +309,9 @@ gone_id() {
     ! grep -q "resource-id=\"$1\"" <<<"$screen"
 }
 
-# Watch's view "Now" (ADR 0046) in the edition $1, a debug build, for the app $2 alone, opened through Watch's
-# screen and read from a uiautomator dump, kept in the file $3, by now-screen.py: its output once the app's row
-# shows with bytes, or the last reading after 20 s.
+# The network part's view "Now" (ADR 0046) in the edition $1, a debug build, for the app $2 alone, opened through the
+# network part's screen and read from a uiautomator dump, kept in the file $3, by now-screen.py: its output once the
+# app's row shows with bytes, or the last reading after 20 s.
 network_now() {
     local read=""
     adb shell am start -n "$1/org.visadahyu.datapavan.network.MainActivity" --activity-clear-top --ez now true --es now_package "$2" >/dev/null
@@ -341,7 +341,7 @@ screen_has_holding() {
     grep -q "text=\"[^\"]*$1" <<<"$screen"
 }
 
-# Taps the element of a new dump whose text holds $1, as a row of Watch's "Now", whose texts the screen may
+# Taps the element of a new dump whose text holds $1, as a row of the network part's "Now", whose texts the screen may
 # read as one; the isolates around a package name are dropped first.
 tap_holding() {
     local bounds

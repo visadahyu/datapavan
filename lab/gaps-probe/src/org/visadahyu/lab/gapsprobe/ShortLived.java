@@ -13,7 +13,7 @@ import java.util.List;
 /**
  * short-lived: sockets to the lab's server that close at once, against sockets kept open (the
  * control). Steps: "udp-closed", "udp-open", "tcp-closed", "tcp-open". Each trial records its local
- * port, by which the run finds the flow Watch recorded and the owner Android named for it.
+ * port, by which the run finds the flow the network part recorded and the owner Android named for it.
  */
 final class ShortLived {
     private static final byte[] PAYLOAD = "gaps-short-lived".getBytes(StandardCharsets.US_ASCII);

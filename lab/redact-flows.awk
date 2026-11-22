@@ -1,4 +1,4 @@
-# Keeps, of Watch's flows (protocol app destination uid outcome named-by ech dns network dns-name name), only
+# Keeps, of the network part's flows (protocol app destination uid outcome named-by ech dns network dns-name name), only
 # what belongs to the lab: flows to the lab's server and the emulator's own addresses (10.0.2.0/24), loopback,
 # and the tunnel's addresses, with names only under .gaps.example or another name reserved for testing (RFC
 # 2606). The DNS name beside a connection's own (since W5's first part) and the name are each kept only so,

@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 # SPDX-License-Identifier: Apache-2.0
-"""Reads Watch's view "Now", or an app's history, from one uiautomator dump, for the emulator checks
+"""Reads the network part's view "Now", or an app's history, from one uiautomator dump, for the emulator checks
 (scripts/verify-activity.sh, verify-chain.sh; ADR 0046, decision 6): what the screen says of one app,
 found by its package name, which each row shows under the app's label.
 

@@ -1,9 +1,9 @@
 #!/usr/bin/env bash
 # W2's CPU check (docs/DESIGN.md, 13.2): the packet-engine spike's measuring round
-# (spikes/packet-engine/tools/measure.sh), run through Watch itself, so that Watch's engine CPU for the
-# spike's workload can be set against the spike's system engine. Watch's tunnel carries only the
+# (spikes/packet-engine/tools/measure.sh), run through the network part itself, so that the network part's engine CPU
+# for the spike's workload can be set against the spike's system engine. The network part's tunnel carries only the
 # spike's workload app (org.visadahyu.datapavan.watch.load, installed from the spike), which loads the
-# test server (scripts/network-lab/server.py). Prints one line per measurement, then Watch's CPU time in
+# test server (scripts/network-lab/server.py). Prints one line per measurement, then the network part's CPU time in
 # clock ticks, its memory and its counters. Only the workload's own log lines are read.
 #
 #   ANDROID_SERIAL=... HOST=192.168.1.20:8790 scripts/network-lab/measure.sh [rounds, default 3]
@@ -33,7 +33,7 @@ load() { # load TAG OP URL [extra am args...]: one workload run, prints its resu
     wait_for "tag=$tag " 300 | sed 's/.*SPIKE_RESULT //' || echo "tag=$tag op=$op error=timeout"
 }
 
-cpu_ticks() { # utime+stime of Watch, in clock ticks
+cpu_ticks() { # utime+stime of the network part, in clock ticks
     local pid
     pid=$(adb shell pidof "$ADVANCED:network" | tr -d '\r')
     [ -n "$pid" ] || { echo 0; return; }
@@ -45,7 +45,7 @@ SINCE="$(adb shell date +%s | tr -d '\r').000"
 adb shell am force-stop "$ADVANCED"
 adb shell am start -n "$ADVANCED/org.visadahyu.datapavan.network.MainActivity" --ez start true --es only_apps "$LOAD" >/dev/null
 sleep 3
-adb shell dumpsys activity service "$ADVANCED/org.visadahyu.datapavan.network.NetworkVpnService" | tr -d '\r' | grep -q 'running true' || { echo "Watch's tunnel did not start"; exit 1; }
+adb shell dumpsys activity service "$ADVANCED/org.visadahyu.datapavan.network.NetworkVpnService" | tr -d '\r' | grep -q 'running true' || { echo "the network part's tunnel did not start"; exit 1; }
 before=$(cpu_ticks)
 run=$(date +%s)
 for r in $(seq 1 "$ROUNDS"); do
