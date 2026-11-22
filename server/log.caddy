@@ -1,0 +1,14 @@
+	# No log line carries a client's address (ADR 0055, decision 2), for every site, though no access log is on:
+	# Caddy's error log (http.log.error) carries the whole request otherwise, and its debug lines a remote_ip and
+	# remote_port of their own. Go's own messages name an address in their text, at the debug level only, which
+	# therefore stays off.
+	log {
+		format filter {
+			wrap json
+			fields {
+				request delete
+				remote_ip delete
+				remote_port delete
+			}
+		}
+	}

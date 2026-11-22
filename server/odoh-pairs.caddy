@@ -1,0 +1,8 @@
+# SPDX-License-Identifier: Apache-2.0
+# The targets Datapavan's relay forwards to (ADR 0055): those of data/odoh/targets.tsv that pair with the relay by
+# the pair rule in core/net/src/catalogue.rs, by their host and path there. A target added here must pass that rule
+# in the data first.
+(odoh_pairs) {
+	import odoh_target cloudflare odoh.cloudflare-dns.com /dns-query %2Fdns-query
+	import odoh_target crypto-sx odoh.crypto.sx /dns-query %2Fdns-query
+}
