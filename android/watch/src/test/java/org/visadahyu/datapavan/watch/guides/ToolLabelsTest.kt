@@ -49,6 +49,10 @@ class ToolLabelsTest {
         val withoutPersian: (Resource, List<Locale>) -> String? = { resource, locales -> fixture(resource, locales.filter { it.language != "fa" }) }
         val lacking = ToolLabels(book, guide, withoutPersian, phone = english, own = persian)
         assertEquals(ToolLabels.Shown("Proxy switch of the test tool", null, fromTool = true), lacking.shown("proxy_switch"))
+        // A Persian phone with Datapavan in German, which the tool lacks: its default English is not set beside the
+        // Persian as if it were German (the review's K11: the check of the language must be the one that decides).
+        val german = ToolLabels(book, guide, ::fixture, phone = persian, own = listOf(Locale.forLanguageTag("de-DE"))).shown("proxy_switch")
+        assertEquals(ToolLabels.Shown("کلید پروکسی ابزار آزمایشی", null, fromTool = true), german)
         // The test tool's default words are English, so English counts as there.
         val inEnglish = ToolLabels(book, guide, ::fixture, phone = persian, own = english).shown("proxy_switch")
         assertEquals("Proxy switch of the test tool", inEnglish.also)

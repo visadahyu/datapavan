@@ -257,6 +257,10 @@ private fun Facts(view: NowView, snapshot: Snapshot?, onAllowAccess: () -> Unit)
     when (snapshot?.known) {
         Snapshot.NO_ACCESS -> {
             Text(stringResource(R.string.now_no_access), style = MaterialTheme.typography.bodyMedium)
+            // Datapavan's name for the access stays; the phone's own name for its page follows, where the button sends
+            // the user (the maintainer, 2026-11-22; ADR 0054).
+            Text(stringResource(R.string.now_access_phone_name, quotedLabel("usage_access")), style = MaterialTheme.typography.bodyMedium)
+            AndroidLabelsNote("usage_access")
             OutlinedButton(onClick = onAllowAccess) { Text(stringResource(R.string.now_allow_access)) }
         }
         Snapshot.LOCKED -> Text(stringResource(R.string.now_locked), style = MaterialTheme.typography.bodyMedium)

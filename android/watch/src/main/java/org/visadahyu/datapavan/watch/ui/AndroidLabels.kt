@@ -5,6 +5,8 @@ import androidx.annotation.StringRes
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.DisposableEffect
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.staticCompositionLocalOf
 import androidx.compose.ui.platform.LocalConfiguration
@@ -12,7 +14,6 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
 import org.visadahyu.datapavan.datapack.DataPackStore
 import org.visadahyu.datapavan.labels.LabelRow
-import org.visadahyu.datapavan.labels.LabelSource
 import org.visadahyu.datapavan.labels.PhoneLabels
 import org.visadahyu.datapavan.labels.SystemLabels
 import org.visadahyu.datapavan.watch.R
@@ -33,6 +34,7 @@ internal object AndroidLabels {
         "private_dns_off" to listOf(0 to R.string.android_label_private_dns_off),
         "private_dns_automatic" to listOf(0 to R.string.android_label_private_dns_automatic),
         "always_on_vpn" to listOf(0 to R.string.android_label_always_on_vpn),
+        "usage_access" to listOf(36 to R.string.android_label_usage_access_api36, 0 to R.string.android_label_usage_access),
         "screen_lock" to listOf(
             37 to R.string.android_label_screen_lock_api37,
             36 to R.string.android_label_screen_lock_api36,
@@ -48,28 +50,49 @@ internal object AndroidLabels {
     @StringRes
     fun fallback(key: String, sdk: Int): Int? = FALLBACKS[key]?.firstOrNull { sdk >= it.first }?.second
 
-    /** The labels for [context]'s screens, read from the data pack in use (an imported one's rows win) and the phone. */
-    fun of(context: Context): SystemLabels =
-        PhoneLabels.of(context, rows = { DataPackStore.read(context, WatchPacks).text(LabelRow.PATH) }, fallback = ::fallback)
+    /** Each key's strings with the Android version they hold from, for the check against their names' _apiN. */
+    val thresholds: Map<String, List<Pair<Int, Int>>> get() = FALLBACKS
+
+    /**
+     * The labels for [context]'s screens, from [rows], the text of labels.tsv in the data pack in use (an imported one's
+     * rows win), and the phone.
+     */
+    fun of(context: Context, rows: String?): SystemLabels = PhoneLabels.of(context, rows = { rows }, fallback = ::fallback)
+
+    /** labels.tsv's text from the data pack in use; it parses the pack, so never on the main thread (the fix round's m3). */
+    fun rows(context: Context): String = runCatching { DataPackStore.read(context, WatchPacks).text(LabelRow.PATH) }.getOrNull().orEmpty()
 }
+
+/**
+ * A screen's labels: [labels] for its locales, and whether the data pack's rows are read yet ([ready]). Until they
+ * are, the labels are Datapavan's copies of AOSP's texts, and no note says so.
+ */
+internal data class ScreenLabels(val labels: SystemLabels, val ready: Boolean)
 
 /** The labels of a screen, which WatchTheme sets for its locales. */
-internal val LocalAndroidLabels = staticCompositionLocalOf<SystemLabels?> { null }
+internal val LocalAndroidLabels = staticCompositionLocalOf<ScreenLabels?> { null }
 
+/** The labels for this screen's locales, the data pack's rows read on a thread of their own. */
 @Composable
-internal fun rememberAndroidLabels(): SystemLabels {
+internal fun rememberAndroidLabels(): ScreenLabels {
     val context = LocalContext.current
     val locales = LocalConfiguration.current.locales
-    return remember(context, locales) { AndroidLabels.of(context) }
+    val rows = remember(context) { mutableStateOf<String?>(null) }
+    DisposableEffect(context) {
+        Thread { rows.value = AndroidLabels.rows(context) }.apply { name = "android-labels" }.start()
+        onDispose { }
+    }
+    val text = rows.value
+    return remember(context, locales, text) { ScreenLabels(AndroidLabels.of(context, text), ready = text != null) }
 }
 
 @Composable
-private fun labels(): SystemLabels = LocalAndroidLabels.current ?: rememberAndroidLabels()
+private fun screenLabels(): ScreenLabels = LocalAndroidLabels.current ?: rememberAndroidLabels()
 
 /** An Android label as a sentence quotes it: each part in its own direction, Datapavan's beside the phone's. */
 @Composable
 internal fun quotedLabel(key: String): String {
-    val labels = labels()
+    val labels = screenLabels().labels
     val both = stringResource(R.string.label_with_own)
     return remember(labels, key, both) { labels.label(key).quoted { first, second -> String.format(both, first, second) } }
 }
@@ -77,7 +100,7 @@ internal fun quotedLabel(key: String): String {
 /** An Android label standing alone, as a heading: plain, or both parts isolated where there are two. */
 @Composable
 internal fun labelAlone(key: String): String {
-    val labels = labels()
+    val labels = screenLabels().labels
     val both = stringResource(R.string.label_with_own)
     return remember(labels, key, both) {
         val label = labels.label(key)
@@ -86,20 +109,18 @@ internal fun labelAlone(key: String): String {
 }
 
 /**
- * Whether a part that quotes Android's labels [keys] must say they are Android's own names: one of them was not read
- * from this phone as its screen names it (the audit's C2), since the phone's maker has rows for other labels only, or
- * the phone gave none.
+ * Under a part that names Android's settings or switches [keys]: names those of them that are Android's own names
+ * rather than this phone's (the audit's C2, the fix round's M1): this phone's maker has not been seen to show them, or
+ * the phone gave none. Nothing is said before the data pack's rows are read.
  */
 @Composable
-internal fun labelsAreAndroids(vararg keys: String): Boolean {
-    val labels = labels()
-    return remember(labels, keys.toList()) { keys.any { labels.label(it).source != LabelSource.PHONE } }
-}
-
-/** Under a part that quotes Android's labels [keys]: says they are Android's own names where [labelsAreAndroids]. */
-@Composable
 internal fun AndroidLabelsNote(vararg keys: String) {
-    if (labelsAreAndroids(*keys)) {
-        Text(stringResource(R.string.labels_android_note), style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
-    }
+    val screen = screenLabels()
+    val named = remember(screen, keys.toList()) { if (screen.ready) screen.labels.androids(keys.toList()) else emptyList() }
+    if (named.isEmpty()) return
+    val both = stringResource(R.string.label_with_own)
+    val quote = stringResource(R.string.label_named)
+    val separator = stringResource(R.string.labels_list_separator)
+    val list = named.joinToString(separator) { label -> String.format(quote, label.quoted { first, second -> String.format(both, first, second) }) }
+    Text(stringResource(R.string.labels_android_note, list), style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
 }
