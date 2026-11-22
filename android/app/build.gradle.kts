@@ -98,13 +98,15 @@ val isolatedServices = buildList {
 }
 
 // The native libraries each APK must carry, with the JNI symbol each must export (core/jni and NativeCore.kt;
-// core/watch-jni and Engine.kt), and those it must not: Basic never carries Watch's engine.
+// core/network-jni and Engine.kt), and those it must not: Basic never carries the network part's engine. One name
+// for both lists, so that the check of Basic cannot drift from the library Advanced carries.
+val networkLibrary = "libdatapavan_network.so"
 val requiredLibraries = buildMap {
     put("libdatapavan.so", "Java_org_visadahyu_datapavan_core_NativeCore_version")
-    if (advanced) put("libdatapavan_watch.so", "Java_org_visadahyu_datapavan_watch_Engine_nativeStart")
+    if (advanced) put(networkLibrary, "Java_org_visadahyu_datapavan_watch_Engine_nativeStart")
 }
-val forbiddenLibraries = if (advanced) emptyList() else listOf("libdatapavan_watch.so")
-// The methods of WatchVpnService that Watch's library calls back by name (core/watch-jni/src/lib.rs), which
+val forbiddenLibraries = if (advanced) emptyList() else listOf(networkLibrary)
+// The methods of WatchVpnService that Watch's library calls back by name (core/network-jni/src/lib.rs), which
 // R8 must neither remove nor rename (watch/proguard-rules.pro).
 val jniCallbacks = if (advanced) listOf("ownerUid", "protectSocket", "logRecords", "statesWanted", "resolveEndpoint", "routeOfApp", "exchange", "dnsChanged") else emptyList()
 
@@ -118,7 +120,7 @@ val licenceFiles = buildList {
     add("LICENSE")
     add("licences/native-core.txt")
     if (advanced) {
-        add("licences/native-watch.txt")
+        add("licences/native-network.txt")
         add("licences/MPL-2.0.txt")
         add("licences/gotatun-BSD-3-Clause.txt")
     }

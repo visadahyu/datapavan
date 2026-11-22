@@ -1,4 +1,4 @@
-The crates inside libdatapavan_watch.so, Watch's engine, in Datapavan Advanced, built from core/watch-jni
+The crates inside libdatapavan_network.so, the network part's engine, in Datapavan Advanced, built from core/network-jni
 (Datapavan's own crates are under Apache-2.0: LICENSE). Each crate's name, version and licence, then
 the licence texts its package carries, each text once with the crates that carry it.
 Written by scripts/licences.py from core/Cargo.lock; do not edit by hand.

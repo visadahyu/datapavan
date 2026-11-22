@@ -2,7 +2,7 @@
 licences/ as one file per library, for the APK to carry beside NOTICE (android/app/build.gradle.kts) and for
 scripts/check.sh to hold current.
 
-For each library (libdatapavan.so from core/jni, libdatapavan_watch.so from core/watch-jni), the crates its code is
+For each library (libdatapavan.so from core/jni, libdatapavan_network.so from core/network-jni), the crates its code is
 built from on the shipped Android targets: normal dependencies, not build or development ones, and not procedural
 macros, whose code runs in the compiler and is not shipped. For each crate: its name, version and licence
 expression, then its own licence texts, as its package on crates.io carries them (LICENSE*, LICENCE*, COPYING*,
@@ -30,7 +30,7 @@ OUT = os.path.join(ROOT, "licences")
 TARGETS = ["aarch64-linux-android", "armv7-linux-androideabi", "x86_64-linux-android"]
 LIBRARIES = {
     "native-core.txt": ("datapavan-jni", "libdatapavan.so, in every edition"),
-    "native-watch.txt": ("datapavan-watch-jni", "libdatapavan_watch.so, Watch's engine, in Datapavan Advanced"),
+    "native-network.txt": ("datapavan-network-jni", "libdatapavan_network.so, the network part's engine, in Datapavan Advanced"),
 }
 # Packages that carry no licence text of their own, and the texts this repository keeps for them.
 VENDORED = {
@@ -88,7 +88,7 @@ def render(file_name):
     root_name, what = LIBRARIES[file_name]
     packages = shipped(root_name)
     lines = [
-        f"The crates inside {what}, built from core/{'jni' if root_name == 'datapavan-jni' else 'watch-jni'}",
+        f"The crates inside {what}, built from core/{'jni' if root_name == 'datapavan-jni' else 'network-jni'}",
         "(Datapavan's own crates are under Apache-2.0: LICENSE). Each crate's name, version and licence, then",
         "the licence texts its package carries, each text once with the crates that carry it.",
         "Written by scripts/licences.py from core/Cargo.lock; do not edit by hand.",

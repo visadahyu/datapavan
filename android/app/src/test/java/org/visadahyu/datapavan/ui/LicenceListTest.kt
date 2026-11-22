@@ -20,7 +20,7 @@ class LicenceListTest {
     @Test
     fun `the files the build names are the repository's`() {
         assertTrue(carried.containsAll(listOf("NOTICE", LicenceList.LICENSE, "native-core.txt", LicenceList.JVM_TABLE)))
-        assertEquals(BuildConfig.ADVANCED, "native-watch.txt" in carried)
+        assertEquals(BuildConfig.ADVANCED, "native-network.txt" in carried)
         assertEquals(BuildConfig.ADVANCED, "MPL-2.0.txt" in carried && "gotatun-BSD-3-Clause.txt" in carried)
         for (file in carried) assertTrue("$file is not in the repository", repository(file).isFile)
     }
@@ -51,15 +51,15 @@ class LicenceListTest {
 
     @Test
     fun `gotatun opens the repository's texts, a crate taken under Apache-2_0 opens LICENSE`() {
-        val watch = LicenceList.crates("native-watch.txt", File("../../licences/native-watch.txt").readText())
-        val gotatun = watch.crates.single { it.name == "gotatun" }
+        val network = LicenceList.crates("native-network.txt", File("../../licences/native-network.txt").readText())
+        val gotatun = network.crates.single { it.name == "gotatun" }
         assertEquals("MPL-2.0", gotatun.licence)
         assertEquals(listOf("MPL-2.0.txt", "gotatun-BSD-3-Clause.txt"), gotatun.texts.map { it.file })
         assertTrue(gotatun.texts.all { it.anchor == null })
-        val jni = watch.crates.single { it.name == "jni" }
+        val jni = network.crates.single { it.name == "jni" }
         assertEquals(listOf(LicenceList.Text(LicenceList.LICENSE)), jni.texts)
-        val adler = watch.crates.single { it.name == "adler2" }
-        assertEquals(listOf(LicenceList.Text("native-watch.txt", "adler2 2.0.1 (")), adler.texts)
+        val adler = network.crates.single { it.name == "adler2" }
+        assertEquals(listOf(LicenceList.Text("native-network.txt", "adler2 2.0.1 (")), adler.texts)
     }
 
     @Test

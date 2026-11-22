@@ -11,7 +11,7 @@ import org.visadahyu.datapavan.watch.tunnel.qr.QrDecode
 
 /**
  * Every refusal the engine can give has words on the screen (W7, part 2): the codes are read from the parser's own
- * source (core/net's `Refusal::code`) and the bridge's (core/watch-jni), so that a code added there without words
+ * source (core/net's `Refusal::code`) and the bridge's (core/network-jni), so that a code added there without words
  * here fails this test; and each string they name is in Watch's strings.
  */
 class RefusalsTest {
@@ -26,7 +26,7 @@ class RefusalsTest {
 
     /** The answers of `nativeTunnelSet` that are not the parser's: the engine's bound. */
     private fun bridgeCodes(): List<String> {
-        val source = File(root, "core/watch-jni/src/lib.rs").readText()
+        val source = File(root, "core/network-jni/src/lib.rs").readText()
         return Regex("\"(too-many)\"\\.clone_into").findAll(source).map { it.groupValues[1] }.toList()
     }
 

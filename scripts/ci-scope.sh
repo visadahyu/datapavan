@@ -79,7 +79,7 @@ rank() { case $1 in none) echo 0 ;; build) echo 1 ;; *) echo 2 ;; esac; }
 wireguard_path() {
     case $1 in
         .github/* | scripts/ci-scope.sh | scripts/check.sh | scripts/emulator-shard.sh | scripts/emulator-stop.sh) return 0 ;;
-        core/net/* | core/engine/* | core/watch-jni/* | core/Cargo.toml | core/Cargo.lock | rust-toolchain.toml) return 0 ;;
+        core/net/* | core/engine/* | core/network-jni/* | core/Cargo.toml | core/Cargo.lock | rust-toolchain.toml) return 0 ;;
         android/* | spikes/wireguard-core/peer/*) return 0 ;;
         scripts/wglab.sh | scripts/verify-wireguard.sh | scripts/verify-wireguard-import.sh | scripts/workload-app/*) return 0 ;;
         scripts/adb-ui.sh | scripts/host-ports.sh | scripts/emulator-networks.sh) return 0 ;;
@@ -304,7 +304,7 @@ TABLE
 yes core/net/src/engine/tunnels.rs
 yes core/net/tests/wglab.rs
 yes core/engine/src/lib.rs
-yes core/watch-jni/src/lib.rs
+yes core/network-jni/src/lib.rs
 yes core/Cargo.lock
 yes rust-toolchain.toml
 yes android/watch/src/main/java/org/visadahyu/datapavan/watch/TunnelStore.kt

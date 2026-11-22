@@ -45,7 +45,7 @@ internal object LicenceList {
     private val LIBRARY = Regex("""^The crates inside (\S+),""")
 
     /**
-     * The crates of a native library's file (`native-core.txt`, `native-watch.txt`, as scripts/licences.py writes
+     * The crates of a native library's file (`native-core.txt`, `native-network.txt`, as scripts/licences.py writes
      * them): each `- NAME VERSION: EXPRESSION` line before the texts, with the text that covers it. A crate whose
      * package carries its own texts is covered by this file, at the block that names it as a carrier; one that
      * carries none names the repository's texts for it, or Apache-2.0's, which is [LICENSE]. A line of the list

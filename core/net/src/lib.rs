@@ -4,7 +4,7 @@
 //! apps' connections, reached by rewriting addresses; UDP is relayed in userspace.
 //!
 //! Like the rest of the engine, it holds no `unsafe` code (ADR 0006). The JNI bridge in
-//! `datapavan-watch-jni` hands it the tunnel's descriptor and answers its questions to Android.
+//! `datapavan-network-jni` hands it the tunnel's descriptor and answers its questions to Android.
 
 pub mod answers;
 pub mod blocking;

@@ -1,13 +1,13 @@
 package org.visadahyu.datapavan.watch
 
 /**
- * The packet engine in Rust (`core/net`, ADR 0012), through its JNI bridge (`core/watch-jni`). One
+ * The packet engine in Rust (`core/net`, ADR 0012), through its JNI bridge (`core/network-jni`). One
  * engine runs at a time; it owns the tunnel's descriptor from [nativeStart] or [nativeSwapTunnel] until
  * [nativeStop].
  */
 internal object Engine {
     init {
-        System.loadLibrary("datapavan_watch")
+        System.loadLibrary("datapavan_network")
     }
 
     /**
@@ -237,7 +237,7 @@ internal object Engine {
 
     /**
      * The kept flows that went through a proxy, one per line as `protocol app destination uid kind how flags asked
-     * proxy-name cover name` (core/watch-jni's `proxy_line`); debug builds only. No credential: the engine keeps none.
+     * proxy-name cover name` (core/network-jni's `proxy_line`); debug builds only. No credential: the engine keeps none.
      */
     external fun nativeFlowProxies(): String
 

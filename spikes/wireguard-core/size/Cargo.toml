@@ -1,6 +1,6 @@
 [package]
 name = "wg-size"
-description = "core/watch-jni's library with GotaTun's Tunn linked in and called, to measure its size (W7's spike)."
+description = "core/network-jni's library with GotaTun's Tunn linked in and called, to measure its size (W7's spike)."
 version.workspace = true
 edition.workspace = true
 license.workspace = true
@@ -8,7 +8,7 @@ publish.workspace = true
 
 [lib]
 # The name the app loads, so that the library compares with the one in Advanced's APK.
-name = "datapavan_watch"
+name = "datapavan_network"
 crate-type = ["cdylib"]
 
 [features]
@@ -17,7 +17,7 @@ ring = ["dep:gotatun", "dep:bytes", "gotatun/ring"]
 aws-lc = ["dep:gotatun", "dep:bytes", "gotatun/aws-lc-rs"]
 
 [dependencies]
-# core/watch-jni's own dependencies, at the versions of core's lock file.
+# core/network-jni's own dependencies, at the versions of core's lock file.
 datapavan-net = { path = "../../../core/net" }
 datapavan-engine = { path = "../../../core/engine" }
 jni = { version = "=0.22.4", default-features = false }

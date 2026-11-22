@@ -1,8 +1,8 @@
 #!/usr/bin/env bash
 # Size per ABI of Watch's native library (W7's spike, ADR 0035, question 3). Four variants:
 #
-#   today     core/watch-jni, as the app builds it now;
-#   baseline  the spike's copy (size/): core/watch-jni's own source, unchanged, without WireGuard;
+#   today     core/network-jni, as the app builds it now;
+#   baseline  the spike's copy (size/): core/network-jni's own source, unchanged, without WireGuard;
 #   ring      the same with GotaTun 0.10.3 on `ring`, linked in and called;
 #   aws-lc    the same with GotaTun 0.10.3 on `aws-lc-rs`;
 #   ring-in-core, aws-lc-in-core
@@ -19,7 +19,7 @@
 #   spikes/wireguard-core/size.sh OUT_DIR [ROOT] [variant...]
 #
 # ROOT is the checkout to build in (default: the one this script is in), so that scripts/reproducible.sh's
-# method can build a commit in two fresh clones. Writes OUT_DIR/<variant>/<abi>/libdatapavan_watch.so (as
+# method can build a commit in two fresh clones. Writes OUT_DIR/<variant>/<abi>/libdatapavan_network.so (as
 # built) and .stripped.so, and prints one line per library: variant, ABI, bytes as built, bytes stripped,
 # and the stripped file's sha256.
 set -euo pipefail
@@ -63,7 +63,7 @@ in_core() {
     sed -i -e 's|"\.\./\.\./\.\./core/|"../|' \
         -e 's|^gotatun = { workspace = true, optional = true }|gotatun = { version = "=0.10.3", default-features = false, optional = true }|' \
         -e 's|^bytes = { workspace = true, optional = true }|bytes = { version = "=1.12.1", optional = true }|' "$tree/core/wg-size/Cargo.toml"
-    sed -i -e 's|"\.\./\.\./\.\./\.\./core/watch-jni/src/lib.rs"|"../../watch-jni/src/lib.rs"|' \
+    sed -i -e 's|"\.\./\.\./\.\./\.\./core/network-jni/src/lib.rs"|"../../network-jni/src/lib.rs"|' \
         -e 's|"\.\./\.\./common/pair.rs"|"../pair.rs"|' "$tree/core/wg-size/src/lib.rs"
     grep 'wg-size' "$tree/core/Cargo.toml" >/dev/null && ! grep -E 'workspace = true, optional|\.\./\.\./\.\./core' \
         "$tree/core/wg-size/Cargo.toml" >/dev/null || { echo "the copy in $tree is not as expected" >&2; exit 1; }
@@ -72,7 +72,7 @@ in_core() {
 
 for variant in "${variants[@]}"; do
     case $variant in
-        today) dir="$ROOT/core"; args=(-p datapavan-watch-jni) ;;
+        today) dir="$ROOT/core"; args=(-p datapavan-network-jni) ;;
         baseline) dir="$ROOT/spikes/wireguard-core"; args=(-p wg-size) ;;
         ring) dir="$ROOT/spikes/wireguard-core"; args=(-p wg-size --features ring) ;;
         aws-lc) dir="$ROOT/spikes/wireguard-core"; args=(-p wg-size --features aws-lc) ;;
@@ -95,7 +95,7 @@ for variant in "${variants[@]}"; do
     (cd "$dir" && CARGO_ENCODED_RUSTFLAGS="$flags" cargo ndk "${abi_args[@]}" --platform 29 -o "$OUT/$variant" build "${lock[@]}" \
         --release -q "${args[@]}") >&2
     for abi in "${ABIS[@]}"; do
-        lib="$OUT/$variant/$abi/libdatapavan_watch.so"
+        lib="$OUT/$variant/$abi/libdatapavan_network.so"
         "$STRIP" --strip-unneeded -o "${lib%.so}.stripped.so" "$lib"
         printf '%s\t%s\t%s\t%s\t%s\n' "$variant" "$abi" "$(stat -c %s "$lib")" "$(stat -c %s "${lib%.so}.stripped.so")" \
             "$(sha256sum "${lib%.so}.stripped.so" | cut -d' ' -f1)"

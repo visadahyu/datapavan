@@ -81,7 +81,7 @@ configurations.configureEach {
 }
 
 /**
- * Builds Watch's Rust JNI library (`core/watch-jni`) for every shipped ABI with cargo-ndk: the audit
+ * Builds the network part's Rust JNI library (`core/network-jni`) for every shipped ABI with cargo-ndk: the audit
  * app's task (app/build.gradle.kts), with the crate as an input.
  *
  * The cargo environment is controlled: inherited flags that could change the output are dropped, and
@@ -237,7 +237,7 @@ androidComponents {
             // The messengers whose proxies the engine infers (core/net/src/messengers.rs, ADR 0052).
             sources.from(listOf("clients.tsv", "names.tsv", "telegram-cidr.txt").map { repositoryRoot.file("data/messengers/$it") })
             workspaceDir.set(rustWorkspace)
-            crate.set("datapavan-watch-jni")
+            crate.set("datapavan-network-jni")
             abis.set(shippedAbis)
             platformLevel.set(variant.minSdk.apiLevel)
             // -Pdatapavan.rustRelease=true: optimised Rust in a debug build too, so that the CPU check
@@ -289,7 +289,7 @@ tasks.withType<Test>().configureEach {
             .map { repositoryRoot.dir(it) },
     ).withPathSensitivity(PathSensitivity.RELATIVE).withPropertyName("repositoryData")
     inputs.files(
-        listOf("core/net/src/engine.rs", "core/net/src/wireguard/config.rs", "core/watch-jni/src/lib.rs")
+        listOf("core/net/src/engine.rs", "core/net/src/wireguard/config.rs", "core/network-jni/src/lib.rs")
             .map { repositoryRoot.file(it) },
     ).withPathSensitivity(PathSensitivity.RELATIVE).withPropertyName("engineSources")
 }

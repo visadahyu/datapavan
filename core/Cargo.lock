@@ -394,7 +394,7 @@ dependencies = [
 ]
 
 [[package]]
-name = "datapavan-watch-jni"
+name = "datapavan-network-jni"
 version = "0.1.0"
 dependencies = [
  "datapavan-engine",

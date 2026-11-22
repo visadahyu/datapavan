@@ -3,7 +3,7 @@
 # workspace, with a lock file of its own that began as a copy of core/Cargo.lock, so that every crate the
 # engine already uses keeps its version. Findings: docs/spikes/2026-11-wireguard-core.md.
 #
-# - size:  core/watch-jni's library, its own source unchanged, with GotaTun linked in and called;
+# - size:  core/network-jni's library, its own source unchanged, with GotaTun linked in and called;
 # - bench: Tunn's encapsulation and the peer's decapsulation, per packet, on one core;
 # - lab:   the client of the interoperation lab (peer/, lab.sh): Tunn over a UDP socket against the
 #          Linux kernel's WireGuard.

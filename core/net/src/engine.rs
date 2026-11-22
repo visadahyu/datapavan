@@ -1488,7 +1488,7 @@ impl Engine {
     /// stay out of the view. It cannot clear the flows still open, which the engine needs to carry them,
     /// nor the seconds and segments that wait for their states, which are the log's and go to it as its
     /// retention says. A snapshot looks organisations up outside the engine's locks and keeps them after: a
-    /// caller must not clear while one is taken, or the addresses it looked up stay (watch-jni's `ENGINE`
+    /// caller must not clear while one is taken, or the addresses it looked up stay (network-jni's `ENGINE`
     /// lock holds both calls apart; review c1 of W5's third part, engine, nit 5).
     pub fn clear_activity(&self) {
         let now = self.shared.clock.wall_ms();

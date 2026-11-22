@@ -38,8 +38,8 @@ build second-with-a-longer-path "${reversed[@]}"
 ok=0
 for variant in "${variants[@]}"; do
     for abi in arm64-v8a armeabi-v7a x86_64; do
-        a="$WORK/first/out/$variant/$abi/libdatapavan_watch.stripped.so"
-        b="$WORK/second-with-a-longer-path/out/$variant/$abi/libdatapavan_watch.stripped.so"
+        a="$WORK/first/out/$variant/$abi/libdatapavan_network.stripped.so"
+        b="$WORK/second-with-a-longer-path/out/$variant/$abi/libdatapavan_network.stripped.so"
         leaks=$(strings "$a" | grep -c -E "$HOME|$WORK|/tmp/" || true)
         if cmp -s "$a" "$b"; then
             echo "== $variant $abi: reproducible, $(stat -c %s "$a") bytes, $(sha256sum "$a" | cut -c1-16), $leaks strings naming this machine's paths"

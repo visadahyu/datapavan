@@ -1,11 +1,11 @@
-//! core/watch-jni's library, its source file included unchanged, and, with the `ring` or `aws-lc` feature,
+//! core/network-jni's library, its source file included unchanged, and, with the `ring` or `aws-lc` feature,
 //! one more export that runs a WireGuard session between two of GotaTun's `Tunn`s: the handshake with a
 //! preshared key, the queued first packet, a data packet each way, the timers and the counters. What W7's
 //! engine calls is then in the library, and nothing of it can be dropped as dead code.
 
 #[allow(missing_docs, clippy::all)]
-#[path = "../../../../core/watch-jni/src/lib.rs"]
-mod watch;
+#[path = "../../../../core/network-jni/src/lib.rs"]
+mod network;
 
 #[cfg(any(feature = "ring", feature = "aws-lc"))]
 #[path = "../../common/pair.rs"]
