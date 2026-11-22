@@ -80,8 +80,8 @@ else
     check_label plan shortLabel Plan
     check_label plan longLabel "Your plan"
     check_label apps shortLabel Apps
-    check_label network shortLabel Network
-    check_label network longLabel "Network use"
+    check_label network shortLabel "Data use"
+    check_label network longLabel "Data use"
     echo "ok: Android lists the three shortcuts"
 fi
 

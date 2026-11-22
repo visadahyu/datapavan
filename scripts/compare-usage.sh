@@ -129,7 +129,7 @@ open_app() {
 # The app page's line for this network type, as "size" ("0" when the app used none).
 datapavan_size() {
     open_sections
-    scroll_to "Network use" >/dev/null || return 1
+    scroll_to "Data use" >/dev/null || return 1
     for _ in 1 2 3 4; do
         local line
         line=$(texts | plain | grep -m1 -E "^$LINE [0-9]" || true)

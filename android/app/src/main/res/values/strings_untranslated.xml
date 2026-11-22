@@ -48,7 +48,7 @@
     <string name="plan_not_opened_sensitive_body_plain">It still holds the access below. Remove what you do not need.</string>
     <!-- How to turn off a preinstalled app. %1$s: the button on the app's page, as Android names it. -->
     <string name="guide_steps_quoted">1. Open the app in system settings.\n2. Tap the “%1$s” button, or the one that turns the app off.\n3. If the button is greyed out, the phone maker blocks it. From a computer with USB debugging, you can remove the app for your user instead; this can be undone.</string>
-    <!-- Datapavan Advanced only: the title of the card on the network page that opens the Network screen, where each
+    <!-- Datapavan Advanced only: the title of the card on the Data use tab that opens the Network screen, where each
          app's connections show (ui/NetworkEntry.kt). -->
     <string name="network_entry_title">Each app\'s connections</string>
 </resources>

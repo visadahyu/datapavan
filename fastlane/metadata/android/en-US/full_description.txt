@@ -14,6 +14,6 @@ Datapavan shows what the apps on your phone can reach and how much they send, an
 A short plan, the changes that remove the most risk first. Each one opens the right Android screen where you decide, and a journal on the phone keeps what you changed so that you can undo it. It leaves out the apps it recognises as essential.
 
 <b>What it never does</b>
-No analytics, no crash reports, no servers, no accounts. Datapavan itself sends nothing anywhere. Genuine Datapavan has no internet access and never asks for it: a copy that asks for it is not genuine.
+No analytics, no crash reports, no servers, no accounts. Datapavan itself sends nothing anywhere. Genuine Datapavan Basic has no internet access and never asks for it: a copy of Basic that asks for it is not genuine.
 
 Languages: English, French, German, Spanish, Russian, Chinese, Arabic and Persian.

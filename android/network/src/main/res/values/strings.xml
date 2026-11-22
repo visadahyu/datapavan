@@ -38,7 +38,7 @@
     <!-- While Datapavan looks for an installed tool whose proxy answers. -->
     <string name="chain_searching">Looking for a circumvention tool in proxy mode…</string>
     <!-- No tool of Datapavan's list with a proxy mode is installed. Android runs one VPN at a time. -->
-    <string name="chain_none">No circumvention tool with a proxy mode is installed. Android runs only one VPN at a time, so Datapavan can work beside such a tool only through its proxy mode.</string>
+    <string name="chain_none">No circumvention tool with a proxy mode is installed. Android runs only one VPN at a time, so Datapavan\'s VPN can work beside such a tool only through the tool\'s proxy mode.</string>
     <!-- %1$s: the names of the installed tools, comma separated. Their proxy does not answer. -->
     <string name="chain_not_answering">Installed: %1$s. No proxy answers. Run the tool in proxy mode instead of VPN mode, then look again.</string>
     <!-- The chain is on, but the tool's proxy does not answer. %1$s: the tool's name. -->
@@ -110,7 +110,7 @@
 
     <string name="now_title">Now</string>
     <string name="now_intro">Apps that used the network, and whether you were using them at the time.</string>
-    <string name="now_network_off">Datapavan\'s VPN is off, so Datapavan sees no traffic. Turn it on in the Network screen.</string>
+    <string name="now_network_off">Datapavan\'s VPN is off, so it sees no traffic. Turn it on in the Network screen: on the Data use tab, tap \"See where apps connect\".</string>
     <string name="now_no_access">Datapavan cannot tell which app you are using, because it has no usage access. Apps show without a state.</string>
     <string name="now_allow_access">Allow usage access</string>
     <string name="now_locked">Which app you are using shows after the first unlock since the phone started.</string>
@@ -183,7 +183,7 @@
     <string name="cannot_see_content">Datapavan does not see content. For encrypted traffic it sees the size, the place and the time, never what was sent.</string>
     <string name="cannot_see_device">Datapavan does not see what an app does on the phone, such as reading your contacts, files or photos. Only the sending shows.</string>
     <string name="cannot_see_together">Some apps cannot be told apart. Apps that share a number count together. A keyboard counts as in use while the screen is on, and in the background while it is off. Live wallpapers have no screen of their own. Your circumvention tool carries the traffic of the apps you send through it.</string>
-    <string name="cannot_see_gaps">Datapavan sees nothing while another VPN is on, from apps you left out, or from a work profile, a private space or another user. It also sees nothing before the first unlock after a restart, or when traffic goes around the VPN. Traffic between apps on the phone never reaches it.</string>
+    <string name="cannot_see_gaps">Datapavan sees no traffic while another VPN is on, from apps you left out, or from a work profile, a private space or another user. It also sees none before the first unlock after a restart, or when traffic goes around the VPN. Traffic between apps on the phone never reaches it.</string>
     <string name="cannot_see_sizes">Sizes are what the apps sent and received through Datapavan. Android\'s data usage screen also counts headers and resent data, so it shows a little more.</string>
     <string name="cannot_see_notification">\"With its notification\" means Android lets the app show one, not that you saw it. A channel you turned off still counts. So does a phone that hides some notifications, and up to Android 12 an app whose notifications you turned off. A music player not allowed notifications counts in the background while its notification shows. From Android 12, so does a service that runs for less than 10 seconds.</string>
     <string name="cannot_see_in_use">\"In use\" is what Android records of each app\'s screens. On some phones the feed left of the home screen may count as in the background. An app allowed to open screens from the background can look in use.</string>
@@ -192,7 +192,7 @@
     <string name="history_title">History of %1$s</string>
     <string name="history_back">Back to Now</string>
     <string name="history_intro">Each connection Datapavan kept for this app, newest first, one day at a time.</string>
-    <string name="history_keep">To keep a history, choose how many days to keep records in the Network screen.</string>
+    <string name="history_keep">To keep a history, open the Network screen and choose how many days to keep records. On the Data use tab, tap \"See where apps connect\".</string>
     <string name="history_nothing_yet">Nothing has been kept yet.</string>
     <string name="history_closed">This day cannot be opened now.</string>
     <string name="history_empty">No connections on this day.</string>
@@ -491,7 +491,7 @@
     <!-- %1$s: the network's own domains, by commas. -->
     <string name="dns_search">This network says these domains are its own: %1$s. For a name under them, Datapavan asks the encrypted way first. It asks this network only when the internet does not know the name.</string>
     <string name="dns_notify">Notify me while names go to the network\'s resolver</string>
-    <string name="dns_notify_refused">Android does not let Datapavan show notifications, so this stays off. Allow them for Datapavan in Android\'s settings, then turn this on again.</string>
+    <string name="dns_notify_refused">Android does not let Datapavan show notifications, so this stays off. Allow them for Datapavan Advanced in Android\'s settings, then turn this on again.</string>
     <string name="dns_pairs">Oblivious DoH pairs, each of two different operators and countries:</string>
     <!-- %1$s: the relay's operator and its countries; %2$s: the target's. -->
     <string name="dns_pair">Relay: %1$s. Target: %2$s.</string>
@@ -667,22 +667,22 @@
     <string name="guide_note_remote_profile">A remote profile shows only \"%1$s\": its content comes from its address and cannot be changed here. Make a local profile instead.</string>
     <string name="guide_note_engines">In this mode, profiles that use sing-box, OpenConnect, IKEv2 or a chain still start a VPN.</string>
     <!-- The pages of tools that run only as a VPN, and of those whose steps wait. %1$s: the tool's name. -->
-    <string name="guide_vpn_only">%1$s runs only as a VPN. Android runs one VPN at a time, so Datapavan cannot run beside it: when one starts, Android stops the other.</string>
-    <string name="guide_wireguard_only">%1$s runs only as a VPN, so Datapavan cannot run beside it. But Datapavan can carry a WireGuard configuration itself, and send the apps you choose through it.</string>
+    <string name="guide_vpn_only">%1$s runs only as a VPN. Android runs one VPN at a time, so Datapavan\'s VPN cannot run beside it: when one starts, Android stops the other.</string>
+    <string name="guide_wireguard_only">%1$s runs only as a VPN, so Datapavan\'s VPN cannot run beside it. But Datapavan can carry a WireGuard configuration itself, and send the apps you choose through it.</string>
     <!-- Quotes the Network screen's own heading, tunnels_title, as it reads. -->
     <string name="guide_wireguard_add">Add one in Datapavan, under \"WireGuard configurations\".</string>
     <string name="guide_wireguard_proton">Proton VPN\'s website makes these files, on the free plan too. In your account, open \"Downloads\", then \"WireGuard configuration\".</string>
     <string name="guide_wireguard_mullvad">Mullvad\'s website makes these files for a paid account. Use its configuration generator.</string>
     <string name="guide_wireguard_windscribe">Windscribe\'s website makes these files for paid accounts. Use its \"Config Generator\".</string>
-    <string name="guide_wireguard_same">The file or QR code you added to WireGuard works in Datapavan too.</string>
+    <string name="guide_wireguard_same">The configuration file or QR code you added to WireGuard works in Datapavan as well.</string>
     <string name="guide_note_amneziawg">AmneziaWG changes how WireGuard\'s packets look. Datapavan does not read that change yet, so it cannot carry these configurations.</string>
     <string name="guide_waiting_intro">There are no steps for %1$s yet.</string>
     <string name="guide_waiting_closed">Its code is not public, so its steps wait until it is tried with Datapavan.</string>
     <string name="guide_waiting_partly">Part of its code is not public, so its steps wait until it is tried with Datapavan.</string>
     <string name="guide_note_tethering">It has a feature it calls Proxy Tethering. Whether that gives a proxy on this phone that Datapavan can use is not known yet.</string>
     <!-- The website's list of the guides (scripts/guides.py), which Datapavan does not show. -->
-    <string name="guide_index_title" tools:ignore="UnusedResources">Your tool beside Datapavan</string>
-    <string name="guide_index_intro" tools:ignore="UnusedResources">Android runs one VPN at a time. These pages say how each circumvention tool can run beside Datapavan, read from the tool\'s own code.</string>
+    <string name="guide_index_title" tools:ignore="UnusedResources">Your tool beside Datapavan Advanced</string>
+    <string name="guide_index_intro" tools:ignore="UnusedResources">Android runs one VPN at a time. These pages say how each circumvention tool can run beside the VPN of Datapavan Advanced, read from the tool\'s own code. Datapavan Basic has no VPN, so it runs beside any of them.</string>
     <string name="guide_index_proxy" tools:ignore="UnusedResources">Tools with a proxy mode</string>
     <string name="guide_index_wireguard" tools:ignore="UnusedResources">Tools that run only as a VPN, with WireGuard configurations</string>
     <string name="guide_index_vpn" tools:ignore="UnusedResources">Tools that run only as a VPN</string>

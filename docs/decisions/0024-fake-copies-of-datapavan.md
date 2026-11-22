@@ -44,7 +44,7 @@ The defence is layered, from the first public release:
    internet access, or a copy of Advanced that asks for one of those permissions, is not genuine (ADR 0045,
    decision 4, and the build's check of each edition, ADR 0045, decision 9). Basic's page
    "Is this copy genuine?" takes this sentence with the release of Advanced's 0.2.0; until then it teaches
-   "Genuine Datapavan has no internet access and never asks for it", which stays true of Basic. When a later
+   "Genuine Datapavan Basic has no internet access and never asks for it", which stays true of Basic. When a later
    version needs other access, the sentence changes with it, and the release notes say so.
 
 ## Consequences

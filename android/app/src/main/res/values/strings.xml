@@ -95,7 +95,7 @@
     <string name="owner_same_group">Made by the same company group as this app (%1$s): %2$s. The group can combine this data with what its other apps and services collect.</string>
     <string name="owner_shut_down">The service behind %1$s shut down on %2$s.</string>
     <!-- Network use and apps not opened, from usage access (ADR 0022). -->
-    <string name="usage_access_title">Network use and apps you do not open</string>
+    <string name="usage_access_title">Data use and apps you do not open</string>
     <string name="usage_access_body">With usage access, Datapavan can show how much data each app used, and which apps you have not opened for a long time. The same access would let an app see which apps you opened and when. Datapavan reads only totals and the date each app was last used, keeps none of it, and cannot send it anywhere, because it has no network access. Everything else works without it.</string>
     <!-- Datapavan Advanced's, which also reads which app was on screen and when for its network part (ADR 0046); the screens pick it by BuildConfig.ADVANCED. -->
     <string name="usage_access_body_advanced">With usage access, Datapavan can show how much data each app used, and which apps you have not opened for a long time. The same access lets an app see which apps you opened and when. Datapavan Advanced also reads, back to the phone\'s start, which app was on screen and when, which apps ran a foreground service, which ones you used in other ways, as by tapping their notification, and when the screen turned on or off and the lock screen showed; and whether each app may show notifications. From this it tells, for each connection, whether you were using its app. It keeps what it learns in two places only: in memory for “Now”, and, if you keep a connection log, as the state of each record for the days you chose. It sends none of it anywhere. Everything else works without it.</string>
@@ -109,8 +109,8 @@
     <string name="usage_access_step_allow">2. Tap “%1$s”, then the menu (⋮) at the top of that page. Choose “%2$s”, which shows there only after step 1, and confirm. Then tap “%3$s” again.</string>
     <string name="usage_access_app_info">Open app info</string>
     <string name="usage_reading">Reading Android\'s records…</string>
-    <string name="usage_missing">Network use and the last opening need usage access, which you can allow on the overview.</string>
-    <string name="section_network">Network use</string>
+    <string name="usage_missing">Data use and the last opening need usage access, which you can allow on the overview.</string>
+    <string name="section_network">Data use</string>
     <!-- %1$d is a number of days; %2$s and %3$s are localised dates. -->
     <plurals name="network_period">
         <item quantity="one">Last %1$d day: %2$s to %3$s</item>
@@ -128,7 +128,7 @@
     <string name="network_lag">From Android\'s own count. Mobile data is for all SIM cards together. Datapavan keeps none of these numbers.</string>
     <!-- Below the network list and the apps list. -->
     <string name="other_profiles">Apps in another profile on this phone, such as a work profile, a private space or a secure folder, are not included here. Android shows Datapavan only the profile it is installed in.</string>
-    <string name="network_none">No network use in this period.</string>
+    <string name="network_none">No data use in this period.</string>
     <!-- All four values are data sizes: the total, received, sent and the part in the background. -->
     <string name="network_mobile">Mobile data %1$s: %2$s received, %3$s sent, %4$s of it in the background</string>
     <string name="network_wifi">Wi-Fi %1$s: %2$s received, %3$s sent, %4$s of it in the background</string>
@@ -540,11 +540,11 @@
 
     <!-- Whether this copy is genuine (ADR 0024). -->
     <string name="own_title">Is this copy genuine?</string>
-    <string name="own_teach">Genuine Datapavan has no internet access and never asks for it. A copy that asks for it is not genuine.</string>
+    <string name="own_teach">Genuine Datapavan Basic has no internet access and never asks for it. A copy of Basic that asks for it is not genuine.</string>
     <!-- Datapavan Advanced's, picked by BuildConfig.ADVANCED: ADR 0045, decision 4's sentence, and the check of what it never asks for. -->
     <string name="own_teach_advanced">Genuine Datapavan Basic never has internet access. Genuine Datapavan Advanced uses it only for your own apps\' traffic and the servers you choose. It never asks for your camera, microphone, location, contacts, messages or call log. No Datapavan app ever asks you for money.</string>
     <string name="own_internet_none">This copy has no internet access.</string>
-    <string name="own_internet_present">This copy asks for internet access, so it is not genuine Datapavan. Uninstall it and install Datapavan from a channel you trust.</string>
+    <string name="own_internet_present">This copy asks for internet access, so it is not genuine Datapavan Basic. Uninstall it and install Datapavan from a channel you trust.</string>
     <string name="own_permissions_none_advanced">This copy asks for none of them.</string>
     <string name="own_permissions_present_advanced">This copy asks for at least one of them, so it is not genuine Datapavan Advanced. Uninstall it and install Datapavan from a channel you trust.</string>
     <string name="own_permissions_extra">This copy asks for a permission that genuine Datapavan never asks for, so it is not genuine. Uninstall it and install Datapavan from a channel you trust.</string>
@@ -561,7 +561,9 @@
     <string name="nav_summary">Summary</string>
     <string name="nav_apps">Apps</string>
     <string name="nav_phone">Phone</string>
-    <string name="nav_network">Network</string>
+    <!-- The audit's tab of each app's data use, which Android calls "Data usage" (the maintainer, 2026-11-22: not
+         "Network", which is Advanced's screen for its network part). -->
+    <string name="nav_network">Data use</string>
     <string name="settings_title">Settings</string>
     <string name="settings_appearance">Appearance</string>
     <string name="settings_theme_system">As the system</string>
@@ -592,10 +594,10 @@
     <string name="about_updates_advanced">Datapavan Advanced does not check for a newer version itself: it uses the internet only for your own apps\' traffic and the servers you choose. The newest version and what changed are on its website. If the website does not open, the same files are on GitHub.</string>
     <string name="about_copy_hint">To open an address in another browser, such as Tor Browser, touch and hold it to copy it.</string>
     <string name="about_open_website">Open the website</string>
-    <!-- The editions (ADR 0045), in a few calm lines, with no prompt: the one this is, and the others. Datapavan Basic on Google Play is updated by Google Play. -->
+    <!-- The editions (ADR 0045), in a few calm lines, with no prompt: the one this is, and the others. Basic, from Google Play, is updated by Google Play. -->
     <string name="about_editions_title">Editions</string>
-    <string name="about_editions_basic">This is Datapavan Basic, signed by its developer with one key kept offline. It never has internet access. On Google Play, Datapavan Basic has the same checks, and Google signs it. Datapavan Advanced adds a log of every app\'s connections, tracker blocking and encrypted DNS.</string>
-    <string name="about_editions_play">This is Datapavan Basic from Google Play, which keeps it up to date. Google signs it. It never has internet access. Datapavan Basic signed by its developer with one key kept offline, and Datapavan Advanced, which adds a log of every app\'s connections, tracker blocking and encrypted DNS, are on the website.</string>
+    <string name="about_editions_basic">This is Datapavan Basic, signed by its developer with one key kept offline. It never has internet access. On Google Play, Datapavan Basic has the same checks, and Google signs it. Datapavan Advanced adds a log of each app\'s connections, tracker blocking and encrypted DNS.</string>
+    <string name="about_editions_play">This is Datapavan Basic, from Google Play, which keeps it up to date. Google signs it. It never has internet access. The website has Datapavan Basic signed by its developer with one key kept offline, and Datapavan Advanced. Advanced adds a log of each app\'s connections, tracker blocking and encrypted DNS.</string>
     <string name="about_editions_advanced">This is Datapavan Advanced, signed by its developer with one key kept offline. It uses the internet only for your own apps\' traffic and the servers you choose. Datapavan Basic has the same checks without the connection log, tracker blocking or encrypted DNS. It never has internet access, so it can check this app from outside.</string>
     <!-- On the overview, about four months after this version's release. %1$s is a date in the user's format. -->
     <string name="version_old">This version of Datapavan is from %1$s. A newer one may be out, and Datapavan cannot check for you.</string>
@@ -662,7 +664,7 @@
     <string name="screenshots_allow">Allow screenshots for one minute</string>
     <string name="screenshots_allowed">Screenshots are allowed now. They are blocked again after one minute, or as soon as you leave the app.</string>
     <string name="screenshots_block">Block screenshots now</string>
-    <!-- Datapavan Advanced only: the card on the network page that opens the Network screen (ui/NetworkEntry.kt, ADR 0045).
+    <!-- Datapavan Advanced only: the card on the Data use tab that opens the Network screen (ui/NetworkEntry.kt, ADR 0045).
          Its title, network_entry_title, is in strings_untranslated.xml until it is translated. -->
     <string name="network_entry_body">See where each app on your phone connects, as it happens. For this, Datapavan works as a VPN on this phone. It uses the internet only to pass each app\'s traffic on, and sends nothing to its developer.</string>
     <string name="network_entry_open">See where apps connect</string>
@@ -679,7 +681,7 @@
     <string name="licences_text_licence">The Apache License 2.0. Datapavan is published under it, and so are many of its parts.</string>
     <!-- %1$s: the name of a native library file, for example libdatapavan.so. -->
     <string name="licences_text_native">The licence texts of the Rust packages inside %1$s.</string>
-    <string name="licences_text_mpl">The Mozilla Public License 2.0. GotaTun, the WireGuard code in Advanced, is published under it.</string>
+    <string name="licences_text_mpl">The Mozilla Public License 2.0. GotaTun, the WireGuard code in Datapavan Advanced, uses it.</string>
     <string name="licences_text_gotatun">The BSD 3-Clause License of the parts of GotaTun that came from Cloudflare\'s BoringTun.</string>
     <!-- A file the screen has no description for: its name only. -->
     <string name="licences_text_other">A licence text the app carries.</string>

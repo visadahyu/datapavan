@@ -144,7 +144,7 @@ expect "USB debugging is on"
 [ -z "$CA_FILE" ] || expect "Extra certificate authority installed"
 expect "No hardware check on an emulator"
 open_tab network || fail "no network destination"
-expect "Network use"
+expect "Data use"
 expect "Show the last 7 days"
 wait_for_tracker_scan || fail "the tracker scan did not finish"
 
