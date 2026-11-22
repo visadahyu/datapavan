@@ -21,7 +21,7 @@ ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 APK="${1:-$ROOT/android/app/build-advanced/outputs/apk/debug/app-debug.apk}"
 PKG=org.visadahyu.datapavan.advanced
 # Watch's screen in Datapavan Advanced (ADR 0045); debug builds export it for these checks.
-WATCH_SCREEN=org.visadahyu.datapavan.watch.MainActivity
+WATCH_SCREEN=org.visadahyu.datapavan.network.MainActivity
 SHELL_UID=2000
 PIN=4826
 # shellcheck source=scripts/adb-ui.sh
@@ -59,7 +59,7 @@ fail() {
 
 # Watch's own account, with debug commands (WatchVpnService.debugLog).
 watch_dump() {
-    adb shell dumpsys activity service "$PKG/org.visadahyu.datapavan.watch.WatchVpnService" "$@" | tr -d '\r' | sed 's/^ *//'
+    adb shell dumpsys activity service "$PKG/org.visadahyu.datapavan.network.WatchVpnService" "$@" | tr -d '\r' | sed 's/^ *//'
 }
 
 log_line() {

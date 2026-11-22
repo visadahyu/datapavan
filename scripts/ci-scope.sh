@@ -307,7 +307,7 @@ yes core/engine/src/lib.rs
 yes core/network-jni/src/lib.rs
 yes core/Cargo.lock
 yes rust-toolchain.toml
-yes android/network/src/main/java/org/visadahyu/datapavan/watch/TunnelStore.kt
+yes android/network/src/main/java/org/visadahyu/datapavan/network/TunnelStore.kt
 yes android/app/build.gradle.kts
 yes spikes/wireguard-core/peer/Dockerfile
 yes scripts/wglab.sh

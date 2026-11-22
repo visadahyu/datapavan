@@ -27,7 +27,7 @@ set -euo pipefail
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 APK="${1:-$ROOT/android/app/build-advanced/outputs/apk/debug/app-debug.apk}"
 PKG=org.visadahyu.datapavan.advanced
-WATCH_SCREEN=org.visadahyu.datapavan.watch.MainActivity
+WATCH_SCREEN=org.visadahyu.datapavan.network.MainActivity
 FIXTURE=org.visadahyu.datapavan.blockfixture
 A=$FIXTURE.a
 B=$FIXTURE.b
@@ -57,7 +57,7 @@ cleanup() {
 }
 trap cleanup EXIT
 
-dump() { adb shell dumpsys activity service "$PKG/org.visadahyu.datapavan.watch.WatchVpnService" "$@" | tr -d '\r'; }
+dump() { adb shell dumpsys activity service "$PKG/org.visadahyu.datapavan.network.WatchVpnService" "$@" | tr -d '\r'; }
 fixture_log() { adb logcat -d -s DatapavanBlockingFixture | tr -d '\r' | sed -n 's/.*DatapavanBlockingFixture: //p'; }
 fail() {
     echo "BLOCKING CHECK FAILED: $*" >&2

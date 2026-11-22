@@ -28,7 +28,7 @@ ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 APK="${1:-$ROOT/android/app/build-advanced/outputs/apk/debug/app-debug.apk}"
 PKG=org.visadahyu.datapavan.advanced
 # Watch's screen in Datapavan Advanced (ADR 0045); debug builds export it for these checks.
-WATCH_SCREEN=org.visadahyu.datapavan.watch.MainActivity
+WATCH_SCREEN=org.visadahyu.datapavan.network.MainActivity
 TOOL=org.visadahyu.datapavan.testtool
 WORKLOAD=org.visadahyu.datapavan.workload
 TOOL_PORT=10870
@@ -59,7 +59,7 @@ cleanup() {
 trap cleanup EXIT
 host_server --sentinel "$WORK/sentinel.log" || exit 1
 
-dump() { adb shell dumpsys activity service "$PKG/org.visadahyu.datapavan.watch.WatchVpnService" "$@" | tr -d '\r'; }
+dump() { adb shell dumpsys activity service "$PKG/org.visadahyu.datapavan.network.WatchVpnService" "$@" | tr -d '\r'; }
 # When the engine's counters began, then its counter at place $1, counting from 1, as Watch's dump prints
 # them, from one dump: two reads with another beginning span an engine Watch started afresh, whose
 # counters began again at 0 (unit 9b, fix round 2).

@@ -46,7 +46,7 @@ set -euo pipefail
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 APK="${1:-$ROOT/android/app/build-advanced/outputs/apk/debug/app-debug.apk}"
 PKG=org.visadahyu.datapavan.advanced
-WATCH_SCREEN=org.visadahyu.datapavan.watch.MainActivity
+WATCH_SCREEN=org.visadahyu.datapavan.network.MainActivity
 WORKLOAD=org.visadahyu.datapavan.workload
 LAB="$ROOT/scripts/dnslab.sh"
 # shellcheck source=scripts/adb-ui.sh
@@ -79,7 +79,7 @@ cleanup() {
 }
 trap cleanup EXIT
 
-dump() { adb shell dumpsys activity service "$PKG/org.visadahyu.datapavan.watch.WatchVpnService" "$@" | tr -d '\r'; }
+dump() { adb shell dumpsys activity service "$PKG/org.visadahyu.datapavan.network.WatchVpnService" "$@" | tr -d '\r'; }
 way() { sed -n 's/^ *dns-way //p' <<<"$(dump)"; }
 held() { sed -n 's/^ *dns-held //p' <<<"$(dump)"; }
 workload_log() { adb logcat -d -s DatapavanWorkload | tr -d '\r' | sed -n 's/.*DatapavanWorkload: //p'; }

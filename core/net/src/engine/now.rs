@@ -2414,7 +2414,7 @@ mod tests {
     /// Where the fixture Watch's Kotlin side reads is kept (`SnapshotTest`).
     const FIXTURE: &str = concat!(
         env!("CARGO_MANIFEST_DIR"),
-        "/../../android/network/src/test/resources/org/visadahyu/datapavan/watch/activity/snapshot.hex"
+        "/../../android/network/src/test/resources/org/visadahyu/datapavan/network/activity/snapshot.hex"
     );
 
     /// The fixture Watch's Kotlin side reads is what the engine writes, byte for byte, as for the log

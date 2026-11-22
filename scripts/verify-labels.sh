@@ -285,7 +285,7 @@ if [ -f "$ADVANCED_APK" ]; then
         local above
         above=$(sed -n 's/.*<string name="dns_local_names">\([^<]*\)<.*/\1/p' "$ROOT/android/network/src/main/res/$2/strings.xml" | sed "s/\\\\'/'/g")
         adb shell am force-stop "$ADVANCED"
-        adb shell am start -W -n "$ADVANCED/org.visadahyu.datapavan.watch.MainActivity" >/dev/null
+        adb shell am start -W -n "$ADVANCED/org.visadahyu.datapavan.network.MainActivity" >/dev/null
         scroll_to "${above:0:24}" || fail "the names' section is not on screen ('${above:0:24}')"
         for _ in 1 2 3; do
             screen_contains "$1" && return 0

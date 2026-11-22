@@ -221,7 +221,7 @@ android_gates() {
     done
     echo "== Android: Watch's colours are the audit app's (network/.../ui/Theme.kt)"
     diff <(grep -o 'Color(0x[0-9A-F]*)' "$ROOT/android/app/src/main/java/org/visadahyu/datapavan/ui/Theme.kt") \
-        <(grep -o 'Color(0x[0-9A-F]*)' "$ROOT/android/network/src/main/java/org/visadahyu/datapavan/watch/ui/Theme.kt")
+        <(grep -o 'Color(0x[0-9A-F]*)' "$ROOT/android/network/src/main/java/org/visadahyu/datapavan/network/ui/Theme.kt")
     echo "== Android: lint, unit tests, APK and bundle builds of Basic, its allowlist, native-library check"
     cd "$ROOT/android"
     ./gradlew --no-daemon --stacktrace \

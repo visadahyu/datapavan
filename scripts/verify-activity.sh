@@ -29,7 +29,7 @@ set -euo pipefail
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 APK="${1:-$ROOT/android/app/build-advanced/outputs/apk/debug/app-debug.apk}"
 PKG=org.visadahyu.datapavan.advanced
-WATCH_SCREEN=org.visadahyu.datapavan.watch.MainActivity
+WATCH_SCREEN=org.visadahyu.datapavan.network.MainActivity
 # The workload app under three package names, three apps: on screen, in the background, with a service.
 SCREEN_APP=org.visadahyu.datapavan.workload
 BACKGROUND_APP=org.visadahyu.datapavan.workload.b
@@ -72,7 +72,7 @@ fail() {
 
 # Watch's own account, with debug commands (WatchVpnService.debugActivity).
 watch_dump() {
-    adb shell dumpsys activity service "$PKG/org.visadahyu.datapavan.watch.WatchVpnService" "$@" | tr -d '\r' | sed 's/^ *//'
+    adb shell dumpsys activity service "$PKG/org.visadahyu.datapavan.network.WatchVpnService" "$@" | tr -d '\r' | sed 's/^ *//'
 }
 
 uid_of() { adb shell cmd package list packages -U "$1" | tr -d '\r' | sed -n "s/^package:$1 uid:\([0-9]*\)$/\1/p"; }

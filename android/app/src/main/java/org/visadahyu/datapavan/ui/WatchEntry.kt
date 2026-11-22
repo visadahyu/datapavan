@@ -41,7 +41,7 @@ internal fun WatchEntry() {
 }
 
 /** Watch's screen, in the :network library. */
-private const val WATCH_SCREEN = "org.visadahyu.datapavan.watch.MainActivity"
+private const val WATCH_SCREEN = "org.visadahyu.datapavan.network.MainActivity"
 
 /**
  * Datapavan Advanced only: from the audit's page of an app, Watch's view "Now" for that app (ADR 0046, decision
@@ -58,5 +58,5 @@ internal fun WatchNowEntry(packageName: String) {
 }
 
 /** Watch's view "Now", in the :network library, and the one extra it reads: a package name. */
-private const val WATCH_NOW = "org.visadahyu.datapavan.watch.NowActivity"
+private const val WATCH_NOW = "org.visadahyu.datapavan.network.NowActivity"
 private const val WATCH_NOW_PACKAGE = "package"

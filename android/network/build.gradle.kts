@@ -10,7 +10,7 @@ plugins {
 // application's build (app/build.gradle.kts) checks the merged manifest of each edition against its own
 // allowlist, and that Advanced's APK holds this library's native code and keeps the methods it calls back.
 android {
-    namespace = "org.visadahyu.datapavan.watch"
+    namespace = "org.visadahyu.datapavan.network"
     compileSdk = 37
     ndkVersion = "30.0.16248370"
 

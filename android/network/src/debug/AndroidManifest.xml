@@ -10,7 +10,7 @@
     -->
     <application>
         <activity
-            android:name="org.visadahyu.datapavan.watch.MainActivity"
+            android:name="org.visadahyu.datapavan.network.MainActivity"
             android:exported="true"
             tools:replace="android:exported" />
     </application>

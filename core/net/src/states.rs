@@ -468,7 +468,7 @@ mod tests {
     /// Where Watch's Kotlin side keeps the readings it writes (`StatesTest`), one a line in hex.
     const FIXTURE: &str = concat!(
         env!("CARGO_MANIFEST_DIR"),
-        "/../../android/network/src/test/resources/org/visadahyu/datapavan/watch/activity/states.hex"
+        "/../../android/network/src/test/resources/org/visadahyu/datapavan/network/activity/states.hex"
     );
 
     /// The engine reads what Watch's Kotlin side writes (`States.kt`), byte for byte: its test writes the

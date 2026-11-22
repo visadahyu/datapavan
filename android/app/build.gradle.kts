@@ -88,13 +88,13 @@ val allowedExported = mapOf(
     "org.visadahyu.datapavan.MainActivity" to "",
     "androidx.profileinstaller.ProfileInstallReceiver" to "android.permission.DUMP",
 )
-val allowedExportedInDebug = if (advanced) mapOf("org.visadahyu.datapavan.watch.MainActivity" to "") else emptyMap()
+val allowedExportedInDebug = if (advanced) mapOf("org.visadahyu.datapavan.network.MainActivity" to "") else emptyMap()
 
 // The services that parse untrusted input, which must stay in an isolated process (ADR 0045, decision 9): the audit's
 // parsers in every edition, and in Advanced the QR decoder of a WireGuard configuration's picture (W7, part 2).
 val isolatedServices = buildList {
     add("org.visadahyu.datapavan.audit.ParserService")
-    if (advanced) add("org.visadahyu.datapavan.watch.tunnel.qr.QrService")
+    if (advanced) add("org.visadahyu.datapavan.network.tunnel.qr.QrService")
 }
 
 // The native libraries each APK must carry, with the JNI symbol each must export (core/jni and NativeCore.kt;
@@ -103,7 +103,7 @@ val isolatedServices = buildList {
 val networkLibrary = "libdatapavan_network.so"
 val requiredLibraries = buildMap {
     put("libdatapavan.so", "Java_org_visadahyu_datapavan_core_NativeCore_version")
-    if (advanced) put(networkLibrary, "Java_org_visadahyu_datapavan_watch_Engine_nativeStart")
+    if (advanced) put(networkLibrary, "Java_org_visadahyu_datapavan_network_Engine_nativeStart")
 }
 val forbiddenLibraries = if (advanced) emptyList() else listOf(networkLibrary)
 // The methods of WatchVpnService that Watch's library calls back by name (core/network-jni/src/lib.rs), which

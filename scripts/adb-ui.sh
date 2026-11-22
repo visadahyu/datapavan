@@ -314,7 +314,7 @@ gone_id() {
 # shows with bytes, or the last reading after 20 s.
 watch_now() {
     local read=""
-    adb shell am start -n "$1/org.visadahyu.datapavan.watch.MainActivity" --activity-clear-top --ez now true --es now_package "$2" >/dev/null
+    adb shell am start -n "$1/org.visadahyu.datapavan.network.MainActivity" --activity-clear-top --ez now true --es now_package "$2" >/dev/null
     for _ in $(seq 1 20); do
         sleep 1
         dump_screen || continue

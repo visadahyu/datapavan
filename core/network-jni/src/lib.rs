@@ -1,5 +1,5 @@
 //! Thin JNI bridge between Datapavan Watch and [`datapavan_net`], as `datapavan-jni` is for the audit
-//! app: `org.visadahyu.datapavan.watch.Engine` starts and stops the engine, and the engine calls back
+//! app: `org.visadahyu.datapavan.network.Engine` starts and stops the engine, and the engine calls back
 //! into `WatchVpnService` for `getConnectionOwnerUid` and `protect`, to hand over the log's records, and
 //! to ask for a reading of the apps' states. Every export converts its
 //! arguments, calls the engine and converts the result; all logic is in the engine, which holds no
@@ -634,7 +634,7 @@ fn set_non_blocking(fd: &OwnedFd) {
 // fd: Int, mtu: Int, keepFlows: Int, tableFd: Int, tableStart: Long, tableLength: Long): Boolean`,
 // unique in this library.
 #[unsafe(no_mangle)]
-pub extern "system" fn Java_org_visadahyu_datapavan_watch_Engine_nativeStart<'caller>(
+pub extern "system" fn Java_org_visadahyu_datapavan_network_Engine_nativeStart<'caller>(
     mut unowned_env: EnvUnowned<'caller>,
     _class: JClass<'caller>,
     service: JObject<'caller>,
@@ -701,7 +701,7 @@ pub extern "system" fn Java_org_visadahyu_datapavan_watch_Engine_nativeStart<'ca
 // SAFETY: exported under the JNI name of the Kotlin method `external fun nativeSwapTunnel(fd: Int):
 // Boolean`, unique in this library.
 #[unsafe(no_mangle)]
-pub extern "system" fn Java_org_visadahyu_datapavan_watch_Engine_nativeSwapTunnel<'caller>(
+pub extern "system" fn Java_org_visadahyu_datapavan_network_Engine_nativeSwapTunnel<'caller>(
     mut unowned_env: EnvUnowned<'caller>,
     _class: JClass<'caller>,
     fd: jint,
@@ -723,7 +723,7 @@ pub extern "system" fn Java_org_visadahyu_datapavan_watch_Engine_nativeSwapTunne
 /// `Engine.nativeStop()`: stops the engine and closes the tunnel's descriptor.
 // SAFETY: exported under the JNI name of the Kotlin method `external fun nativeStop()`.
 #[unsafe(no_mangle)]
-pub extern "system" fn Java_org_visadahyu_datapavan_watch_Engine_nativeStop<'caller>(
+pub extern "system" fn Java_org_visadahyu_datapavan_network_Engine_nativeStop<'caller>(
     mut unowned_env: EnvUnowned<'caller>,
     _class: JClass<'caller>,
 ) {
@@ -741,7 +741,7 @@ pub extern "system" fn Java_org_visadahyu_datapavan_watch_Engine_nativeStop<'cal
 // SAFETY: exported under the JNI name of the Kotlin method
 // `external fun nativeNetworkChanged(dns: String, moved: Boolean)`.
 #[unsafe(no_mangle)]
-pub extern "system" fn Java_org_visadahyu_datapavan_watch_Engine_nativeNetworkChanged<'caller>(
+pub extern "system" fn Java_org_visadahyu_datapavan_network_Engine_nativeNetworkChanged<'caller>(
     mut unowned_env: EnvUnowned<'caller>,
     _class: JClass<'caller>,
     dns: JString<'caller>,
@@ -764,7 +764,7 @@ pub extern "system" fn Java_org_visadahyu_datapavan_watch_Engine_nativeNetworkCh
 /// `android.system.Os` offers no `getsockoptInt` to apps (ADR 0044, decision 5 as amended).
 // SAFETY: exported under the JNI name of the Kotlin method `external fun nativeRouteMtu(fd: Int): Int`.
 #[unsafe(no_mangle)]
-pub extern "system" fn Java_org_visadahyu_datapavan_watch_Engine_nativeRouteMtu<'caller>(
+pub extern "system" fn Java_org_visadahyu_datapavan_network_Engine_nativeRouteMtu<'caller>(
     mut unowned_env: EnvUnowned<'caller>,
     _class: JClass<'caller>,
     fd: jint,
@@ -788,7 +788,7 @@ pub extern "system" fn Java_org_visadahyu_datapavan_watch_Engine_nativeRouteMtu<
 /// reads, such as `2026-11`, or empty when it has none or no engine runs.
 // SAFETY: exported under the JNI name of the Kotlin method `external fun nativeOrganisations(): String`.
 #[unsafe(no_mangle)]
-pub extern "system" fn Java_org_visadahyu_datapavan_watch_Engine_nativeOrganisations<'caller>(
+pub extern "system" fn Java_org_visadahyu_datapavan_network_Engine_nativeOrganisations<'caller>(
     mut unowned_env: EnvUnowned<'caller>,
     _class: JClass<'caller>,
 ) -> JString<'caller> {
@@ -806,7 +806,7 @@ pub extern "system" fn Java_org_visadahyu_datapavan_watch_Engine_nativeOrganisat
 /// `Engine.nativeFlushLog()`: hands the connection log every waiting record now (debug builds' test).
 // SAFETY: exported under the JNI name of the Kotlin method `external fun nativeFlushLog()`.
 #[unsafe(no_mangle)]
-pub extern "system" fn Java_org_visadahyu_datapavan_watch_Engine_nativeFlushLog<'caller>(
+pub extern "system" fn Java_org_visadahyu_datapavan_network_Engine_nativeFlushLog<'caller>(
     mut unowned_env: EnvUnowned<'caller>,
     _class: JClass<'caller>,
 ) {
@@ -830,7 +830,7 @@ pub extern "system" fn Java_org_visadahyu_datapavan_watch_Engine_nativeFlushLog<
 // logDestinations: Boolean): Boolean`.
 #[unsafe(no_mangle)]
 #[allow(clippy::too_many_arguments)]
-pub extern "system" fn Java_org_visadahyu_datapavan_watch_Engine_nativeChain<'caller>(
+pub extern "system" fn Java_org_visadahyu_datapavan_network_Engine_nativeChain<'caller>(
     mut unowned_env: EnvUnowned<'caller>,
     _class: JClass<'caller>,
     proxy: JString<'caller>,
@@ -891,7 +891,7 @@ pub extern "system" fn Java_org_visadahyu_datapavan_watch_Engine_nativeChain<'ca
 // SAFETY: exported under the JNI name of the Kotlin method `external fun nativeTunnelSet(id: Int, text:
 // ByteArray, localNetwork: Boolean): String`.
 #[unsafe(no_mangle)]
-pub extern "system" fn Java_org_visadahyu_datapavan_watch_Engine_nativeTunnelSet<'caller>(
+pub extern "system" fn Java_org_visadahyu_datapavan_network_Engine_nativeTunnelSet<'caller>(
     mut unowned_env: EnvUnowned<'caller>,
     _class: JClass<'caller>,
     id: jint,
@@ -933,7 +933,7 @@ pub extern "system" fn Java_org_visadahyu_datapavan_watch_Engine_nativeTunnelSet
 // SAFETY: exported under the JNI name of the Kotlin method `external fun nativeTunnelParse(text: ByteArray):
 // String`.
 #[unsafe(no_mangle)]
-pub extern "system" fn Java_org_visadahyu_datapavan_watch_Engine_nativeTunnelParse<'caller>(
+pub extern "system" fn Java_org_visadahyu_datapavan_network_Engine_nativeTunnelParse<'caller>(
     mut unowned_env: EnvUnowned<'caller>,
     _class: JClass<'caller>,
     text: JByteArray<'caller>,
@@ -953,7 +953,7 @@ pub extern "system" fn Java_org_visadahyu_datapavan_watch_Engine_nativeTunnelPar
 /// after them as they were; each keeps its core and its session.
 // SAFETY: exported under the JNI name of the Kotlin method `external fun nativeTunnelOrder(ids: IntArray)`.
 #[unsafe(no_mangle)]
-pub extern "system" fn Java_org_visadahyu_datapavan_watch_Engine_nativeTunnelOrder<'caller>(
+pub extern "system" fn Java_org_visadahyu_datapavan_network_Engine_nativeTunnelOrder<'caller>(
     mut unowned_env: EnvUnowned<'caller>,
     _class: JClass<'caller>,
     ids: JIntArray<'caller>,
@@ -976,7 +976,7 @@ pub extern "system" fn Java_org_visadahyu_datapavan_watch_Engine_nativeTunnelOrd
 /// wait, their flows refused and never sent directly, until `nativeTunnelRoutes` sends them elsewhere.
 // SAFETY: exported under the JNI name of the Kotlin method `external fun nativeTunnelRemove(id: Int)`.
 #[unsafe(no_mangle)]
-pub extern "system" fn Java_org_visadahyu_datapavan_watch_Engine_nativeTunnelRemove<'caller>(
+pub extern "system" fn Java_org_visadahyu_datapavan_network_Engine_nativeTunnelRemove<'caller>(
     mut unowned_env: EnvUnowned<'caller>,
     _class: JClass<'caller>,
     id: jint,
@@ -999,7 +999,7 @@ pub extern "system" fn Java_org_visadahyu_datapavan_watch_Engine_nativeTunnelRem
 // SAFETY: exported under the JNI name of the Kotlin method `external fun nativeTunnelRoutes(uids: IntArray,
 // tunnels: IntArray, logDestinations: Boolean)`.
 #[unsafe(no_mangle)]
-pub extern "system" fn Java_org_visadahyu_datapavan_watch_Engine_nativeTunnelRoutes<'caller>(
+pub extern "system" fn Java_org_visadahyu_datapavan_network_Engine_nativeTunnelRoutes<'caller>(
     mut unowned_env: EnvUnowned<'caller>,
     _class: JClass<'caller>,
     uids: JIntArray<'caller>,
@@ -1034,7 +1034,7 @@ pub extern "system" fn Java_org_visadahyu_datapavan_watch_Engine_nativeTunnelRou
 /// nowhere until then. Kept for the engines to come, as the routes are.
 // SAFETY: exported under the JNI name of the Kotlin method `external fun nativeKnownApps(uids: IntArray?)`.
 #[unsafe(no_mangle)]
-pub extern "system" fn Java_org_visadahyu_datapavan_watch_Engine_nativeKnownApps<'caller>(
+pub extern "system" fn Java_org_visadahyu_datapavan_network_Engine_nativeKnownApps<'caller>(
     mut unowned_env: EnvUnowned<'caller>,
     _class: JClass<'caller>,
     uids: JIntArray<'caller>,
@@ -1063,7 +1063,7 @@ pub extern "system" fn Java_org_visadahyu_datapavan_watch_Engine_nativeKnownApps
 /// [`answer_line`] writes it; empty when no engine runs. For the debug builds' dump.
 // SAFETY: exported under the JNI name of the Kotlin method `external fun nativeAppAnswers(): String`.
 #[unsafe(no_mangle)]
-pub extern "system" fn Java_org_visadahyu_datapavan_watch_Engine_nativeAppAnswers<'caller>(
+pub extern "system" fn Java_org_visadahyu_datapavan_network_Engine_nativeAppAnswers<'caller>(
     mut unowned_env: EnvUnowned<'caller>,
     _class: JClass<'caller>,
 ) -> JString<'caller> {
@@ -1080,7 +1080,7 @@ pub extern "system" fn Java_org_visadahyu_datapavan_watch_Engine_nativeAppAnswer
 /// set; empty when no engine runs.
 // SAFETY: exported under the JNI name of the Kotlin method `external fun nativeTunnelStates(): String`.
 #[unsafe(no_mangle)]
-pub extern "system" fn Java_org_visadahyu_datapavan_watch_Engine_nativeTunnelStates<'caller>(
+pub extern "system" fn Java_org_visadahyu_datapavan_network_Engine_nativeTunnelStates<'caller>(
     mut unowned_env: EnvUnowned<'caller>,
     _class: JClass<'caller>,
 ) -> JString<'caller> {
@@ -1113,7 +1113,7 @@ fn reply(outcome: i32, body: Option<Vec<u8>>) -> Reply {
 // SAFETY: exported under the JNI name of the Kotlin method `external fun nativeExchanged(ticket: Long, outcome: Int,
 // body: ByteArray?): Boolean`.
 #[unsafe(no_mangle)]
-pub extern "system" fn Java_org_visadahyu_datapavan_watch_Engine_nativeExchanged<'caller>(
+pub extern "system" fn Java_org_visadahyu_datapavan_network_Engine_nativeExchanged<'caller>(
     mut unowned_env: EnvUnowned<'caller>,
     _class: JClass<'caller>,
     ticket: jlong,
@@ -1143,7 +1143,7 @@ pub extern "system" fn Java_org_visadahyu_datapavan_watch_Engine_nativeExchanged
 // SAFETY: exported under the JNI name of the Kotlin method `external fun nativeDns(relays: String, targets: String,
 // pairs: String, presets: String, setting: String): IntArray`.
 #[unsafe(no_mangle)]
-pub extern "system" fn Java_org_visadahyu_datapavan_watch_Engine_nativeDns<'caller>(
+pub extern "system" fn Java_org_visadahyu_datapavan_network_Engine_nativeDns<'caller>(
     mut unowned_env: EnvUnowned<'caller>,
     _class: JClass<'caller>,
     relays: JString<'caller>,
@@ -1180,7 +1180,7 @@ pub extern "system" fn Java_org_visadahyu_datapavan_watch_Engine_nativeDns<'call
 // SAFETY: exported under the JNI name of the Kotlin method `external fun nativeDnsNetwork(validated: Boolean,
 // domains: String)`.
 #[unsafe(no_mangle)]
-pub extern "system" fn Java_org_visadahyu_datapavan_watch_Engine_nativeDnsNetwork<'caller>(
+pub extern "system" fn Java_org_visadahyu_datapavan_network_Engine_nativeDnsNetwork<'caller>(
     mut unowned_env: EnvUnowned<'caller>,
     _class: JClass<'caller>,
     validated: jboolean,
@@ -1202,7 +1202,7 @@ pub extern "system" fn Java_org_visadahyu_datapavan_watch_Engine_nativeDnsNetwor
 /// runs. It names no lookup.
 // SAFETY: exported under the JNI name of the Kotlin method `external fun nativeDnsStatus(): String`.
 #[unsafe(no_mangle)]
-pub extern "system" fn Java_org_visadahyu_datapavan_watch_Engine_nativeDnsStatus<'caller>(
+pub extern "system" fn Java_org_visadahyu_datapavan_network_Engine_nativeDnsStatus<'caller>(
     mut unowned_env: EnvUnowned<'caller>,
     _class: JClass<'caller>,
 ) -> JString<'caller> {
@@ -1220,7 +1220,7 @@ pub extern "system" fn Java_org_visadahyu_datapavan_watch_Engine_nativeDnsStatus
 /// ([`Engine::dns_times_clear`]), for debug builds' speed budget check; nothing when none runs.
 // SAFETY: exported under the JNI name of the Kotlin method `external fun nativeDnsTimesClear()`.
 #[unsafe(no_mangle)]
-pub extern "system" fn Java_org_visadahyu_datapavan_watch_Engine_nativeDnsTimesClear<'caller>(
+pub extern "system" fn Java_org_visadahyu_datapavan_network_Engine_nativeDnsTimesClear<'caller>(
     mut unowned_env: EnvUnowned<'caller>,
     _class: JClass<'caller>,
 ) {
@@ -1238,7 +1238,7 @@ pub extern "system" fn Java_org_visadahyu_datapavan_watch_Engine_nativeDnsTimesC
 // SAFETY: exported under the JNI name of the Kotlin method `external fun nativeDnsCatalogue(relays: String,
 // targets: String, pairs: String, presets: String): String`.
 #[unsafe(no_mangle)]
-pub extern "system" fn Java_org_visadahyu_datapavan_watch_Engine_nativeDnsCatalogue<'caller>(
+pub extern "system" fn Java_org_visadahyu_datapavan_network_Engine_nativeDnsCatalogue<'caller>(
     mut unowned_env: EnvUnowned<'caller>,
     _class: JClass<'caller>,
     relays: JString<'caller>,
@@ -1300,7 +1300,7 @@ fn catalogue_lines(catalogue: &Catalogue) -> String {
 /// with a time to live of 0, so that Android's resolver keeps none of them.
 // SAFETY: exported under the JNI name of the Kotlin method `external fun nativeUncacheAnswers(on: Boolean)`.
 #[unsafe(no_mangle)]
-pub extern "system" fn Java_org_visadahyu_datapavan_watch_Engine_nativeUncacheAnswers<'caller>(
+pub extern "system" fn Java_org_visadahyu_datapavan_network_Engine_nativeUncacheAnswers<'caller>(
     mut unowned_env: EnvUnowned<'caller>,
     _class: JClass<'caller>,
     on: jboolean,
@@ -1317,7 +1317,7 @@ pub extern "system" fn Java_org_visadahyu_datapavan_watch_Engine_nativeUncacheAn
 /// them in the order of `datapavan_net::engine::Counters::snapshot`, or an empty array when none runs.
 // SAFETY: exported under the JNI name of the Kotlin method `external fun nativeCounters(): LongArray`.
 #[unsafe(no_mangle)]
-pub extern "system" fn Java_org_visadahyu_datapavan_watch_Engine_nativeCounters<'caller>(
+pub extern "system" fn Java_org_visadahyu_datapavan_network_Engine_nativeCounters<'caller>(
     mut unowned_env: EnvUnowned<'caller>,
     _class: JClass<'caller>,
 ) -> JLongArray<'caller> {
@@ -1342,7 +1342,7 @@ pub extern "system" fn Java_org_visadahyu_datapavan_watch_Engine_nativeCounters<
 // SAFETY: exported under the JNI name of the Kotlin method `external fun nativeStates(message:
 // ByteArray): Boolean`.
 #[unsafe(no_mangle)]
-pub extern "system" fn Java_org_visadahyu_datapavan_watch_Engine_nativeStates<'caller>(
+pub extern "system" fn Java_org_visadahyu_datapavan_network_Engine_nativeStates<'caller>(
     mut unowned_env: EnvUnowned<'caller>,
     _class: JClass<'caller>,
     message: JByteArray<'caller>,
@@ -1361,7 +1361,7 @@ pub extern "system" fn Java_org_visadahyu_datapavan_watch_Engine_nativeStates<'c
 /// running engine's memory, or an empty array when none runs.
 // SAFETY: exported under the JNI name of the Kotlin method `external fun nativeActivity(): ByteArray`.
 #[unsafe(no_mangle)]
-pub extern "system" fn Java_org_visadahyu_datapavan_watch_Engine_nativeActivity<'caller>(
+pub extern "system" fn Java_org_visadahyu_datapavan_network_Engine_nativeActivity<'caller>(
     mut unowned_env: EnvUnowned<'caller>,
     _class: JClass<'caller>,
 ) -> JByteArray<'caller> {
@@ -1383,7 +1383,7 @@ static TRACKERS: Mutex<Option<Arc<NetworkSignatures>>> = Mutex::new(None);
 // SAFETY: exported under the JNI name of the Kotlin method `external fun nativeReadDataPack(pack: ByteArray,
 // keys: String): IntArray`.
 #[unsafe(no_mangle)]
-pub extern "system" fn Java_org_visadahyu_datapavan_watch_Engine_nativeReadDataPack<'caller>(
+pub extern "system" fn Java_org_visadahyu_datapavan_network_Engine_nativeReadDataPack<'caller>(
     mut unowned_env: EnvUnowned<'caller>,
     _class: JClass<'caller>,
     pack: JByteArray<'caller>,
@@ -1403,7 +1403,9 @@ pub extern "system" fn Java_org_visadahyu_datapavan_watch_Engine_nativeReadDataP
 // SAFETY: exported under the JNI name of the Kotlin method `external fun nativeReadDataPayload(payload:
 // ByteArray): IntArray`.
 #[unsafe(no_mangle)]
-pub extern "system" fn Java_org_visadahyu_datapavan_watch_Engine_nativeReadDataPayload<'caller>(
+pub extern "system" fn Java_org_visadahyu_datapavan_network_Engine_nativeReadDataPayload<
+    'caller,
+>(
     mut unowned_env: EnvUnowned<'caller>,
     _class: JClass<'caller>,
     payload: JByteArray<'caller>,
@@ -1423,7 +1425,7 @@ pub extern "system" fn Java_org_visadahyu_datapavan_watch_Engine_nativeReadDataP
 // SAFETY: exported under the JNI name of the Kotlin method `external fun nativeTrackers(table: ByteArray):
 // IntArray`.
 #[unsafe(no_mangle)]
-pub extern "system" fn Java_org_visadahyu_datapavan_watch_Engine_nativeTrackers<'caller>(
+pub extern "system" fn Java_org_visadahyu_datapavan_network_Engine_nativeTrackers<'caller>(
     mut unowned_env: EnvUnowned<'caller>,
     _class: JClass<'caller>,
     table: JByteArray<'caller>,
@@ -1457,7 +1459,7 @@ pub extern "system" fn Java_org_visadahyu_datapavan_watch_Engine_nativeTrackers<
 // SAFETY: exported under the JNI name of the Kotlin method `external fun nativeBlockingTable(table: ByteArray):
 // IntArray`.
 #[unsafe(no_mangle)]
-pub extern "system" fn Java_org_visadahyu_datapavan_watch_Engine_nativeBlockingTable<'caller>(
+pub extern "system" fn Java_org_visadahyu_datapavan_network_Engine_nativeBlockingTable<'caller>(
     mut unowned_env: EnvUnowned<'caller>,
     _class: JClass<'caller>,
     table: JByteArray<'caller>,
@@ -1491,7 +1493,7 @@ pub extern "system" fn Java_org_visadahyu_datapavan_watch_Engine_nativeBlockingT
 /// the time since the phone started, here, so that an engine started later keeps the same ones.
 // SAFETY: exported under the JNI name of the Kotlin method `external fun nativeBlocking(setting: String)`.
 #[unsafe(no_mangle)]
-pub extern "system" fn Java_org_visadahyu_datapavan_watch_Engine_nativeBlocking<'caller>(
+pub extern "system" fn Java_org_visadahyu_datapavan_network_Engine_nativeBlocking<'caller>(
     mut unowned_env: EnvUnowned<'caller>,
     _class: JClass<'caller>,
     setting: JString<'caller>,
@@ -1516,7 +1518,7 @@ pub extern "system" fn Java_org_visadahyu_datapavan_watch_Engine_nativeBlocking<
 /// engine runs. For "Now", inside the app only (ADR 0046's rule: nothing of it reaches a notification).
 // SAFETY: exported under the JNI name of the Kotlin method `external fun nativeBlocked(): String`.
 #[unsafe(no_mangle)]
-pub extern "system" fn Java_org_visadahyu_datapavan_watch_Engine_nativeBlocked<'caller>(
+pub extern "system" fn Java_org_visadahyu_datapavan_network_Engine_nativeBlocked<'caller>(
     mut unowned_env: EnvUnowned<'caller>,
     _class: JClass<'caller>,
 ) -> JString<'caller> {
@@ -1544,7 +1546,7 @@ pub extern "system" fn Java_org_visadahyu_datapavan_watch_Engine_nativeBlocked<'
 // SAFETY: exported under the JNI name of the Kotlin method `external fun nativeTrackersOf(hosts: String):
 // String`.
 #[unsafe(no_mangle)]
-pub extern "system" fn Java_org_visadahyu_datapavan_watch_Engine_nativeTrackersOf<'caller>(
+pub extern "system" fn Java_org_visadahyu_datapavan_network_Engine_nativeTrackersOf<'caller>(
     mut unowned_env: EnvUnowned<'caller>,
     _class: JClass<'caller>,
     hosts: JString<'caller>,
@@ -1595,7 +1597,7 @@ fn int_array<'local>(
 /// (`datapavan_net::Engine::clear_activity`, for ADR 0047's profile); nothing when none runs.
 // SAFETY: exported under the JNI name of the Kotlin method `external fun nativeClearActivity()`.
 #[unsafe(no_mangle)]
-pub extern "system" fn Java_org_visadahyu_datapavan_watch_Engine_nativeClearActivity<'caller>(
+pub extern "system" fn Java_org_visadahyu_datapavan_network_Engine_nativeClearActivity<'caller>(
     mut unowned_env: EnvUnowned<'caller>,
     _class: JClass<'caller>,
 ) {
@@ -1635,7 +1637,7 @@ fn flow_routes(flows: &[Flow]) -> String {
 /// W7's emulator check (scripts/verify-wireguard.sh). Empty when the engine keeps none, as in release builds.
 // SAFETY: exported under the JNI name of the Kotlin method `external fun nativeFlowRoutes(): String`.
 #[unsafe(no_mangle)]
-pub extern "system" fn Java_org_visadahyu_datapavan_watch_Engine_nativeFlowRoutes<'caller>(
+pub extern "system" fn Java_org_visadahyu_datapavan_network_Engine_nativeFlowRoutes<'caller>(
     mut unowned_env: EnvUnowned<'caller>,
     _class: JClass<'caller>,
 ) -> JString<'caller> {
@@ -1654,7 +1656,7 @@ pub extern "system" fn Java_org_visadahyu_datapavan_watch_Engine_nativeFlowRoute
 // SAFETY: exported under the JNI name of the Kotlin method `external fun nativeProxies(families: IntArray, uids:
 // IntArray, android: String, strictDns: Boolean)`.
 #[unsafe(no_mangle)]
-pub extern "system" fn Java_org_visadahyu_datapavan_watch_Engine_nativeProxies<'caller>(
+pub extern "system" fn Java_org_visadahyu_datapavan_network_Engine_nativeProxies<'caller>(
     mut unowned_env: EnvUnowned<'caller>,
     _class: JClass<'caller>,
     families: JIntArray<'caller>,
@@ -1718,7 +1720,9 @@ fn proxy_setting(families: &[i32], uids: &[i32], android: &str) -> ProxySetting 
 /// package` a line (`telegram`, `whatsapp` or `signal`), for Watch to find their UIDs.
 // SAFETY: exported under the JNI name of the Kotlin method `external fun nativeMessengerClients(): String`.
 #[unsafe(no_mangle)]
-pub extern "system" fn Java_org_visadahyu_datapavan_watch_Engine_nativeMessengerClients<'caller>(
+pub extern "system" fn Java_org_visadahyu_datapavan_network_Engine_nativeMessengerClients<
+    'caller,
+>(
     mut unowned_env: EnvUnowned<'caller>,
     _class: JClass<'caller>,
 ) -> JString<'caller> {
@@ -1738,7 +1742,7 @@ pub extern "system" fn Java_org_visadahyu_datapavan_watch_Engine_nativeMessenger
 /// writes it, for debug builds and the emulator check. Empty when the engine keeps none.
 // SAFETY: exported under the JNI name of the Kotlin method `external fun nativeFlowProxies(): String`.
 #[unsafe(no_mangle)]
-pub extern "system" fn Java_org_visadahyu_datapavan_watch_Engine_nativeFlowProxies<'caller>(
+pub extern "system" fn Java_org_visadahyu_datapavan_network_Engine_nativeFlowProxies<'caller>(
     mut unowned_env: EnvUnowned<'caller>,
     _class: JClass<'caller>,
 ) -> JString<'caller> {
@@ -1812,7 +1816,7 @@ fn proxy_line(f: &Flow) -> Option<String> {
 /// builds and the end-to-end test. Empty when the engine keeps none, as in release builds.
 // SAFETY: exported under the JNI name of the Kotlin method `external fun nativeFlows(): String`.
 #[unsafe(no_mangle)]
-pub extern "system" fn Java_org_visadahyu_datapavan_watch_Engine_nativeFlows<'caller>(
+pub extern "system" fn Java_org_visadahyu_datapavan_network_Engine_nativeFlows<'caller>(
     mut unowned_env: EnvUnowned<'caller>,
     _class: JClass<'caller>,
 ) -> JString<'caller> {
