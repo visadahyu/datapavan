@@ -4,19 +4,21 @@
   word)
 - Date: 2026-11-22
 - Decided by: the direction by the maintainer, 2026-11-21 («همه تایید شد», to the coordinator's six
-  recommendations). This record was drafted by the coordinator with AI help.
+  recommendations). This record was drafted by the coordinator with AI help, and revised the same day after the
+  server was read: the relay is Caddy's configuration, not a program.
 - Builds on:
   - [0016](0016-no-user-data.md), whose decision 5 requires a new ADR before any change to it;
   - [0042](0042-dns-of-apps-that-go-directly.md), the pairs and the ladder;
   - [0051](0051-two-lanes-and-an-analysis-machine.md).
 
 ## Context
-- **What Watch uses today.** By default, Watch sends the names that direct apps look up through Oblivious DoH: a
-  relay sees the phone's address but not the question, and a target sees the question but not the address (ADR
-  0042).
-- **Who runs the relays.** The default pairs use relays run by volunteers: Numa's, and crypto.sx's on Fastly. Their
-  targets are Cloudflare's and dnscry.pt's. One person runs dnscry.pt, and few public ODoH relays exist at all. A
-  volunteer's relay can stop at any time, and the default way would go with it.
+- **What Advanced's network monitoring uses today.** By default, it sends the names that direct apps look up
+  through Oblivious DoH. A relay sees the phone's address but not the question, and a target sees the question but
+  not the address (ADR 0042).
+- **Who runs the relays.** The default pairs use relays run by volunteers: Numa's, and crypto.sx's on Fastly.
+  - **Their targets:** Cloudflare's and dnscry.pt's.
+  - **The risk:** one person runs dnscry.pt, and few public ODoH relays exist at all. A volunteer's relay can
+    stop at any time, and the default way would go with it.
 - **What the maintainer asked, on 2026-11-21:** why the project depends on volunteers rather than running
   everything itself.
 - **The answer has two parts:**
@@ -26,10 +28,16 @@
   - **A relay is possible.** The project may run a relay, paired only with targets of other operators.
 
   The maintainer approved that direction.
+- **What the server already is.** The project's server is a netcup VPS running Debian 13. It is the one that
+  serves datapavan.org (strategy repository, `server/`).
+  - **Its front:** Caddy holds port 443 for the website, its redirects, and `mail.datapavan.org` in front of
+    Stalwart. Caddy is Debian's 2.6.2, sandboxed under systemd, with its admin API off and no access log.
+  - **Its firewall:** the firewall already lets Caddy's user reach DNS and port 443.
+  - **What follows:** Caddy can be the relay with configuration alone.
 - **Why ADR 0016 must change.** Today no part of Datapavan contacts a server of the project's own by itself:
   - **Basic** has no INTERNET permission;
-  - **Watch** connects only to what the user's apps and tools reach, to the resolvers the user or the data names,
-    and to the ODoH relays and targets of other operators.
+  - **Advanced's network monitoring** connects only to what the user's apps and tools reach, to the resolvers the
+    user or the data names, and to the ODoH relays and targets of other operators.
 
   A relay of the project's own would be the first server of the project that phones contact by themselves, and it
   would see their addresses. ADR 0016 decision 1 says the project collects no data from users. Its decision 5
@@ -48,80 +56,148 @@
      - the TLS session;
      - the size and timing of the request;
      - the target it names.
-   - **One counter, for abuse only:** a per-address count of requests, kept in memory for at most 10 minutes, is the
-     only state that outlives a request.
-   - **Nothing is written:** no access log, no error log with an address, no metrics by address, no sampling, no
+   - **No state outlives a request.** There is no count per address, not even for abuse. Caddy's core has none,
+     and none is better than one kept for ten minutes.
+   - **Nothing is written:** no access log, no log line with an address, no metrics by address, no sampling, no
      analytics, no backups of any of these.
-   - **What may be counted:** totals that carry no address (requests per minute, errors by kind), in memory, only to
-     keep the service running.
+     - **Caddy's error log,** which would carry the whole request when a target is down, has its request fields
+       deleted for every site on the server.
+     - **The log level** stays at info: Go's own debug messages name an address in their text.
+   - **The abuse limit is what the relay forwards:**
+     - at most one POST of at most 65,604 bytes per request;
+     - only to the two targets of point 6, at one fixed path each.
+
+     It cannot be pointed at anyone else. An abuser can spend the server's bandwidth, and can make the targets
+     rate-limit the relay's one address, which fails it for every user of it. The ladder then moves on (point 7).
+   - **A later option:** a kernel rate limit per source address in `nftables`, which keeps its counts in the
+     kernel for seconds. It needs the maintainer's word, and is not part of this decision.
    - **Anything wider** needs a new ADR. Every other part of ADR 0016 stands.
 3. **Not an open proxy.**
-   - **Allowed targets:** the relay forwards only to the targets in `data/odoh/targets.tsv` whose pairing with it
-     passes the pair rule, by host and path, and only HTTPS POSTs of `application/oblivious-dns-message` within the
-     RFC's sizes.
-   - **Refused:** any other target, method or type gets a 4xx without contacting anything.
+   - **What it forwards:** the relay answers one path, `/odoh/proxy`. It forwards a request there only when it is
+     a POST of `application/oblivious-dns-message` whose length is within RFC 9230's sizes, and whose whole query
+     names exactly one allowed target by its host and path.
+     - **The path** may be written plain or with `/` as `%2F`.
+     - **Refused:** a duplicated or encoded `targethost`, an extra parameter, and any other order or path.
+   - **The forwarded request** carries the body, ODoH's `Content-Type` and `Accept`, and the target's `Host`.
+     - **Never sent:** none of the client's headers, and none that the proxy adds by itself (`X-Forwarded-*`, Go's
+       `User-Agent`).
+     - **The response:** the target's status and body come back without its cookies or any `Server` header.
+   - **Refused:** any other method, type, size, query or path gets a 4xx without contacting anything.
    - **Why:** a relay that forwards anywhere would be a tool for attacking others and a reason to block it.
-4. **Its configuration and code are published.**
-   - **What is published:** the relay's code, its configuration (the web server's site block with logging off, the
-     service unit, the allowlist) and how it is deployed, in this repository.
-   - **The code:** a small relay of the project's own in Rust, with the engine's HTTP stack where it fits. The
-     reason is that an existing server would bring its own logging and features to remove. Its tests prove the
-     allowlist, the absence of addresses in anything written, and the counter's expiry.
+4. **Caddy's configuration, published, instead of a relay program.**
+   - **What is published:** the configuration in this repository's `server/`:
+     - `log.caddy`: the global log filter;
+     - `odoh-relay.caddy`: the relay's rules;
+     - `odoh-pairs.caddy`: the allowed targets.
+
+     The maintainer's install script (strategy repository, `server/odoh-relay.sh`) carries copies of these
+     files, and the relay's test checks that the copies match.
+   - **Why not a program of the project's own:** the first draft of this record chose a small relay in Rust,
+     because an existing server would bring its own logging and features to remove. Reading the server showed the
+     other way is better:
+     - **The attack surface:** the program that faces the internet stays the one already there, already exposed
+       and already sandboxed. A relay program would add a second listener and a second parser behind it.
+     - **Already hardened:** Caddy runs as its own user under a systemd sandbox, behind a firewall that limits
+       where it may connect. A new program would need all of that again.
+     - **Nothing new to patch:** Debian's security updates, which the server installs by itself, cover Caddy.
+       A program of the project's own would be one more thing to watch for flaws and rebuild.
+     - **Caddy's logging** is removed by configuration, and the test proves it.
+   - **The test:** `scripts/relaylab.sh` runs Debian 13's own Caddy package with these files, beside stand-ins
+     for the targets that record what they receive. It tests:
+     - every rule of point 3, over HTTP/1.1 and HTTP/2;
+     - the log, with a target down;
+     - a control run without the filter, which shows that the check would catch an address.
+
+     CI runs it on the `dns` shard.
+   - **Caddy 2.6.2's limits,** written around and tested: a lone `*` in a header deletion crashes the request,
+     and the proxy's own deletions run after its settings. The client's headers are therefore deleted before the
+     proxy, with `**`.
 5. **Where it runs.**
-   - **The server:** the project's netcup server, which already serves datapavan.org. That costs nothing new, as
-     the memory of 2026-11-05 asks.
-   - **The location:** the jurisdiction and hosting network are those of the server's address, read from its RIPE
-     and RDAP records when it is built and recorded in `data/odoh` with their sources, like every other relay's.
-   - **The operator** is the project, seated where the maintainer is.
-   - **Who deploys:** root changes on the server (the service unit, the web server's site block) are the
-     maintainer's to type, since agents there have no sudo.
+   - **The server and the name:** the project's netcup server, at `https://datapavan.org/odoh/proxy`. This needs no
+     new DNS record, certificate or firewall rule, and costs nothing new, as the memory of 2026-11-05 asks.
+   - **The location,** read from the address of datapavan.org on 2026-11-22 (`data/odoh/sources.tsv`):
+     - **The hosting network:** AS197540, netcup GmbH, Karlsruhe, Germany, by RIPEstat and RIPE's RDAP.
+     - **The jurisdictions:** DE, the server's, and TR, the operator's seat.
+   - **The operator** is the project, seated where the maintainer resides, Türkiye.
+   - **Who deploys:** the change to the server's Caddyfile is the maintainer's to run with sudo, since agents
+     there have no root: `server/odoh-relay.sh` in the strategy repository.
+     - **What it does:** it backs the Caddyfile up and writes the three parts between markers, so a second run
+       never adds them twice. It then validates the configuration, restarts Caddy, and checks the site and the
+       relay from the server.
+     - **If validation fails:** it puts the backup back.
 6. **Its place among the pairs.**
    - **Kept:** the volunteers' pairs stay.
-   - **The project's pair:** the project's relay joins with Cloudflare's target, since dnscry.pt shares the server's
-     jurisdiction if the server is in Germany. The pair rule decides on the recorded values, not this record.
+   - **The project's pairs:** by the rule, on the recorded values, the relay pairs with:
+     - Cloudflare's target (US, CR; AS13335);
+     - crypto.sx's target (FR, US; AS13335, AS12876).
+
+     It does not pair with dnscry.pt's targets, which share Germany. The engine's tests hold this.
+   - **Offered on debuggable builds alone,** until point 8's gates pass:
+     - `relays.tsv` has a `status` column, and the relay's row says `debug`.
+     - Advanced's network monitoring leaves such rows out of a release build's tables before the engine or the
+       screen reads them (`DnsSettings.forBuild`, by Android's debuggable flag).
+     - `pairs.tsv` does not name the relay, so no build uses it by default. A debug build offers its pairs on the
+       DNS screen.
+     - **Its release** takes a pack with the status `-`, and then a pair in `pairs.tsv` if it is to be a default.
    - **The order of the pairs** is set by measurement, not here: each pair's warm p50 and p95 from at least two
      networks, and how often each fails over a week.
    - **The volunteers** are still asked before a release ships their endpoints (ADR 0042's release gate).
 7. **The threat assessment, published with the relay.** Decision 5 of ADR 0016 asks for it. It covers what follows,
    and every point is a fact about the design, not a promise:
-   - **The network sees who uses Datapavan.** A network observer sees connections to the relay's address. The relay
-     serves only Datapavan, so that address marks a phone as running Datapavan's Watch more strongly than a
-     volunteer's relay, which others' clients use too.
+   - **The network sees a connection to datapavan.org.**
+     - **The address and name:** the relay shares the website's address and its name. A network observer sees
+       `datapavan.org` in the TLS handshake and cannot tell the relay's path from a visit to the site by name.
+     - **What it can still read:** the pattern is not a visit's. There are small POSTs at the rate of the
+       phone's lookups, over hours. Contact with datapavan.org already marks a phone as near Datapavan, and the
+       pattern marks it as running Advanced's network monitoring more strongly than a volunteer's relay, which
+       others' clients use too.
      - **Mitigations within this decision:**
        - lookups go through the user's tool while it is on, as ADR 0042 already does for some fetches;
-       - ECH on the relay's name where the web server and DNS support it;
-       - the volunteers' pairs stay, so a user can leave the project's out. Watch's DNS screen must offer that.
+       - the volunteers' pairs stay, so a user can leave the project's pair out. Advanced's network monitoring's
+         DNS screen must offer that.
+     - **ECH is not available:** Caddy 2.6.2 cannot serve ECH, and Android offers it to apps only from Android 17.
+       It would hide the name, not the address.
      - **Fronting the relay with a large CDN** would hide it among other sites but add a party that sees addresses.
        It is left to a later decision.
-   - **What the relay sees.** If the relay is breached or compelled to log, it learns addresses, times and sizes,
-     and which target was asked. It never learns the question, which is sealed to the target. A breach or a
-     compelled log is a risk this server has met before: `homediyet.com` was found hacked on it before its
-     reinstall of 2026-11-06.
-     - **What limits it:** the server is hardened and the relay runs as its own user.
+   - **What the relay sees.** If the server is breached or compelled to log, it learns addresses, times and sizes,
+     and which target was asked. It never learns the question, which is sealed to the target.
+     - **A risk this server has met before:** `homediyet.com` was found hacked on it before its reinstall of
+       2026-11-06.
+     - **What limits it:** the server is hardened, and the relay is the website's own Caddy, under its user and its
+       sandbox. No new program faces the internet. A flaw in Caddy now reaches the relay as well as the website
+       and the mail proxy, as it already reached both.
      - **What the relay keeps:** nothing. A compelled log can cover only the time after the order.
-   - **Blocking.** A censor that blocks the relay's address takes only that pair away. The ladder moves to the next
-     pair, then to the tool, then to the other ways (ADR 0042).
-   - **Abuse.** The allowlist and the counter limit it. A flood against the relay also hits the website, which is on
-     the same server: measure it, and move the relay to its own address or server if it costs the website.
+   - **Blocking.** A censor that blocks the relay's address takes that pair away, and with it the website, since
+     both share one address. The ladder moves to the next pair, then to the tool, then to the other ways (ADR 0042).
+   - **Abuse.** The allowlist and the size limit bound what an abuser gets (point 2).
+     - **Shared fate:** a flood against the relay is a flood against the website and the mail proxy, which run in
+       the same Caddy. Measure it.
+     - **If it costs the website:** move the relay to its own address, or its own server, with its own record.
 8. **What gates its release.**
    - **The reviews:** the legal review that ADR 0016 decision 5 requires, of the relay's handling of addresses under
      the server's jurisdiction and the operator's, and the threat assessment, published.
    - **The checks:**
-     - the relay's tests;
-     - a week of the measurements in point 6;
-     - CI's DNS lab, with a lab relay in the project's own code beside the current ones.
-   - **Until all of these pass,** the relay ships in no release as a default. It may be tried in debug builds.
+     - the relay's test (`scripts/relaylab.sh`), on CI;
+     - the DNS lab's ODoH steps through it on an emulator (`DNSLAB_RELAY=caddy DNSLAB_ONLY=odoh
+       scripts/verify-dns.sh`);
+     - the install script's own checks on the server, from the server;
+     - a week of the measurements in point 6.
+   - **Until all of these pass,** the relay ships in no release (point 6's status column). It may be tried in
+     debug builds.
 
 ## Consequences
 - **Under the project's own control.** The default way no longer depends only on volunteers, and the project can
-  keep one pair working on its own.
-- **First contact by phones.** For the first time, phones contact a server of the project's own by themselves. The
-  privacy policy's one sentence, that nothing leaves the phone unless the user sends it, becomes untrue for Watch's
-  ODoH relay. PRIVACY.md and its page must say exactly what the relay handles and keeps, before the release that
-  ships it.
-- **A Datapavan-only address.** A network observer can tell Datapavan's users from others more easily than with
-  volunteers' relays alone. The user must be able to leave the project's pair out.
-- **Running a service.** The project must keep it up, patch it and watch it, without logs. That is a running cost
-  in time, and later perhaps in money.
+  keep pairs working on its own.
+- **First contact by phones.** For the first time, phones contact a server of the project's own by themselves.
+  - **The privacy policy:** its one sentence, that nothing leaves the phone unless the user sends it, becomes
+    untrue for Advanced's ODoH relay.
+  - **Before the release that ships it:** PRIVACY.md and its page must say exactly what the relay handles and
+    keeps.
+- **A Datapavan-only pattern.** A network observer can tell Datapavan's users from others more easily than with
+  volunteers' relays alone, though it sees only the website's name. The user must be able to leave the project's
+  pair out.
+- **The website and the relay share a fate:** one address to block, one Caddy to breach, one link to flood.
+- **Running a service.** The project must keep it up and watch it, without logs, and keep the pairs in the
+  configuration in step with the data. That is a running cost in time. Caddy's patches come with Debian's.
 - **No collusion by design.** Running only a relay keeps ODoH's split. The project can never see a question tied to
   an address, whatever it is compelled to do, as long as it runs no target in the pairs.
