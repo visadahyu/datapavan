@@ -179,7 +179,7 @@ footer p{margin:.2rem 0;color:var(--mute);font-size:.95rem}
 <body>
 <div class="w"><header class="top"><a class="brand" href="../../index.html"><span><svg class="mark" viewBox="0 0 240 240" aria-hidden="true"><rect width="240" height="240" rx="52" class="mk-b"/><path class="mk-f" d="M62.58,72.28 Q63.23,66.59 63.67,61.12 Q64.11,55.65 64.11,49.95 Q64.11,44.04 63.56,37.91 Q63.01,31.79 61.7,25.0 Q70.24,28.72 87.97,32.22 Q105.7,35.73 129.23,38.46 Q152.76,41.2 178.37,43.17 L178.37,48.2 Q136.78,53.68 106.57,59.48 Q76.37,65.28 62.58,72.28 Z M146.63,215.0 Q144.44,189.83 142.47,171.33 Q140.5,152.83 138.64,139.37 Q136.78,125.91 134.59,115.62 Q132.4,105.33 129.67,96.36 Q126.93,87.38 123.21,77.97 Q135.03,79.94 146.85,79.94 Q157.79,79.94 170.49,77.97 Q166.77,88.04 163.92,99.53 Q161.08,111.03 158.89,126.57 Q156.7,142.11 155.06,163.56 Q153.42,185.01 152.32,215.0 L146.63,215.0 Z M92.56,215.0 Q90.38,189.83 88.41,171.33 Q86.44,152.83 84.57,139.37 Q82.71,125.91 80.52,115.62 Q78.34,105.33 75.6,96.36 Q72.86,87.38 69.14,77.97 Q80.96,79.94 92.78,79.94 Q103.73,79.94 116.42,77.97 Q112.7,88.04 109.86,99.53 Q107.01,111.03 104.82,126.57 Q102.63,142.11 100.99,163.56 Q99.35,185.01 98.26,215.0 L92.56,215.0 Z"/></svg></span><span class="ltr">Datapavan</span></a><nav><a href="../../index.html#checks">What it checks</a><a href="../../index.html#limits">What it can’t see</a><a href="../../index.html#plan">What you can do</a><a href="../../index.html#faq">Questions</a><a href="../../index.html#get">Get it</a><a href="../../index.html#names">The names</a><a href="../../news/index.html">News</a><a href="https://github.com/visadahyu/datapavan" class="ltr">GitHub</a></nav>
 <details class="lng"><summary aria-label="Language">English</summary><ul><li><a href="../../guides/exclave/index.html" hreflang="en" lang="en" aria-current="true">English</a></li><li><a href="../../fr/index.html" hreflang="fr" lang="fr">Français</a></li><li><a href="../../de/index.html" hreflang="de" lang="de">Deutsch</a></li><li><a href="../../es/index.html" hreflang="es" lang="es">Español</a></li><li><a href="../../ru/index.html" hreflang="ru" lang="ru">Русский</a></li><li><a href="../../zh/index.html" hreflang="zh" lang="zh">简体中文</a></li><li><a href="../../ar/index.html" hreflang="ar" lang="ar">العربية</a></li><li><a href="../../fa/index.html" hreflang="fa" lang="fa">فارسی</a></li></ul></details></header></div>
-<main><section><div class="w prose"><h1>Exclave in proxy mode</h1><p>Android runs one VPN at a time. In its proxy mode, Exclave runs without a VPN, and Watch can send your apps through it.</p>
+<main><section><div class="w prose"><h1>Exclave in proxy mode</h1><p>Android runs one VPN at a time. In its proxy mode, Exclave runs without a VPN, and Datapavan can send your apps through it.</p>
 <p>These steps assume Exclave already works for you as a VPN.</p>
 <h2 id="turn-on-proxy-mode">Turn on proxy mode</h2>
 <ol>
@@ -189,25 +189,25 @@ footer p{margin:.2rem 0;color:var(--mute);font-size:.95rem}
 <li>Tap its round start button, which a screen reader calls &ldquo;<a href="https://github.com/dyhkwong/Exclave/blob/feb707b49720aa503b20e1ebbc05404be333fd8d/app/src/main/res/values/strings.xml#L177">Connect</a>&rdquo;.</li>
 </ol>
 <p>Its proxy then listens on this phone at 127.0.0.1, port 2080.</p>
-<p>In a work profile or another user on this phone, its port is higher by that user&rsquo;s number. Watch looks there too.</p>
-<p>Then come back to Watch. It finds the proxy by itself and offers to send your apps through it.</p>
+<p>In a work profile or another user on this phone, its port is higher by that user&rsquo;s number. Datapavan looks there too.</p>
+<p>Then come back to Datapavan. It finds the proxy by itself and offers to send your apps through it.</p>
 <h2 id="a-password-for-its-proxy">A password for its proxy</h2>
-<p>Its proxy can ask for a user name and a password. Set the ones Watch shows when it finds the proxy. Then other apps on this phone cannot use it.</p>
+<p>Its proxy can ask for a user name and a password. Set the ones Datapavan shows when it finds the proxy. Then other apps on this phone cannot use it.</p>
 <ol>
 <li>Open the menu in the top corner of its screen and tap &ldquo;<a href="https://github.com/dyhkwong/Exclave/blob/feb707b49720aa503b20e1ebbc05404be333fd8d/app/src/main/res/values/strings.xml#L180">Settings</a>&rdquo;.</li>
 <li>Under &ldquo;<a href="https://github.com/dyhkwong/Exclave/blob/feb707b49720aa503b20e1ebbc05404be333fd8d/app/src/main/res/values/strings.xml#L53">Inbound settings</a>&rdquo;, fill in &ldquo;<a href="https://github.com/dyhkwong/Exclave/blob/feb707b49720aa503b20e1ebbc05404be333fd8d/app/src/main/res/values/strings.xml#L94">Username</a>&rdquo; and &ldquo;<a href="https://github.com/dyhkwong/Exclave/blob/feb707b49720aa503b20e1ebbc05404be333fd8d/app/src/main/res/values/strings.xml#L95">Password</a>&rdquo;.</li>
 </ol>
 <h2 id="what-it-asks-for">What it asks for</h2>
 <p>It asks to show notifications.</p>
-<p>On Android 17 it asks for the local network permission. Watch does not need that for its proxy, which is on this phone.</p>
+<p>On Android 17 it asks for the local network permission. Datapavan does not need that for its proxy, which is on this phone.</p>
 <h2 id="back-to-vpn-mode">Back to VPN mode</h2>
 <ol>
 <li>Open the menu in the top corner of its screen and tap &ldquo;<a href="https://github.com/dyhkwong/Exclave/blob/feb707b49720aa503b20e1ebbc05404be333fd8d/app/src/main/res/values/strings.xml#L180">Settings</a>&rdquo;.</li>
 <li>Under &ldquo;<a href="https://github.com/dyhkwong/Exclave/blob/feb707b49720aa503b20e1ebbc05404be333fd8d/app/src/main/res/values/strings.xml#L54">App settings</a>&rdquo;, tap &ldquo;<a href="https://github.com/dyhkwong/Exclave/blob/feb707b49720aa503b20e1ebbc05404be333fd8d/app/src/main/res/values/strings.xml#L44">Service mode</a>&rdquo; and choose &ldquo;<a href="https://github.com/dyhkwong/Exclave/blob/feb707b49720aa503b20e1ebbc05404be333fd8d/app/src/main/res/values/strings.xml#L46">VPN</a>&rdquo;.</li>
 </ol>
-<p>When Exclave runs as a VPN again, Android turns Watch off: only one VPN runs at a time.</p>
+<p>When Exclave runs as a VPN again, Android turns Datapavan&rsquo;s VPN off: only one VPN runs at a time.</p>
 <p>Read from the source code of Exclave, version <a href="https://github.com/dyhkwong/Exclave/tree/0.17.68">0.17.68</a>.</p>
-<p>Not yet tried with Watch.</p>
+<p>Not yet tried with Datapavan.</p>
 <p>The words in quotes are as that version shows them.</p>
 </div></section></main>
 <div class="w"><footer><div class="fl"><a href="../../news/index.html">News</a>
