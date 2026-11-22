@@ -1,7 +1,7 @@
-//! Fuzzing of Watch's side of Oblivious DoH (`datapavan_net::odoh`, W8, part 1): any bytes a target may serve as
-//! its configurations or a relay may send back as an answer, and any HTTPS record a resolver may send. A key read
-//! from them seals a query whose bytes start as an ODoH query does; an answer that is not the target's to that very
-//! query never opens; the `odohconfig` parameter of a record is read without panicking. The engine's own HPKE (fix
+//! Fuzzing of the network part's side of Oblivious DoH (`datapavan_net::odoh`, W8, part 1): any bytes a target may
+//! serve as its configurations or a relay may send back as an answer, and any HTTPS record a resolver may send. A key
+//! read from them seals a query whose bytes start as an ODoH query does; an answer that is not the target's to that
+//! very query never opens; the `odohconfig` parameter of a record is read without panicking. The engine's own HPKE (fix
 //! round): any encapsulated key and ciphertext are refused, or opened, without panicking.
 #![no_main]
 

@@ -120,7 +120,7 @@ impl Truth {
         Placed::Known(state)
     }
 
-    /// A reading of the truth from `from` to `until`, as Watch's Kotlin side would tell it.
+    /// A reading of the truth from `from` to `until`, as the network part's Kotlin side would tell it.
     fn reading(&self, from: u64, until: u64) -> Told {
         let mut intervals = Vec::new();
         for &uid in &APPS {
@@ -270,7 +270,7 @@ fn act(
 }
 
 /// Runs the model with `seed` and `variant`. Without access, the reading after the 400th second tells
-/// nothing is known, and the next tells from its end, as Watch's tracker does; with set backs, the clock
+/// nothing is known, and the next tells from its end, as the network part's tracker does; with set backs, the clock
 /// goes back by 1 to 5 seconds now and then.
 fn run(seed: u64, variant: Variant) -> Run {
     run_for(seed, variant, LENGTH_MS)
@@ -338,7 +338,7 @@ fn run_for(seed: u64, variant: Variant, length: u64) -> Run {
                         }
                     }
                 }
-                // Watch's Kotlin side finds it at its next reading, and tells from the new clock on.
+                // The network part's Kotlin side finds it at its next reading, and tells from the new clock on.
                 told_until = now;
                 floor = now;
             }

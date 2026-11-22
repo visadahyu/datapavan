@@ -114,7 +114,7 @@ async fn gives_the_password_only_when_the_proxy_asks() -> Outcome {
     )
     .await;
     assert_eq!(error(without), Some(Error::NoAcceptableMethod));
-    // A proxy without a password takes Watch's greeting with one too.
+    // A proxy without a password takes the network part's greeting with one too.
     let open = proxy(Settings::default()).await?;
     let (mut stream, _) = through(
         open.address,

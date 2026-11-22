@@ -5,7 +5,7 @@
 //! out, one held when its way opens, and a lookup to the tunnel's DNS address alike.
 //!
 //! Android names a socket's app when asked, and may hand the port to another app at any moment. An
-//! answer so tells who held the socket when it was asked, and Watch presumes the same app for what came
+//! answer so tells who held the socket when it was asked, and the network part presumes the same app for what came
 //! less than `Limits::udp_reask` before or after that: a port rarely comes back to another app so soon.
 //! When answers near a datagram name different apps, a handover fell near it, and who sent it cannot be
 //! told: it is dropped, never sent under either answer, and a later question could not tell either.

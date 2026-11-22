@@ -64,9 +64,9 @@ const SERVER: &[u8] = b"server in";
 const TOLD_APART: usize = 4;
 /// The largest datagram read as QUIC's, a server's Initial or Retry (ADR 0044, unit 9b, fix round 1) or,
 /// since fix round 3, an app's: a larger one costs no keys and no AEAD, carries nothing and asks nothing.
-/// It is the tunnel's largest MTU, `TunnelMtu.MOST` on Watch's side, which a test holds to it. QUIC lets IP
+/// It is the tunnel's largest MTU, `TunnelMtu.MOST` on the network part's side, which a test holds to it. QUIC lets IP
 /// fragment none of its datagrams (RFC 9000 14), and a sender makes an Initial's datagram larger than 1,200
-/// bytes only where it believes the path and its peer carry it (14.1): an app's path ends in Watch's
+/// bytes only where it believes the path and its peer carry it (14.1): an app's path ends in the network part's
 /// tunnel, so an app's larger datagram came in IP fragments, as a QUIC stack that cannot set "don't
 /// fragment", configured above the MTU, sends them, and the engine puts together (`fragments.rs`).
 /// **Accepted limit** (fix round 4, review H): such a client's Initial asks nothing, so its stand-in has no
@@ -337,7 +337,7 @@ fn long_packet(datagram: &[u8], at: usize) -> Option<LongPacket> {
 /// does not check, or whose reserved bits are set, a connection error for a receiver (RFC 9000 17.2).
 /// Those bits are read before the tag: RFC 9001 9.5, to which 17.2 points, asks an endpoint to remove
 /// header and packet protection together, so that their timing confirms no guess of a packet number, its
-/// length or the Key Phase; Watch is no endpoint of these packets, sends nothing on what it reads, and
+/// length or the Key Phase; the network part is no endpoint of these packets, sends nothing on what it reads, and
 /// Initial keys are anyone's. A packet with them set is refused either way, so a wrong key costs no AEAD
 /// three times in four.
 fn open(
@@ -1027,7 +1027,7 @@ impl Initial {
         let mut read = false;
         let mut at = 0;
         let mut first: Option<Cid> = None;
-        // A datagram larger than any a QUIC client sends through Watch's tunnel is read no further.
+        // A datagram larger than any a QUIC client sends through the network part's tunnel is read no further.
         let packets = if datagram.len() > LARGEST_DATAGRAM {
             0
         } else {
@@ -1807,7 +1807,7 @@ pub(crate) mod tests {
         assert!(initial.keys[Version::V2.index()].is_none());
     }
 
-    /// [`LARGEST_DATAGRAM`] is the tunnel's largest MTU, which Watch's `TunnelMtu.MOST` sets: raising
+    /// [`LARGEST_DATAGRAM`] is the tunnel's largest MTU, which the network part's `TunnelMtu.MOST` sets: raising
     /// one without the other would drop real Initials unread (fix round 4, review H).
     #[test]
     fn the_largest_datagram_is_the_tunnels_largest_mtu() {
@@ -1821,7 +1821,7 @@ pub(crate) mod tests {
         assert_eq!(most, Some(LARGEST_DATAGRAM));
     }
 
-    /// A datagram larger than [`LARGEST_DATAGRAM`] is no QUIC client's through Watch's tunnel: it asks
+    /// A datagram larger than [`LARGEST_DATAGRAM`] is no QUIC client's through the network part's tunnel: it asks
     /// nothing, opens nothing and names no flow, however many Initials it holds, so that one costs no more
     /// than the largest a client sends (fix round 3, review E: 16 Initials of 4,000 bytes cost 200 us).
     #[test]
@@ -2185,7 +2185,7 @@ pub(crate) mod tests {
             ServerName::None
         );
         assert!(!initial.is_quic());
-        // A short-header packet: the connection began before Watch saw it.
+        // A short-header packet: the connection began before the network part saw it.
         let mut initial = Initial::new();
         assert_eq!(initial.push(&[0x40; 1200]), ServerName::None);
         // An unknown version.

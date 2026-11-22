@@ -2,7 +2,7 @@
 //! decision 2 (d) and decision 4: "Trackers are named only from the εxodus network signatures").
 //!
 //! The table is `exodus/trackers.tsv` of the data pack the audit verifies (ADR 0015, `data/exodus`), the
-//! current pack's, which Watch's Kotlin side reads and hands over: lines starting with `#` are comments,
+//! current pack's, which the network part's Kotlin side reads and hands over: lines starting with `#` are comments,
 //! every other line has six tab-separated columns, and the sixth is the network signature. εxodus writes
 //! a signature as a Python regular expression and applies it as ETIP does, with `re.search`: an
 //! alternative matches a name when it matches anywhere in it. The table uses a small subset of the
@@ -13,7 +13,7 @@
 //! - `.` for any one character but a line break, `.*` for any run of them, `[0-9]*` for a run of digits;
 //! - one alternative with a port and a path (`54\.243\.73\.253:8080/SilverPush/`): its host part is
 //!   matched as above against the destination's address or name, and its port against the
-//!   destination's port. Watch never sees a path (it reads no content), so the path is not checked: such
+//!   destination's port. The network part never sees a path (it reads no content), so the path is not checked: such
 //!   an alternative marks every flow to that address and port.
 //!
 //! Anything else (another escape such as the `\a` of `data.\altbeacon\.org`, which Python reads as the
@@ -421,7 +421,7 @@ mod tests {
         assert!(!marks("a.*b", "a\nb", 443));
     }
 
-    /// The one alternative with a port and a path matches its address at its port; the path, which Watch
+    /// The one alternative with a port and a path matches its address at its port; the path, which the network part
     /// never sees, is not checked.
     #[test]
     fn a_port_and_a_path_match_by_address_and_port() {

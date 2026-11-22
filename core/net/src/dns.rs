@@ -312,7 +312,7 @@ fn param_of(record: &[u8], key: u16) -> Option<Vec<u8>> {
 
 /// Sets the time to live of every record of a DNS response to 0, the OPT record's flags left alone,
 /// so that Android's resolver, which keeps one cache for all the apps of a network, keeps none of it:
-/// each app's next lookup of the name then reaches Watch again, with that app as its owner. Negative
+/// each app's next lookup of the name then reaches the network part again, with that app as its owner. Negative
 /// answers are covered too, since Android keeps them for the SOA record's TTL at most (RFC 2308).
 /// Returns `false`, the message left as it was, when it is not a well-formed response.
 pub fn uncache(message: &mut [u8]) -> bool {

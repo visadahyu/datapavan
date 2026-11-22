@@ -1,5 +1,5 @@
 //! The protocol core behind one small trait (ADR 0035, Decision): handshake, keys, timers and
-//! encryption, fed packet by packet. [`GotaTun`] is the core Watch runs, Mullvad's `noise::Tunn` with no
+//! encryption, fed packet by packet. [`GotaTun`] is the core the network part runs, Mullvad's `noise::Tunn` with no
 //! device, TUN or socket; this module is the only one that names it, so that another core (sanstun,
 //! `BoringTun`) can take its place here alone.
 //!
@@ -49,7 +49,7 @@ pub enum Sent {
 #[derive(Debug, PartialEq, Eq)]
 pub enum Received {
     /// Datagrams for the server: a cookie reply's or a handshake's answer, then, once a handshake that
-    /// Watch started completes, the packets that waited for it. `established` says it completed.
+    /// the network part started completes, the packets that waited for it. `established` says it completed.
     Send {
         /// The datagrams, in order.
         datagrams: Vec<Vec<u8>>,

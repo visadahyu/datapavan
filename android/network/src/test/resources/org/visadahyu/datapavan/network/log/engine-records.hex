@@ -1,5 +1,5 @@
-# Watch's connection log: one batch of records as the engine writes them (core/net/src/log.rs,
-# version 6), in hex. Written by the engine's test the_kotlin_sides_fixture_is_what_the_engine_writes
+# The network part's connection log: one batch of records as the engine writes them
+# (core/net/src/log.rs, version 6), in hex. Written by the engine's test the_kotlin_sides_fixture_is_what_the_engine_writes
 # (core/net/src/engine/logbook.rs), which fails when the engine writes otherwise; run it with
 # DATAPAVAN_WRITE_FIXTURE=1 to write it anew. Read by LogTest and LogDaysTest. Not edited by hand.
 100000007700060107000000000000008b270000c04e8feba1010000a0e293eba10100002c01000000000000409c0000

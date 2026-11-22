@@ -1,7 +1,7 @@
-//! Fuzzing of Watch's reader of DNS answers (`datapavan_net::dns`): any bytes a resolver on the
+//! Fuzzing of the network part's reader of DNS answers (`datapavan_net::dns`): any bytes a resolver on the
 //! network can send. A response that is read must have a question in lower case, of printable ASCII,
 //! and so must the public names of its ECH configurations. Setting its times to live to 0 must not
-//! panic, and a message it refuses must stay as it was. The answers Watch gives chained apps (ADR 0038):
+//! panic, and a message it refuses must stay as it was. The answers the network part gives chained apps (ADR 0038):
 //! a resolver's answer rebuilt once is rebuilt to the same bytes again and has every time to live at 0,
 //! and a query read as one gets an answer.
 #![no_main]
@@ -17,7 +17,7 @@ fuzz_target!(|data: &[u8]| {
         assert!(dns::uncache(&mut uncached));
         assert_eq!(uncached, out);
     }
-    // Watch's cache of direct answers takes any answer, and answers a query only with its own ID.
+    // The network part's cache of direct answers takes any answer, and answers a query only with its own ID.
     // The cache reads the time since the phone started (CLOCK_BOOTTIME); any reading that is not a
     // failed one (Duration::MAX) will do here.
     let since_boot = Duration::from_secs(3600);

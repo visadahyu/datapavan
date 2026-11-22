@@ -92,10 +92,10 @@ impl Shared {
     /// tunnel, a flow whose app Android cannot name goes through the default one, never directly (ADR 0035,
     /// question 7 as settled).
     pub(super) fn app_route(&self, uid: Option<u32>) -> Route {
-        // An app Watch did not name when it last handed its routes over, one installed since (with a new UID when
-        // installed again), goes where Watch answered, asked at its first flow, and nowhere until then, never on a
-        // default way: directly it could be an app the user sends through a tunnel or the tool (the maintainer,
-        // 2026-11-20). This holds for the chain as for the tunnels.
+        // An app the network part did not name when it last handed its routes over, one installed since (with a new UID
+        // when installed again), goes where the network part answered, asked at its first flow, and nowhere until then,
+        // never on a default way: directly it could be an app the user sends through a tunnel or the tool (the
+        // maintainer, 2026-11-20). This holds for the chain as for the tunnels.
         if let Some(uid) = uid {
             use super::tunnels::{AppRoute, Newcomer};
             match self.tunnels.newcomer(uid) {
@@ -161,7 +161,7 @@ impl Shared {
     /// What to ask the tool for: the name behind a stand-in address, or the address itself. `None` for
     /// a stand-in the map no longer holds.
     pub(super) fn tool_target(&self, destination: SocketAddr) -> Option<Target> {
-        // DNS over TCP to Watch's own address, which Android's resolver uses when an answer was cut
+        // DNS over TCP to the network part's own address, which Android's resolver uses when an answer was cut
         // short, goes to the resolver of chained apps (ADR 0038). Its answers are not rebuilt.
         if self.is_tunnel_dns(destination.ip()) {
             return Some(Target::Address(RESOLVERS[0]));

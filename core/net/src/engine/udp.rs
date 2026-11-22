@@ -5,7 +5,7 @@
 //! that carries no identifier to tell them by (unit 9b). A
 //! mapping lets in only what comes from an address the app sent to (address-dependent filtering);
 //! through the tool, each answer's header says where it came from. Each destination stays a flow of
-//! its own in the log, with its own name, bytes and QUIC reading. Lookups to Watch's own DNS address
+//! its own in the log, with its own name, bytes and QUIC reading. Lookups to the network part's own DNS address
 //! keep one socket for each flow. Sockets are opened off the packet loop, and answers are read into one
 //! buffer for each engine thread.
 
@@ -40,7 +40,7 @@ use tokio::io::{AsyncReadExt, Interest};
 use tokio::net::{TcpStream, UdpSocket};
 use tokio::sync::{Notify, mpsc, watch};
 
-/// How long a lookup to Watch's own DNS address waits for its answer before its flow ends (ADR 0044,
+/// How long a lookup to the network part's own DNS address waits for its answer before its flow ends (ADR 0044,
 /// decision 3). Android's resolver gives up sooner.
 const LOOKUP_WAIT: Duration = Duration::from_secs(10);
 
@@ -113,7 +113,7 @@ impl Owed {
         }
     }
 
-    /// The lookup `query` will have no answer from here, as when Watch could not answer it.
+    /// The lookup `query` will have no answer from here, as when the network part could not answer it.
     fn given_up(&self, query: &[u8]) {
         let key = Self::key(query, false);
         let mut owed = lock(&self.0);
@@ -132,7 +132,7 @@ impl Owed {
     }
 }
 
-/// A flow of lookups to Watch's own DNS address, with the flow's number.
+/// A flow of lookups to the network part's own DNS address, with the flow's number.
 pub(super) struct UdpFlow {
     /// The flow's number, which tells its entry from a later flow's between the same two ends.
     id: u64,
@@ -163,14 +163,14 @@ impl UdpFlow {
     }
 }
 
-/// Where the lookups of a flow to Watch's own DNS address go.
+/// Where the lookups of a flow to the network part's own DNS address go.
 #[derive(Clone)]
 pub(super) enum UdpWay {
     /// A protected socket connected to the network's resolver.
     Direct(Arc<UdpSocket>),
-    /// A chained app's lookups, which Watch answers (ADR 0038).
+    /// A chained app's lookups, which the network part answers (ADR 0038).
     Lookups(Arc<Chain>),
-    /// A direct app's lookups, which Watch's encrypted resolver answers (W8, part 1, ADR 0042).
+    /// A direct app's lookups, which the network part's encrypted resolver answers (W8, part 1, ADR 0042).
     Resolved,
 }
 
@@ -227,7 +227,7 @@ fn read_quic(quic: &mut Option<(Opened, Box<quic::Initial>)>, payload: &[u8]) ->
 }
 
 /// A destination in the engine's table: opening while Android names its app and its way is made, off
-/// the event loop so that no other packet waits for that; then, for a flow of lookups to Watch's own
+/// the event loop so that no other packet waits for that; then, for a flow of lookups to the network part's own
 /// DNS address, open.
 pub(super) enum UdpEntry {
     Opening(Holding),
@@ -418,7 +418,7 @@ struct Peer {
     /// Whether it came in, another port of an address the app sent to, and the app has not sent to it
     /// since: its datagrams are not read for a QUIC name.
     came_in: bool,
-    /// Whether it came in before the app sent to it: it counts under [`CAME_IN`], and Watch learns names
+    /// Whether it came in before the app sent to it: it counts under [`CAME_IN`], and the network part learns names
     /// from it only from an answer to a query the app sent it, even once the app answers it.
     came_in_first: bool,
     /// Whether it is a stand-in the app sent to that waits for its first answer from an address, or
@@ -434,7 +434,7 @@ struct Peer {
     ids: Vec<identifiers::Asked>,
     /// For a stand-in on port 53 while it waits, or a flow from a port 53 that came in first, the ID and
     /// question of each DNS query the app sent it, the latest last: only an answer to one of them binds
-    /// the stand-in, or teaches Watch names from a flow the app did not start.
+    /// the stand-in, or teaches the network part names from a flow the app did not start.
     asked: Vec<(u16, String)>,
     /// Through the tool, the fingerprints of the identifiers the app sent it, whatever it stands as, each
     /// once, the latest last, at most [`TOLD`] (ADR 0044, unit 9b, fix round 2).
@@ -1502,7 +1502,7 @@ impl<'a> Scope<'a> {
         LetIn::Peer(shown, peer.bytes.clone(), false)
     }
 
-    /// The peer the app knows as `shown`, refreshed by `answer`. Watch learns names only from a peer the
+    /// The peer the app knows as `shown`, refreshed by `answer`. The network part learns names only from a peer the
     /// app sent to, or from an answer to a query the app sent one that came in.
     fn answered_by(&mut self, shown: SocketAddr, answer: &[u8], now: Instant) -> LetIn {
         let Some(peer) = self.peers.get_mut(&shown) else {
@@ -1605,7 +1605,7 @@ impl<'a> Scope<'a> {
     /// Which peer an answer from the tool's relay under `name` on `port` is for (ADR 0044, decision 2,
     /// unit 9b, fix rounds 4 and 5). The relays read for this unit put a name on an answer to say that it
     /// came from the address the association's first destination, that name, resolved to, at the
-    /// answer's own port: a label is a source, as an address and port are, whose address Watch does not
+    /// answer's own port: a label is a source, as an address and port are, whose address the network part does not
     /// know. So it is resolved by the rules an answer from an address is, with the label in place of the
     /// address:
     /// - its holder is the name's own peer on that port, as a destination holds its own address
@@ -2174,7 +2174,7 @@ enum Carried {
     Several,
 }
 
-/// The engine's UDP: the destinations waiting for their way, the flows of lookups to Watch's own DNS
+/// The engine's UDP: the destinations waiting for their way, the flows of lookups to the network part's own DNS
 /// address, and the mappings.
 #[derive(Default)]
 pub(super) struct UdpTable {
@@ -2298,7 +2298,7 @@ struct ToPeer {
 }
 
 /// What a datagram of the app needs once the table has been read: its flow of lookups' way, its app,
-/// the answer Watch's cache holds for it, and the flow's number and lookups owed; its peer's way; or a
+/// the answer the network part's cache holds for it, and the flow's number and lookups owed; its peer's way; or a
 /// way to be opened.
 enum Next {
     Flow(UdpWay, Option<u32>, Option<Vec<u8>>, (u64, Arc<Owed>)),
@@ -2320,7 +2320,7 @@ enum LetIn {
     Unidentified,
     /// It came from another port of an address the app sent to, beyond [`CAME_IN`].
     Capped,
-    /// It came from the peer the app knows as this address, whose bytes these are; and whether Watch may
+    /// It came from the peer the app knows as this address, whose bytes these are; and whether the network part may
     /// learn names from it.
     Peer(SocketAddr, Option<Arc<FlowBytes>>, bool),
 }
@@ -3192,8 +3192,8 @@ impl Loop {
         true
     }
 
-    /// Hands a lookup on a way Watch answers itself to a task of its own: a chained app's (ADR 0038), or a direct
-    /// app's by the encrypted resolver (W8, part 1). False for a way that relays it.
+    /// Hands a lookup on a way the network part answers itself to a task of its own: a chained app's (ADR 0038), or a
+    /// direct app's by the encrypted resolver (W8, part 1). False for a way that relays it.
     fn answered_here(
         &self,
         way: &UdpWay,
@@ -3321,8 +3321,8 @@ fn count_sent(
             Counters::add(&shared.counters.too_big, 1);
             None
         }
-        // Tracker blocking refused it: "port unreachable", as Watch refuses QUIC elsewhere (ADR 0038), so that a
-        // client such as Cronet goes over TCP at once (ADR 0053, decision 4).
+        // Tracker blocking refused it: "port unreachable", as the network part refuses QUIC elsewhere (ADR 0038), so
+        // that a client such as Cronet goes over TCP at once (ADR 0053, decision 4).
         Err(error) if super::tcp::Blocked::of(&error).is_some() => {
             packet::unreachable(packet, parsed, Unreachable::Port)
         }
@@ -3480,7 +3480,7 @@ fn try_send_to(
 
 /// Opens a destination's way, off the event loop: decides whose its first datagram that waits is, by
 /// the one rule ([`Record::whose`]), asking Android as it needs, then makes the destination a peer of
-/// that app's mapping, or for Watch's own DNS address opens a flow of lookups. Where the route sends the
+/// that app's mapping, or for the network part's own DNS address opens a flow of lookups. Where the route sends the
 /// app's UDP nowhere, the app is told the destination cannot be reached. A datagram the rule drops is
 /// dropped and counted. When the chain takes the app, or lets it go, while its way opens, the
 /// destination is routed again: what waited leaves by the new route, never by the old. It goes on until
@@ -4349,7 +4349,7 @@ async fn mapped_socket(shared: &Arc<Shared>, destination: SocketAddr) -> io::Res
 async fn associate(shared: &Arc<Shared>, chain: &Chain) -> io::Result<(UdpSocket, TcpStream)> {
     let opening = async {
         let mut control = connect_proxy(shared, chain.proxy).await?;
-        // The address Watch will send from is not known yet: zeros, as RFC 1928 allows.
+        // The address the network part will send from is not known yet: zeros, as RFC 1928 allows.
         let any = Target::Address(packet::unspecified_like(&chain.proxy));
         let bound = socks5::handshake(
             &mut control,
@@ -4646,7 +4646,7 @@ fn read_mapped(
             }
         };
         // A router's "time exceeded", "fragmentation needed" or "packet too big" (with its MTU), and an
-        // unreachable with its code, reach the app from whoever sent them, as without Watch (ADR 0044,
+        // unreachable with its code, reach the app from whoever sent them, as without the network part (ADR 0044,
         // decision 5 as amended, and unit 11b). One for which no error to the app can be built is
         // dropped, and counted.
         match told_to((app, destination), &error, &sent) {
@@ -4723,7 +4723,7 @@ fn relayed_receive(
             Err(error) if error.kind() == io::ErrorKind::WouldBlock => break,
             Err(_) => return (packets, true, from_last),
         };
-        // A header that is not well formed, or a fragment, which Watch drops as RFC 1928 allows, names
+        // A header that is not well formed, or a fragment, which the network part drops as RFC 1928 allows, names
         // no peer.
         let Some((target, answer)) = socks5::parse_datagram(&buffer[..n]) else {
             Counters::add(&shared.counters.udp_unmatched, 1);
@@ -4767,7 +4767,7 @@ fn relayed_receive(
 
 /// An `answer` a mapping let in from the peer the app knows as `from`: counted, and wrapped in an IP
 /// packet to the app, with the hop limit it `arrived` with where the kernel gave one (ADR 0044, unit
-/// 11b). Watch learns names from it when it `learns`.
+/// 11b). The network part learns names from it when it `learns`.
 fn deliver(
     shared: &Shared,
     (app, uid): (SocketAddr, Option<u32>),
@@ -4802,7 +4802,7 @@ fn unreachable_to(app: SocketAddr, destination: SocketAddr, told: Unreachable) -
 }
 
 /// An error from the path for the app at `app`, about its datagram to `destination`, from the router or
-/// host that sent it, as without Watch, or from the destination where the kernel names no sender (ADR
+/// host that sent it, as without the network part, or from the destination where the kernel names no sender (ADR
 /// 0044, unit 11b; before, every one came as if from the destination). It quotes the app's last
 /// datagram there, `sent`, as a router does: its IP header as the app sent it, with the hop limit the
 /// router found (1 for "time exceeded"), and its UDP header, by whose ports the app's kernel finds its
@@ -4819,8 +4819,8 @@ fn told_to(
     errors::to_app(error.told, &quoted, (from, app.ip()), error.hops)
 }
 
-/// Opens a flow of lookups to Watch's own DNS address for the app `uid`, whose its first lookup that
-/// waits is, by the rule: the network's resolver's way, or Watch's own answers for a chained app. Those
+/// Opens a flow of lookups to the network part's own DNS address for the app `uid`, whose its first lookup that
+/// waits is, by the rule: the network's resolver's way, or the network part's own answers for a chained app. Those
 /// the rule says the app sent go by it; those it drops are dropped and counted; from the first of
 /// another app's, or undecided, all wait on, and the flow then gives way at once, still handing the app
 /// the answers it owes. It opens only for the app the newest answer about the socket names.
@@ -4840,7 +4840,7 @@ async fn open_lookups(
         return Made::Done;
     }
     // On the direct path a flow of lookups holds a socket of its own, and so a place in the budget, for
-    // as long as it waits for answers; a chained app's lookups, which Watch answers, hold none.
+    // as long as it waits for answers; a chained app's lookups, which the network part answers, hold none.
     let place = if let Route::Direct = route {
         let room = lock(flows).room(uid, shared);
         let Some(place) = room else {
@@ -4953,7 +4953,7 @@ async fn open_lookups(
     Made::Done
 }
 
-/// Starts answering a new flow of lookups: Watch answers a chained app's itself, each in a task of its
+/// Starts answering a new flow of lookups: the network part answers a chained app's itself, each in a task of its
 /// own; the network's resolver answers the others, which a task hands the app. The flow ends when none
 /// of its lookups waits any more.
 fn start_answers(
@@ -5016,7 +5016,7 @@ fn start_answers(
 /// A flow of lookups' two ends, its app, and its number with the lookups it owes answers to.
 type Ends = ((SocketAddr, SocketAddr), Option<u32>, (u64, Arc<Owed>));
 
-/// While a chain is on, the answer Watch's cache holds for a direct app's lookup, with a time to live
+/// While a chain is on, the answer the network part's cache holds for a direct app's lookup, with a time to live
 /// of 0 like every answer then, so that the network's resolver is asked no more often than before.
 fn cached_answer(shared: &Shared, destination: SocketAddr, query: &[u8]) -> Option<Vec<u8>> {
     if !shared.is_tunnel_dns(destination.ip()) || !shared.uncached_answers.load(Ordering::Relaxed) {
@@ -5027,8 +5027,8 @@ fn cached_answer(shared: &Shared, destination: SocketAddr, query: &[u8]) -> Opti
     Some(answer)
 }
 
-/// How a new flow of lookups to Watch's own DNS address goes, by its app's `route`: a protected socket
-/// to the network's resolver, or Watch's own answers to a chained app's lookups. A flow whose app
+/// How a new flow of lookups to the network part's own DNS address goes, by its app's `route`: a protected socket
+/// to the network's resolver, or the network part's own answers to a chained app's lookups. A flow whose app
 /// Android cannot name while a chain is on goes nowhere.
 async fn way_for(
     shared: &Arc<Shared>,
@@ -5036,8 +5036,8 @@ async fn way_for(
     destination: SocketAddr,
 ) -> io::Result<UdpWay> {
     match route {
-        // Watch's encrypted resolver answers DNS at port 53 alone: DNS over QUIC or anything else at Watch's DNS
-        // address is refused, so that Android's resolver asks on port 53 (W8, part 1, point 9).
+        // The network part's encrypted resolver answers DNS at port 53 alone: DNS over QUIC or anything else at the
+        // network part's DNS address is refused, so that Android's resolver asks on port 53 (W8, part 1, point 9).
         Route::Direct if shared.resolver.on() => {
             if destination.port() == 53 {
                 Ok(UdpWay::Resolved)
@@ -5057,7 +5057,7 @@ async fn way_for(
 }
 
 /// Answers one lookup of a chained app (ADR 0038) and sends the answer to the app; then one lookup
-/// fewer of its flow `id` waits. Watch's answer comes within a few seconds (`lookups::LOOKUP_TIMEOUT`
+/// fewer of its flow `id` waits. The network part's answer comes within a few seconds (`lookups::LOOKUP_TIMEOUT`
 /// for each resolver), so the flow ends once its last lookup has its answer, as a direct one does: a
 /// later lookup from the same socket asks Android again whose socket it is.
 async fn answer_lookup(
@@ -5078,7 +5078,7 @@ async fn answer_lookup(
     lock(&flows).settled(key, id, &owed);
 }
 
-/// Answers one lookup of a direct app by Watch's encrypted resolver (W8, part 1) and sends the answer to the
+/// Answers one lookup of a direct app by the network part's encrypted resolver (W8, part 1) and sends the answer to the
 /// app; then one lookup fewer of its flow `id` waits, as for a chained app's ([`answer_lookup`]).
 async fn answer_resolved(
     query: Vec<u8>,
@@ -5089,7 +5089,7 @@ async fn answer_resolved(
 ) {
     let (app, destination) = key;
     let answer = super::resolver::answer(&shared, &query, false, uid).await;
-    // A messenger's lookups through Watch count for its hellos (ADR 0052, the fix round's S-M3).
+    // A messenger's lookups through the network part count for its hellos (ADR 0052, the fix round's S-M3).
     if let Some(answer) = &answer {
         shared.looked_up(uid, answer);
     }
@@ -5197,7 +5197,7 @@ struct UdpEnds {
     _place: Option<Place>,
 }
 
-/// Wraps each answer of a flow of lookups to Watch's own DNS address in an IP packet to the app, until
+/// Wraps each answer of a flow of lookups to the network part's own DNS address in an IP packet to the app, until
 /// every lookup it carried has its answer, one waited [`LOOKUP_WAIT`] (ADR 0044, decision 3), or the
 /// network beneath changes. A flow that gave way to a later one still hands the app what it owes.
 async fn answers(
@@ -5211,7 +5211,7 @@ async fn answers(
     let key = (ends.app, ends.destination);
     // Only a change after the flow opened ends it: a clone starts with the loop's last-seen version.
     changes.borrow_and_update();
-    // Lookups all answered from Watch's cache leave nothing to wait for.
+    // Lookups all answered from the network part's cache leave nothing to wait for.
     let mut done = lock(&flows).settled(key, ends.id, &ends.owed);
     while !done {
         tokio::select! {
@@ -5476,7 +5476,7 @@ mod tests {
         );
     }
 
-    /// While a chain is on, Watch's cache answers a direct app's question for its time to live in time
+    /// While a chain is on, the network part's cache answers a direct app's question for its time to live in time
     /// since the phone started, its sleep included (finding 4): after a night's sleep, though the phone
     /// was awake for less, it answers no more, and the question goes to the network's resolver.
     #[test]

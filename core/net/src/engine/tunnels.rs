@@ -1,4 +1,4 @@
-//! `WireGuard` upstreams in the engine (W7, ADR 0035): a table of tunnels, one for each configuration Watch
+//! `WireGuard` upstreams in the engine (W7, ADR 0035): a table of tunnels, one for each configuration the network part
 //! sets, each with its protocol core, its protected UDP socket, its timers and its state; and the flows
 //! of the apps sent through them, forwarded by address swap (option 3).
 //!
@@ -18,7 +18,7 @@
 //! IPv6 address, is refused with "administratively prohibited", which the app's kernel reads at once as a
 //! failure, so that it falls back to IPv4 or gives up; nothing of it leaves directly.
 //!
-//! **DNS.** A chosen app's lookups to Watch's own DNS address go to its configuration's DNS server through
+//! **DNS.** A chosen app's lookups to the network part's own DNS address go to its configuration's DNS server through
 //! its tunnel, UDP rebuilt datagram by datagram, TCP by a second swap of the destination; the answers are
 //! read for naming (W3) on the way back, kept in the tunnel's own cache, and reach the app with a time to
 //! live of 0 (ADR 0035, question 4), so that Android's shared cache hands them to no other app.
@@ -97,11 +97,11 @@ const ECHO_IDLE: Duration = Duration::from_secs(30);
 const LARGEST: usize = 65_535;
 /// At most this many configurations at once (W7, part 2): each holds a protocol core with its queue of 256
 /// packets, its socket, its buffer for fragments (256 KiB) and its read buffer, about 700 KiB at worst, so eight
-/// stay within a tenth of Watch's memory budget of 48 MB (ADR 0045); a phone's user needs a few. The screens hold
-/// the import to it, and `Tunnels::set` takes the first this many in order.
+/// stay within a tenth of the network part's memory budget of 48 MB (ADR 0045); a phone's user needs a few. The screens
+/// hold the import to it, and `Tunnels::set` takes the first this many in order.
 pub const MAX_TUNNELS: usize = 8;
 
-/// One configuration Watch sets, under the number Watch gave it.
+/// One configuration the network part sets, under the number the network part gave it.
 #[derive(Clone, Debug)]
 pub struct Configured {
     /// Its number, not 0, which the routes and the states name.
@@ -113,7 +113,7 @@ pub struct Configured {
     pub local_network: bool,
 }
 
-/// What Watch sets on its tunnels: the configurations, in the order they were added, the first the
+/// What the network part sets on its tunnels: the configurations, in the order they were added, the first the
 /// default; each app's tunnel by UID; and whether the destinations of the apps sent through them are
 /// kept (W6's switch, "Log where these apps connect", `chain_log_destinations`).
 #[derive(Clone, Debug, Default)]
@@ -124,19 +124,20 @@ pub struct TunnelSetting {
     pub routes: HashMap<u32, u32>,
     /// Whether their flows' destinations go to the log and the live view.
     pub log_destinations: bool,
-    /// The user's default tunnel, as Watch's order names it, set or not: while its configuration is not set (a
-    /// wrap that cannot be opened now, or at all), flows of no app and ICMP echo are refused, never sent through
+    /// The user's default tunnel, as the network part's order names it, set or not: while its configuration is not set
+    /// (a wrap that cannot be opened now, or at all), flows of no app and ICMP echo are refused, never sent through
     /// another configuration's provider, which the user did not choose for them (W7, part 2, fix round, security
     /// review m4). None: the first set is the default, as for the debug builds' hook.
     pub default: Option<u32>,
-    /// Every installed app's UID when Watch last handed its routes over, while Watch routes any app (a tunnel, or
-    /// the tool): a flow of a UID outside it, an app installed since (one installed again has a new UID), waits for
-    /// Watch to say where it goes ([`super::Platform::route_of_app`]), and goes nowhere until then, never on a
-    /// default way (the maintainer, 2026-11-20). None: Watch routes no app, or names none, and no flow asks.
+    /// Every installed app's UID when the network part last handed its routes over, while the network part routes any
+    /// app (a tunnel, or the tool): a flow of a UID outside it, an app installed since (one installed again has a new
+    /// UID), waits for the network part to say where it goes ([`super::Platform::route_of_app`]), and goes nowhere
+    /// until then, never on a default way (the maintainer, 2026-11-20). None: the network part routes no app, or names
+    /// none, and no flow asks.
     pub known: Option<Arc<HashSet<u32>>>,
 }
 
-/// Where Watch says an app it did not name in its last hand-over goes ([`super::Platform::route_of_app`]).
+/// Where the network part says an app it did not name in its last hand-over goes ([`super::Platform::route_of_app`]).
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum AppRoute {
     /// Directly: the store gives it no route.
@@ -147,32 +148,32 @@ pub enum AppRoute {
     Tunnel(u32),
 }
 
-/// How long a flow of an app Watch did not name waits for Watch's answer before it is refused, never sent
-/// directly: Watch reads the app's packages from Android and the route its store gives them, which opens its
-/// state under a Keystore key in well under a second, also on a slow phone; a held SYN is sent again by the
-/// app's kernel after a second, and a first datagram waits, so three seconds cost an app installed a moment ago
+/// How long a flow of an app the network part did not name waits for the network part's answer before it is refused,
+/// never sent directly: the network part reads the app's packages from Android and the route its store gives them,
+/// which opens its state under a Keystore key in well under a second, also on a slow phone; a held SYN is sent again by
+/// the app's kernel after a second, and a first datagram waits, so three seconds cost an app installed a moment ago
 /// one or two retries at most.
 pub const ASK_BOUND: Duration = Duration::from_secs(3);
 
 /// How long a refusal for want of an answer stands before a new flow of the app asks again.
 const ASK_AGAIN: Duration = Duration::from_secs(10);
 
-/// An app as Watch's last hand-over knows it ([`Tunnels::newcomer`]).
+/// An app as the network part's last hand-over knows it ([`Tunnels::newcomer`]).
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub(super) enum Newcomer {
-    /// Named, or Watch names none: its route is the setting's.
+    /// Named, or the network part names none: its route is the setting's.
     Named,
-    /// Not named, and Watch has not answered, or not in time: it goes nowhere.
+    /// Not named, and the network part has not answered, or not in time: it goes nowhere.
     Unanswered,
-    /// Not named, and Watch answered.
+    /// Not named, and the network part answered.
     Answered(AppRoute),
 }
 
-/// What Watch answered of an app it did not name, kept by UID until its next hand-over names it.
+/// What the network part answered of an app it did not name, kept by UID until its next hand-over names it.
 #[derive(Clone, Copy, Debug)]
 enum Answer {
     Route(AppRoute),
-    /// No answer within [`ASK_BOUND`], or none Watch could give: refused since.
+    /// No answer within [`ASK_BOUND`], or none the network part could give: refused since.
     Refused(Instant),
 }
 
@@ -225,7 +226,7 @@ struct Tflow {
     from: SocketAddr,
     /// Where it goes inside the tunnel: the destination, or for lookups the configuration's DNS server.
     to: SocketAddr,
-    /// Lookups to Watch's own DNS address.
+    /// Lookups to the network part's own DNS address.
     lookups: bool,
     last: Instant,
     /// UDP: when the app last sent, after which Android is asked again whose the socket is (the
@@ -414,7 +415,8 @@ struct Table {
     order: Vec<u32>,
     /// The user's default tunnel, set or not ([`TunnelSetting::default`]).
     default: Option<u32>,
-    /// Every app Watch named at its last hand-over ([`TunnelSetting::known`]), and its answers for the others.
+    /// Every app the network part named at its last hand-over ([`TunnelSetting::known`]), and its answers for the
+    /// others.
     known: Option<Arc<HashSet<u32>>>,
     answers: HashMap<u32, Answer>,
     tunnels: HashMap<u32, Tunnel>,
@@ -427,7 +429,7 @@ struct Table {
     /// The number of the last generation handed out.
     generations: u64,
     /// The log's numbers of flows the setting ended, for the engine's thread to end in the log: the log's
-    /// clock is read there alone (`logbook`), and `Tunnels::set` runs on Watch's.
+    /// clock is read there alone (`logbook`), and `Tunnels::set` runs on the network part's.
     ended: Vec<u64>,
     /// The engine's tunnel, for the tasks the table starts, and the network's changes they follow.
     tun: Option<(Arc<Tun>, watch::Receiver<u64>)>,
@@ -441,7 +443,8 @@ pub(super) struct Tunnels {
     any: AtomicBool,
     /// Whether any tunnelled flow or echo is open.
     carrying: AtomicBool,
-    /// Whether Watch named the apps it knows ([`TunnelSetting::known`]): a flow of another must wait for its app.
+    /// Whether the network part named the apps it knows ([`TunnelSetting::known`]): a flow of another must wait for its
+    /// app.
     asks: AtomicBool,
     /// Woken when the setting changed, for the engine's loop to start what must start.
     pub(super) changed: Notify,
@@ -552,8 +555,8 @@ impl Tunnels {
             drop(tunnels);
             table.order = order;
             // Every route is kept, also to a tunnel whose configuration is not set: its app waits, its flows
-            // refused, until the configuration comes (`admit`); only Watch taking the route away sends the app
-            // its other way (fix round, both reviews' first major finding).
+            // refused, until the configuration comes (`admit`); only the network part taking the route away sends the
+            // app its other way (fix round, both reviews' first major finding).
             let routes: HashMap<u32, u32> = setting
                 .routes
                 .iter()
@@ -588,7 +591,7 @@ impl Tunnels {
             })
         };
         // Ended in the log by the engine's thread, when it next turns (`Loop::tunnels_changed`): the log's clock is
-        // read there alone, and this runs on Watch's.
+        // read there alone, and this runs on the network part's.
         lock(&self.table).ended.extend(ended);
         self.update_carrying();
         self.changed.notify_one();
@@ -616,13 +619,13 @@ impl Tunnels {
         }
     }
 
-    /// Whether a new flow must wait for its app to be named before its route: Watch named the apps it knows, so
-    /// that one it did not name is asked of it.
+    /// Whether a new flow must wait for its app to be named before its route: the network part named the apps it knows,
+    /// so that one it did not name is asked of it.
     pub(super) fn asks(&self) -> bool {
         self.asks.load(Ordering::Acquire)
     }
 
-    /// Whether Watch named the app `uid`, and if not, what it answered.
+    /// Whether the network part named the app `uid`, and if not, what it answered.
     pub(super) fn newcomer(&self, uid: u32) -> Newcomer {
         let table = lock(&self.table);
         if table
@@ -638,8 +641,8 @@ impl Tunnels {
         }
     }
 
-    /// Whether a flow of the app `uid` must ask Watch where it goes: not named, and no answer yet, or a refusal
-    /// older than [`ASK_AGAIN`].
+    /// Whether a flow of the app `uid` must ask the network part where it goes: not named, and no answer yet, or a
+    /// refusal older than [`ASK_AGAIN`].
     pub(super) fn must_ask(&self, uid: u32, now: Instant) -> bool {
         let table = lock(&self.table);
         if table
@@ -656,7 +659,7 @@ impl Tunnels {
         }
     }
 
-    /// Notes Watch's answer for the app `uid`, or that none came: a late answer replaces the refusal, and a
+    /// Notes the network part's answer for the app `uid`, or that none came: a late answer replaces the refusal, and a
     /// refusal never replaces an answer.
     pub(super) fn answered(&self, uid: u32, answer: Option<AppRoute>, now: Instant) {
         let mut table = lock(&self.table);
@@ -672,7 +675,7 @@ impl Tunnels {
         }
     }
 
-    /// Watch's answers kept, by UID, `None` for a refusal: for the debug builds' dump.
+    /// The network part's answers kept, by UID, `None` for a refusal: for the debug builds' dump.
     pub(super) fn answers(&self) -> Vec<(u32, Option<AppRoute>)> {
         let table = lock(&self.table);
         let mut answers: Vec<_> = table
@@ -709,7 +712,7 @@ impl Tunnels {
     }
 
     /// The tunnel the app `uid` is sent through, if one: its own, or for an app Android cannot name the
-    /// default while any app is sent through one: the user's default, as Watch named it, whether or not its
+    /// default while any app is sent through one: the user's default, as the network part named it, whether or not its
     /// configuration is set, else the first set.
     /// With no configuration set at all, a flow of no app gets the number 0, which no tunnel has: it is
     /// refused, never sent directly; and while the user's default is not set, its number, which refuses it
@@ -737,7 +740,7 @@ impl Tunnels {
 
     /// Whether `destination` goes directly for an app of the tunnel `t`, by its "local network directly"
     /// (ADR 0035, question 8): a private, link-local, unique-local or multicast address, but not one of the
-    /// configuration's own, its DNS servers', or Watch's own addresses, which go through the tunnel.
+    /// configuration's own, its DNS servers', or the network part's own addresses, which go through the tunnel.
     /// A destination inside an `AllowedIPs` entry at least as narrow as its local range (a company's
     /// 10.0.0.0/8 behind its server) goes through the tunnel: the more specific wins, as in `WireGuard`'s own
     /// routing (fix round, finding 5).
@@ -809,7 +812,7 @@ impl Tunnels {
     }
 
     /// Where a new flow of the app at `app` to `shown` goes through the tunnel `t`, if it may: inside the
-    /// peer's `AllowedIPs`, of a version the configuration has an address of. Lookups to Watch's own DNS
+    /// peer's `AllowedIPs`, of a version the configuration has an address of. Lookups to the network part's own DNS
     /// address go to the configuration's DNS server, of the same version where `same_version` asks (TCP
     /// and echo, whose packets keep their version), else of either.
     fn admit(
@@ -971,7 +974,7 @@ fn is_local(address: IpAddr) -> bool {
     local_range(address).is_some()
 }
 
-/// Whether `address` is one of Watch's own in the tunnel: its address, the fake peer, its DNS address.
+/// Whether `address` is one of the network part's own in the tunnel: its address, the fake peer, its DNS address.
 fn own_address(shared: &Shared, address: IpAddr) -> bool {
     let at = shared.addresses;
     [
@@ -1076,10 +1079,10 @@ fn forward(
     let tunnel = table.tunnels.get_mut(&t)?;
     let mtu = tunnel.config.mtu();
     if lookups && parsed.protocol == UDP {
-        // Watch's DNS address answers: from the tunnel's cache, or the query rebuilt toward its server.
+        // The network part's DNS address answers: from the tunnel's cache, or the query rebuilt toward its server.
         let payload = packet::udp_payload(packet, parsed)?.to_vec();
         later.lookup = Some((uid, packet.len()));
-        // Tracker blocking decides before the tunnel's server is asked (W8, part 3a; ADR 0053): Watch has a
+        // Tracker blocking decides before the tunnel's server is asked (W8, part 3a; ADR 0053): the network part has a
         // tunnelled app's names only where it answers them, here, and blocks them by those alone.
         if let Some(answer) = shared.lookup_blocked(uid, &payload) {
             let rebuilt = packet::udp(key.2, key.1, &answer)?;
@@ -1535,7 +1538,7 @@ pub(super) fn open_tcp(
         return packet::unreachable(&held, &parsed, Unreachable::Prohibited);
     };
     let lookups = shared.is_tunnel_dns(destination.ip());
-    // Counted as any flow; the log keeps none of Watch's own DNS address.
+    // Counted as any flow; the log keeps none of the network part's own DNS address.
     let id = flow.id;
     let bytes = shared.record_tunnelled(flow, t);
     let now = Instant::now();
@@ -2046,12 +2049,13 @@ async fn connect(shared: &Arc<Shared>, t: u32, ready: &mut Ready) -> Option<Arc<
     Some(socket)
 }
 
-/// The address of `name`, and whether it was asked over encrypted DNS: by Watch's encrypted resolver once it is
-/// set (W8 takes this over); before, from Android's own resolver on the network beneath (`Platform::resolve`),
+/// The address of `name`, and whether it was asked over encrypted DNS: by the network part's encrypted resolver once it
+/// is set (W8 takes this over); before, from Android's own resolver on the network beneath (`Platform::resolve`),
 /// which uses the user's Private DNS where it is on (the maintainer's answer 4, 2026-11-19); where the platform
 /// has none, from the network's resolver over plain DNS through a protected socket. An IPv4 address first, else an IPv6 one; never a loopback, multicast or unspecified one.
 async fn resolve(shared: &Arc<Shared>, name: &str, port: u16) -> Option<(SocketAddr, bool)> {
-    // Once Watch's encrypted resolver is set, it resolves the name, not Android's resolver (W8, part 1, point 10).
+    // Once the network part's encrypted resolver is set, it resolves the name, not Android's resolver (W8, part 1,
+    // point 10).
     if shared.resolver.on() {
         return super::resolver::endpoint(shared, name)
             .await
@@ -2552,10 +2556,10 @@ mod tests {
         );
     }
 
-    /// An app Watch did not name when it last handed its routes over, one installed again with a new UID, goes
-    /// where Watch answers, through a tunnel, the tool or directly, and nowhere before that, never on a default
-    /// way; a refusal for want of an answer stands a while, then a new flow asks again; Watch's next hand-over that
-    /// names the app ends its answer (the maintainer, 2026-11-20).
+    /// An app the network part did not name when it last handed its routes over, one installed again with a new UID,
+    /// goes where the network part answers, through a tunnel, the tool or directly, and nowhere before that, never on a
+    /// default way; a refusal for want of an answer stands a while, then a new flow asks again; the network part's next
+    /// hand-over that names the app ends its answer (the maintainer, 2026-11-20).
     #[test]
     fn an_app_not_yet_named_goes_where_the_kotlin_side_answers_and_nowhere_before() {
         use super::super::chain::Route;
@@ -2610,7 +2614,7 @@ mod tests {
         }));
         assert!(
             matches!(shared.route(Some(10_402), web), Route::Tool(_)),
-            "the chain covers it once Watch says so"
+            "the chain covers it once the network part says so"
         );
         shared.tunnels.answered(10_403, None, now);
         assert!(matches!(shared.route(Some(10_403), web), Route::Refused));
@@ -2641,13 +2645,13 @@ mod tests {
         assert!(!shared.tunnels.asks());
         assert!(
             matches!(shared.route(Some(10_700), web), Route::Direct),
-            "Watch names none: no app is asked"
+            "the network part names none: no app is asked"
         );
     }
 
-    /// Watch is asked on a thread of its own at the flow's owner lookup; its answer decides the flow's route, and
-    /// one that does not come within [`ASK_BOUND`] refuses the flow, never sending it directly; a late answer
-    /// serves the next flow.
+    /// The network part is asked on a thread of its own at the flow's owner lookup; its answer decides the flow's
+    /// route, and one that does not come within [`ASK_BOUND`] refuses the flow, never sending it directly; a late
+    /// answer serves the next flow.
     #[test]
     fn the_kotlin_side_is_asked_off_the_loop_and_an_answer_too_late_refuses_the_flow() {
         use super::super::chain::Route;
@@ -2716,7 +2720,7 @@ mod tests {
 
     /// "Local network directly", per configuration and off by default: a tunnelled app's private,
     /// link-local, unique-local and multicast destinations go directly, but not the configuration's own
-    /// network, its DNS server, or Watch's addresses.
+    /// network, its DNS server, or the network part's addresses.
     #[test]
     fn local_network_directly_lets_only_the_local_network_go_directly() {
         use super::super::chain::Route;
@@ -2790,7 +2794,7 @@ mod tests {
     }
 
     /// A new flow is admitted inside `AllowedIPs`, of a version the configuration has an address of; a
-    /// lookup to Watch's DNS address goes to the configuration's server.
+    /// lookup to the network part's DNS address goes to the configuration's server.
     #[test]
     fn a_flow_is_admitted_only_where_the_tunnel_carries_it() {
         let shared = shared();
@@ -2836,7 +2840,7 @@ mod tests {
                 .map(|(_, to)| to),
             Some(SocketAddr::from(([10, 77, 0, 1], 53)))
         );
-        // A lookup to Watch's IPv6 DNS address reaches the IPv4 server, rebuilt; a TCP one cannot.
+        // A lookup to the network part's IPv6 DNS address reaches the IPv4 server, rebuilt; a TCP one cannot.
         let dns6 = SocketAddr::from((shared.addresses.dns6, 53));
         assert!(
             shared
@@ -2984,9 +2988,9 @@ mod tests {
     }
 
     /// The tunnels' table is a leaf lock: forwarding a packet tells the log nothing while it holds it, so
-    /// that Watch's thread, which holds the log's live flows while it asks each flow's route (`hide_chained`,
-    /// whose `hides` takes the table), and the engine's thread, counting a tunnelled packet's bytes as a
-    /// quarter hour turns (which cuts every live segment), never wait for each other (fix round, finding 3;
+    /// that the network part's thread, which holds the log's live flows while it asks each flow's route
+    /// (`hide_chained`, whose `hides` takes the table), and the engine's thread, counting a tunnelled packet's bytes as
+    /// a quarter hour turns (which cuts every live segment), never wait for each other (fix round, finding 3;
     /// the engine reviewer's R6, here on the real `forward`).
     #[test]
     fn forwarding_tells_the_log_nothing_under_the_tables_lock() {

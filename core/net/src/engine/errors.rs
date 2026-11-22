@@ -4,7 +4,7 @@
 //! queues each error on the socket's error queue, with the destination of the packet it answered, the
 //! address of the router or host that sent it (`SO_EE_OFFENDER`), as much of that packet as the error
 //! quoted, and for "fragmentation needed" or "packet too big" the MTU the router gave (decision 5 as
-//! amended). Each reaches the app as it would without Watch: from that router or host, about what the
+//! amended). Each reaches the app as it would without the network part: from that router or host, about what the
 //! app sent. nix reads that queue with safe functions: the engine has no unsafe code (ADR 0006).
 
 use super::Counters;
@@ -162,7 +162,7 @@ fn v6_address(address: libc::sockaddr_in6) -> Option<IpAddr> {
 }
 
 /// Whom an error reaches the app from: the router or host that sent it, `offender`, as it would without
-/// Watch; but the address the app knows, `shown`, where the kernel names no sender, where the sender is
+/// the network part; but the address the app knows, `shown`, where the kernel names no sender, where the sender is
 /// the very address the engine sent to, `target`, which the app may know by another (the tunnel's DNS
 /// address for the network's resolver), where it is no address an error may come from, or where it is
 /// one of the phone's own. The engine's kernel sends an error from the phone's address on the network
@@ -186,7 +186,7 @@ pub(super) fn sender(offender: Option<IpAddr>, target: IpAddr, shown: IpAddr) ->
 
 /// The error `told` for the app at `to`, from `from`, quoting `quoted`, with the hop limit it arrived
 /// with where the kernel gave one: what the router or host sent the engine, as it would have reached
-/// the app without Watch.
+/// the app without the network part.
 pub(super) fn to_app(
     told: Told,
     quoted: &[u8],

@@ -1,7 +1,7 @@
-//! The lookups of chained apps (ADR 0038): Watch answers A, AAAA and reverse lookups of stand-ins
-//! itself, and every other question goes through the tool: by the encrypted ways of Watch's resolver once it
-//! is set (W8, part 1), else to Quad9's service without blocking, as DNS over TCP on a connection Watch keeps
-//! ([`super::kept`]); so that no lookup of a chained app reaches the network beneath.
+//! The lookups of chained apps (ADR 0038): the network part answers A, AAAA and reverse lookups of stand-ins
+//! itself, and every other question goes through the tool: by the encrypted ways of the network part's resolver once it
+//! is set (W8, part 1), else to Quad9's service without blocking, as DNS over TCP on a connection the network part
+//! keeps ([`super::kept`]); so that no lookup of a chained app reaches the network beneath.
 
 use super::chain::Chain;
 use super::{Shared, kept, lock, resolver};
@@ -26,8 +26,8 @@ pub(super) const LOOKUP_TIMEOUT: Duration = Duration::from_secs(4);
 
 /// The answer to a chained app's `query`, of the app `uid` if Android named it, or `None` when it is not even a
 /// DNS message with an ID. A question tracker blocking stops for the app gets "no data" kept for no time before
-/// any stand-in is given or anything goes to the tool (W8, part 3a; ADR 0053): Watch never resolves a chained
-/// app's names, so the question's name is all it matches (ADR 0038).
+/// any stand-in is given or anything goes to the tool (W8, part 3a; ADR 0053): the network part never resolves a
+/// chained app's names, so the question's name is all it matches (ADR 0038).
 pub(super) async fn answer(
     shared: &Arc<Shared>,
     chain: &Arc<Chain>,
@@ -60,13 +60,13 @@ pub(super) async fn answer(
             }
         }
     }
-    // Asked before: the answer Watch keeps for the tool's route, for its time to live, so that each name
+    // Asked before: the answer the network part keeps for the tool's route, for its time to live, so that each name
     // costs one trip through the tool, not one per lookup (ADR 0038).
     let kept = lock(&shared.tool_answers).answer(query, shared.clock.since_boot());
     if let Some(kept) = kept {
         return answers::rebuilt(&kept).or_else(|| answers::failure(query));
     }
-    // Once Watch's encrypted resolver is set (W8, part 1), these questions go the encrypted ways through the
+    // Once the network part's encrypted resolver is set (W8, part 1), these questions go the encrypted ways through the
     // tool, never to Quad9 in plain DNS (ADR 0038 gave this path to W8).
     if shared.resolver.on() {
         let Some(asked) = hygiene::read(query) else {

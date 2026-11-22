@@ -1,5 +1,5 @@
 //! The connection log's bookkeeping inside the engine (ADR 0037): each open flow's bytes, the segments
-//! of open flows at each quarter hour, each app's lookups, and the task that hands the records to Watch.
+//! of open flows at each quarter hour, each app's lookups, and the task that hands the records to the network part.
 //!
 //! **No byte in another quarter hour** (finding 4 of the independent review of 2026-11-09). The logger's
 //! timer runs on the monotonic clock, which stands still while the phone sleeps: with the screen off, a
@@ -52,8 +52,8 @@ use tokio::sync::watch;
 /// midnight on one (since 1979: Africa/Monrovia at -0:44:30 and Pacific/Kiritimati at -10:40 left theirs in
 /// 1972 and 1979), and every change of offset that changes the date falls on one (since 2011:
 /// Newfoundland, Goose Bay and Moncton changed theirs at 00:01 local time until 2010 and 2006, so that the
-/// date changed at 02:31 or 03:01 UTC). Watch's Kotlin side checks it of the zones it knows, by their rules ahead
-/// (`LogDaysTest`; review 1 of W5's first part, names, finding 5).
+/// date changed at 02:31 or 03:01 UTC). The network part's Kotlin side checks it of the zones it knows, by their rules
+/// ahead (`LogDaysTest`; review 1 of W5's first part, names, finding 5).
 pub(super) const SEGMENT_MS: u64 = 15 * 60 * 1000;
 
 /// Where an open segment ends, and where the next begins ([`cut`]).
@@ -241,7 +241,7 @@ pub(super) struct Live {
     pub(super) direct: bool,
 }
 
-/// An app's lookups to Watch's own DNS address: since when, and since the first, how many and the
+/// An app's lookups to the network part's own DNS address: since when, and since the first, how many and the
 /// tunnel's bytes for them, as counts: lookups, nought, bytes up, bytes down.
 #[derive(Debug)]
 pub(super) struct Lookups {
@@ -388,7 +388,7 @@ impl Shared {
     }
 
     /// Counts a new flow and keeps it for tests. For the log, a flow that opened becomes live and gets
-    /// its byte counts; one that did not is written once its moment's state is told. Lookups to Watch's
+    /// its byte counts; one that did not is written once its moment's state is told. Lookups to the network part's
     /// own DNS address are counted per app instead.
     pub(super) fn record(&self, flow: Flow) -> Option<Arc<FlowBytes>> {
         let via = match self.route(flow.uid, flow.destination) {
@@ -476,7 +476,7 @@ impl Shared {
         Some(bytes)
     }
 
-    /// Counts a lookup an app sent to Watch's own DNS address, `packet` bytes on the tunnel.
+    /// Counts a lookup an app sent to the network part's own DNS address, `packet` bytes on the tunnel.
     pub(super) fn lookup(&self, uid: Option<u32>, packet: usize) {
         self.count_lookups(uid, [1, packet as u64, 0]);
         self.log_ready.notify_one();
@@ -575,7 +575,7 @@ impl Shared {
     /// once the engine has handed its last records on.
     ///
     /// When no logger is there to make it, as before the engine's tunnel is up or once it has stopped,
-    /// it waits for nothing (the fresh review 2 of W5's first part, nit 7: the debug flush held Watch's
+    /// it waits for nothing (the fresh review 2 of W5's first part, nit 7: the debug flush held the network part's
     /// lock on the engine for the whole wait then). A waiter asked of a logger that then ends without its
     /// engine's loop, as only tests run it, waits out `wait`.
     pub(super) fn ask_flush(&self, wait: Duration) -> bool {
@@ -789,7 +789,7 @@ impl Drop for Ended<'_> {
     }
 }
 
-/// Hands finished records to Watch's log: gathered for [`LOG_DELAY`] after the first one, and at every
+/// Hands finished records to the network part's log: gathered for [`LOG_DELAY`] after the first one, and at every
 /// quarter hour the segments of the flows still open, and at once when a flush is asked
 /// ([`Shared::ask_flush`]). With nothing open and nothing waiting it sleeps without a timer, so an idle
 /// tunnel does not wake the phone. Its timer stands still while the phone sleeps, and may wake hours
@@ -1078,7 +1078,7 @@ mod tests {
         }
     }
 
-    /// Where Watch's Kotlin side keeps the fixture its tests read (`LogTest`, `LogDaysTest`).
+    /// Where the network part's Kotlin side keeps the fixture its tests read (`LogTest`, `LogDaysTest`).
     const FIXTURE: &str = concat!(
         env!("CARGO_MANIFEST_DIR"),
         "/../../android/network/src/test/resources/org/visadahyu/datapavan/network/log/engine-records.hex"
@@ -1337,7 +1337,7 @@ mod tests {
         }
     }
 
-    /// The fixture Watch's Kotlin side reads is what the engine writes, byte for byte, so that the two
+    /// The fixture the network part's Kotlin side reads is what the engine writes, byte for byte, so that the two
     /// cannot drift apart unseen: a change of the format fails here until the fixture is written anew
     /// (`DATAPAVAN_WRITE_FIXTURE=1`), and then the Kotlin tests read it. The engine's own cuts are in
     /// it: midnight in Kathmandu ends a segment there.
@@ -1352,8 +1352,8 @@ mod tests {
             ]
         );
         let mut text = String::from(
-            "# Watch's connection log: one batch of records as the engine writes them (core/net/src/log.rs,\n\
-             # version 6), in hex. Written by the engine's test the_kotlin_sides_fixture_is_what_the_engine_writes\n\
+            "# The network part's connection log: one batch of records as the engine writes them\n\
+             # (core/net/src/log.rs, version 6), in hex. Written by the engine's test the_kotlin_sides_fixture_is_what_the_engine_writes\n\
              # (core/net/src/engine/logbook.rs), which fails when the engine writes otherwise; run it with\n\
              # DATAPAVAN_WRITE_FIXTURE=1 to write it anew. Read by LogTest and LogDaysTest. Not edited by hand.\n",
         );
@@ -1720,7 +1720,7 @@ mod tests {
         assert_eq!(taken(&shared), vec![]);
     }
 
-    /// Watch's log, as the logger hands it batches.
+    /// The network part's log, as the logger hands it batches.
     #[derive(Default)]
     struct Kept(Mutex<Vec<Vec<u8>>>);
 

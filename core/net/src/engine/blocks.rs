@@ -1,5 +1,5 @@
-//! Tracker blocking in the engine (W8, part 3a; ADR 0053): what Watch's Kotlin side sets, the one decision every
-//! path asks, the answers that carry it to Android's resolver, and the hold of a connection's first bytes until
+//! Tracker blocking in the engine (W8, part 3a; ADR 0053): what the network part's Kotlin side sets, the one decision
+//! every path asks, the answers that carry it to Android's resolver, and the hold of a connection's first bytes until
 //! they name it.
 //!
 //! **The decision** ([`Shared::verdict`]) takes the app, a name, and the path that asks: a lookup, or a
@@ -47,8 +47,8 @@ const TIES: usize = 8_192;
 /// The most apps and rows counted at once for "Now": far above a phone's apps times the rows they reach.
 const TALLIES: usize = 4_096;
 
-/// What Watch's Kotlin side sets for tracker blocking, whole each time (ADR 0053), and keeps for the engines to
-/// come, as the chain is.
+/// What the network part's Kotlin side sets for tracker blocking, whole each time (ADR 0053), and keeps for the engines
+/// to come, as the chain is.
 #[derive(Clone, Debug, Default)]
 pub struct BlockSetting {
     /// Whether the user turned blocking on.
@@ -56,7 +56,7 @@ pub struct BlockSetting {
     /// The graded table of the data pack (`blocking/hosts.tsv`), with any debug build's entry for the lab's names.
     pub table: Option<Arc<Table>>,
     /// The apps blocking covers, by UID: the apps the user installed, without the browsers unless the user
-    /// included them, and never the user's tool, Watch, Play services or the system's.
+    /// included them, and never the user's tool, the network part, Play services or the system's.
     pub covered: Vec<u32>,
     /// Whether the user's tool's own lookups are blocked by DNS, off by default.
     pub tool_dns: bool,
@@ -74,7 +74,7 @@ pub struct BlockSetting {
 /// Which path asks for a decision.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub(super) enum Path {
-    /// A lookup to Watch's DNS address.
+    /// A lookup to the network part's DNS address.
     Lookup,
     /// A connection: its hello, its request's host, its stand-in's name or its address.
     Connection,
@@ -92,8 +92,8 @@ pub struct Tally {
     pub since_ms: u64,
 }
 
-/// An address an answer Watch passed gave a name: whether every name given it while held was one a row grades
-/// `block` or `code`, the row of the last such name, and until when it is held.
+/// An address an answer the network part passed gave a name: whether every name given it while held was one a row
+/// grades `block` or `code`, the row of the last such name, and until when it is held.
 #[derive(Clone, Copy, Debug)]
 struct Tie {
     blocked_only: bool,
@@ -197,7 +197,7 @@ impl Blocks {
 }
 
 impl Shared {
-    /// Sets blocking as Watch's Kotlin side last said ([`BlockSetting`]).
+    /// Sets blocking as the network part's Kotlin side last said ([`BlockSetting`]).
     pub(super) fn set_blocking(&self, setting: BlockSetting) {
         lock(&self.blocks).set(setting);
         self.blocking_set.fetch_add(1, Ordering::Release);
@@ -304,8 +304,8 @@ impl Shared {
         }
     }
 
-    /// Notes the addresses an answer Watch passed on from Android's resolver gave `names` (the question and its
-    /// CNAME chain), for blocking by address: an address stays tied to blocked names alone only while every name
+    /// Notes the addresses an answer the network part passed on from Android's resolver gave `names` (the question and
+    /// its CNAME chain), for blocking by address: an address stays tied to blocked names alone only while every name
     /// given it, as long as it is held, is one a row grades `block` or `code`.
     pub(super) fn tie(&self, names: &[String], addresses: &[(IpAddr, u32)]) {
         let mut blocks = lock(&self.blocks);
@@ -357,8 +357,8 @@ impl Shared {
     }
 
     /// The row that blocks a connection of `uid` to `address` by its address alone (decision 4): only where an
-    /// answer Watch passed, still held, tied the address to blocked names alone, and never inside a network the
-    /// organisation table does not name as a company's own (a CDN, a cloud or a host sells room to others,
+    /// answer the network part passed, still held, tied the address to blocked names alone, and never inside a network
+    /// the organisation table does not name as a company's own (a CDN, a cloud or a host sells room to others,
     /// ADR 0036). The connection is then asked of Android first, and refused before anything leaves.
     pub(super) fn address_verdict(&self, uid: Option<u32>, address: IpAddr) -> Option<usize> {
         let tie = self.address_tie(address)?;
@@ -913,8 +913,8 @@ mod tests {
         );
     }
 
-    /// An address is blocked by itself only while every name an answer Watch passed gave it is a row that may
-    /// block, and only inside a company's own network: never a CDN's or a cloud's (decision 4).
+    /// An address is blocked by itself only while every name an answer the network part passed gave it is a row that
+    /// may block, and only inside a company's own network: never a CDN's or a cloud's (decision 4).
     #[test]
     fn an_address_is_blocked_only_where_blocked_names_alone_tied_it_outside_a_cloud() {
         let (mut shared, _) = blocking(&[

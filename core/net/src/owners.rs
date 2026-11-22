@@ -12,7 +12,7 @@ use std::collections::HashMap;
 const ENTITIES: &str = include_str!("../../../data/owners/entities.tsv");
 const ASNS: &str = include_str!("../../../data/owners/asns.tsv");
 
-/// What Watch knows of a network's owner.
+/// What the network part knows of a network's owner.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum NetworkKind {
     /// A company's own network: it sells no hosting, so its servers are its own.

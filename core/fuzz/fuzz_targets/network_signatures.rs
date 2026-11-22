@@ -1,4 +1,4 @@
-//! Differential fuzzing of Watch's matcher of the εxodus network signatures (`datapavan_net::trackers`,
+//! Differential fuzzing of the network part's matcher of the εxodus network signatures (`datapavan_net::trackers`,
 //! ADR 0046, decision 2 (d)). The input is a table, as `trackers.tsv` or not, then a zero byte, then
 //! names, one per line. Reading must never panic; every alternative of a signature kept is either read
 //! or refused; and for every name, at ports 443 and 8080, the matcher must find exactly the trackers

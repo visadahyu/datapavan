@@ -174,7 +174,7 @@ fn lab_config(limits: &Limits) -> Config {
 }
 
 /// Engines on the namespace's tunnel, for a test that sets the tunnel up again: each on a descriptor
-/// of its own, a duplicate of the tunnel's, as Watch's Kotlin side starts each on a new tunnel, with
+/// of its own, a duplicate of the tunnel's, as the network part's Kotlin side starts each on a new tunnel, with
 /// these limits.
 struct Tunnels {
     limits: Limits,
@@ -2063,7 +2063,7 @@ async fn modes(
 }
 
 /// ADR 0044, decision 5 as amended, and the second review of unit 12 (R1, R3): while the tunnel's MTU
-/// is still 1,500 and the network beneath is narrower, as in the moment before Watch sets the tunnel up
+/// is still 1,500 and the network beneath is narrower, as in the moment before the network part sets the tunnel up
 /// again with that network's MTU, each app socket's datagram that fits the tunnel reaches the server
 /// whole, whatever its path MTU discovery mode, as before this unit: the engine's kernel fragments it
 /// for the narrow network, and the engine answers nothing as too large. So a connected default socket
@@ -2108,7 +2108,7 @@ fn at_the_tunnels_mtu_every_socket_reaches_a_narrower_network() -> Outcome {
     )
 }
 
-/// Sets tun0's MTU, as Watch's Kotlin side sets the tunnel's to the network's first hop's
+/// Sets tun0's MTU, as the network part's Kotlin side sets the tunnel's to the network's first hop's
 /// (`Builder.setMtu`).
 fn set_tunnel_mtu(mtu: u16) -> Outcome {
     let set = Command::new("ip")
@@ -2121,7 +2121,7 @@ fn set_tunnel_mtu(mtu: u16) -> Outcome {
 }
 
 /// ADR 0044, decision 5 as amended: with the tunnel's MTU at the network's, 1,280, each app socket's
-/// datagram of 1,500 bytes meets the tunnel as it would meet that network without Watch, measured here
+/// datagram of 1,500 bytes meets the tunnel as it would meet that network without the network part, measured here
 /// against the same app on the narrow network itself, from an address of the namespace's own. A socket
 /// that may fragment (dont, want, omit) is fragmented by its own kernel, the engine puts the fragments
 /// together, and the server gets the datagram whole; one that may not (do, probe, interface, IPv6's
@@ -2296,7 +2296,7 @@ fn router_says(router: IpAddr, (mapped, server): (SocketAddr, SocketAddr), mtu: 
 /// A router past the first hop says a destination's path is narrower: the engine's mapping reads it
 /// off its error queue, and the app is told at once, as if from the destination, with the router's
 /// MTU, and counted; the app's kernel then keeps that MTU for the path. An app's connected default
-/// socket fails its next read once with `EMSGSIZE`, then goes on, as it would without Watch. IPv4 and
+/// socket fails its next read once with `EMSGSIZE`, then goes on, as it would without the network part. IPv4 and
 /// IPv6.
 #[test]
 #[ignore = "needs an unprivileged network namespace; scripts/check.sh rust runs it"]
@@ -2403,7 +2403,7 @@ fn answer_ttl(response: &[u8]) -> Option<u32> {
 /// nothing of them reaches the server directly; a direct app's lookup reaches the network's resolver,
 /// and its answer comes uncached, as while a chain is on; a flow to an address an answer named before
 /// is named by it; and the counters go on. Before, the new engine started with no chain, and those
-/// went directly until Watch's Kotlin side set the chain again.
+/// went directly until the network part's Kotlin side set the chain again.
 #[test]
 #[ignore = "needs an unprivileged network namespace; scripts/check.sh rust runs it"]
 fn a_tunnel_set_up_again_keeps_the_chain_from_its_first_packet() -> Outcome {
@@ -2561,7 +2561,7 @@ async fn echoing_server(ip: IpAddr) -> io::Result<(SocketAddr, Arc<AtomicU64>)> 
 }
 
 /// Sets the tunnel up again as Android does when it keeps the VPN network, as for a new MTU, and as
-/// Watch's Kotlin side then does: a second tun device, tun2, Android's in-place update from tun0 to it,
+/// the network part's Kotlin side then does: a second tun device, tun2, Android's in-place update from tun0 to it,
 /// and its descriptor handed to the running engine, which waits off the test's runtime, whose servers
 /// go on meanwhile. Then the engine's descriptor of tun0 is closed, and the test's own, its standard
 /// input, is the one left.
@@ -2857,11 +2857,11 @@ fn with_androids_marks_a_swap_on_the_same_network_keeps_a_connection() -> Outcom
     )
 }
 
-/// Why Watch does not swap when Android brings up a new VPN network, as when the apps left out change:
+/// Why the network part does not swap when Android brings up a new VPN network, as when the apps left out change:
 /// a connection the engine's listener accepted carries the old network's netId, and once the old
 /// network is gone what it sends routes nowhere, so the app's connection hangs, here for the 3 s it is
 /// given, while a new connection on the new network passes. The engine is not at fault, and nothing in
-/// it could be: the marks are Android's, so Watch starts a new engine there instead.
+/// it could be: the marks are Android's, so the network part starts a new engine there instead.
 #[test]
 #[ignore = "needs an unprivileged network namespace; scripts/check.sh rust runs it"]
 fn with_androids_marks_a_swap_onto_a_new_network_would_hang_a_connection() -> Outcome {
@@ -2884,7 +2884,7 @@ fn with_androids_marks_a_swap_onto_a_new_network_would_hang_a_connection() -> Ou
             let read = timeout(Duration::from_secs(3), connection.read_exact(&mut heard)).await;
             assert!(
                 read.is_err(),
-                "the kept connection did not hang: {read:?}; the model no longer shows why Watch \
+                "the kept connection did not hang: {read:?}; the model no longer shows why the network part \
                  starts a new engine on a new network"
             );
             Ok(())
@@ -2892,7 +2892,7 @@ fn with_androids_marks_a_swap_onto_a_new_network_would_hang_a_connection() -> Ou
     )
 }
 
-/// What Watch does instead when Android brings up a new VPN network (unit 12's path): the old engine
+/// What the network part does instead when Android brings up a new VPN network (unit 12's path): the old engine
 /// hands over and a new one starts on the new tunnel, which knows nothing of the old connection and
 /// resets it at once, so that the app opens a new one.
 #[test]
@@ -3042,7 +3042,7 @@ fn sniffed_request(sniffer: &Socket, v4: bool) -> Result<u8, Box<dyn std::error:
     Err("no echo request among what the namespace received".into())
 }
 
-/// ADR 0044, unit 11b: Watch is not a hop. An app's datagram on the direct path and its echo request
+/// ADR 0044, unit 11b: the network part is not a hop. An app's datagram on the direct path and its echo request
 /// leave with the time to live (IPv4) or hop limit (IPv6) the app sent them with, here 3, as the
 /// server's socket (`IP_RECVTTL`, `IPV6_RECVHOPLIMIT`) and a raw socket of the namespace see them;
 /// before, they left with the engine's own, 64. A lookup to the tunnel's DNS address still leaves with
@@ -3110,7 +3110,7 @@ fn namespace_hops(hops: u8) -> Outcome {
 }
 
 /// ADR 0044, unit 11b: what comes back reaches the app with the hop limit it arrived with, as a tool
-/// that reads it, ping's `ttl=` or a traceroute's guess of the way back, would see it without Watch: a
+/// that reads it, ping's `ttl=` or a traceroute's guess of the way back, would see it without the network part: a
 /// server's answer sent with 7, and the namespace's echo reply, sent with 7 by its kernel, reach the
 /// app's socket with 7, IPv4 and IPv6. Before, both reached it with the engine's own 64.
 #[test]
@@ -3295,7 +3295,7 @@ fn traced(v4: bool) -> (u8, (u8, u8), (u8, u8)) {
 }
 
 /// ADR 0044, unit 11b: a router's "time exceeded" for a datagram the app sent reaches the app's socket
-/// (`IP_RECVERR`) from that router, as without Watch, with the hop limit it came with, where before it
+/// (`IP_RECVERR`) from that router, as without the network part, with the hop limit it came with, where before it
 /// was dropped; an unreachable with its code too. One error at most for each datagram: a second for one
 /// datagram is dropped and counted, and so is one forged for a destination the app never sent to, which
 /// the engine's kernel queues all the same, its socket not being connected. IPv4 and IPv6, the router
@@ -3468,7 +3468,7 @@ fn engine_ping_since(
 
 /// ADR 0044, unit 11b: the ping sockets queue their errors from the path now. A router's "time
 /// exceeded" for an app's echo request reaches the app's ping socket (`IP_RECVERR`), as `ping -t`
-/// shows it without Watch: from that router, with the hop limit it came with, quoting the app's own
+/// shows it without the network part: from that router, with the hop limit it came with, quoting the app's own
 /// request, with the app's identifier and that request's sequence number, by which the app's kernel
 /// finds the socket and the app its request. Errors forged for a destination the socket never pinged
 /// and for a request it never sent are dropped and counted, as is a second for one request; the
@@ -3591,7 +3591,7 @@ const BYTES_UP: usize = 2;
 const BYTES_DOWN: usize = 3;
 
 /// ADR 0044, unit 11b: echo's bytes are in the engine's byte counters, up and down, as Android counts
-/// them to Watch: what the ping socket sends and reads, the ICMP message, header and data, as UDP's are
+/// them to the network part: what the ping socket sends and reads, the ICMP message, header and data, as UDP's are
 /// what its sockets carry. A ping of 20 bytes of data is 28 each way, here the first, which waits for
 /// its socket, and the next; before, echo counted none. IPv4 and IPv6.
 #[test]
@@ -3925,7 +3925,7 @@ async fn app_connect_from(
 /// tunnel's address (here only the listening one), is bound anew, on a new port: a new connection
 /// through the engine passes, and one it relayed before, kept open, goes on through the old port. On the Android 15
 /// emulator netd destroyed it when the tunnel was set up again with the same addresses, and every TCP
-/// connection through Watch was refused for the rest of the run: the accept loop had ended at its first
+/// connection through the network part was refused for the rest of the run: the accept loop had ended at its first
 /// error.
 async fn a_destroyed_listener(engine: &Engine, v4: bool) -> Outcome {
     if !v4 {

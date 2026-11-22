@@ -1,5 +1,5 @@
-"""An independent oracle for Watch's Oblivious DoH (W8, part 1): the HPKE and ODoH of RFC 9180 and RFC 9230 written
-again in Python over `cryptography`'s X25519 and AES-GCM, after the research's probe (odoh_probe.py, of the project's
+"""An independent oracle for the network part's Oblivious DoH (W8, part 1): the HPKE and ODoH of RFC 9180 and RFC 9230
+written again in Python over `cryptography`'s X25519 and AES-GCM, after the research's probe (odoh_probe.py, of the project's
 research of 2026-11-20), with HPKE's DeriveKeyPair added so that every key comes from fixed material. RFC 9230 has
 no test vectors; this writes oracle.txt, which core/net/src/odoh.rs's tests read: a target's configurations, a query
 sealed to it under a fixed ephemeral key, and the target's answer sealed under a fixed nonce. The engine must seal

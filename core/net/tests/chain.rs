@@ -105,14 +105,14 @@ fn started(
     Ok((engine, UnixDatagram::from_std(app_end)?))
 }
 
-/// A new tunnel, a new pair, for an engine that goes on from `previous`, as Watch's Kotlin side sets
+/// A new tunnel, a new pair, for an engine that goes on from `previous`, as the network part's Kotlin side sets
 /// the tunnel up again: the engine before stops and hands over ([`Engine::hand_over`]), with no chain
 /// set on the new one.
 fn set_up_again(previous: Engine) -> io::Result<(Engine, UnixDatagram)> {
     set_up_again_with(previous, None)
 }
 
-/// As [`set_up_again`], with `setting`, the chain Watch set while no engine ran, as during the swap.
+/// As [`set_up_again`], with `setting`, the chain the network part set while no engine ran, as during the swap.
 fn set_up_again_with(
     previous: Engine,
     setting: Option<ChainSetting>,
@@ -322,7 +322,7 @@ async fn other_questions_go_to_the_resolver_through_the_tool() -> Outcome {
         0, 16, 0, 1, 0, 0, 0, 0, 0, 6, 5, b'h', b'e', b'l', b'l', b'o'
     ]));
     assert_eq!(tool.commands(), [1], "one CONNECT, to the resolver");
-    // Asked again within the record's 300 s, from another port: Watch answers from what it kept.
+    // Asked again within the record's 300 s, from another port: the network part answers from what it kept.
     send(
         &tunnel,
         app(CHAINED_PORT),
@@ -556,7 +556,7 @@ async fn a_stand_in_keeps_its_name_when_the_tunnel_is_set_up_again() -> Outcome 
     Ok(())
 }
 
-/// ADR 0044, unit 12 (fourth check, minor 1): a chain Watch set while no engine ran, as when one lands
+/// ADR 0044, unit 12 (fourth check, minor 1): a chain the network part set while no engine ran, as when one lands
 /// during the swap, is the new engine's, over the older one the engine before handed over: the chained
 /// app's first datagram goes to the new tool's proxy, and the old one sees nothing more.
 #[tokio::test(flavor = "current_thread")]
@@ -819,7 +819,7 @@ async fn a_stand_in_without_identifiers_beside_a_waiting_one_gets_an_association
 
 /// A stand-in whose datagram carries an identifier, beside one without that waits on its port, gets
 /// an association of its own too; two that carry identifiers share the mapping's. The scripted relay
-/// sees each association's datagrams from its own address at Watch.
+/// sees each association's datagrams from its own address at the network part.
 #[tokio::test(flavor = "current_thread")]
 async fn only_a_stand_in_beside_one_without_identifiers_gets_an_association_of_its_own() -> Outcome
 {
@@ -1124,7 +1124,7 @@ async fn a_second_name_at_a_bound_address_is_not_answered_as_the_first() -> Outc
 }
 
 /// On port 53, a stand-in is bound only by a DNS response to a query the app sent it: a stranger that
-/// answers first, with something else or under another ID, takes nothing, and feeds Watch no names
+/// answers first, with something else or under another ID, takes nothing, and feeds the network part no names
 /// (review of unit 9, finding 2). Since unit 9b, such answers are counted as carrying none of the
 /// stand-in's identifiers, where unit 9 counted them as filtered.
 #[tokio::test(flavor = "current_thread")]
@@ -1541,7 +1541,7 @@ async fn a_lookup_sent_once_the_chain_takes_the_app_stays_off_the_network() -> O
     let read = dns::response(&answer).ok_or("a response")?;
     assert!(
         matches!(read.addresses[..], [(IpAddr::V4(_), 0)]),
-        "not Watch's stand-in: {:?}",
+        "not the network part's stand-in: {:?}",
         read.addresses
     );
     assert!(
@@ -1911,7 +1911,7 @@ fn named_response(id: u16, name: &[u8], address: [u8; 4]) -> Vec<u8> {
 }
 
 /// Port 53 of an address a stand-in was bound to, which the app never asked anything, sends a DNS
-/// response: it comes in as another port of that address, but Watch learns no name from it (second
+/// response: it comes in as another port of that address, but the network part learns no name from it (second
 /// review of unit 9, finding 4). The answer to a query the app then sends it does name; another unasked
 /// response after it, once the app has sent there, still does not (fifth review, finding 2).
 #[tokio::test(flavor = "current_thread")]
@@ -2119,7 +2119,7 @@ async fn a_lookup_on_a_port_handed_to_a_chained_app_stays_off_the_network() -> O
     let read = dns::response(&answer).ok_or("a response")?;
     assert!(
         matches!(read.addresses[..], [(IpAddr::V4(_), 0)]),
-        "not Watch's stand-in: {:?}",
+        "not the network part's stand-in: {:?}",
         read.addresses
     );
     assert!(
@@ -4580,7 +4580,7 @@ async fn datagrams_held_behind_one_cost_one_question() -> Outcome {
 
 // ADR 0044, unit 9b: a stand-in's answers told apart by what the protocol itself carries. The scripted
 // relay sends each answer from the address the test chooses, as a tool reaches a name's server, in
-// IPv4 and in IPv6; the stand-ins themselves are IPv4, as Watch gives them.
+// IPv4 and in IPv6; the stand-ins themselves are IPv4, as the network part gives them.
 
 /// The addresses a tool reaches for two names on `port`, in IPv4 and in IPv6.
 fn far_pairs(port: u16) -> [(SocketAddr, SocketAddr); 2] {

@@ -1,7 +1,7 @@
-//! Watch's encrypted resolver through the engine's tunnel (W8, part 1, ADR 0042): a direct app's lookup to Watch's
-//! DNS address at port 53 is answered by the encrypted way the Kotlin side carries, never relayed to the network's
-//! resolver; at port 853 (DNS over QUIC) it is refused; in the strict setting with every way down the app gets
-//! "server failure" and nothing goes to the network's resolver; outside it, the network's resolver answers. The
+//! The network part's encrypted resolver through the engine's tunnel (W8, part 1, ADR 0042): a direct app's lookup to
+//! the network part's DNS address at port 53 is answered by the encrypted way the Kotlin side carries, never relayed to
+//! the network's resolver; at port 853 (DNS over QUIC) it is refused; in the strict setting with every way down the app
+//! gets "server failure" and nothing goes to the network's resolver; outside it, the network's resolver answers. The
 //! Kotlin side is played by a fake that answers DoH with 10.53.3.3 and the network with 10.53.5.5.
 
 use datapavan_net::catalogue::Catalogue;
@@ -20,8 +20,8 @@ type Outcome = Result<(), Box<dyn std::error::Error>>;
 
 const APP: u16 = 40_001;
 
-/// Watch's Kotlin side, played: every exchange is recorded; DoH answers 10.53.3.3, the network 10.53.5.5, unless
-/// `failing` makes every encrypted exchange fail.
+/// The network part's Kotlin side, played: every exchange is recorded; DoH answers 10.53.3.3, the network 10.53.5.5,
+/// unless `failing` makes every encrypted exchange fail.
 #[derive(Default)]
 struct Kotlin {
     exchanges: OnceLock<Arc<Exchanges>>,

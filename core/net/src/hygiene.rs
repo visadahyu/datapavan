@@ -21,7 +21,7 @@ pub const QUERY_BLOCK: usize = 128;
 const TYPE_OPT: u16 = 41;
 /// The padding option (RFC 7830).
 const OPTION_PADDING: u16 = 12;
-/// The UDP size Watch's queries announce upstream: the DNS Flag Day 2020 value.
+/// The UDP size the network part's queries announce upstream: the DNS Flag Day 2020 value.
 const UPSTREAM_UDP: u16 = 1232;
 /// The most a client without EDNS takes over UDP (RFC 1035 4.2.1).
 const PLAIN_UDP: usize = PLAIN_UDP_SIZE as usize;
@@ -32,7 +32,7 @@ const KEPT_FLAGS: u16 = 0x0100 | 0x0010;
 /// DNSSEC OK, in the OPT record's flags.
 const DO_BIT: u32 = 0x0000_8000;
 
-/// An app's query as Watch read it.
+/// An app's query as the network part read it.
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct Asked {
     /// Its ID, which the answer gets back.
@@ -55,7 +55,7 @@ pub struct Asked {
 
 /// Reads an app's query: a standard query (QR 0, opcode 0) with one question, no answer or authority records,
 /// and in its additional section at most an OPT record (whose options are dropped) and records that are dropped.
-/// `None` for anything else, which Watch answers with "server failure" where it has an ID.
+/// `None` for anything else, which the network part answers with "server failure" where it has an ID.
 #[must_use]
 pub fn read(query: &[u8]) -> Option<Asked> {
     let id = u16_at(query, 0)?;
@@ -293,8 +293,8 @@ impl Asked {
     }
 }
 
-/// A query for `name` of type `kind` in class IN with ID 0, as Watch asks for itself (a `WireGuard` endpoint's
-/// name, a target's HTTPS record): `None` for a name that cannot be written.
+/// A query for `name` of type `kind` in class IN with ID 0, as the network part asks for itself (a `WireGuard`
+/// endpoint's name, a target's HTTPS record): `None` for a name that cannot be written.
 #[must_use]
 pub fn query_for(name: &str, kind: u16) -> Option<Asked> {
     let mut query = vec![0, 0, 0x01, 0x00, 0, 1, 0, 0, 0, 0, 0, 1];

@@ -1,4 +1,4 @@
-//! What names a flow: the DNS answers Watch passed on, the TLS or QUIC server name of its first bytes,
+//! What names a flow: the DNS answers the network part passed on, the TLS or QUIC server name of its first bytes,
 //! the organisation behind the destination's network, and whether it is an app's own DNS.
 
 use super::{Counters, DnsUse, Ech, Flow, NamedBy, Network, Opened, Shared, lock};
@@ -72,7 +72,7 @@ impl Shared {
     }
 
     /// The network of `address` and the organisation behind it, as the company people know where the
-    /// owners' table names it, if Watch has the organisation table and it names the address.
+    /// owners' table names it, if the network part has the organisation table and it names the address.
     pub(super) fn organisation(&self, address: IpAddr) -> Option<(Network, String)> {
         let organisation = self
             .organisations
@@ -89,7 +89,7 @@ impl Shared {
     }
 
     /// Whether a flow to `destination`, named `name` by DNS if at all, carries the app's own DNS, and
-    /// to which known resolver: port 53 to another server than Watch's, port 853, or port 443 to a
+    /// to which known resolver: port 53 to another server than the network part's, port 853, or port 443 to a
     /// known resolver's address or host name.
     pub(super) fn dns_use(
         &self,

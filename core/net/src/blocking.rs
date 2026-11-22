@@ -2,8 +2,8 @@
 //! send to, each graded by what it does (`data/blocking/hosts.tsv`, CC0, in the signed data pack), and the plain
 //! HTTP `Host` a connection's first bytes name.
 //!
-//! Each row is a host, the SDK's Maven coordinate, the SDK's package prefix (which Watch's Kotlin side joins at
-//! run time to the εxodus tracker of the same SDK, to name it: ADR 0046's decision 4 as ADR 0053 amends it), a
+//! Each row is a host, the SDK's Maven coordinate, the SDK's package prefix (which the network part's Kotlin side joins
+//! at run time to the εxodus tracker of the same SDK, to name it: ADR 0046's decision 4 as ADR 0053 amends it), a
 //! grade, the condition of a grade that depends on the app's code, the host's function, the kind of evidence, the
 //! source and the date. The engine reads the host and the grade; Kotlin reads the rest for the screens, and
 //! decides each code-dependent grade from the audit's scan of the app, which it hands over by app.
@@ -30,8 +30,8 @@ pub enum Grade {
     Block,
     /// It also serves the app's own function (sign-in, a database, storage, push): blocked in none.
     Keep,
-    /// It serves both, and the app's own code decides which (`graph.facebook.com`): Watch's Kotlin side tells
-    /// the engine, by app, where it is [`Grade::Block`]; elsewhere it is kept.
+    /// It serves both, and the app's own code decides which (`graph.facebook.com`): the network part's Kotlin side
+    /// tells the engine, by app, where it is [`Grade::Block`]; elsewhere it is kept.
     Code,
 }
 

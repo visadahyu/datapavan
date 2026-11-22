@@ -1,6 +1,6 @@
 //! Stand-in addresses for the names that chained apps look up (ADR 0038, W6).
 //!
-//! A chained app asks Watch for a name's address; Watch answers with an address of its own from
+//! A chained app asks the network part for a name's address; the network part answers with an address of its own from
 //! 198.18.0.0/15 and remembers the name, and when the app connects to that address, the name goes to
 //! the tool, which resolves it at its far end. Each name keeps its address for as long as it is used,
 //! so that connections in parallel agree. At most [`CAPACITY`] names are held; when they are all in
@@ -8,7 +8,7 @@
 //! whole range, so that an address given up is not handed out again before 131,070 others: an app that
 //! still holds it in a cache of its own meets "unknown" rather than another name.
 //!
-//! The map lives in memory only. It is the list of names the user opened through the tool, so Watch
+//! The map lives in memory only. It is the list of names the user opened through the tool, so the network part
 //! never writes it down (ADR 0038).
 
 use std::collections::{BTreeMap, HashMap};
@@ -18,7 +18,7 @@ use std::net::{IpAddr, Ipv4Addr};
 const BASE: u32 = u32::from_be_bytes([198, 18, 0, 0]);
 /// The number of addresses in 198.18.0.0/15.
 const SIZE: u32 = 1 << 17;
-/// The most names held at once: about 2 MB at most, against Watch's memory budget of 48 MB.
+/// The most names held at once: about 2 MB at most, against the network part's memory budget of 48 MB.
 pub const CAPACITY: usize = 16_384;
 
 /// Whether `ip` is in the stand-ins' range.

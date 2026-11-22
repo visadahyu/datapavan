@@ -1,4 +1,4 @@
-//! Fuzzing of Watch's packet reader and writers (`datapavan_net::packet`): any bytes an app can put
+//! Fuzzing of the network part's packet reader and writers (`datapavan_net::packet`): any bytes an app can put
 //! into the tunnel. A packet that is read must describe the input exactly; its ends rewritten must
 //! read back as the new ends, and every packet built in answer to it must read back as well. An echo
 //! request that is read lies inside the input, and the reply and refusal built for it fit, as do the

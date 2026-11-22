@@ -1,5 +1,5 @@
-//! The records Watch's connection log stores (W4, ADR 0037), in the form the engine hands them to
-//! Watch's Kotlin side, which seals each one under the day's key. Version 5, little-endian:
+//! The records the network part's connection log stores (W4, ADR 0037), in the form the engine hands them to
+//! The network part's Kotlin side, which seals each one under the day's key. Version 5, little-endian:
 //!
 //! - a flow segment: version, kind 1, the flow's number, the app's UID (`u32::MAX` unknown), start and
 //!   end in milliseconds since 1970 (UTC), bytes up and down as the app sent and received them, bytes
@@ -12,7 +12,7 @@
 //!   directly, 1 through the user's tool, 2 through a `WireGuard` tunnel) and the tunnel's number (u32, 0 for
 //!   none); and since version 5 its proxy ([`push_proxy`]): a byte 0 for none; and since version 6 the SDK of the
 //!   graded table's row that blocked it, a length byte and UTF-8, empty for a flow not blocked.
-//! - lookups an app sent to Watch's own DNS address: version, kind 2, the UID, start and end, their
+//! - lookups an app sent to the network part's own DNS address: version, kind 2, the UID, start and end, their
 //!   count, their packets' bytes up and down on the tunnel, and last the app's state over them, as a segment's.
 //!
 //! A batch is a count (u32), then each record after its length (u16).
@@ -59,7 +59,7 @@ pub enum Record {
         /// seconds', or for a part with no bytes its end's.
         state: Placed,
     },
-    /// Lookups an app sent to Watch's own DNS address between `start` and `end`.
+    /// Lookups an app sent to the network part's own DNS address between `start` and `end`.
     Lookups {
         /// The app's UID, if Android named it.
         uid: Option<u32>,

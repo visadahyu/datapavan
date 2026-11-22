@@ -5,7 +5,7 @@
 //! A TCP packet from an app to `D:dp` is rewritten to come from the fake peer `FAKE:fp` and go to the
 //! engine's listener on the tunnel's address. Android's TCP stack answers it, and the answer is
 //! rewritten back to come from `D:dp`. The listener accepts the connection as if from `FAKE:fp`, the
-//! table maps that to `D:dp`, and the engine connects there. Watch must be inside its own tunnel for
+//! table maps that to `D:dp`, and the engine connects there. The network part must be inside its own tunnel for
 //! this, and protects each socket of its own (spike, finding 6).
 //!
 //! The app's first SYN is held until Android has named the app and the real server has accepted, so
@@ -21,14 +21,14 @@
 //!
 //! The apps' fragments are put together again, and the "fragmentation needed" and "packet too big"
 //! that routers beyond the first hop send the engine's sockets reach the apps, with their MTU. The
-//! engine answers nothing as too large on its own: the tunnel's MTU is the first hop's, which Watch's
-//! Kotlin side reads and sets, so the apps' own kernels meet it as they would without Watch (decision 5
+//! engine answers nothing as too large on its own: the tunnel's MTU is the first hop's, which the network part's
+//! Kotlin side reads and sets, so the apps' own kernels meet it as they would without the network part (decision 5
 //! as amended on 2026-11-15).
 //!
-//! Watch is not a hop (unit 11b): an app's datagram on the direct path and its ping leave with the
+//! The network part is not a hop (unit 11b): an app's datagram on the direct path and its ping leave with the
 //! app's own hop limit, what comes back reaches the app with the hop limit it arrived with, and the
 //! errors the path sends, a router's "time exceeded" and "destination unreachable" among them, reach
-//! the app from the router or host that sent them, so that a traceroute through Watch sees the path.
+//! the app from the router or host that sent them, so that a traceroute through the network part sees the path.
 
 use std::collections::{HashMap, VecDeque};
 use std::io;
@@ -104,7 +104,7 @@ use udp::UdpFlows;
 /// The tunnel's addresses (ADR 0041, decision 3): its own address, a /32 or a /128 (ADR 0034: a wider
 /// prefix would count as local network on Android 17), the fake peer the kernel sees for every rewritten
 /// connection, outside it, and the DNS server Android is given inside the tunnel, whose queries the engine
-/// passes on to the network's resolver. Any app can read the tunnel's address and prefix, so Watch takes
+/// passes on to the network's resolver. Any app can read the tunnel's address and prefix, so the network part takes
 /// the ones other apps use and is not singled out by them.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub struct Addresses {
@@ -124,8 +124,8 @@ pub struct Addresses {
 
 impl Addresses {
     /// The tunnel addresses of `NetGuard`, `TrackerControl` and `InviZible` Pro, with the same /32 and /128:
-    /// an app that reads them finds a local firewall, the kind of app Watch is, not Watch itself. Read
-    /// from 32 apps' own source on 2026-11-12; the largest other group, 172.19.0.1, is that of proxy and
+    /// an app that reads them finds a local firewall, the kind of app the network part is, not the network part itself.
+    /// Read from 32 apps' own source on 2026-11-12; the largest other group, 172.19.0.1, is that of proxy and
     /// circumvention clients, and its /30 does not fit Android 17.
     pub const COMMON: Self = Self {
         tun4: Ipv4Addr::new(10, 1, 10, 1),
@@ -136,9 +136,9 @@ impl Addresses {
         dns6: Ipv6Addr::new(0xfd00, 1, 0xfd00, 1, 0xfd00, 1, 0xfd00, 3),
     };
 
-    /// Watch's earlier addresses, for a network that uses the common ones itself: Comcast Business
+    /// The network part's earlier addresses, for a network that uses the common ones itself: Comcast Business
     /// gateways answer at 10.1.10.1, and a tunnel that takes the router's address cuts the phone off
-    /// from it. Watch picks this set when the network beneath clashes with [`Addresses::COMMON`].
+    /// from it. The network part picks this set when the network beneath clashes with [`Addresses::COMMON`].
     pub const SPARE: Self = Self {
         tun4: Ipv4Addr::new(10, 215, 173, 1),
         fake4: Ipv4Addr::new(10, 215, 173, 2),
@@ -262,8 +262,8 @@ pub struct Limits {
     pub fragment_wait: Duration,
     /// A write to the tunnel that the tunnel refuses waits this long, off the event loop, for the
     /// tunnel set up again to take its place, and goes there (ADR 0044, unit 12b): Android resets the
-    /// old interface before Watch hands the engine the new one, and a tun device whose interface is
-    /// down refuses writes. Watch's Kotlin side hands it over as soon as `establish()` returns, within
+    /// old interface before the network part hands the engine the new one, and a tun device whose interface is
+    /// down refuses writes. The network part's Kotlin side hands it over as soon as `establish()` returns, within
     /// milliseconds; without a new tunnel by then, the packet is dropped, as before.
     pub tunnel_wait: Duration,
     /// The first of the fake ports handed out, `first_port..=last_port`.
@@ -274,7 +274,7 @@ pub struct Limits {
 
 impl Limits {
     /// The product's limits for a process that may open `descriptors` files (its soft limit): a
-    /// reserve of a sixteenth, at least 128, stays for Watch itself; waiting TCP connections may use an
+    /// reserve of a sixteenth, at least 128, stays for the network part itself; waiting TCP connections may use an
     /// eighth of the rest, at most 4,096, and UDP mappings a quarter. Each app may use a quarter of
     /// each cap, at least 32 waiting connections and 64 mappings, and never more than the cap.
     #[must_use]
@@ -341,10 +341,10 @@ impl Default for Limits {
         }
     }
 }
-/// How long finished records gather before they go to Watch's log together (ADR 0037).
+/// How long finished records gather before they go to the network part's log together (ADR 0037).
 const LOG_DELAY: Duration = Duration::from_secs(30);
 
-/// What the engine asks of Android, through Watch's Kotlin side, and the clock it reads.
+/// What the engine asks of Android, through the network part's Kotlin side, and the clock it reads.
 pub trait Platform: Send + Sync + 'static {
     /// `ConnectivityManager.getConnectionOwnerUid`: the UID of the app with a socket from `local` to
     /// `remote`, or `None` when Android does not know.
@@ -353,7 +353,7 @@ pub trait Platform: Send + Sync + 'static {
     /// `VpnService.protect`: keeps one of the engine's sockets out of the tunnel.
     fn protect(&self, fd: RawFd) -> bool;
 
-    /// Hands a batch of records to Watch's connection log ([`crate::log::batch`]).
+    /// Hands a batch of records to the network part's connection log ([`crate::log::batch`]).
     fn log(&self, batch: &[u8]);
 
     /// The clock the engine reads for the log's times ([`Clock`]): the phone's own, unless a test hands
@@ -362,7 +362,7 @@ pub trait Platform: Send + Sync + 'static {
         Arc::new(SystemClock)
     }
 
-    /// Whether Watch's Kotlin side tells the engine the apps' states ([`Engine::states`], ADR 0046,
+    /// Whether the network part's Kotlin side tells the engine the apps' states ([`Engine::states`], ADR 0046,
     /// decision 1): then each second's bytes wait for their app's state, and the log's segments are cut
     /// where it changes. Without it, every segment is written at once in no state.
     fn tells_states(&self) -> bool {
@@ -370,7 +370,7 @@ pub trait Platform: Send + Sync + 'static {
     }
 
     /// The engine would have the apps' states read: a flow opened, or bytes have waited for their state
-    /// for five seconds. Watch's Kotlin side reads when its own rules allow (ADR 0046, decision 1), off
+    /// for five seconds. The network part's Kotlin side reads when its own rules allow (ADR 0046, decision 1), off
     /// the engine's thread: this must not block.
     fn wants_states(&self) {}
 
@@ -382,9 +382,9 @@ pub trait Platform: Send + Sync + 'static {
         None
     }
 
-    /// Where the app `uid` goes, which Watch did not name when it last handed its routes over
-    /// ([`TunnelSetting::known`]): an app installed since, one installed again with a new UID among them. Watch
-    /// reads the UID's packages from Android and answers the route its store gives them. Called off the event
+    /// Where the app `uid` goes, which the network part did not name when it last handed its routes over
+    /// ([`TunnelSetting::known`]): an app installed since, one installed again with a new UID among them. The network
+    /// part reads the UID's packages from Android and answers the route its store gives them. Called off the event
     /// loop, on a thread of its own, at a held SYN or first datagram, which waits for it at most [`ASK_BOUND`];
     /// `None` where it cannot say, and the flow is refused, never sent directly (the maintainer, 2026-11-20).
     fn route_of_app(&self, _uid: u32) -> Option<AppRoute> {
@@ -392,7 +392,7 @@ pub trait Platform: Send + Sync + 'static {
     }
 
     /// Carries the exchange `request` of the encrypted resolver (W8, part 1): over Android's own TLS, from a
-    /// socket Watch protects and binds to the network beneath or through the user's tool, or by Android's
+    /// socket the network part protects and binds to the network beneath or through the user's tool, or by Android's
     /// resolver on the network beneath. Returns at once, from the engine's own thread, without blocking; the
     /// reply comes later, by [`Engine::exchanged`] with `ticket`. False where the platform carries none: then
     /// the network's resolver is asked from a protected socket, and no encrypted way answers.
@@ -401,7 +401,7 @@ pub trait Platform: Send + Sync + 'static {
     }
 
     /// The way direct apps' names go changed kind: an encrypted way, the fallback to the network's resolver,
-    /// or failing in the strict setting ([`Engine::dns_status`]). Returns at once; Watch's screen and its
+    /// or failing in the strict setting ([`Engine::dns_status`]). Returns at once; the network screen and its
     /// notice read the state when they want it.
     fn dns_changed(&self) {}
 }
@@ -432,7 +432,7 @@ pub enum Outcome {
 }
 
 /// Where a flow's name came from. W3's order, written here and only here ([`NamedBy::yields_to`]): the
-/// server name the connection itself sent, in its TLS or QUIC hello; then a DNS answer Watch passed to
+/// server name the connection itself sent, in its TLS or QUIC hello; then a DNS answer the network part passed to
 /// the app for the destination's address; then the organisation of the address's network; then none.
 ///
 /// The connection's own name comes first: the engine read it from the flow itself, while a DNS answer
@@ -444,7 +444,7 @@ pub enum Outcome {
 /// started, so that a name kept through a night does not show its age as a difference, while a later
 /// answer for the address does not end it ([`Opened::dns_held_until`]). A stand-in's flow is named by its hello
 /// too, one rule for every flow: the hello says which server the app spoke to at the address the tool
-/// reached. A hello's name that is the public name of an ECH configuration Watch saw, in Android's
+/// reached. A hello's name that is the public name of an ECH configuration the network part saw, in Android's
 /// resolver's answers or the app's own, never names a flow ([`Ech::Hidden`]): a DNS name stays the
 /// flow's then.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -457,7 +457,7 @@ pub enum NamedBy {
     /// the hello's name, which the connection inside the proxy's tunnel sends, and before a DNS answer for
     /// the proxy's address, which names the proxy, not the destination.
     Proxy,
-    /// A DNS answer Watch passed to the app for the destination's address.
+    /// A DNS answer the network part passed to the app for the destination's address.
     Dns,
     /// The organisation whose network the address is in, from the offline table (ADR 0036).
     Organisation,
@@ -488,17 +488,17 @@ pub enum Ech {
     /// ECH offered: a real one, or GREASE, which look the same by design. The server name in the hello
     /// names the flow.
     Offered,
-    /// The hello's server name is the public name of an ECH configuration in a DNS answer Watch passed
+    /// The hello's server name is the public name of an ECH configuration in a DNS answer the network part passed
     /// on: the real name is hidden, and the public name does not name the flow.
     Hidden,
 }
 
-/// Whether a flow carries an app's own DNS, past Watch's resolver (W3, ADR 0029).
+/// Whether a flow carries an app's own DNS, past the network part's resolver (W3, ADR 0029).
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum DnsUse {
-    /// Not DNS, as far as Watch can tell, or the phone's own lookups through Watch's resolver.
+    /// Not DNS, as far as the network part can tell, or the phone's own lookups through the network part's resolver.
     None,
-    /// Plain DNS on port 53 to another server than Watch's: around the phone's DNS settings.
+    /// Plain DNS on port 53 to another server than the network part's: around the phone's DNS settings.
     Plain,
     /// DNS over TLS or QUIC (port 853), or DNS over HTTPS to a known resolver.
     Encrypted,
@@ -519,7 +519,7 @@ pub struct Flow {
     pub uid: Option<u32>,
     /// How it went.
     pub outcome: Outcome,
-    /// The destination's name, if Watch knows it.
+    /// The destination's name, if the network part knows it.
     pub name: Option<String>,
     /// Where the name came from.
     pub named_by: NamedBy,
@@ -599,7 +599,7 @@ struct Opened {
 pub struct Config {
     /// The tunnel's MTU, as given to `Builder.setMtu`.
     pub mtu: u16,
-    /// How many of the latest flows to keep in memory for Watch's debug builds and tests; 0 keeps
+    /// How many of the latest flows to keep in memory for the network part's debug builds and tests; 0 keeps
     /// none. Release builds keep none: the connection log (W4) decides what is recorded.
     pub keep_flows: usize,
     /// The tunnel's addresses, as given to `Builder.addAddress` and `addDnsServer`.
@@ -717,7 +717,7 @@ impl Counters {
     /// header that is not well formed, a fragment, or a port several stand-ins wait on), datagrams from
     /// another port of an address the app sent to that a mapping dropped because as many such ports had
     /// come in as it lets in, and relays a tool offered for UDP elsewhere than on the phone or at its
-    /// proxy's own address, which Watch refused, and datagrams and lookups dropped because who sent
+    /// proxy's own address, which the network part refused, and datagrams and lookups dropped because who sent
     /// them could not be told: the answers of Android's near them named different apps, and those
     /// dropped because they came too late for their app, which lost the socket before their way opened,
     /// or for any answer near them (ADR 0044, unit 9, "Whose a datagram is"), and datagrams and lookups
@@ -860,8 +860,8 @@ impl Counters {
     }
 }
 
-/// What Watch last set on its engines from outside: the chain, and whether answers go uncached, which
-/// goes with it ([`Engine::chain`]). Watch's native side keeps it whether or not an engine runs, so that
+/// What the network part last set on its engines from outside: the chain, and whether answers go uncached, which
+/// goes with it ([`Engine::chain`]). The network part's native side keeps it whether or not an engine runs, so that
 /// a chain set while none does, as in the moment of a swap, is the next engine's from its first packet
 /// (fourth check of unit 12, minor 1); it wins over what the engine before handed over, which it may
 /// be newer than.
@@ -938,9 +938,9 @@ struct Shared {
     flows: Mutex<VecDeque<Flow>>,
     /// The DNS server of the network beneath the tunnel.
     upstream_dns: Mutex<Option<IpAddr>>,
-    /// Names from the DNS answers Watch passed on, by address.
+    /// Names from the DNS answers the network part passed on, by address.
     names: Mutex<Names>,
-    /// The offline table from address to organisation, if Watch has one.
+    /// The offline table from address to organisation, if the network part has one.
     organisations: Option<Organisations>,
     /// Well-known public DNS resolvers.
     resolvers: Resolvers,
@@ -959,13 +959,13 @@ struct Shared {
     last_reading: AtomicU64,
     /// The flows open now, for the log.
     live: Mutex<HashMap<u64, Live>>,
-    /// Lookups each app sent to Watch's own DNS address since the last segment.
+    /// Lookups each app sent to the network part's own DNS address since the last segment.
     lookups: Mutex<HashMap<Option<u32>, Lookups>>,
     /// The bytes of open TCP flows by fake port, for the packets the tunnel carries.
     wire: Mutex<HashMap<u16, Arc<FlowBytes>>>,
-    /// Records waiting to go to Watch's log.
+    /// Records waiting to go to the network part's log.
     pending_log: Mutex<Vec<Record>>,
-    /// Whether Watch's Kotlin side tells the apps' states ([`Platform::tells_states`]).
+    /// Whether the network part's Kotlin side tells the apps' states ([`Platform::tells_states`]).
     tracks: bool,
     /// The seconds not placed in a state yet, of every flow and app's lookups together and of each app
     /// ([`activity::MARKS`], [`activity::MARKS_SHARE`]).
@@ -985,7 +985,7 @@ struct Shared {
     flushes: Mutex<logbook::Flushes>,
     /// Woken when a flush is asked.
     flush_wanted: Notify,
-    /// Whether the answers of Watch's own DNS address go to the apps with a time to live of 0
+    /// Whether the answers of the network part's own DNS address go to the apps with a time to live of 0
     /// ([`crate::dns::uncache`]), so that Android's resolver keeps none of them.
     uncached_answers: AtomicBool,
     /// The user's tool and the apps sent through it, while a chain is on (W6).
@@ -1090,7 +1090,7 @@ impl Engine {
     }
 
     /// Starts as [`Engine::start`], on a tunnel set up again, with what the engine before it handed
-    /// over ([`Engine::hand_over`]), and with the chain Watch last set, which wins over the one handed
+    /// over ([`Engine::hand_over`]), and with the chain the network part last set, which wins over the one handed
     /// over: all of it is in place before the new engine's thread reads its first packet.
     ///
     /// # Errors
@@ -1361,7 +1361,7 @@ impl Engine {
         self.shared.resolver.clear_times();
     }
 
-    /// The exchanges that wait for Watch's Kotlin side, which hands each reply to [`Exchanges::complete`].
+    /// The exchanges that wait for the network part's Kotlin side, which hands each reply to [`Exchanges::complete`].
     #[must_use]
     pub fn exchanges(&self) -> Arc<Exchanges> {
         Arc::clone(&self.shared.resolver.exchanges)
@@ -1371,7 +1371,7 @@ impl Engine {
     /// connections already open keep their way. A UDP mapping that it sends another way ends at its
     /// next datagram either way, so that the app's next one follows the new route (ADR 0044, decision
     /// 1); one through the same tool, reached the same way, stays. While a chain is on, every answer
-    /// of Watch's DNS address reaches the apps with a time to live of 0 (ADR 0038).
+    /// of the network part's DNS address reaches the apps with a time to live of 0 (ADR 0038).
     pub fn chain(&self, chain: Option<Chain>) {
         let on = chain.is_some() || self.shared.tunnels.any();
         *lock(&self.shared.chain) = chain.map(Arc::new);
@@ -1391,7 +1391,7 @@ impl Engine {
     /// its route from now on; an app whose tunnel changed has its UDP flows end at once, so that its next
     /// datagram takes its new route, and keeps its TCP connections' way, as the chain does. A tunnel whose
     /// configuration is the same keeps its session. While any app goes through a tunnel, every answer of
-    /// Watch's DNS address reaches the apps with a time to live of 0 (ADR 0035, question 4).
+    /// the network part's DNS address reaches the apps with a time to live of 0 (ADR 0035, question 4).
     pub fn tunnels(&self, setting: &TunnelSetting) {
         self.shared.tunnels.set(setting);
         // As after a chain set anew: a UDP mapping or flow of lookups asks again whether its way still holds.
@@ -1421,14 +1421,14 @@ impl Engine {
         self.shared.blocked_tallies()
     }
 
-    /// Whether the answers of Watch's own DNS address reach the apps with a time to live of 0 now: while a chain
-    /// or a tunnel takes any app, or as set by [`Engine::uncache_answers`].
+    /// Whether the answers of the network part's own DNS address reach the apps with a time to live of 0 now: while a
+    /// chain or a tunnel takes any app, or as set by [`Engine::uncache_answers`].
     #[must_use]
     pub fn answers_uncached(&self) -> bool {
         self.shared.uncached_answers.load(Ordering::Relaxed)
     }
 
-    /// Watch's answers for the apps it did not name, by UID, `None` for a flow refused for want of one
+    /// The network part's answers for the apps it did not name, by UID, `None` for a flow refused for want of one
     /// ([`Platform::route_of_app`]).
     #[must_use]
     pub fn app_answers(&self) -> Vec<(u32, Option<AppRoute>)> {
@@ -1441,9 +1441,9 @@ impl Engine {
         self.shared.tunnels.states(self.shared.clock.since_boot())
     }
 
-    /// Whether the answers of Watch's own DNS address reach the apps with a time to live of 0, so that
+    /// Whether the answers of the network part's own DNS address reach the apps with a time to live of 0, so that
     /// Android's resolver, which keeps one cache for all the apps of a network, keeps none of them:
-    /// each app's lookup then reaches Watch with that app as its owner. Off by default.
+    /// each app's lookup then reaches the network part with that app as its owner. Off by default.
     pub fn uncache_answers(&self, on: bool) {
         self.shared.uncached_answers.store(on, Ordering::Relaxed);
     }
@@ -1496,7 +1496,7 @@ impl Engine {
         self.shared.clear_blocked();
     }
 
-    /// Takes a reading of the apps' states from Watch's Kotlin side, a message of [`crate::states`]:
+    /// Takes a reading of the apps' states from the network part's Kotlin side, a message of [`crate::states`]:
     /// every second held that it covers is placed, and the log's segments cut where an app's state
     /// changed. False for a message that is not one of its version, which changes nothing.
     #[must_use]
@@ -1582,7 +1582,7 @@ async fn run(
         changes,
     };
     // Sized from the first tunnel's MTU, and never smaller than 1,500 bytes: a tunnel set up again and
-    // handed over (`Engine::swap_tunnel`) keeps this buffer, which holds its packets too, since Watch
+    // handed over (`Engine::swap_tunnel`) keeps this buffer, which holds its packets too, since the network part
     // never gives the tunnel an MTU above 1,500 (ADR 0044, decision 5 as amended).
     let mut buffer = vec![0u8; usize::from(mtu).max(1500) + 64];
     let mut swept = Instant::now();
@@ -1775,7 +1775,7 @@ impl Shared {
 }
 
 /// The MTU the kernel keeps for the route of a connected socket (`IP_MTU`), or `None` when it says
-/// nothing, as for a socket not connected. Watch's Kotlin side reads the first hop's MTU of the network
+/// nothing, as for a socket not connected. The network part's Kotlin side reads the first hop's MTU of the network
 /// beneath with it, from a UDP socket bound to that network and connected toward an address only its
 /// default route covers, and gives the tunnel that MTU (ADR 0044, decision 5 as amended). On Linux
 /// `IP_MTU` answers for an IPv6 socket too, with what router advertisements set.
@@ -2100,9 +2100,9 @@ mod tests {
         assert_eq!(shared.counters.snapshot()[11..16], [3, 3, 0, 3, 2]);
     }
 
-    /// Review 1 of W5's first part, names, finding 1: an ECH public name never names a flow wherever Watch
+    /// Review 1 of W5's first part, names, finding 1: an ECH public name never names a flow wherever the network part
     /// saw it in an ECH configuration. From Android's resolver it hides names in every app's flows; from
-    /// an app's own plain resolver, past Watch's, in that app's flows only, so that no app hides another's
+    /// an app's own plain resolver, past the network part's, in that app's flows only, so that no app hides another's
     /// names (ADR 0038): there another app's hello names its flow.
     #[test]
     fn an_ech_public_name_hides_the_name_in_the_flows_of_the_answers_scope() {
@@ -2309,7 +2309,7 @@ mod tests {
         let plain = open_flow(&shared, at([192, 0, 2, 53], 53));
         shared.learn(&dns_answer("own.example", [203, 0, 113, 20]), Some(UID));
         let named_by_own = open_flow(&shared, at([203, 0, 113, 20], 443));
-        // Android's resolver through Watch: not the app's own.
+        // Android's resolver through the network part: not the app's own.
         let tunnel = open_flow(
             &shared,
             SocketAddr::new(IpAddr::V4(Addresses::COMMON.dns4), 53),
@@ -3030,7 +3030,7 @@ mod tests {
     }
 
     /// A descriptor tokio cannot register, here `/dev/null`, which epoll refuses, is refused, so that
-    /// Watch's Kotlin side starts an engine instead; the engine goes on with the tunnel it had.
+    /// the network part's Kotlin side starts an engine instead; the engine goes on with the tunnel it had.
     #[tokio::test(flavor = "current_thread")]
     async fn a_tunnel_the_engine_cannot_take_leaves_the_old_one_in_place() -> io::Result<()> {
         let server = UdpSocket::bind((Ipv4Addr::LOCALHOST, 0)).await?;

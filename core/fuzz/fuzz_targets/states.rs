@@ -1,4 +1,4 @@
-//! Fuzzing of the engine's reader of the apps' states that Watch's Kotlin side tells it
+//! Fuzzing of the engine's reader of the apps' states that the network part's Kotlin side tells it
 //! (`datapavan_net::states`, ADR 0046, decision 1). Any bytes: a message that is read must write back
 //! to the same bytes, with its span forward, every interval inside it and of a state other than the
 //! background, none where nothing is known, and a time the screen went off only for a screen off, or on

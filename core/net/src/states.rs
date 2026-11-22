@@ -1,9 +1,9 @@
-//! What Watch's Kotlin side tells the engine of the apps' states (ADR 0046, decision 1): one reading of
+//! What the network part's Kotlin side tells the engine of the apps' states (ADR 0046, decision 1): one reading of
 //! Android's usage events, as the states each app had over a span of the wall clock. Version 2,
 //! little-endian:
 //!
 //! - version (2), the span's start and end in milliseconds since 1970 (UTC), what is known over it (0:
-//!   the states below; 1: nothing, Watch has no usage access; 2: nothing, Android gave no events, as
+//!   the states below; 1: nothing, the network part has no usage access; 2: nothing, Android gave no events, as
 //!   before the first unlock after a restart), the screen at the span's end (0 off, 1 on, 2 not known),
 //!   when it last came on (0 for not known, and always 0 for a screen not on) and when it last went off
 //!   (0 for not known, always 0 for a screen not known or on since a moment not known, and for a screen on
@@ -56,7 +56,7 @@ impl State {
 /// Why a second has no state.
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
 pub enum Unknown {
-    /// Watch has no usage access.
+    /// The network part has no usage access.
     NoAccess,
     /// Android gave no usage events, as before the first unlock after a restart.
     Locked,
@@ -65,8 +65,8 @@ pub enum Unknown {
     Late,
     /// Android did not name the flow's app.
     NoApp,
-    /// Nothing was told for it: before Watch's first reading, in a gap a clock set back left, or when
-    /// Watch stopped before a reading came.
+    /// Nothing was told for it: before the network part's first reading, in a gap a clock set back left, or when
+    /// the network part stopped before a reading came.
     NotTold,
 }
 
@@ -138,7 +138,7 @@ impl Placed {
 pub enum Known {
     /// The apps' states: the intervals, and the background elsewhere.
     States,
-    /// Nothing: Watch has no usage access.
+    /// Nothing: the network part has no usage access.
     NoAccess,
     /// Nothing: Android gave no events, as before the first unlock after a restart.
     Locked,
@@ -255,7 +255,7 @@ pub fn read(bytes: &[u8]) -> Option<Told> {
     })
 }
 
-/// A message in its stored form: what Watch's Kotlin side writes, for the engine's tests and the
+/// A message in its stored form: what the network part's Kotlin side writes, for the engine's tests and the
 /// fixture both sides read.
 #[must_use]
 pub fn write(told: &Told) -> Vec<u8> {
@@ -465,13 +465,13 @@ mod tests {
         });
     }
 
-    /// Where Watch's Kotlin side keeps the readings it writes (`StatesTest`), one a line in hex.
+    /// Where the network part's Kotlin side keeps the readings it writes (`StatesTest`), one a line in hex.
     const FIXTURE: &str = concat!(
         env!("CARGO_MANIFEST_DIR"),
         "/../../android/network/src/test/resources/org/visadahyu/datapavan/network/activity/states.hex"
     );
 
-    /// The engine reads what Watch's Kotlin side writes (`States.kt`), byte for byte: its test writes the
+    /// The engine reads what the network part's Kotlin side writes (`States.kt`), byte for byte: its test writes the
     /// fixture and fails when it writes otherwise, and this one reads it, so that the two cannot drift
     /// apart unseen.
     #[test]

@@ -1,4 +1,4 @@
-//! Fuzzing of Watch's reader of the IP-to-organisation table (`datapavan_net::organisations`): a
+//! Fuzzing of the network part's reader of the IP-to-organisation table (`datapavan_net::organisations`): a
 //! table comes in the APK or a data pack, but is read as untrusted. Opening it and looking up
 //! addresses must never panic, and a name found must hold no control character.
 #![no_main]

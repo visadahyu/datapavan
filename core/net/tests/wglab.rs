@@ -1,5 +1,5 @@
-//! W7's interoperation lab through the engine itself (ADR 0035, "Tests without a provider"): Watch's engine on
-//! a pair of datagram sockets for its tunnel, its `WireGuard` tunnels to peers of both reference implementations,
+//! W7's interoperation lab through the engine itself (ADR 0035, "Tests without a provider"): the network part's engine
+//! on a pair of datagram sockets for its tunnel, its `WireGuard` tunnels to peers of both reference implementations,
 //! the Linux kernel's `WireGuard` and wireguard-go, in the Compose project `datapavan-wglab`. Chosen apps' TCP,
 //! UDP, ICMP and DNS on IPv4 and IPv6, a packet from outside `AllowedIPs` refused, a `PresharedKey`, two tunnels
 //! at once to two peers, the MTU's second way (a SYN's MSS clamped as the peer's kernel takes it, a datagram
@@ -466,7 +466,7 @@ fn too_big_said(packet: &[u8]) -> Option<(IpAddr, u32)> {
     Some((source, said))
 }
 
-/// A lookup to Watch's DNS address of `kind` for `lab.test`, and its answer.
+/// A lookup to the network part's DNS address of `kind` for `lab.test`, and its answer.
 async fn lookup(
     tunnel: &UnixDatagram,
     v6: bool,
@@ -558,7 +558,7 @@ async fn tcp_udp_icmp_and_dns_pass_on_both_versions_and_nothing_from_outside_all
             "{version}: the peer's answer with a time to live of 0"
         );
         println!(
-            "PASS dns-{version}: Watch's DNS address answered from the configuration's server, TTL 0"
+            "PASS dns-{version}: the network part's DNS address answered from the configuration's server, TTL 0"
         );
     }
     // The reflector answers from 10.77.1.1 and fd77:1::1, outside the client's AllowedIPs.

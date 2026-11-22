@@ -102,7 +102,7 @@ impl Proxied {
     }
 }
 
-/// What Watch tells the engine for the inference and the declared proxies: the messengers' apps, by UID, and
+/// What the network part tells the engine for the inference and the declared proxies: the messengers' apps, by UID, and
 /// the proxies Android's setting names, by host (a name or an address as text) and port.
 #[derive(Clone, Debug, Default, PartialEq, Eq)]
 pub struct ProxySetting {
@@ -110,11 +110,12 @@ pub struct ProxySetting {
     pub messengers: Vec<(Family, u32)>,
     /// The proxies Android's setting names, by host and port.
     pub android: Vec<(String, u16)>,
-    /// The trackers' network signatures of the data pack Watch reads (`trackers`), for the marks a proxied
-    /// flow keeps ([`Proxied::trackers`]); none until Watch hands them.
+    /// The trackers' network signatures of the data pack the network part reads (`trackers`), for the marks a proxied
+    /// flow keeps ([`Proxied::trackers`]); none until the network part hands them.
     pub trackers: Option<Arc<NetworkSignatures>>,
     /// Whether Private DNS is strict on the network beneath: Android's resolver then asks its provider over
-    /// TLS, and Watch sees no app's lookups, so a hello no answer tied is no evidence (the fix round's S-M3).
+    /// TLS, and the network part sees no app's lookups, so a hello no answer tied is no evidence (the fix round's
+    /// S-M3).
     pub strict_dns: bool,
 }
 
@@ -137,7 +138,7 @@ struct Inferred {
     until: Duration,
 }
 
-/// The names a messenger app looked up through Watch, as keyed hashes, each until the names' shortest
+/// The names a messenger app looked up through the network part, as keyed hashes, each until the names' shortest
 /// lifetime ([`crate::names::MIN_KEEP`]) after, and its last lookup, in time since the phone started.
 #[derive(Default)]
 struct LookedUp {
@@ -153,7 +154,7 @@ pub(super) struct State {
     direct: HashMap<u32, Direct>,
     /// The flows named an inferred proxy within their window of take-back, open or ended, by flow.
     inferred: HashMap<u64, Inferred>,
-    /// Each messenger app's lookups through Watch (the fix round's S-M3).
+    /// Each messenger app's lookups through the network part (the fix round's S-M3).
     looked_up: HashMap<u32, LookedUp>,
     /// When each Signal app last reached a third party of its own (a donation's, a debug log's): the pages
     /// it opens in its own web view after are not its proxy (the fix round's R-M5).
@@ -194,7 +195,7 @@ pub(super) enum Shape {
 }
 
 impl State {
-    /// What Watch told last.
+    /// What the network part told last.
     pub(super) fn setting(&self) -> &ProxySetting {
         &self.setting
     }
@@ -227,7 +228,7 @@ fn record_flow(record: &crate::log::Record) -> Option<u64> {
 }
 
 impl Shared {
-    /// Sets what Watch tells for the proxies ([`ProxySetting`]); the open flows keep how they were named.
+    /// Sets what the network part tells for the proxies ([`ProxySetting`]); the open flows keep how they were named.
     pub(super) fn set_proxies(&self, setting: ProxySetting) {
         let mut state = lock(&self.proxies);
         state.families = setting
@@ -238,21 +239,21 @@ impl Shared {
         state.setting = setting;
     }
 
-    /// The messenger an app is, if Watch named it one.
+    /// The messenger an app is, if the network part named it one.
     pub(super) fn family(&self, uid: Option<u32>) -> Option<Family> {
         uid.and_then(|uid| lock(&self.proxies).families.get(&uid).copied())
     }
 
     /// Whether an app's own proxies keep their address and the destination asked for: "Log where these apps
-    /// connect", which Watch hands with every route ([`super::TunnelSetting::log_destinations`]), off until it
-    /// is told.
+    /// connect", which the network part hands with every route ([`super::TunnelSetting::log_destinations`]), off until
+    /// it is told.
     pub(super) fn logs_own_proxies(&self) -> bool {
         self.tunnels.logs_destinations()
     }
 
     /// Whether `address` is in the maker's own network, for the messenger `family`: `Some(true)` or
-    /// `Some(false)` where Watch can tell, by Telegram's ranges, or by the organisation table and the owners'
-    /// table, or by a DNS name of the maker's (`dns_name`); `None` where it cannot.
+    /// `Some(false)` where the network part can tell, by Telegram's ranges, or by the organisation table and the
+    /// owners' table, or by a DNS name of the maker's (`dns_name`); `None` where it cannot.
     fn in_makers_network(
         &self,
         family: Family,
@@ -515,7 +516,7 @@ impl Shared {
     }
 
     /// The trackers matched on `hosts` (a name or an address as text, each with its port), by their εxodus ids,
-    /// sorted, at most [`MAX_TRACKERS`]; none before Watch handed the table.
+    /// sorted, at most [`MAX_TRACKERS`]; none before the network part handed the table.
     fn marks(&self, hosts: &[(String, u16)]) -> Vec<u32> {
         let Some(table) = lock(&self.proxies).setting.trackers.clone() else {
             return Vec::new();
@@ -694,7 +695,7 @@ impl Shared {
 
     /// A TLS hello read on a flow, outside a declared proxy's tunnel: for a messenger's flow, first whether it is
     /// its proxy's, and whether its name may name the flow. A Telegram or `WhatsApp` hello whose name no DNS answer
-    /// Watch passed tied to an address outside the maker's network is a cover: it never names the flow
+    /// the network part passed tied to an address outside the maker's network is a cover: it never names the flow
     /// ("Telegram → google.com" must not appear), and the flow is a candidate for the messenger's proxy. A Signal
     /// hello is decided by its name: Signal's own, its fronts and the third parties it reaches are not a proxy.
     pub(super) fn hello_read(&self, opened: Opened, hello: &Hello) {
@@ -744,11 +745,11 @@ impl Shared {
         }
     }
 
-    /// Whether a messenger's hello named `name`, untied to its flow's address, and Watch can tell so (the fix
-    /// round's S-M3): no answer Watch passed and still holds gave `name` this address, and the app did not
-    /// look `name` up through Watch within the names' lifetime; and only where Watch sees the app's lookups, as
-    /// Private DNS is not strict beneath and the app made one through Watch in the window. Otherwise an untied
-    /// hello is no evidence. A fake-TLS proxy's cover is never looked up.
+    /// Whether a messenger's hello named `name`, untied to its flow's address, and the network part can tell so (the
+    /// fix round's S-M3): no answer the network part passed and still holds gave `name` this address, and the app did
+    /// not look `name` up through the network part within the names' lifetime; and only where the network part sees the
+    /// app's lookups, as Private DNS is not strict beneath and the app made one through the network part in the window.
+    /// Otherwise an untied hello is no evidence. A fake-TLS proxy's cover is never looked up.
     fn untied(&self, opened: &Opened, name: &str) -> bool {
         let Some(uid) = opened.uid else {
             return false;
@@ -771,8 +772,9 @@ impl Shared {
         !seen && !lock(&self.names).gave(opened.destination.ip(), opened.uid, name, Instant::now())
     }
 
-    /// A DNS `answer` Watch passed to the app `uid`, from Android's resolver, the app's own or Watch's cache:
-    /// for a messenger, its question is a name it looked up through Watch ([`Shared::untied`]).
+    /// A DNS `answer` the network part passed to the app `uid`, from Android's resolver, the app's own or the network
+    /// part's cache: for a messenger, its question is a name it looked up through the network part
+    /// ([`Shared::untied`]).
     pub(super) fn looked_up(&self, uid: Option<u32>, answer: &[u8]) {
         let Some(uid) = uid.filter(|&u| {
             matches!(
@@ -1299,7 +1301,7 @@ mod tests {
         (shared, clock)
     }
 
-    /// The app `uid` looked `name` up through Watch, and was given `address`: Android's resolver's answer,
+    /// The app `uid` looked `name` up through the network part, and was given `address`: Android's resolver's answer,
     /// which names every app's flows.
     fn looked_up(shared: &Shared, uid: u32, name: &str, address: [u8; 4]) {
         let answer = super::super::tests::dns_answer(name, address);
@@ -1694,7 +1696,7 @@ mod tests {
     fn a_fake_tls_cover_never_names_telegrams_flow() {
         let shared = engine(true);
         telegram(&shared);
-        // Watch sees Telegram's lookups: it looked a name up through it a moment ago.
+        // The network part sees Telegram's lookups: it looked a name up through it a moment ago.
         looked_up(&shared, UID, "web.example.org", [93, 184, 216, 99]);
         let (proxy, bytes) = open(&shared, UID, at([93, 184, 216, 34], 443));
         relay(
@@ -2419,7 +2421,7 @@ mod tests {
 
     /// "Tied" is tested from the name's side (S-M3): a Telegram hello for a name an answer gave this address,
     /// though a later answer re-pointed it to another name (`www.youtube.com`, then `i.ytimg.com`), names its
-    /// flow and is no cover; so is one for a name the app looked up through Watch, whatever address it got.
+    /// flow and is no cover; so is one for a name the app looked up through the network part, whatever address it got.
     #[test]
     fn a_re_pointed_address_keeps_its_names_tied_for_telegram() {
         let shared = engine(true);
@@ -2486,8 +2488,9 @@ mod tests {
         }
     }
 
-    /// Where Watch does not see the app's lookups, an untied hello is no evidence (S-M3): under strict Private
-    /// DNS, or for an app whose lookups never passed through Watch in the window, the hello names its flow.
+    /// Where the network part does not see the app's lookups, an untied hello is no evidence (S-M3): under strict
+    /// Private DNS, or for an app whose lookups never passed through the network part in the window, the hello names
+    /// its flow.
     #[test]
     fn an_untied_hello_counts_only_where_the_engine_sees_the_apps_lookups() {
         // Strict Private DNS, though the app looked a name up before.
@@ -2522,7 +2525,7 @@ mod tests {
             &[&crate::tls::tests::hello("www.google.com", 1000)],
         );
         assert!(live(&shared, flow.id).proxy.is_some());
-        // An app whose lookups never pass through Watch, as one with its own DNS over HTTPS.
+        // An app whose lookups never pass through the network part, as one with its own DNS over HTTPS.
         let (quiet, clock) = engine_at(true);
         telegram(&quiet);
         let (flow, bytes) = open(&quiet, UID, at([93, 184, 216, 34], 443));
@@ -2533,7 +2536,7 @@ mod tests {
             &[&crate::tls::tests::hello("www.google.com", 1000)],
         );
         assert!(live(&quiet, flow.id).proxy.is_none());
-        // Its last lookup through Watch is older than the window: no evidence either.
+        // Its last lookup through the network part is older than the window: no evidence either.
         looked_up(&quiet, UID, "web.example.org", [93, 184, 216, 99]);
         clock.pass(u64::try_from(SUBSTITUTION.as_millis()).unwrap_or(0) + 1_000);
         let (flow, bytes) = open(&quiet, UID, at([93, 184, 216, 36], 443));

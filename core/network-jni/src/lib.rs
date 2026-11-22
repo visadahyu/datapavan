@@ -1,4 +1,4 @@
-//! Thin JNI bridge between Datapavan Watch and [`datapavan_net`], as `datapavan-jni` is for the audit
+//! Thin JNI bridge between Datapavan Advanced's network part and [`datapavan_net`], as `datapavan-jni` is for the audit
 //! app: `org.visadahyu.datapavan.network.Engine` starts and stops the engine, and the engine calls back
 //! into `NetworkVpnService` for `getConnectionOwnerUid` and `protect`, to hand over the log's records, and
 //! to ask for a reading of the apps' states. Every export converts its
@@ -54,7 +54,7 @@ fn engine() -> MutexGuard<'static, Option<Engine>> {
     ENGINE.lock().unwrap_or_else(PoisonError::into_inner)
 }
 
-/// The chain Watch last set, with whether answers go uncached, kept whether or not an engine ran then
+/// The chain the network part last set, with whether answers go uncached, kept whether or not an engine ran then
 /// (ADR 0044, unit 12, fourth check, minor 1). While `nativeStart` swaps engines, none is in [`ENGINE`]:
 /// a `nativeChain` that lands then, as from `refreshChain`'s thread, is kept here, and the next engine
 /// starts with it, rather than with the older chain the engine before handed over. `nativeStop` clears
@@ -66,7 +66,7 @@ fn setting() -> MutexGuard<'static, Option<ChainSetting>> {
     SET.lock().unwrap_or_else(PoisonError::into_inner)
 }
 
-/// The exchanges of the engine that runs, which wait for Watch's Kotlin side (W8, part 1): `nativeExchanged`
+/// The exchanges of the engine that runs, which wait for the network part's Kotlin side (W8, part 1): `nativeExchanged`
 /// hands each reply here, never under [`ENGINE`], so that a reply never waits for the engine's lock. Set when an
 /// engine starts, cleared when it stops; a reply for an engine that is gone finds no ticket and goes nowhere.
 static EXCHANGES: Mutex<Option<Arc<Exchanges>>> = Mutex::new(None);
@@ -169,8 +169,8 @@ fn set_proxies(change: impl FnOnce(&mut ProxySetting)) {
     }
 }
 
-/// The graded table of tracker blocking Watch's Kotlin side last handed over (`Engine.nativeBlockingTable`), read
-/// from the data pack the audit verifies; none before (W8, part 3a; ADR 0053).
+/// The graded table of tracker blocking the network part's Kotlin side last handed over (`Engine.nativeBlockingTable`),
+/// read from the data pack the audit verifies; none before (W8, part 3a; ADR 0053).
 static BLOCKING_TABLE: Mutex<Option<Arc<Table>>> = Mutex::new(None);
 
 /// Keeps blocking's setting for the engines to come, beside the chain, and sets it on the one that runs.
@@ -368,7 +368,7 @@ fn set_uncached(on: bool) {
 }
 
 /// Starts the next engine with `start`, given what the engine before handed over, if one ran, and the
-/// chain Watch last set: [`SET`] is held from reading it until the new engine is in [`ENGINE`], so that
+/// chain the network part last set: [`SET`] is held from reading it until the new engine is in [`ENGINE`], so that
 /// a chain set meanwhile waits, and then reaches the new engine. Whether it started.
 fn start_next(
     handover: Option<Handover>,
@@ -472,13 +472,13 @@ impl Platform for Service {
         });
     }
 
-    /// Watch's Kotlin side tells the apps' states (ADR 0046, decision 1).
+    /// The network part's Kotlin side tells the apps' states (ADR 0046, decision 1).
     fn tells_states(&self) -> bool {
         true
     }
 
-    /// `NetworkVpnService.routeOfApp(uid)`: where an app Watch did not name at its last hand-over goes, from its
-    /// packages and Watch's store ([`app_route`]); none where Kotlin cannot say.
+    /// `NetworkVpnService.routeOfApp(uid)`: where an app the network part did not name at its last hand-over goes, from
+    /// its packages and the network part's store ([`app_route`]); none where Kotlin cannot say.
     fn route_of_app(&self, uid: u32) -> Option<AppRoute> {
         let uid = i32::try_from(uid).ok()?;
         let answer = self
@@ -984,7 +984,7 @@ pub extern "system" fn Java_org_visadahyu_datapavan_network_Engine_nativeTunnelR
     unowned_env
         .with_env(|_env| -> Result<_, Error> {
             if let Ok(id) = u32::try_from(id) {
-                // The routes to it stay: its apps wait, never going directly, until Watch routes them
+                // The routes to it stay: its apps wait, never going directly, until the network part routes them
                 // elsewhere or sets its configuration again (fix round, both reviews' first finding).
                 set_tunnels(|tunnels| tunnels.tunnels.retain(|t| t.id != id));
             }
@@ -1029,9 +1029,9 @@ pub extern "system" fn Java_org_visadahyu_datapavan_network_Engine_nativeTunnelR
         .resolve::<ThrowRuntimeExAndDefault>();
 }
 
-/// `Engine.nativeKnownApps(uids)`: every installed app's UID, while Watch routes any app, or null when it routes
-/// none (`TunnelSetting::known`): a flow of a UID outside it waits for Watch to say where it goes, and goes
-/// nowhere until then. Kept for the engines to come, as the routes are.
+/// `Engine.nativeKnownApps(uids)`: every installed app's UID, while the network part routes any app, or null when it
+/// routes none (`TunnelSetting::known`): a flow of a UID outside it waits for the network part to say where it goes,
+/// and goes nowhere until then. Kept for the engines to come, as the routes are.
 // SAFETY: exported under the JNI name of the Kotlin method `external fun nativeKnownApps(uids: IntArray?)`.
 #[unsafe(no_mangle)]
 pub extern "system" fn Java_org_visadahyu_datapavan_network_Engine_nativeKnownApps<'caller>(
@@ -1059,7 +1059,7 @@ pub extern "system" fn Java_org_visadahyu_datapavan_network_Engine_nativeKnownAp
         .resolve::<ThrowRuntimeExAndDefault>();
 }
 
-/// `Engine.nativeAppAnswers()`: the engine's answers for the apps Watch did not name, one per line as
+/// `Engine.nativeAppAnswers()`: the engine's answers for the apps the network part did not name, one per line as
 /// [`answer_line`] writes it; empty when no engine runs. For the debug builds' dump.
 // SAFETY: exported under the JNI name of the Kotlin method `external fun nativeAppAnswers(): String`.
 #[unsafe(no_mangle)]
@@ -1095,8 +1095,8 @@ pub extern "system" fn Java_org_visadahyu_datapavan_network_Engine_nativeTunnelS
         .resolve::<ThrowRuntimeExAndDefault>()
 }
 
-/// A reply as Watch's Kotlin side gives it: `outcome` 200 or 0 with the answer's bytes, another HTTP status, or
-/// -1 (no answer in time), -2 (reset once the TLS hello was out, or a certificate that does not check), -3 (refused,
+/// A reply as the network part's Kotlin side gives it: `outcome` 200 or 0 with the answer's bytes, another HTTP status,
+/// or -1 (no answer in time), -2 (reset once the TLS hello was out, or a certificate that does not check), -3 (refused,
 /// closed, or anything else).
 fn reply(outcome: i32, body: Option<Vec<u8>>) -> Reply {
     match (outcome, body) {
@@ -1109,7 +1109,7 @@ fn reply(outcome: i32, body: Option<Vec<u8>>) -> Reply {
 }
 
 /// `Engine.nativeExchanged(ticket, outcome, body)`: the reply to the engine's exchange `ticket` ([`reply`]), from
-/// Watch's Kotlin side's own threads. Returns whether a lookup still waited for it.
+/// the network part's Kotlin side's own threads. Returns whether a lookup still waited for it.
 // SAFETY: exported under the JNI name of the Kotlin method `external fun nativeExchanged(ticket: Long, outcome: Int,
 // body: ByteArray?): Boolean`.
 #[unsafe(no_mangle)]
@@ -1234,7 +1234,7 @@ pub extern "system" fn Java_org_visadahyu_datapavan_network_Engine_nativeDnsTime
         .resolve::<ThrowRuntimeExAndDefault>();
 }
 
-/// The ways of the datasets for Watch's screen ([`catalogue_lines`]).
+/// The ways of the datasets for the network screen ([`catalogue_lines`]).
 // SAFETY: exported under the JNI name of the Kotlin method `external fun nativeDnsCatalogue(relays: String,
 // targets: String, pairs: String, presets: String): String`.
 #[unsafe(no_mangle)]
@@ -1259,7 +1259,7 @@ pub extern "system" fn Java_org_visadahyu_datapavan_network_Engine_nativeDnsCata
         .resolve::<ThrowRuntimeExAndDefault>()
 }
 
-/// The ways of `catalogue` that the engine read, as Watch's screen reads them, one per line, fields by tabs: `relay
+/// The ways of `catalogue` that the engine read, as the network screen reads them, one per line, fields by tabs: `relay
 /// ID`, `target ID`, `pair RELAY TARGET` for each default pair, `allowed RELAY TARGET` for each pair the rule allows,
 /// `preset ID PROTOCOL`. The words of each come from the tables, which the screen reads itself (W8's fix round: the
 /// native library's size counts).
@@ -1289,14 +1289,14 @@ fn catalogue_lines(catalogue: &Catalogue) -> String {
             datapavan_net::catalogue::Protocol::Doh => "doh",
             datapavan_net::catalogue::Protocol::Dot => "dot",
         };
-        // The card's words come from the table itself, which Watch's Kotlin side reads (W8's fix round, review
-        // R-M2): only the presets that read here, and how each is reached.
+        // The card's words come from the table itself, which the network part's Kotlin side reads (W8's fix round,
+        // review R-M2): only the presets that read here, and how each is reached.
         lines.push(format!("preset\t{}\t{protocol}", p.id));
     }
     lines.join("\n")
 }
 
-/// `Engine.nativeUncacheAnswers(on)`: whether the answers of Watch's own DNS address reach the apps
+/// `Engine.nativeUncacheAnswers(on)`: whether the answers of the network part's own DNS address reach the apps
 /// with a time to live of 0, so that Android's resolver keeps none of them.
 // SAFETY: exported under the JNI name of the Kotlin method `external fun nativeUncacheAnswers(on: Boolean)`.
 #[unsafe(no_mangle)]
@@ -1373,13 +1373,13 @@ pub extern "system" fn Java_org_visadahyu_datapavan_network_Engine_nativeActivit
         .resolve::<ThrowRuntimeExAndDefault>()
 }
 
-/// The network signatures of the trackers table Watch's Kotlin side last handed over, read from the data
+/// The network signatures of the trackers table the network part's Kotlin side last handed over, read from the data
 /// pack the audit verifies (`Engine.nativeTrackers`), for "Now" and each app's history; none before.
 static TRACKERS: Mutex<Option<Arc<NetworkSignatures>>> = Mutex::new(None);
 
 /// `Engine.nativeReadDataPack(pack, keys)`: checks a data pack's signature against the trusted keys
 /// (`signify` public key lines separated by `\n`), then reads its header, as the audit's bridge does
-/// (`datapack::read_signed`), so that Watch reads the pack the audit verifies, not a copy of its own.
+/// (`datapack::read_signed`), so that the network part reads the pack the audit verifies, not a copy of its own.
 // SAFETY: exported under the JNI name of the Kotlin method `external fun nativeReadDataPack(pack: ByteArray,
 // keys: String): IntArray`.
 #[unsafe(no_mangle)]
@@ -1651,7 +1651,7 @@ pub extern "system" fn Java_org_visadahyu_datapavan_network_Engine_nativeFlowRou
 
 /// `Engine.nativeProxies(families, uids, android, strictDns)`: the messengers' apps, each UID of `uids` of the
 /// family at the same place in `families` (0 Telegram, 1 `WhatsApp`, 2 Signal), the proxies Android's setting names,
-/// one `host port` a line in `android` (W8, part 2a; ADR 0052), and whether Private DNS is strict on Watch's
+/// one `host port` a line in `android` (W8, part 2a; ADR 0052), and whether Private DNS is strict on the network part's
 /// network. Kept for the engines to come, as the chain is.
 // SAFETY: exported under the JNI name of the Kotlin method `external fun nativeProxies(families: IntArray, uids:
 // IntArray, android: String, strictDns: Boolean)`.
@@ -1717,7 +1717,7 @@ fn proxy_setting(families: &[i32], uids: &[i32], android: &str) -> ProxySetting 
 }
 
 /// `Engine.nativeMessengerClients()`: the messengers' client packages the engine's table holds, one `family
-/// package` a line (`telegram`, `whatsapp` or `signal`), for Watch to find their UIDs.
+/// package` a line (`telegram`, `whatsapp` or `signal`), for the network part to find their UIDs.
 // SAFETY: exported under the JNI name of the Kotlin method `external fun nativeMessengerClients(): String`.
 #[unsafe(no_mangle)]
 pub extern "system" fn Java_org_visadahyu_datapavan_network_Engine_nativeMessengerClients<
@@ -2065,7 +2065,7 @@ mod tests {
     /// Fourth check of unit 12, minor 1: a chain set while no engine runs, as between `hand_over` and
     /// `start_with` in `nativeStart`, is kept, and the next engine starts with it; one set on a running
     /// engine is the next one's too; and the tunnel's stop forgets it, so that the next run starts with
-    /// none, unless a chain is set before its first engine, as Watch now sets it at a start (unit 12b).
+    /// none, unless a chain is set before its first engine, as the network part now sets it at a start (unit 12b).
     #[test]
     fn a_chain_set_while_no_engine_runs_is_the_next_engines() {
         let _process = process();
@@ -2176,7 +2176,7 @@ mod tests {
         assert!(setting().is_none(), "nothing of the run kept for the next");
     }
 
-    /// Watch's answer for an app it did not name reads as a route, and anything else as none, which refuses.
+    /// The network part's answer for an app it did not name reads as a route, and anything else as none, which refuses.
     #[test]
     fn an_answer_for_an_unnamed_app_reads_strictly() {
         assert_eq!(app_route("direct"), Some(AppRoute::Direct));
@@ -2352,7 +2352,8 @@ mod tests {
         Ok(())
     }
 
-    /// What Watch hands for the proxies: codes and UIDs that do not fit, and lines that do not parse, are left out.
+    /// What the network part hands for the proxies: codes and UIDs that do not fit, and lines that do not parse, are
+    /// left out.
     #[test]
     fn the_proxy_setting_keeps_only_what_parses() {
         let setting = proxy_setting(

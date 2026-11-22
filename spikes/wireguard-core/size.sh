@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Size per ABI of Watch's native library (W7's spike, ADR 0035, question 3). Four variants:
+# Size per ABI of the network part's native library (W7's spike, ADR 0035, question 3). Four variants:
 #
 #   today     core/network-jni, as the app builds it now;
 #   baseline  the spike's copy (size/): core/network-jni's own source, unchanged, without WireGuard;

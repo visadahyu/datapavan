@@ -1,4 +1,4 @@
-//! A SOCKS5 client (RFC 1928, with RFC 1929's username and password) for W6: Watch carries the
+//! A SOCKS5 client (RFC 1928, with RFC 1929's username and password) for W6: the network part carries the
 //! traffic of the apps the user chains through the local proxy of the user's circumvention tool
 //! (docs/VPN.md, "Coexistence with other VPNs"). It sends only `CONNECT` and `UDP ASSOCIATE`; `BIND`,
 //! which would let the tool's network open a connection to the phone, has no command here.
@@ -115,7 +115,7 @@ fn valid_name(name: &[u8]) -> bool {
             .all(|&b| b.is_ascii_alphanumeric() || matches!(b, b'-' | b'_' | b'.'))
 }
 
-/// What Watch asks the proxy to do. `BIND` has no variant.
+/// What the network part asks the proxy to do. `BIND` has no variant.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum Command {
     /// A TCP connection to the target.
@@ -143,7 +143,7 @@ impl Credentials {
         })
     }
 
-    /// The username, for Watch's Kotlin side when it reaches the tool itself (W8, part 1).
+    /// The username, for the network part's Kotlin side when it reaches the tool itself (W8, part 1).
     #[must_use]
     pub fn user(&self) -> &[u8] {
         &self.user
@@ -167,7 +167,7 @@ impl fmt::Debug for Credentials {
 pub enum Error {
     /// The other end is not a SOCKS5 proxy, or broke the protocol.
     Protocol,
-    /// The proxy accepts none of the methods offered: it wants a password Watch was not given.
+    /// The proxy accepts none of the methods offered: it wants a password the network part was not given.
     NoAcceptableMethod,
     /// The proxy refused the username and password.
     PasswordRefused,
@@ -220,7 +220,7 @@ impl fmt::Display for Error {
 
 impl std::error::Error for Error {}
 
-/// The greeting: no authentication, and the password method too when Watch has credentials, so that
+/// The greeting: no authentication, and the password method too when the network part has credentials, so that
 /// the proxy chooses; a tool that cannot take a password still answers.
 #[must_use]
 pub fn greeting(credentials: Option<&Credentials>) -> Vec<u8> {
@@ -230,7 +230,7 @@ pub fn greeting(credentials: Option<&Credentials>) -> Vec<u8> {
     }
 }
 
-/// The method the proxy chose: `true` for the password, `false` for none. A method Watch did not
+/// The method the proxy chose: `true` for the password, `false` for none. A method the network part did not
 /// offer is a protocol error.
 ///
 /// # Errors
@@ -342,7 +342,7 @@ pub fn datagram(target: &Target, payload: &[u8]) -> Vec<u8> {
 }
 
 /// A datagram from the relay: the target it came from and its payload. `None` for a fragment, which
-/// Watch drops as RFC 1928 allows, or for a malformed header.
+/// the network part drops as RFC 1928 allows, or for a malformed header.
 #[must_use]
 pub fn parse_datagram(bytes: &[u8]) -> Option<(Target, &[u8])> {
     if *bytes.get(..3)? != [0, 0, 0] {

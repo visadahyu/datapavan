@@ -1,5 +1,5 @@
 //! Well-known public DNS resolvers, from `data/resolvers/resolvers.tsv` (CC0, each value with its
-//! operator's own page in `sources.tsv`), so that Watch can say when an app sends its own DNS to one of
+//! operator's own page in `sources.tsv`), so that the network part can say when an app sends its own DNS to one of
 //! them, past the phone's settings (W3, ADR 0029): plain DNS to one of its addresses, or DNS over HTTPS
 //! to one of its host names or addresses.
 //!

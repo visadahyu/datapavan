@@ -1,4 +1,4 @@
-//! Watch's offline table from IP address to network and organisation (ADR 0036), built by
+//! The network part's offline table from IP address to network and organisation (ADR 0036), built by
 //! `data/dbip-asn/update.py` from DB-IP's IP to ASN Lite: the last way a flow gets a name, when no DNS
 //! answer, TLS server name or QUIC server name gave one (W3).
 //!

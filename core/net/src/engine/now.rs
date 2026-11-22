@@ -2,11 +2,11 @@
 //! and received them, go to its app's counts by state, in whole minutes over the last hour and since
 //! the screen last came on, and to the destination its flow reached, named as W3 names it. A chained
 //! app's flow whose destination stays out of the log adds to its app's counts only, with the mark that it
-//! went through the user's tool ("Log where these apps connect" off). Lookups to Watch's own DNS address
+//! went through the user's tool ("Log where these apps connect" off). Lookups to the network part's own DNS address
 //! are the log's only.
 //!
 //! All of it is memory only, written to no file, kept with retention "none" too, handed to the next
-//! engine when the tunnel is set up again, and gone when Watch stops. It is bounded: at most [`APPS`]
+//! engine when the tunnel is set up again, and gone when the network part stops. It is bounded: at most [`APPS`]
 //! apps, each with at most 61 minutes of counts, and [`PLACES`] destinations for all apps together and
 //! [`PLACES_PER_APP`] for one, each with at most 61 minutes of counts and names of at most 253 bytes;
 //! past a bound, the app or destination with bytes the longest ago gives way (ADR 0046's "How it is
@@ -259,12 +259,12 @@ pub(super) struct Counts {
     /// seconds before it, placed later, are not counted again.
     cleared: u64,
     /// A moment at or before which no screen-off opens a window: that of a window the last clear forgot, or
-    /// the new clock's now when a clock set back forgot one, so that a reading that tells it again, as Watch's
-    /// Kotlin side does with its moments moved back, does not open it anew, empty (review c1 of W5's third
+    /// the new clock's now when a clock set back forgot one, so that a reading that tells it again, as the network
+    /// part's Kotlin side does with its moments moved back, does not open it anew, empty (review c1 of W5's third
     /// part, engine, finding 2).
     off_floor: u64,
     /// When the engine began counting, in milliseconds since 1970 (0 before it is told): the window while the
-    /// screen was off begins no earlier, so that it never claims hours Watch did not see (finding 6).
+    /// screen was off begins no earlier, so that it never claims hours the network part did not see (finding 6).
     began: u64,
 }
 
@@ -368,7 +368,7 @@ impl Counts {
             .is_some_and(|off| off.until.unwrap_or(off.from) > now)
         {
             self.off = None;
-            // Watch's Kotlin side moves the window's moments back with the clock and tells them again: the
+            // The network part's Kotlin side moves the window's moments back with the clock and tells them again: the
             // window, forgotten with its bytes, is not opened anew from them, empty.
             self.off_floor = now;
         }
@@ -749,7 +749,7 @@ impl Shared {
     }
 
     /// The network and organisation behind a destination: the flow's own where the organisation table
-    /// named it, else the table's for its address, if Watch has the table.
+    /// named it, else the table's for its address, if the network part has the table.
     fn organisation_of(&self, flow: &Flow) -> Option<(Network, String)> {
         if flow.named_by == NamedBy::Organisation
             && let (Some(network), Some(name)) = (flow.network, &flow.name)
@@ -2345,7 +2345,7 @@ mod tests {
         counts.screen_on(T + 10 * MINUTE);
         counts.set_back(T + 5 * MINUTE);
         assert!(counts.off.is_none());
-        // Watch's Kotlin side moves both moments back by the set back, 15 minutes, and tells them again.
+        // The network part's Kotlin side moves both moments back by the set back, 15 minutes, and tells them again.
         counts.screen_off(T - 15 * MINUTE);
         counts.screen_on(T - 5 * MINUTE);
         assert!(
@@ -2359,7 +2359,7 @@ mod tests {
         );
     }
 
-    /// The window while the screen was off begins no earlier than the engine began counting: Watch started
+    /// The window while the screen was off begins no earlier than the engine began counting: the network part started
     /// with the screen off, its first reading telling a screen-off long before (finding 6); and a screen-on
     /// told before a running window's start does not end it (nit 1).
     #[test]
@@ -2411,13 +2411,13 @@ mod tests {
         assert!(Counts::default().counted(0), "never cleared");
     }
 
-    /// Where the fixture Watch's Kotlin side reads is kept (`SnapshotTest`).
+    /// Where the fixture the network part's Kotlin side reads is kept (`SnapshotTest`).
     const FIXTURE: &str = concat!(
         env!("CARGO_MANIFEST_DIR"),
         "/../../android/network/src/test/resources/org/visadahyu/datapavan/network/activity/snapshot.hex"
     );
 
-    /// The fixture Watch's Kotlin side reads is what the engine writes, byte for byte, as for the log
+    /// The fixture the network part's Kotlin side reads is what the engine writes, byte for byte, as for the log
     /// (`logbook`): from an engine's own counts, of an app placed in each state, a chained app, the tool
     /// and flows of no app, read with no usage access at the end.
     #[test]
@@ -2514,8 +2514,8 @@ mod tests {
         assert_eq!(bytes_of(&snapshot, None)[0][0], [50, 0]);
         assert_eq!(bytes_of(&snapshot, None)[0][8], [50, 0], "no app");
         let mut text = String::from(
-            "# Watch's live view: one snapshot as the engine writes it (core/net/src/snapshot.rs, version 4), in\n\
-             # hex. Written by the engine's test the_kotlin_sides_snapshot_fixture_is_what_the_engine_writes\n\
+            "# The network part's live view: one snapshot as the engine writes it (core/net/src/snapshot.rs,\n\
+             # version 4), in hex. Written by the engine's test the_kotlin_sides_snapshot_fixture_is_what_the_engine_writes\n\
              # (core/net/src/engine/now.rs), which fails when the engine writes otherwise; run it with\n\
              # DATAPAVAN_WRITE_FIXTURE=1 to write it anew. Read by SnapshotTest. Not edited by hand.\n",
         );

@@ -14,7 +14,7 @@ crate-type = ["cdylib"]
 
 [dependencies]
 datapavan-net = { path = "../net" }
-# The data pack's reader, which checks a pack's signature, for the table of trackers Watch marks with
+# The data pack's reader, which checks a pack's signature, for the table of trackers the network part marks with
 # (W5's third part): the same code the audit reads its packs with.
 datapavan-engine = { path = "../engine" }
 jni = { version = "0.22.4", default-features = false }

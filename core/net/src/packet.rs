@@ -576,7 +576,7 @@ pub enum Unreachable {
     Host,
     /// The host answered that no one listens on the port (UDP).
     Port,
-    /// Watch refuses it: "communication administratively prohibited" (RFC 1812 5.2.7.1), `ICMPv6`'s
+    /// The network part refuses it: "communication administratively prohibited" (RFC 1812 5.2.7.1), `ICMPv6`'s
     /// "communication with destination administratively prohibited".
     Prohibited,
 }
@@ -832,7 +832,7 @@ fn echo(
 }
 
 /// Gives `packet`, an IPv4 or IPv6 packet the engine built, the hop limit `hops`: the one its answer
-/// arrived with, which reaches the app as it would without Watch (ADR 0044, unit 11b). IPv4's header
+/// arrived with, which reaches the app as it would without the network part (ADR 0044, unit 11b). IPv4's header
 /// checksum is made anew. A packet too short for its header is left as it is.
 pub fn set_hops(packet: &mut [u8], hops: u8) {
     match packet.first().map(|first| first >> 4) {

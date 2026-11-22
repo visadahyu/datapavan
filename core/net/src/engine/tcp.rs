@@ -583,9 +583,9 @@ async fn upstream(
     Option<Arc<super::Chain>>,
     Option<u32>,
 )> {
-    // DNS over TCP to Watch's address goes the way the app's lookups go, once Watch's encrypted resolver is set:
-    // at port 53 to the engine's own listener of it, at any other port (853, Android's opportunistic DNS over
-    // TLS, among them) refused, so that Android asks on port 53 (W8, part 1, point 9).
+    // DNS over TCP to the network part's address goes the way the app's lookups go, once the network part's encrypted
+    // resolver is set: at port 53 to the engine's own listener of it, at any other port (853, Android's opportunistic
+    // DNS over TLS, among them) refused, so that Android asks on port 53 (W8, part 1, point 9).
     let lookups = shared.resolver.on() && shared.is_tunnel_dns(destination.ip());
     let direct = |uid: Option<u32>| async move {
         if lookups {
@@ -613,7 +613,7 @@ async fn upstream(
         || blocking
     {
         // The route waits for the app's name: a chained or tunnelled app's connection must not start
-        // directly, nor one its app's share may refuse, nor one of an app Watch did not name, which may be
+        // directly, nor one its app's share may refuse, nor one of an app the network part did not name, which may be
         // a routed app installed again, nor one tracker blocking may refuse.
         let uid = owner(shared, TCP, app, destination).await;
         let share = shared.tcp_shares.take(uid).ok()?;
@@ -665,8 +665,8 @@ async fn upstream(
 }
 
 /// The row that refuses a connection of `uid` to `destination` before anything leaves (ADR 0053, decision 4): a
-/// stand-in's name, which a chained app's SOCKS request to the tool would carry, or an address an answer Watch
-/// passed tied to blocked names alone.
+/// stand-in's name, which a chained app's SOCKS request to the tool would carry, or an address an answer the network
+/// part passed tied to blocked names alone.
 pub(super) fn blocked_before(
     shared: &Shared,
     uid: Option<u32>,

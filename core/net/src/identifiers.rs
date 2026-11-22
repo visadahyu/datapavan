@@ -51,7 +51,7 @@ const NTP_SIZE: usize = 48;
 const NETBIOS: u16 = 137;
 /// Multicast DNS's port (RFC 6762): from it, a querier's responses hold no question.
 const MDNS: u16 = 5353;
-/// Of a STUN message, the bytes over which its attributes are walked ([`stun`]): Watch's tunnel's largest
+/// Of a STUN message, the bytes over which its attributes are walked ([`stun`]): the network part's tunnel's largest
 /// MTU, [`quic::LARGEST_DATAGRAM`] (ADR 0044, unit 9b, fix rounds 4 and 5).
 const WALKED: usize = quic::LARGEST_DATAGRAM;
 
@@ -346,7 +346,7 @@ fn stun_class(message: &[u8]) -> u8 {
 /// that each fit, padded to 4 bytes, to its end, walked over its first [`WALKED`] bytes.
 ///
 /// A STUN message over UDP SHOULD be smaller than the path's MTU (RFC 8489 6.1), at most 1,500 bytes
-/// through Watch's tunnel, but need not be: the rule is a SHOULD so that STUN may probe the MTU with RFC
+/// through the network part's tunnel, but need not be: the rule is a SHOULD so that STUN may probe the MTU with RFC
 /// 5780's PADDING, an attribute whose own length SHOULD be the MTU of the sender's outgoing interface
 /// (5780 7.6), and which a server MUST put in its response to a padded request (6.1): a padded message
 /// exceeds 1,500 bytes on any path of 1,500. So a larger message is read, its header in full and its

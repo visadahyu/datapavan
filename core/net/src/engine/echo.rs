@@ -7,7 +7,7 @@
 //! app's identifier, the sequence number and data kept, checksums made anew, and the hop limit it
 //! arrived with. Each request leaves with the app's own hop limit, and the errors the path answers it
 //! with, a router's "time exceeded" among them, reach the app from whoever sent them, one at most for
-//! each request (ADR 0044, unit 11b): a traceroute or `ping -t` through Watch sees the path.
+//! each request (ADR 0044, unit 11b): a traceroute or `ping -t` through the network part sees the path.
 //!
 //! Android cannot say whose an echo is: `getConnectionOwnerUid` knows only TCP and UDP. So while a
 //! chain sends any app through the user's tool, no echo leaves directly, since it could be a chained
@@ -17,7 +17,7 @@
 //!
 //! Echo is not a flow: the connection log gets no record of it, and the log's format is unchanged.
 //! The counters are all that is kept of it: since unit 11b its bytes too, in the engine's byte counters,
-//! as Android counts them to Watch's own sockets.
+//! as Android counts them to the network part's own sockets.
 
 use super::errors::{self, Queued, Tally, Told};
 use super::udp::{network_moved, with_buffer};
@@ -459,7 +459,7 @@ impl Loop {
             return;
         }
         // The tunnel's own DNS address leads to the network's resolver, as for UDP and TCP; until
-        // Watch knows that resolver, a ping to it goes nowhere, and so does one to a resolver of the
+        // the network part knows that resolver, a ping to it goes nowhere, and so does one to a resolver of the
         // other IP version, which the app's ICMP or ICMPv6 message cannot reach: its socket would
         // refuse every request and hold a place for `Limits::echo_idle`.
         let target = self
@@ -489,7 +489,7 @@ impl Loop {
             (next, std::mem::take(&mut table.made_room))
         };
         Counters::add(&counters.echo_evicted, made_room);
-        // No await between the chain's check above and the send: a chain set meanwhile from Watch's
+        // No await between the chain's check above and the send: a chain set meanwhile from the network part's
         // side is seen by the next request.
         match next {
             // The kernel writes the socket's own identifier and the checksum into the request.
@@ -520,7 +520,7 @@ impl Loop {
 /// Counts a request that left, with its bytes up (ADR 0044, unit 11b), or one whose socket could not
 /// send it, as when its buffer is full. Its bytes are what the ping socket sent, the ICMP message,
 /// header and data, as UDP's are what its sockets send: Android counts them, with their IP headers, to
-/// Watch, whose own counters left them out before.
+/// the network part, whose own counters left them out before.
 fn count_sent(shared: &Shared, sent: &io::Result<usize>) {
     let counters = &shared.counters;
     match sent {
@@ -656,7 +656,7 @@ async fn carry(
 ///
 /// It queues the ICMP errors that answer its requests on the network beneath (`IP_RECVERR`,
 /// `IPV6_RECVERR`): "time exceeded", "destination unreachable", "fragmentation needed" and "packet too
-/// big" then reach the app as they would without Watch, where before the app saw no reply (unit 11b).
+/// big" then reach the app as they would without the network part, where before the app saw no reply (unit 11b).
 /// With the option, each such error also fails the socket's next read or send once, which then takes
 /// it: such a failure (`errors::from_icmp`) does not end the socket, and the error itself is read off
 /// its queue on `Interest::ERROR`. Where the kernel refuses the option, errors are lost, as before.
@@ -771,7 +771,7 @@ fn receive(
 }
 
 /// The errors from the path a ping socket read off its queue, `queued`, each for the app as it would
-/// reach it without Watch (ADR 0044, unit 11b): from the router or host that sent it, or from the
+/// reach it without the network part (ADR 0044, unit 11b): from the router or host that sent it, or from the
 /// address the app pinged where the kernel names none or it is the target itself; quoting the app's own
 /// request as a router does: its IP header as the app sent it, with the hop limit the router found (1
 /// for "time exceeded"), its ICMP header as the app sent it, its identifier and sequence number among

@@ -1,4 +1,4 @@
-//! Fuzzing of Watch's reader of QUIC Initial packets (`datapavan_net::quic`): any datagrams an app
+//! Fuzzing of the network part's reader of QUIC Initial packets (`datapavan_net::quic`): any datagrams an app
 //! sends. The input is a series of datagrams, each after its length in two bytes. The first byte
 //! chooses how they are read: as datagrams, protection and all, or as the frames of Initial packets
 //! whose protection is already removed, since random bytes almost never decrypt to frames and the

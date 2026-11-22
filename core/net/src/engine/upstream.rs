@@ -23,8 +23,9 @@ impl Shared {
     }
 }
 
-/// Asks Android whose a flow is, off the event loop: the answer comes over Binder. An app Watch did not name
-/// when it last handed its routes over is asked of Watch too, before the flow's route is decided ([`where_to`]).
+/// Asks Android whose a flow is, off the event loop: the answer comes over Binder. An app the network part did not name
+/// when it last handed its routes over is asked of the network part too, before the flow's route is decided
+/// ([`where_to`]).
 pub(super) async fn owner(
     shared: &Arc<Shared>,
     protocol: u8,
@@ -42,10 +43,10 @@ pub(super) async fn owner(
     uid
 }
 
-/// Asks Watch where the app `uid` goes, when Watch did not name it at its last hand-over and has not answered
-/// yet (the maintainer, 2026-11-20): on a thread of its own, never the event loop's, while the flow that asked
-/// waits, at most [`ASK_BOUND`]; past it the flow is refused ([`Shared::app_route`]), and an answer that comes
-/// later serves the app's next flows. The answer is kept by UID until Watch's next hand-over names the app.
+/// Asks the network part where the app `uid` goes, when the network part did not name it at its last hand-over and has
+/// not answered yet (the maintainer, 2026-11-20): on a thread of its own, never the event loop's, while the flow that
+/// asked waits, at most [`ASK_BOUND`]; past it the flow is refused ([`Shared::app_route`]), and an answer that comes
+/// later serves the app's next flows. The answer is kept by UID until the network part's next hand-over names the app.
 async fn where_to(shared: &Arc<Shared>, uid: u32) {
     if !shared.tunnels.must_ask(uid, Instant::now()) {
         return;
@@ -88,7 +89,7 @@ pub(super) async fn connect_tcp(shared: &Arc<Shared>, target: SocketAddr) -> io:
         TcpSocket::new_v6()?
     };
     protect(shared, socket.as_fd()).await?;
-    // Android's stack answers the app's own keepalives inside the phone, so through Watch an app cannot
+    // Android's stack answers the app's own keepalives inside the phone, so through the network part an app cannot
     // tell that the server is gone: the kernel's keepalive on the upstream socket does (after about two
     // hours and eleven minutes by Linux's defaults, beyond RFC 5382's two hours and four), and the relay
     // ends both sides.

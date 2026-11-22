@@ -1,6 +1,6 @@
 # cargo-deny policy: which licences, sources and advisories the Rust dependency tree may have.
 # The enterprise flavour will be commercial, so only licences that allow it pass: permissive ones, and
-# since W7 MPL-2.0, a file-level copyleft that GotaTun alone carries (ADR 0035): Watch stays Apache-2.0,
+# since W7 MPL-2.0, a file-level copyleft that GotaTun alone carries (ADR 0035): the network part stays Apache-2.0,
 # and a change to one of GotaTun's own files would be published under MPL-2.0.
 
 [graph]

@@ -1,4 +1,4 @@
-//! Fuzzing of Watch's reader of the proxy requests an app's first bytes declare, and of the shapes of
+//! Fuzzing of the network part's reader of the proxy requests an app's first bytes declare, and of the shapes of
 //! messengers' proxies (`datapavan_net::proxies`, W8, part 2a): the first bytes of any app's connection. A
 //! request found names a destination a flow can keep, its tunnel starts within the bytes, and reading a stream
 //! that grows never finds a request the whole stream does not have. The seeds are synthetic: no capture of a

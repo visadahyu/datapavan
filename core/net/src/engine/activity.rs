@@ -7,10 +7,10 @@
 //! bytes of a second are the counts from its mark to the next. An app's slots are its flows' marks, so
 //! an app with no traffic holds none, and a count within a second takes no lock: a division, an
 //! addition, a few comparisons and one atomic load more than before, and the lock of the flow's own marks
-//! once a second (ADR 0044's cost note). An app's lookups to Watch's own DNS address are marked the same way, under the
-//! lock they already take.
+//! once a second (ADR 0044's cost note). An app's lookups to the network part's own DNS address are marked the same
+//! way, under the lock they already take.
 //!
-//! **States come from Watch's Kotlin side** ([`crate::states`]): a reading of Android's usage events, as
+//! **States come from the network part's Kotlin side** ([`crate::states`]): a reading of Android's usage events, as
 //! the states each app had over a span of the wall clock, in use and with its notification, the
 //! background elsewhere. A second is *placed* once a reading covers all of it: in the state its app had
 //! in it, "in use" winning over "with its notification" and both over "in the background" within the
@@ -30,7 +30,7 @@
 //! **The window.** Each flow, and each app's lookups, holds at most [`WINDOW`] seconds with counts not
 //! placed yet, and all of them together at most [`MARKS`], each app a quarter of it; past either, the
 //! oldest are placed in no state, "told too late", of the app past its share or holding the most. The
-//! engine asks for a reading at each new second counted, at most every [`ASK_EVERY`] seconds; Watch's
+//! engine asks for a reading at each new second counted, at most every [`ASK_EVERY`] seconds; the network part's
 //! Kotlin side reads at most every 5 seconds with the screen on and every minute with it off (ADR 0046,
 //! decision 1), making an ask in its turn, so a second waits about a minute at most, and the window holds
 //! twice that. A second never ages out by time: in deep sleep it waits for the phone to wake.
@@ -39,7 +39,7 @@
 //! or in no state ("not told"), so that the seconds of two clocks never wait for one reading
 //! ([`Shared::clock_set_back`]).
 //!
-//! **Without Watch's Kotlin side telling states** ([`super::Platform::tells_states`], as in tests that do
+//! **Without the network part's Kotlin side telling states** ([`super::Platform::tells_states`], as in tests that do
 //! not), no mark is noted and every segment is written at once in no state, "not told".
 
 use super::now::{Counts, Seen};
@@ -162,7 +162,7 @@ pub(super) enum Whose {
 }
 
 impl Force {
-    /// Every second, as when the log is flushed or Watch stops.
+    /// Every second, as when the log is flushed or the network part stops.
     pub(super) const ALL: Self = Self {
         before: u64::MAX,
         why: Unknown::NotTold,
@@ -188,7 +188,7 @@ pub(super) enum Of {
         hidden: bool,
         direct: bool,
     },
-    /// An app's lookups to Watch's own DNS address: its counts are the lookups, nought, and their bytes
+    /// An app's lookups to the network part's own DNS address: its counts are the lookups, nought, and their bytes
     /// up and down on the tunnel.
     Lookups,
 }
@@ -466,7 +466,7 @@ impl Timeline {
 /// The states told, the segments that wait for theirs, and each app's counts by state for the live
 /// view ([`super::now`]).
 pub(super) struct Activity {
-    /// Whether Watch's Kotlin side tells the states ([`super::Platform::tells_states`]); without it
+    /// Whether the network part's Kotlin side tells the states ([`super::Platform::tells_states`]); without it
     /// every second is placed at once in no state, "not told".
     tracked: bool,
     timeline: Timeline,
@@ -822,7 +822,7 @@ impl Shared {
         }
     }
 
-    /// Asks Watch's Kotlin side for a reading of the states, at most every [`ASK_EVERY`] seconds of the
+    /// Asks the network part's Kotlin side for a reading of the states, at most every [`ASK_EVERY`] seconds of the
     /// wall clock, whose second now is `second`: it reads when its own rules allow (ADR 0046, decision
     /// 1). A clock set back asks at once.
     pub(super) fn ask(&self, second: u64) {
@@ -837,7 +837,7 @@ impl Shared {
     }
 
     /// Takes a reading of the states, and places every second it covers. Seconds or segments it left
-    /// waiting, as those of the moments after its end, ask for the next reading at once: Watch's Kotlin
+    /// waiting, as those of the moments after its end, ask for the next reading at once: the network part's Kotlin
     /// side makes it when its turn comes, so that they are placed within a reading's period even when no
     /// traffic asks again (review b1 of W5's second part, engine, on how long a record can wait).
     pub(super) fn tell(&self, told: &Told) {
@@ -1730,7 +1730,7 @@ pub(super) mod tests {
         );
     }
 
-    /// An app's lookups to Watch's own DNS address are marked and cut where its state changes too.
+    /// An app's lookups to the network part's own DNS address are marked and cut where its state changes too.
     #[test]
     fn an_apps_lookups_are_cut_where_its_state_changes() {
         let (shared, clock, _) = telling_at(T);
@@ -2132,7 +2132,7 @@ pub(super) mod tests {
     }
 
     /// Past its share of [`HELD`], an app's own oldest segment is written as told too late, never another
-    /// app's: an app that ends short flows by the hundred while the screen is off does not blind Watch
+    /// app's: an app that ends short flows by the hundred while the screen is off does not blind the network part
     /// for others (review b1 of W5's second part, engine, finding 2).
     #[test]
     fn segments_past_an_apps_share_are_its_own_written_as_told_too_late() {
@@ -2763,7 +2763,7 @@ pub(super) mod tests {
         Ok(())
     }
 
-    /// Without Watch's Kotlin side telling states, no mark is noted and every segment is written at
+    /// Without the network part's Kotlin side telling states, no mark is noted and every segment is written at
     /// once, not told.
     #[test]
     fn without_states_told_every_segment_is_written_at_once_as_not_told() {

@@ -9,7 +9,7 @@ functions, unsafe impls and traits, unsafe extern blocks and unsafe attributes (
 after removing comments and string literals. Code under `#[cfg(test)]` inside src/ is counted too, and so is
 code behind features this build does not enable: a site is a place to review, not proof that it runs.
 Crates that forbid unsafe code at their root say so. For crates with C or assembly it gives their files and
-lines as well. Crates named in the --except file ("name vX.Y.Z" lines) are left out: those already in Watch.
+lines as well. Crates named in the --except file ("name vX.Y.Z" lines) are left out: those already in the network part.
 """
 
 import os

@@ -1,4 +1,4 @@
-# W7's spike (ADR 0035, "Before building W7"): GotaTun's protocol core measured beside Watch's engine.
+# W7's spike (ADR 0035, "Before building W7"): GotaTun's protocol core measured beside the network part's engine.
 # Throwaway code: nothing here is released or goes into core/net or the app. It lives outside core's
 # workspace, with a lock file of its own that began as a copy of core/Cargo.lock, so that every crate the
 # engine already uses keeps its version. Findings: docs/spikes/2026-11-wireguard-core.md.

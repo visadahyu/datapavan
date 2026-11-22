@@ -1,6 +1,6 @@
-//! Watch's own cache of the network resolver's answers, for the apps that go directly while a chain is
+//! The network part's own cache of the network resolver's answers, for the apps that go directly while a chain is
 //! on (ADR 0038). Then every answer reaches the apps with a time to live of 0, so that Android's shared
-//! cache keeps none; without a cache of its own, Watch would send the network's resolver a query for
+//! cache keeps none; without a cache of its own, the network part would send the network's resolver a query for
 //! every lookup, many more than before. This cache keeps each answer for the time to live it came with
 //! and answers the same question from it, so that the network sees no more queries than without a chain.
 //!

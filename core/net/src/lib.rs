@@ -1,4 +1,4 @@
-//! Datapavan Watch's packet engine (ADR 0012, docs/VPN.md): it reads every app's IP packets from the
+//! Datapavan Advanced's packet engine (ADR 0012, docs/VPN.md): it reads every app's IP packets from the
 //! tunnel, asks Android which app each flow belongs to, and passes the traffic on to its real
 //! destination over sockets that stay outside the tunnel. Android's own TCP stack terminates the
 //! apps' connections, reached by rewriting addresses; UDP is relayed in userspace.

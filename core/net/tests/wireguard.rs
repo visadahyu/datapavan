@@ -452,8 +452,8 @@ async fn udp_passes_back_only_from_inside_allowed_ips_on_a_flow_the_app_started(
     Ok(())
 }
 
-/// A chosen app's lookup to Watch's own DNS address goes to the configuration's DNS server through the
-/// tunnel, and its answer reaches the app from Watch's address with a time to live of 0; the same question
+/// A chosen app's lookup to the network part's own DNS address goes to the configuration's DNS server through the
+/// tunnel, and its answer reaches the app from the network part's address with a time to live of 0; the same question
 /// again is answered from the tunnel's own cache.
 #[tokio::test(flavor = "current_thread")]
 async fn a_chosen_apps_lookup_goes_to_its_configurations_dns_server() -> Outcome {
@@ -904,8 +904,8 @@ async fn per_packet_cost() -> Outcome {
 }
 
 /// An app taken off its tunnel while its UDP flow is open: the flow ends, in the log too, on the engine's
-/// own thread, where alone the log's clock is read (the watch shard on 2026-11-19: ended from Watch's thread,
-/// a debug build panicked), and the app's next datagram goes its new way, here directly to a local echo.
+/// own thread, where alone the log's clock is read (the network shard on 2026-11-19: ended from the network part's
+/// thread, a debug build panicked), and the app's next datagram goes its new way, here directly to a local echo.
 #[tokio::test(flavor = "current_thread")]
 async fn an_app_taken_off_its_tunnel_ends_its_flows_on_the_engines_thread() -> Outcome {
     let mut server = Server::new(SERVER_KEY).await?;
@@ -925,7 +925,7 @@ async fn an_app_taken_off_its_tunnel_ends_its_flows_on_the_engines_thread() -> O
         .await?;
     let seen = server.next().await?;
     assert_eq!(&seen[12..16], &PHONE4.octets(), "first through the tunnel");
-    // From this thread, as Watch's Kotlin side sets it from its own.
+    // From this thread, as the network part's Kotlin side sets it from its own.
     engine.tunnels(&TunnelSetting {
         routes: HashMap::new(),
         ..setting
@@ -1073,7 +1073,7 @@ async fn an_app_routed_to_a_tunnel_not_set_waits_and_never_goes_directly() -> Ou
 
 /// An app with a direct UDP mapping, then sent through a tunnel: its next datagram on that socket goes into
 /// the tunnel, never by the mapping (the engine reviewer's R1, which kills the mutant that drops
-/// `Engine::tunnels`' bump of the chains' count); and Watch's DNS answers go uncached from then on.
+/// `Engine::tunnels`' bump of the chains' count); and the network part's DNS answers go uncached from then on.
 #[tokio::test(flavor = "current_thread")]
 async fn an_app_newly_routed_leaves_its_direct_mapping() -> Outcome {
     let mut server = Server::new(SERVER_KEY).await?;

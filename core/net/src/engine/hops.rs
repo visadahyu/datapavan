@@ -1,6 +1,6 @@
-//! The hop limit across Watch (ADR 0044, unit 11b). Watch is not a hop: what an app sends leaves with the
-//! time to live (IPv4) or hop limit (IPv6) the app gave it, copied, not lowered, so that a traceroute
-//! through Watch meets the routers it would meet without it. Each datagram carries its own in the
+//! The hop limit across the network part (ADR 0044, unit 11b). The network part is not a hop: what an app sends leaves
+//! with the time to live (IPv4) or hop limit (IPv6) the app gave it, copied, not lowered, so that a traceroute
+//! through the network part meets the routers it would meet without it. Each datagram carries its own in the
 //! ancillary data of its `sendmsg` (`IP_TTL`, `IPV6_HOPLIMIT`), so that the datagrams of one socket with
 //! different hop limits, as a traceroute's probes are, need no socket option between them. What comes
 //! back reaches the app with the hop limit it arrived with, which the kernel gives each datagram read

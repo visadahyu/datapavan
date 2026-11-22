@@ -451,7 +451,7 @@ fn sextet(b: u8) -> Option<u8> {
 
 /// Checks the signature of `pack` against the trusted keys in `keys` (`signify` public key lines separated
 /// by `\n`), and only then reads its header: the result of [`layout`], or the error's code alone. What both
-/// JNI bridges hand the apps' Kotlin side (`PackReader`), the audit's and Watch's.
+/// JNI bridges hand the apps' Kotlin side (`PackReader`), the audit's and the network part's.
 #[must_use]
 pub fn read_signed(pack: &[u8], keys: &str) -> Vec<i32> {
     let result = keys

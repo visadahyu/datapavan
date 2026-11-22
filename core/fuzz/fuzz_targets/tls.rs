@@ -1,4 +1,4 @@
-//! Fuzzing of Watch's reader of TLS server names (`datapavan_net::tls`): the first bytes of any app's
+//! Fuzzing of the network part's reader of TLS server names (`datapavan_net::tls`): the first bytes of any app's
 //! connection. A name found must be printable ASCII in lower case, and reading a stream that grows
 //! byte by byte must never find a name or an ECH flag the whole stream does not have.
 #![no_main]

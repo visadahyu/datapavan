@@ -1,7 +1,7 @@
-//! The encrypted ways Watch knows for the names of apps that go directly (W8, part 1, ADR 0042), from the signed
-//! data pack: the Oblivious DoH relays and targets of `data/odoh` with the default pairs, and the DoH and DoT
-//! resolvers of `data/dns-presets` that the user may choose. Watch's Kotlin side reads the pack and hands the
-//! files' text over; this module reads it, so that one parser, fuzzed, decides what the engine uses.
+//! The encrypted ways the network part knows for the names of apps that go directly (W8, part 1, ADR 0042), from the
+//! signed data pack: the Oblivious DoH relays and targets of `data/odoh` with the default pairs, and the DoH and DoT
+//! resolvers of `data/dns-presets` that the user may choose. The network part's Kotlin side reads the pack and hands
+//! the files' text over; this module reads it, so that one parser, fuzzed, decides what the engine uses.
 //!
 //! **The pair rule** (ADR 0042, "How it is built", point 4): a relay and a target form a pair only when they share
 //! no operator, no person behind them, no jurisdiction, and no hosting network or CDN, read from the dataset's
@@ -29,7 +29,7 @@ impl Url {
     /// Reads `https://host[:port][/path]`; `None` for any other scheme, a query or fragment, user information, a
     /// host that is not a name of letters, digits, hyphens and dots or an IPv4 address, or a path of other
     /// characters than RFC 3986's unreserved ones and `/` (W8's fix round, review S-m4: a target's path goes into
-    /// the relay's URL as it is, and no path may add a parameter to it). Watch's screen checks the same.
+    /// the relay's URL as it is, and no path may add a parameter to it). The network screen checks the same.
     #[must_use]
     pub fn parse(text: &str) -> Option<Self> {
         let rest = text.strip_prefix("https://")?;
@@ -214,8 +214,8 @@ pub struct Preset {
     pub operator: String,
     /// Where and how it is reached.
     pub endpoint: Endpoint,
-    /// What it filters; `none` for nothing. The card's other words are the table's, read by Watch's Kotlin side
-    /// (W8's fix round, review R-M2).
+    /// What it filters; `none` for nothing. The card's other words are the table's, read by the network part's Kotlin
+    /// side (W8's fix round, review R-M2).
     pub filtering: String,
 }
 

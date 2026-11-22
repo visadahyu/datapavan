@@ -1,22 +1,22 @@
-//! The order in which Watch tries the encrypted ways for a direct app's name, and what it learns while it does
-//! (W8, part 1, ADR 0042, "How it is built", points 6 and 7). Pure: the engine hands it the time and what each
+//! The order in which the network part tries the encrypted ways for a direct app's name, and what it learns while it
+//! does (W8, part 1, ADR 0042, "How it is built", points 6 and 7). Pure: the engine hands it the time and what each
 //! attempt gave, and asks it what to try.
 //!
 //! **The order, by privacy.** The user's own resolver when there is one; Oblivious DoH through the pairs (first,
 //! or next after the user's resolver failed: W8's fix round, review R-M1); then, while the user's tool is on,
 //! Oblivious DoH through the tool; then DoH directly to the targets' own operators; then the presets that filter
 //! nothing; the network's resolver last, and never in the strict setting. With "only this resolver" the user's
-//! resolver is the only step, and the network's resolver is never asked either. Watch learns only within a rung (which pair or endpoint answered last on this network, tried first
-//! next), never across rungs, and climbs back up as soon as a higher rung answers: a rung below is used only
-//! while every step above is held.
+//! resolver is the only step, and the network's resolver is never asked either. The network part learns only within a
+//! rung (which pair or endpoint answered last on this network, tried first next), never across rungs, and climbs back
+//! up as soon as a higher rung answers: a rung below is used only while every step above is held.
 //!
 //! **Holds.** A step that timed out, or was refused, or answered with an error, is held for a short back-off,
 //! doubling from [`BACKOFF_FIRST`] to [`BACKOFF_MOST`]; one whose connection was reset or whose answer was
 //! tampered with (a certificate that does not check) is held [`HOLD_TAMPERED`], as long as a measured censor
 //! keeps blocking after it struck (FOCI 2025: up to 360 s). While Android says the network beneath is not
 //! validated (a captive portal), no failure counts. A change of network clears every hold and everything
-//! learned: what Watch learns lives in memory only, for the network it is on, and is never keyed by a network's
-//! name (a list of networks where encrypted DNS failed would be evidence in a phone search).
+//! learned: what the network part learns lives in memory only, for the network it is on, and is never keyed by a
+//! network's name (a list of networks where encrypted DNS failed would be evidence in a phone search).
 
 use std::time::{Duration, Instant};
 
@@ -145,7 +145,7 @@ struct Hold {
     backoff: Duration,
 }
 
-/// Which way answered last, for Watch's screen.
+/// Which way answered last, for the network screen.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum Now {
     /// Nothing asked yet on this network.
@@ -158,7 +158,7 @@ pub enum Now {
     Failing(Instant),
 }
 
-/// The ladder's state on the network Watch is on.
+/// The ladder's state on the network the network part is on.
 #[derive(Debug)]
 pub struct Ladder {
     /// The steps held, each once: a few dozen at most, so a list (the native library's size counts, W8).

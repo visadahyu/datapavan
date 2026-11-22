@@ -1,4 +1,4 @@
-//! The names Watch saw in DNS answers, by address, so that a flow can be named after the name the app
+//! The names the network part saw in DNS answers, by address, so that a flow can be named after the name the app
 //! asked for before it connected (W3).
 //!
 //! An entry lives at least [`MIN_KEEP`], however short the answer's TTL: apps keep addresses longer
@@ -14,8 +14,8 @@
 //! of W5's first part, engine, finding 7). A later answer for the address does not end it: on an address
 //! that serves many names, another app's lookup re-points it often (review 2).
 //!
-//! The answers Android's resolver gave through Watch name every app's flows. The answers an app got
-//! from a resolver of its own, past Watch's (plain DNS to another server), name only that app's flows:
+//! The answers Android's resolver gave through the network part name every app's flows. The answers an app got
+//! from a resolver of its own, past the network part's (plain DNS to another server), name only that app's flows:
 //! an app chooses that resolver, and must not be able to rename other apps' connections through it.
 //!
 //! An address keeps the last name given for it, which names its flows, and up to [`NAMES_PER_ADDRESS`] names
@@ -27,7 +27,7 @@
 //! addresses: a hello that offers ECH and names one of them hides the real name. They are scoped as the
 //! addresses are: those in Android's resolver's answers hide names in every app's flows, those an app got
 //! from a resolver of its own in that app's flows only, so that a public name never names a flow wherever
-//! Watch saw its configuration, and no app can hide the names of another's (review 1 of W5's first part,
+//! The network part saw its configuration, and no app can hide the names of another's (review 1 of W5's first part,
 //! names, finding 1).
 //!
 //! Each scope has a table of its own, the oldest going first when it is full: Android's resolver's holds

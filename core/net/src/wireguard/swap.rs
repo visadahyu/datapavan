@@ -153,7 +153,7 @@ fn quoted_ends(quoted: &[u8], v4: bool) -> Option<(u8, usize, IpAddr, IpAddr)> {
         }
         let from: [u8; 16] = quoted.get(8..24)?.try_into().ok()?;
         let to: [u8; 16] = quoted.get(24..40)?.try_into().ok()?;
-        // No extension headers are followed in a quote: Watch's own packets into the tunnel carry none
+        // No extension headers are followed in a quote: the network part's own packets into the tunnel carry none
         // but a fragment header, whose quote names no port to match by.
         Some((quoted[6], 40, IpAddr::from(from), IpAddr::from(to)))
     }

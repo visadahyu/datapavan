@@ -1,4 +1,4 @@
-//! The DNS answers Watch gives chained apps (ADR 0038, W6): a stand-in address for an A question, no
+//! The DNS answers the network part gives chained apps (ADR 0038, W6): a stand-in address for an A question, no
 //! data for AAAA, the name for a reverse lookup of a stand-in, and for any other question the answer of
 //! the resolver reached through the tool, rebuilt without the address hints of HTTPS and SVCB records.
 //! Every record of these answers has a time to live of 0, so that Android's resolver, which keeps one
@@ -66,7 +66,7 @@ pub fn question(query: &[u8]) -> Option<Question> {
     })
 }
 
-/// Whether Watch answers this question itself: A, AAAA, and a reverse lookup, of the internet class.
+/// Whether the network part answers this question itself: A, AAAA, and a reverse lookup, of the internet class.
 #[must_use]
 pub fn answered_here(question: &Question) -> bool {
     question.class == CLASS_IN && matches!(question.kind, TYPE_A | TYPE_AAAA | TYPE_PTR)
@@ -171,7 +171,7 @@ pub fn name(query: &[u8], question: &Question, name: &str) -> Option<Vec<u8>> {
     Some(out)
 }
 
-/// "Server failure" for `query`, with its question when it has one Watch can read, so that the app's
+/// "Server failure" for `query`, with its question when it has one the network part can read, so that the app's
 /// resolver stops waiting. `None` for a query too short to have an ID.
 #[must_use]
 pub fn failure(query: &[u8]) -> Option<Vec<u8>> {

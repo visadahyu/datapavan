@@ -20,7 +20,7 @@ pub const MAX_TEXT: usize = 16 * 1024;
 pub const MAX_ALLOWED: usize = 256;
 /// At most this many DNS servers.
 pub const MAX_DNS: usize = 8;
-/// The smallest and largest MTU accepted: IPv4's least (RFC 791) and the tunnel's own, which Watch never
+/// The smallest and largest MTU accepted: IPv4's least (RFC 791) and the tunnel's own, which the network part never
 /// sets above 1,500 bytes (ADR 0044, decision 5 as amended). With an IPv6 address, at least 1,280 (RFC
 /// 8200 5).
 pub const MTU_RANGE: std::ops::RangeInclusive<u16> = 576..=1_500;
@@ -225,7 +225,7 @@ impl Peer {
     }
 }
 
-/// A configuration Watch accepts.
+/// A configuration the network part accepts.
 #[derive(Clone, PartialEq, Eq)]
 pub struct Config {
     /// The interface's private key.
@@ -240,7 +240,7 @@ pub struct Config {
     pub peer: Peer,
     /// The apps `WireGuard`'s own app exports with a configuration (`IncludedApplications`,
     /// `ExcludedApplications`): kept for the import to offer as the choice of apps, for the user to
-    /// confirm (the maintainer's answer 2, 2026-11-19). Watch routes by its own choice of apps alone.
+    /// confirm (the maintainer's answer 2, 2026-11-19). The network part routes by its own choice of apps alone.
     pub applications: Applications,
 }
 
@@ -300,7 +300,7 @@ impl Config {
     /// Reads a configuration from `text`.
     ///
     /// # Errors
-    /// The [`Refusal`] that says why the configuration is not one Watch accepts.
+    /// The [`Refusal`] that says why the configuration is not one the network part accepts.
     pub fn parse(text: &[u8]) -> Result<Self, Refusal> {
         parse(text)
     }
@@ -354,7 +354,7 @@ impl Config {
     /// ([`Self::carries_everything`]), `preshared 1` or `0` (whether a `PresharedKey` is set), `mtu N` (the
     /// tunnel's, given or [`DEFAULT_MTU`]), `keepalive N` where the configuration asks for keepalives, and last
     /// `only PACKAGE` or `except PACKAGE` for each app `WireGuard`'s app named with it ([`Applications`]). The
-    /// endpoint is the user's to see on the screen; Watch's dump and log never print it.
+    /// endpoint is the user's to see on the screen; the network part's dump and log never print it.
     #[must_use]
     pub fn describe(&self) -> String {
         let mut lines = Vec::new();
@@ -430,7 +430,7 @@ pub enum Refusal {
         /// The line, counting from 1.
         line: usize,
     },
-    /// A key Watch does not carry out, named when it is a plain word: `PostUp`, `Table`, `SaveConfig`,
+    /// A key the network part does not carry out, named when it is a plain word: `PostUp`, `Table`, `SaveConfig`,
     /// `PreUp`, `PostDown` and the like, or one it does not know. `ListenPort` and `FwMark` are read and
     /// ignored, and `IncludedApplications` and `ExcludedApplications` kept ([`Applications`]).
     Unsupported {
@@ -453,12 +453,12 @@ pub enum Refusal {
         /// The key.
         key: &'static str,
     },
-    /// Two addresses of one version: Watch gives a chosen app's packets one.
+    /// Two addresses of one version: the network part gives a chosen app's packets one.
     SeveralAddresses {
         /// The line, counting from 1.
         line: usize,
     },
-    /// A search domain in `DNS`, which Watch cannot apply.
+    /// A search domain in `DNS`, which the network part cannot apply.
     SearchDomain {
         /// The line, counting from 1.
         line: usize,
@@ -479,7 +479,7 @@ pub enum Refusal {
     DnsUnreachable,
     /// No `PublicKey`.
     NoPublicKey,
-    /// No `Endpoint`: Watch must reach the server first.
+    /// No `Endpoint`: the network part must reach the server first.
     NoEndpoint,
     /// No `AllowedIPs`, or none of a version the configuration has an address of.
     NoAllowedIps,
@@ -708,7 +708,7 @@ fn interface(read: &mut Read, line: usize, key: &str, value: &str) -> Result<(),
             let mtu = number(value).ok_or(Refusal::BadValue { line, key })?;
             read.mtu = Some(mtu);
         }
-        // Read and ignored (the maintainer's answer 2): Watch picks its own socket, and marks nothing.
+        // Read and ignored (the maintainer's answer 2): the network part picks its own socket, and marks nothing.
         "listenport" => {
             let key = "ListenPort";
             if std::mem::replace(&mut read.listen_port_seen, true) {
@@ -899,7 +899,7 @@ fn number(value: &str) -> Option<u16> {
     value.parse().ok()
 }
 
-/// A DNS server Watch can send to: unicast, not the unspecified or a loopback address.
+/// A DNS server the network part can send to: unicast, not the unspecified or a loopback address.
 fn usable_server(address: IpAddr) -> bool {
     crate::packet::unicast(address) && !address.is_loopback()
 }
@@ -937,7 +937,7 @@ fn network(item: &str, masked: bool) -> Option<Network> {
 /// `host:port`, `v4:port` or `[v6]:port`. An address must be one a server can have: unicast, and in IPv6
 /// not link-local, which would need a scope this format has no room for (the engine's review, nit 12). The
 /// loopback stays allowed: a local relay that wraps `WireGuard` to pass a network that blocks it (wstunnel,
-/// udp2raw) listens there, and Watch's own socket reaches it outside the tunnel.
+/// udp2raw) listens there, and the network part's own socket reaches it outside the tunnel.
 fn endpoint(value: &str) -> Option<Endpoint> {
     let server = |address: IpAddr| {
         crate::packet::unicast(address)

@@ -1,7 +1,8 @@
-//! Watch's encrypted resolver for the names of apps that go directly (W8, part 1, ADR 0042, "How it is built").
+//! The network part's encrypted resolver for the names of apps that go directly (W8, part 1, ADR 0042, "How it is
+//! built").
 //!
-//! A direct app's lookup to Watch's DNS address is answered here, never relayed to the network's resolver as
-//! it was: from Watch's cache, else by the ways of the [`Ladder`] in their order of privacy (the user's own
+//! A direct app's lookup to the network part's DNS address is answered here, never relayed to the network's resolver as
+//! it was: from the network part's cache, else by the ways of the [`Ladder`] in their order of privacy (the user's own
 //! resolver or Oblivious DoH through the pairs, then ODoH through the user's tool, the targets' operators' own
 //! DoH, the presets that filter nothing), and only then, outside the strict setting, by the network's resolver,
 //! which the screen shows while it lasts. In the strict setting a lookup no encrypted way answers gets "server
@@ -9,15 +10,15 @@
 //! single labels) go to the network's resolver in either setting. A name under one of the network's search
 //! domains goes the encrypted way first, and to the network's resolver only when that way answers that it does
 //! not exist (NXDOMAIN), in either setting too: the network names its own domains, never the internet's (W8's fix
-//! round, review S-C1). Watch's Kotlin side hands only search domains that are not public suffixes.
+//! round, review S-C1). The network part's Kotlin side hands only search domains that are not public suffixes.
 //!
-//! The engine holds no TLS: each exchange is handed to Watch's Kotlin side ([`Platform::exchange`]), which
+//! The engine holds no TLS: each exchange is handed to the network part's Kotlin side ([`Platform::exchange`]), which
 //! carries it over Android's own TLS from a socket it protects and binds to the network beneath, or through the
 //! user's tool, and answers later with [`Exchanges::complete`]. The engine's loop never waits for it: each
 //! lookup is a task of its own. ODoH's sealing and opening are the engine's ([`crate::odoh`]).
 //!
-//! What the resolver learns (holds, which pair answers best) lives in memory only, for the network Watch is on,
-//! and goes with it; the answers it keeps go too.
+//! What the resolver learns (holds, which pair answers best) lives in memory only, for the network the network part is
+//! on, and goes with it; the answers it keeps go too.
 
 use super::chain::Chain;
 use super::upstream::protect;
@@ -39,7 +40,7 @@ use tokio::net::UdpSocket;
 use tokio::sync::oneshot;
 use tokio::task::JoinSet;
 
-/// How long the engine waits for one exchange: Watch's Kotlin side gives up on its own after 3 s, with the
+/// How long the engine waits for one exchange: the network part's Kotlin side gives up on its own after 3 s, with the
 /// reason.
 pub const EXCHANGE_WAIT: Duration = Duration::from_millis(3_500);
 /// How long one lookup may try the encrypted ways in all, below the five seconds after which Android's
@@ -61,7 +62,7 @@ pub const REFRESH_DELAY: (Duration, Duration) =
 /// How often a target's key is asked for again on one network, at most.
 pub const REFRESH_EVERY: Duration = Duration::from_hours(4);
 
-/// How an exchange travels, as Watch's Kotlin side carries it.
+/// How an exchange travels, as the network part's Kotlin side carries it.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum Carry {
     /// A sealed query sent by POST to a relay (`application/oblivious-dns-message`).
@@ -86,7 +87,7 @@ pub struct Through {
     pub credentials: Option<Credentials>,
 }
 
-/// One exchange for Watch's Kotlin side to carry.
+/// One exchange for the network part's Kotlin side to carry.
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct Exchange {
     /// How.
@@ -115,11 +116,11 @@ pub enum Reply {
     Status(u16),
     /// It failed, and how.
     Failed(Failure),
-    /// The platform carries no exchanges (the engine's tests, a host without Watch's Kotlin side).
+    /// The platform carries no exchanges (the engine's tests, a host without the network part's Kotlin side).
     Unsupported,
 }
 
-/// The exchanges handed to Watch's Kotlin side that wait for their reply.
+/// The exchanges handed to the network part's Kotlin side that wait for their reply.
 #[derive(Debug, Default)]
 pub struct Exchanges {
     /// By ticket: as many as lookups wait at once, a few dozen, so a list.
@@ -168,7 +169,8 @@ pub enum Choice {
     Custom(Endpoint),
 }
 
-/// What Watch set for the names of direct apps: the ways the pack holds, the user's choice, the pairs, strict.
+/// What the network part set for the names of direct apps: the ways the pack holds, the user's choice, the pairs,
+/// strict.
 #[derive(Clone, Debug)]
 pub struct DnsConfig {
     /// The datasets.
@@ -183,7 +185,7 @@ pub struct DnsConfig {
     /// (W8's fix round, review R-M1). Off without a choice.
     pub only: bool,
     /// Debug builds, for the DNS lab's check of a rotated key: how long a key's fetch waits after its 401, at
-    /// least and at most, in place of [`REFRESH_DELAY`]. Watch's release builds never write it.
+    /// least and at most, in place of [`REFRESH_DELAY`]. The network part's release builds never write it.
     pub refresh: Option<(Duration, Duration)>,
 }
 
@@ -346,7 +348,7 @@ impl DnsConfig {
     }
 }
 
-/// How a TCP connection to Watch's DNS address is answered, by its app's route.
+/// How a TCP connection to the network part's DNS address is answered, by its app's route.
 #[derive(Clone)]
 pub(super) enum TcpLookups {
     /// A direct app's, of this UID if Android named it: by this resolver.
@@ -370,12 +372,12 @@ pub(super) struct Resolver {
     cache: Mutex<DnsCache>,
     /// The questions (without ID and flags) whose stale answer is being renewed now: each once at a time.
     renewing: Mutex<Vec<Vec<u8>>>,
-    /// The exchanges that wait for Watch's Kotlin side.
+    /// The exchanges that wait for the network part's Kotlin side.
     pub(super) exchanges: Arc<Exchanges>,
-    /// The network beneath's search domains that Watch accepts: never one label (nor, from Watch's Kotlin side,
-    /// a public suffix).
+    /// The network beneath's search domains that the network part accepts: never one label (nor, from the network
+    /// part's Kotlin side, a public suffix).
     search: Mutex<Vec<String>>,
-    /// The engine's own listener for DNS over TCP to Watch's address, on the loopback, once bound.
+    /// The engine's own listener for DNS over TCP to the network part's address, on the loopback, once bound.
     pub(super) tcp: tokio::sync::OnceCell<SocketAddr>,
     /// The route of each connection to that listener, by its source port, until the listener takes it.
     pub(super) tcp_routes: Mutex<Vec<(u16, TcpLookups)>>,
@@ -428,8 +430,8 @@ impl Resolver {
         *lock(&self.refresh_delay) = (low, high.max(low));
     }
 
-    /// Whether Watch set the encrypted resolver: without it (the engine's own tests), direct apps' lookups go
-    /// to the network's resolver as before W8.
+    /// Whether the network part set the encrypted resolver: without it (the engine's own tests), direct apps' lookups
+    /// go to the network's resolver as before W8.
     pub(super) fn on(&self) -> bool {
         lock(&self.config).is_some()
     }
@@ -438,8 +440,8 @@ impl Resolver {
         lock(&self.config).clone()
     }
 
-    /// Watch set the resolver anew. With the same ways (relays, targets, presets), what the resolver learned on
-    /// this network stays (W8's fix round, review R-m1): the targets' keys and the answers always; the holds too
+    /// The network part set the resolver anew. With the same ways (relays, targets, presets), what the resolver learned
+    /// on this network stays (W8's fix round, review R-m1): the targets' keys and the answers always; the holds too
     /// when the pairs are the same, since steps name pairs by their place; a new choice forgets the old choice's
     /// hold and its answers. Other ways start everything afresh.
     pub(super) fn set(&self, config: Option<Arc<DnsConfig>>) {
@@ -500,7 +502,7 @@ impl Resolver {
         }
     }
 
-    /// The state for Watch's screen and the checks, one `key value` per line.
+    /// The state for the network screen and the checks, one `key value` per line.
     pub(super) fn status(&self) -> String {
         let config = self.config();
         let ladder = lock(&self.ladder);
@@ -553,7 +555,7 @@ impl Resolver {
         )
     }
 
-    /// Whether `name` is under one of the network's search domains that Watch accepts.
+    /// Whether `name` is under one of the network's search domains that the network part accepts.
     fn searched(&self, name: &str) -> bool {
         lock(&self.search).iter().any(|domain| under(name, domain))
     }
@@ -623,7 +625,7 @@ pub(super) fn spawn(task: impl std::future::Future<Output = ()> + Send + 'static
     tokio::spawn(task);
 }
 
-/// Asks Watch's Kotlin side to carry `request`, and waits for its reply at most [`EXCHANGE_WAIT`].
+/// Asks the network part's Kotlin side to carry `request`, and waits for its reply at most [`EXCHANGE_WAIT`].
 async fn ask(shared: &Shared, request: &Exchange) -> Reply {
     let exchanges = &shared.resolver.exchanges;
     let ticket = NEXT_TICKET.fetch_add(1, Ordering::Relaxed);
@@ -657,7 +659,7 @@ async fn ask(shared: &Shared, request: &Exchange) -> Reply {
     reply
 }
 
-/// Tells Watch's Kotlin side when the way it shows changed kind: a way, the fallback, failing.
+/// Tells the network part's Kotlin side when the way it shows changed kind: a way, the fallback, failing.
 fn told<T>(shared: &Shared, change: impl FnOnce(&mut Ladder) -> T) -> T {
     let (before, after, out) = {
         let mut ladder = lock(&shared.resolver.ladder);
@@ -671,7 +673,7 @@ fn told<T>(shared: &Shared, change: impl FnOnce(&mut Ladder) -> T) -> T {
     out
 }
 
-/// The answer to a direct app's `query` to Watch's DNS address, made the app's: over TCP (`tcp`) whole, over
+/// The answer to a direct app's `query` to the network part's DNS address, made the app's: over TCP (`tcp`) whole, over
 /// UDP cut to what the app takes. `None` only for bytes too short to be a query with an ID.
 ///
 /// Tracker blocking decides first, before the cache and its stale window, for every record type (W8, part 3a;
@@ -1140,7 +1142,7 @@ async fn key_from_target(
 }
 
 /// The network's resolver's answer to `asked` (ID 0 asked, any back): through Android's resolver on the network
-/// beneath where Watch's Kotlin side carries it, else from a protected socket to the network's DNS server.
+/// beneath where the network part's Kotlin side carries it, else from a protected socket to the network's DNS server.
 async fn network(shared: &Arc<Shared>, asked: &Asked) -> Option<Vec<u8>> {
     // A random ID, as `plain` sends (W8's fix round, review S-m1): plain DNS has only it and the source port
     // against an answer forged off the path. The app's own ID comes back in `Asked::answer`.
@@ -1241,13 +1243,13 @@ pub(super) async fn endpoint(shared: &Arc<Shared>, name: &str) -> Option<(IpAddr
     fallback
 }
 
-/// How long a connection of DNS over TCP to Watch's address may stay idle before Watch closes it (RFC 7766, 6.2.3:
-/// the client opens another when it needs one).
+/// How long a connection of DNS over TCP to the network part's address may stay idle before the network part closes it
+/// (RFC 7766, 6.2.3: the client opens another when it needs one).
 pub const TCP_IDLE: Duration = Duration::from_secs(10);
 
 /// A connection to the engine's own listener of DNS over TCP, which answers each query the app sends on it by its
-/// `route`: what a TCP connection to Watch's DNS address at port 53 is relayed to (W8, part 1, point 9), so that
-/// such a lookup goes the way its app's UDP lookups go, never to the network's resolver.
+/// `route`: what a TCP connection to the network part's DNS address at port 53 is relayed to (W8, part 1, point 9), so
+/// that such a lookup goes the way its app's UDP lookups go, never to the network's resolver.
 pub(super) async fn connect_lookups(
     shared: &Arc<Shared>,
     route: TcpLookups,
@@ -1357,7 +1359,7 @@ mod tests {
         Fail(Failure),
     }
 
-    /// Watch's Kotlin side as the tests play it: records each exchange and answers by [`Does`], per carry.
+    /// The network part's Kotlin side as the tests play it: records each exchange and answers by [`Does`], per carry.
     struct Fake {
         exchanges: OnceLock<Arc<Exchanges>>,
         seen: Mutex<Vec<Exchange>>,
@@ -1481,7 +1483,7 @@ mod tests {
                 }
                 Carry::Network => Reply::Answer(network_answer(&request.body)),
                 Carry::Fetch => {
-                    // Watch's Kotlin side never looks a name up: a fetch with no address to go to fails.
+                    // The network part's Kotlin side never looks a name up: a fetch with no address to go to fails.
                     if request.addresses.is_empty() {
                         return Reply::Failed(Failure::Refused);
                     }

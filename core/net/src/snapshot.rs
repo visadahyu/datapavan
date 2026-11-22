@@ -1,12 +1,12 @@
-//! What the live view "Now" draws (ADR 0046, decision 2 (d)), as the engine hands it to Watch's Kotlin
+//! What the live view "Now" draws (ADR 0046, decision 2 (d)), as the engine hands it to the network part's Kotlin
 //! side once a second while the view is open: each app's bytes by its state in each window, and the
 //! destinations it reached, from memory only. Version 4, little-endian:
 //!
 //! - version (4), when it was taken (milliseconds since 1970, UTC), what the latest reading of the
-//!   states knew (0 none came yet, 1 the states, 2 nothing: Watch has no usage access, 3 nothing: Android
+//!   states knew (0 none came yet, 1 the states, 2 nothing: the network part has no usage access, 3 nothing: Android
 //!   gave no events, as before the first unlock after a restart), the end of what was told, the screen
 //!   (0 off, 1 on, 2 not known), when it last came on (0 not known), the window "while the screen was
-//!   off": when the screen went off (0 for no window: it has not gone off since Watch started, or the live
+//!   off": when the screen went off (0 for no window: it has not gone off since the network part started, or the live
 //!   memory was cleared since) and came on again (0 while it is still off), then a count (u32) of apps;
 //! - each app: its UID (`u32::MAX` for flows Android named no app for), its state now (the code of
 //!   [`Placed::code`], or 4 while the last second told does not place it), flags (bit 0: the user's

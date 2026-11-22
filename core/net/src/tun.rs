@@ -4,7 +4,7 @@
 //! A tunnel set up again with the same addresses, on the VPN network Android kept, is handed to the
 //! running engine (ADR 0044, unit 12b): its descriptor takes the old one's place for the engine's one
 //! reader and for every writer, each of which takes the descriptor in place when it reads or writes.
-//! Android resets the old interface before Watch can hand the new one over, and a tun device whose
+//! Android resets the old interface before the network part can hand the new one over, and a tun device whose
 //! interface is down refuses writes (`EIO`): a task's write refused so waits a moment for the new one.
 
 /// Whether a write the tunnel refused with `error` could go to a tunnel set up again: a tun device
@@ -132,7 +132,7 @@ impl Tun {
     /// Writes one packet, waiting until the descriptor takes it, as [`Tun::send_once`] does. One the
     /// descriptor refuses as a tunnel set up again would not ([`cured_by_another`]) waits up to the gap
     /// given to [`Tun::waiting`] for another to take its place, and goes to that one; with none by then,
-    /// it fails as before. Android resets the old interface before Watch hands the engine the new tunnel
+    /// it fails as before. Android resets the old interface before the network part hands the engine the new tunnel
     /// (ADR 0044, unit 12b), and a tun device whose interface is down refuses writes (`EIO`): an answer
     /// written in between reaches the app through the new tunnel rather than being lost. Any other
     /// refusal fails at once. Only for the engine's tasks: a wait here holds up the caller.

@@ -1,11 +1,11 @@
-//! The three messengers whose built-in proxies Watch infers (W8, part 2a; ADR 0052), from `data/messengers`:
+//! The three messengers whose built-in proxies the network part infers (W8, part 2a; ADR 0052), from `data/messengers`:
 //! their makers' own Android packages (`clients.tsv`), Telegram's published address ranges
 //! (`telegram-cidr.txt`, byte for byte as Telegram serves it, each fetch recorded in `SOURCE`), and the server
 //! names that tell a messenger's own connections, its own circumvention and the third parties it reaches from
 //! those of a proxy (`names.tsv`).
 //!
-//! The tables are compiled into the engine and kept out of the data pack, as the resolvers are: they are Watch's
-//! alone, and an update of any of them needs an app release (ADR 0052's accepted limits, corrected in the fix
+//! The tables are compiled into the engine and kept out of the data pack, as the resolvers are: they are the network
+//! part's alone, and an update of any of them needs an app release (ADR 0052's accepted limits, corrected in the fix
 //! round, S-n4). Rows that do not parse are skipped, never fatal: the tables are data, checked by
 //! `scripts/check.sh`.
 
@@ -27,7 +27,7 @@ pub enum Family {
 }
 
 impl Family {
-    /// Its code in the tables and in Watch's calls: `telegram`, `whatsapp`, `signal`.
+    /// Its code in the tables and in the network part's calls: `telegram`, `whatsapp`, `signal`.
     #[must_use]
     pub fn code(self) -> &'static str {
         match self {
