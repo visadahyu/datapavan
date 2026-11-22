@@ -437,7 +437,7 @@ class ConnectionLog internal constructor(
         private const val TAG = "WatchLog"
         private const val NAME = "log.db"
         private const val PREFS = "log"
-        private const val ALIAS = "watch-log"
+        private const val ALIAS = "network-log"
         private const val RETENTION = "retention_days"
         // No log becomes evidence by default (ADR 0040): it keeps nothing until the user chooses, at
         // onboarding once W9 brings it, and in the log's settings until then.

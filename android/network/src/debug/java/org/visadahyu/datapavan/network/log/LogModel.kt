@@ -477,7 +477,7 @@ private class Run(private val context: Context, private val seed: Long, private 
     private companion object {
         const val NAME = "log-model.db"
         const val PREFS = "log-model"
-        const val ALIAS = "watch-log-model"
+        const val ALIAS = "network-log-model"
         const val MAX_PAGES = 1_073_741_823L
 
         /** Long enough for the Keystore to make a key pair, which can take seconds on an emulator. */

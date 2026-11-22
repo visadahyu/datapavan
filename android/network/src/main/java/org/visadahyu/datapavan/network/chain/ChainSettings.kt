@@ -135,7 +135,7 @@ class ChainSettings private constructor(private val prefs: SharedPreferences) {
         private const val UDP_CHOSEN = "udp_chosen"
         private const val PASSWORD = "password"
         private const val KEYSTORE = "AndroidKeyStore"
-        private const val KEY_ALIAS = "watch-chain"
+        private const val KEY_ALIAS = "network-chain"
         private const val TRANSFORMATION = "AES/GCM/NoPadding"
         private const val TAG_BITS = 128
         private const val IV_BYTES = 12

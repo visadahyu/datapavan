@@ -1934,7 +1934,7 @@ class NetworkVpnService : VpnService() {
         private const val QR_WAIT_MS = 20_000L
 
         /** The debug builds' key that needs an unlocked phone, for the measure of `setUnlockedDeviceRequired`. */
-        private const val PROBE_ALIAS = "watch-tunnels-probe"
+        private const val PROBE_ALIAS = "network-tunnels-probe"
 
         /** When a configuration still closed after an unlock is tried again. */
         private val UNLOCK_RETRIES_MS = listOf(1_000L, 2_000L, 4_000L, 8_000L)

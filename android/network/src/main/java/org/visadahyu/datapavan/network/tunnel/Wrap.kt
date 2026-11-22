@@ -183,10 +183,10 @@ class KeystoreWrap(private val alias: String = ALIAS, private val unlockedOnly: 
     private fun lockedNow(): Boolean = locked()
 
     companion object {
-        const val ALIAS = "watch-tunnels"
+        const val ALIAS = "network-tunnels"
 
         /** Key B: needs an unlocked phone. */
-        const val UNLOCKED_ALIAS = "watch-tunnels-unlocked"
+        const val UNLOCKED_ALIAS = "network-tunnels-unlocked"
         private const val TAG = "WatchTunnels"
         private const val PROVIDER = "AndroidKeyStore"
         private const val TRANSFORMATION = "AES/GCM/NoPadding"
@@ -218,6 +218,6 @@ class KeystoreWrap(private val alias: String = ALIAS, private val unlockedOnly: 
  * wrap opens only where it was made.
  */
 fun associated(slot: Int, part: Wrap.Part): ByteArray {
-    val label = "datapavan-watch tunnel ${part.label}".toByteArray(Charsets.US_ASCII)
+    val label = "datapavan-network tunnel ${part.label}".toByteArray(Charsets.US_ASCII)
     return ByteBuffer.allocate(label.size + 1 + 4).put(label).put(TunnelStore.VERSION).putInt(slot).array()
 }

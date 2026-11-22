@@ -15,8 +15,8 @@ import javax.crypto.spec.SecretKeySpec
  * app's rows under that key and nothing else.
  */
 class Sealer(dayKey: ByteArray, private val day: Long, val keyId: Long) {
-    private val sealKey = SecretKeySpec(derive(dayKey, "datapavan-watch log seal"), "AES")
-    private val tokenKey = SecretKeySpec(derive(dayKey, "datapavan-watch log token"), "HmacSHA256")
+    private val sealKey = SecretKeySpec(derive(dayKey, "datapavan-network log seal"), "AES")
+    private val tokenKey = SecretKeySpec(derive(dayKey, "datapavan-network log token"), "HmacSHA256")
 
     /** The token of the app with `uid` (null: Android did not name it). */
     fun token(uid: Int?): ByteArray {
