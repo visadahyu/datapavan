@@ -1,6 +1,6 @@
 <?xml version="1.0" encoding="utf-8"?>
 <!--
-    ADR 0054 (Android's own labels, read from the phone): the sentences of Advanced's network monitoring that quote a
+    ADR 0054 (Android's own labels, read from the phone): the sentences of Advanced's network part that quote a
     label of Android's own screens, which the label now fills as Android names it on this phone, and the lines around
     them. In English only. They are translated into the seven other languages by ADR 0030's process before the merge,
     and then move into strings.xml, where scripts/check-translations.py holds them to every language; until then this
@@ -57,4 +57,7 @@
     <!-- The phone has no screen lock (a PIN, pattern or password). %1$s: Android's name for the setting (Settings,
          Security). -->
     <string name="log_no_screen_lock_quoted">This phone has no PIN, pattern or password set under the \"%1$s\" setting, so records of earlier days can be opened at any time. With one, they open only while the phone is unlocked.</string>
+    <!-- The title of Datapavan Advanced's screen for its network part: the VPN, the connection log, the user's tool,
+         WireGuard, DNS and tracker blocking (the maintainer, 2026-11-22: the part has no name of its own). -->
+    <string name="network_title">Network</string>
 </resources>

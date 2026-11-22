@@ -80,12 +80,12 @@ print("\n".join(day.split(":")[0] for day in table.split(",") if day != "-"))' "
 # each connection", or "none". The screen is in English for the test (set below).
 lock_sentence() {
     adb shell input keyevent KEYCODE_WAKEUP
-    scroll_to "Watch keeps a record of each connection" >/dev/null || true
+    scroll_to "Datapavan keeps a record of each connection" >/dev/null || true
     swipe_up
     dump_screen >/dev/null
     # A text that holds a double quote is written in single quotes from Android 16, and with &quot; before.
     adb shell cat "$DUMP" | grep -oE "text=(\"[^\"]*\"|'[^']*')" | sed "s/^text=.//; s/.\$//; s/&quot;/\"/g; s/&apos;/'/g" |
-        grep -E '^(Records of earlier days|This phone has no PIN, pattern or password|This phone did not let Watch)' | head -1 | grep . || echo none
+        grep -E '^(Records of earlier days|This phone has no PIN, pattern or password|This phone did not let Datapavan)' | head -1 | grep . || echo none
 }
 
 start_network() {

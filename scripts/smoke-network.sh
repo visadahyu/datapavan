@@ -38,6 +38,21 @@ string() {
     sed -n "s/.*<string name=\"$2\">\(.*\)<\/string>.*/\1/p" "$RES/$1/strings.xml" | sed "s/\\\\'/'/g"
 }
 
+# The screen's title, "Network", in the folder $1's language, or in English while it waits for its translations in
+# strings_untranslated.xml.
+title() {
+    local text
+    text=$(string "$1" network_title)
+    [ -n "$text" ] || text=$(sed -n 's/.*<string name="network_title">\(.*\)<\/string>.*/\1/p' "$RES/values/strings_untranslated.xml")
+    echo "$text"
+}
+
+# The bounds of the first element whose text contains $1, for a pseudo-locale that wraps every text in marks.
+bounds_containing() {
+    adb shell cat "$DUMP" | grep -o "text=\"[^\"]*$1[^\"]*\"[^>]*bounds=\"[^\"]*\"" | head -1 | grep -o 'bounds="[^"]*"' |
+        grep -o '[0-9]\+' | tr '\n' ' '
+}
+
 # Opens the network part afresh in the language $1 (a BCP 47 tag, or "" for the phone's own).
 open_in() {
     adb shell am force-stop "$PKG"
@@ -80,16 +95,18 @@ uid=$(adb shell cmd package list packages -U "$PKG" | tr -d '\r' | sed -n "s/^pa
 [ -n "$uid" ] || fail "the network part is not installed"
 adb logcat -c
 
-# Every language, by the tagline in its resource directory. Per-app languages need Android 13.
+# Every language, by the tagline in its resource directory, and the title's side. Per-app languages need Android 13.
 width=$(adb shell wm size | tr -d '\r' | sed -n 's/.*: \([0-9]*\)x.*/\1/p' | tail -1)
 if [ "$(adb shell getprop ro.build.version.sdk | tr -d '\r')" -ge 33 ]; then
     for pair in en:values fr:values-fr de:values-de es:values-es ru:values-ru zh-CN:values-zh-rCN ar:values-ar fa:values-fa; do
         tag=${pair%%:*}
-        tagline=$(string "${pair#*:}" tagline)
+        tagline=$(string "${pair#*:}" network_tagline)
+        [ -n "$tagline" ] || fail "no network_tagline in ${pair#*:}"
         open_in "$tag"
         wait_for "$tagline" 15 || fail "the network part in $tag does not show its tagline"
         # Right to left: the heading ends at the right edge, not the left.
-        set -- $(text_bounds "Datapavan Advanced")
+        set -- $(text_bounds "$(title "${pair#*:}")")
+        [ $# -eq 4 ] || fail "the network part in $tag shows no title \"$(title "${pair#*:}")\""
         case $tag in
             ar | fa) [ "$3" -gt $((width * 3 / 4)) ] || fail "the network part in $tag is not laid out right to left" ;;
             *) [ "$1" -lt $((width / 4)) ] || fail "the network part in $tag is not laid out left to right" ;;
@@ -101,8 +118,13 @@ if [ "$(adb shell getprop ro.build.version.sdk | tr -d '\r')" -ge 33 ]; then
     wait_for "\\[Šéé" 15 || fail "the network part in en-XA does not show the pseudo-locale's text"
     echo "ok: en-XA"
     open_in ar-XB
-    wait_for "Datapavan Advanced" 15 || fail "the network part in ar-XB does not open"
-    set -- $(text_bounds "Datapavan Advanced")
+    # The title, pseudo-localized, is the first sign that the screen is open.
+    for _ in $(seq 1 15); do
+        dump_screen && set -- $(bounds_containing "$(title values)") && [ $# -eq 4 ] && break
+        set --
+        sleep 1
+    done
+    [ $# -eq 4 ] || fail "the network part in ar-XB shows no title"
     [ "$3" -gt $((width * 3 / 4)) ] || fail "the network part in ar-XB is not laid out right to left"
     echo "ok: ar-XB"
     adb shell cmd locale set-app-locales "$PKG" --locales "" >/dev/null

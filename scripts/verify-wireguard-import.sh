@@ -625,7 +625,7 @@ lost_notice() { [ "$(sed -n 's/^ *tunnel-lost notice //p' <<<"$(dump tunnel-stor
 within 10 lost_state || fail "with key A gone the store's state is not lost: $(dump tunnel-store | grep -E 'tunnel-(state|slot)' | tr '\n' ' ')"
 within 10 lost_notice shown || fail "no notification says the network part holds the apps"
 record=$(adb shell dumpsys notification --noredact | tr -d '\r' | grep -A30 "NotificationRecord.*pkg=$PKG.*id=7202" || true)
-grep -qF "Watch is holding your apps" <<<"$record" || fail "the notification does not say the network part holds the apps"
+grep -qF "Datapavan is holding your apps" <<<"$record" || fail "the notification does not say the network part holds the apps"
 for word in wg-import "WireGuard" "$HOST" 10.77.0; do
     ! grep -qF -- "$word" <<<"$record" || fail "the notification names a configuration or a server ($word)"
 done

@@ -97,7 +97,7 @@
     <!-- Network use and apps not opened, from usage access (ADR 0022). -->
     <string name="usage_access_title">Network use and apps you do not open</string>
     <string name="usage_access_body">With usage access, Datapavan can show how much data each app used, and which apps you have not opened for a long time. The same access would let an app see which apps you opened and when. Datapavan reads only totals and the date each app was last used, keeps none of it, and cannot send it anywhere, because it has no network access. Everything else works without it.</string>
-    <!-- Datapavan Advanced's, which also reads which app was on screen and when for Watch (ADR 0046); the screens pick it by BuildConfig.ADVANCED. -->
+    <!-- Datapavan Advanced's, which also reads which app was on screen and when for its network part (ADR 0046); the screens pick it by BuildConfig.ADVANCED. -->
     <string name="usage_access_body_advanced">With usage access, Datapavan can show how much data each app used, and which apps you have not opened for a long time. The same access lets an app see which apps you opened and when. Datapavan Advanced also reads, back to the phone\'s start, which app was on screen and when, which apps ran a foreground service, which ones you used in other ways, as by tapping their notification, and when the screen turned on or off and the lock screen showed; and whether each app may show notifications. From this it tells, for each connection, whether you were using its app. It keeps what it learns in two places only: in memory for “Now”, and, if you keep a connection log, as the state of each record for the days you chose. It sends none of it anywhere. Everything else works without it.</string>
     <string name="usage_access_phone_warning">When you turn it on, some phones show a strong warning of their own, sometimes with a countdown. They show it for every app that asks for usage access.</string>
     <string name="usage_access_button">Allow usage access</string>
@@ -594,9 +594,9 @@
     <string name="about_open_website">Open the website</string>
     <!-- The editions (ADR 0045), in a few calm lines, with no prompt: the one this is, and the others. Datapavan Basic on Google Play is updated by Google Play. -->
     <string name="about_editions_title">Editions</string>
-    <string name="about_editions_basic">This is Datapavan Basic, signed by its developer with one key kept offline. It never has internet access. On Google Play, Datapavan Basic has the same checks, and Google signs it. Datapavan Advanced adds Watch, which shows where each app connects.</string>
-    <string name="about_editions_play">This is Datapavan Basic from Google Play, which keeps it up to date. Google signs it. It never has internet access. Datapavan Basic signed by its developer with one key kept offline, and Datapavan Advanced, which adds Watch, are on the website.</string>
-    <string name="about_editions_advanced">This is Datapavan Advanced, signed by its developer with one key kept offline. It uses the internet only for your own apps\' traffic and the servers you choose. Datapavan Basic has the same checks without Watch and never has internet access, so it can check this app from outside.</string>
+    <string name="about_editions_basic">This is Datapavan Basic, signed by its developer with one key kept offline. It never has internet access. On Google Play, Datapavan Basic has the same checks, and Google signs it. Datapavan Advanced adds a log of every app\'s connections, tracker blocking and encrypted DNS.</string>
+    <string name="about_editions_play">This is Datapavan Basic from Google Play, which keeps it up to date. Google signs it. It never has internet access. Datapavan Basic signed by its developer with one key kept offline, and Datapavan Advanced, which adds a log of every app\'s connections, tracker blocking and encrypted DNS, are on the website.</string>
+    <string name="about_editions_advanced">This is Datapavan Advanced, signed by its developer with one key kept offline. It uses the internet only for your own apps\' traffic and the servers you choose. Datapavan Basic has the same checks without the connection log, tracker blocking or encrypted DNS. It never has internet access, so it can check this app from outside.</string>
     <!-- On the overview, about four months after this version's release. %1$s is a date in the user's format. -->
     <string name="version_old">This version of Datapavan is from %1$s. A newer one may be out, and Datapavan cannot check for you.</string>
     <string name="version_old_button">Where to get it</string>
@@ -662,13 +662,13 @@
     <string name="screenshots_allow">Allow screenshots for one minute</string>
     <string name="screenshots_allowed">Screenshots are allowed now. They are blocked again after one minute, or as soon as you leave the app.</string>
     <string name="screenshots_block">Block screenshots now</string>
-    <!-- Datapavan Advanced only: the way from the network page to Watch (ui/WatchEntry.kt, ADR 0045). -->
-    <string name="network_entry_title" translatable="false">Watch</string>
-    <string name="network_entry_body">See where each app on your phone connects, as it happens. Watch works as a VPN on this phone. It uses the internet only to pass each app\'s traffic on, and sends nothing to Datapavan.</string>
-    <string name="network_entry_open">Open Watch</string>
+    <!-- Datapavan Advanced only: the card on the network page that opens the Network screen (ui/NetworkEntry.kt, ADR 0045).
+         Its title, network_entry_title, is in strings_untranslated.xml until it is translated. -->
+    <string name="network_entry_body">See where each app on your phone connects, as it happens. For this, Datapavan works as a VPN on this phone. It uses the internet only to pass each app\'s traffic on, and sends nothing to its developer.</string>
+    <string name="network_entry_open">See where apps connect</string>
 
-    <!-- W5, part 3 (ADR 0046): the way into Watch's "Now" from an app's page, Advanced only. -->
-    <!-- Datapavan Advanced, on an app's page: opens Watch's view "Now" for that app. -->
+    <!-- W5, part 3 (ADR 0046): the way into "Now" from an app's page, Advanced only. -->
+    <!-- Datapavan Advanced, on an app's page: opens the view "Now" of the Network screen for that app. -->
     <string name="network_now_open">See what this app sends now</string>
 
     <!-- W7, part 2 (ADR 0035, release gate): the licence screen. -->
@@ -679,7 +679,7 @@
     <string name="licences_text_licence">The Apache License 2.0. Datapavan is published under it, and so are many of its parts.</string>
     <!-- %1$s: the name of a native library file, for example libdatapavan.so. -->
     <string name="licences_text_native">The licence texts of the Rust packages inside %1$s.</string>
-    <string name="licences_text_mpl">The Mozilla Public License 2.0. GotaTun, the WireGuard code in Watch, is published under it.</string>
+    <string name="licences_text_mpl">The Mozilla Public License 2.0. GotaTun, the WireGuard code in Advanced, is published under it.</string>
     <string name="licences_text_gotatun">The BSD 3-Clause License of the parts of GotaTun that came from Cloudflare\'s BoringTun.</string>
     <!-- A file the screen has no description for: its name only. -->
     <string name="licences_text_other">A licence text the app carries.</string>

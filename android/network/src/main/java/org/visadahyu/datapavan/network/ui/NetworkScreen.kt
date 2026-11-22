@@ -119,7 +119,7 @@ internal fun NetworkScreen(
             verticalArrangement = Arrangement.spacedBy(16.dp),
         ) {
             Text(
-                stringResource(R.string.app_name),
+                stringResource(R.string.network_title),
                 style = MaterialTheme.typography.headlineMedium,
                 color = MaterialTheme.colorScheme.primary,
                 modifier = Modifier.semantics { heading() },

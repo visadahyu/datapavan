@@ -117,7 +117,7 @@ class ProxyFactsTest {
         assertEquals("inferred from where and how it connects.", proxy.getValue("proxy_how_inferred"))
         assertTrue(proxy.getValue("proxy_network").contains("who runs it is not known"))
         assertEquals(
-            "its connection sent the name %1\$s. no dns answer watch passed gave that name this address.",
+            "its connection sent the name %1\$s. no dns answer datapavan passed gave that name this address.",
             proxy.getValue("proxy_cover"),
         )
         // "Own" goes from the proxy rows: Android's setting is no app's own (screens review M3).

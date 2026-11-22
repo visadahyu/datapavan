@@ -225,7 +225,7 @@ if all_steps && [ "$(adb shell getprop ro.build.version.sdk | tr -d '\r')" -ge 3
     done
     [ -n "$denied" ] || fail "turning \"Notify me\" on did not ask for Android's leave to notify"
     sleep 1
-    scroll_to "Android does not let Watch show notifications" || fail "refused, the screen does not say why"
+    scroll_to "Android does not let Datapavan show notifications" || fail "refused, the screen does not say why"
     grep -q "dns-notify off" <<<"$(dump)" || fail "refused, \"Notify me\" did not stay off"
     echo "ok: refused Android's leave to notify, \"Notify me\" stayed off and the screen said why"
     adb shell pm grant "$PKG" android.permission.POST_NOTIFICATIONS

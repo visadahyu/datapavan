@@ -411,7 +411,7 @@ done
 echo "ok: without usage access, the dump says so, and a flow's bytes have no state"
 shell_screen=$(now_screen com.android.shell)
 grep -qx 'now no state' <<<"$shell_screen" || fail "\"Now\" does not show the shell with no state: $(tr '\n' ';' <<<"$shell_screen" | cut -c1-800)"
-grep -qx 'why Watch had no usage access.' <<<"$shell_screen" || fail "\"Now\" does not say why the shell's bytes have no state"
+grep -qx 'why Datapavan had no usage access.' <<<"$shell_screen" || fail "\"Now\" does not say why the shell's bytes have no state"
 grep -q 'Allow usage access' <<<"$(grep '^texts ' <<<"$shell_screen")" || fail "\"Now\" does not offer usage access without it"
 [ "$(screen_bytes "$shell_screen" none)" -gt 0 ] || fail "\"Now\" shows no bytes in no state for the shell"
 echo "ok: on the screen, without usage access, the app's row has no state and says why"
