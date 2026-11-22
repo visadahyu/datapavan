@@ -32,4 +32,14 @@ object PhoneLocales {
     }
 
     fun list(locales: LocaleList): List<Locale> = (0 until locales.size()).map { locales[it] }
+
+    /**
+     * The locale to read a label in for the language [tag]: the phone's own for that language where it has one, region
+     * included, since a maker's English may differ by region (the Galaxy A40's en-US said "Optimize" where its bare
+     * English said "Optimise"), else the language alone.
+     */
+    fun forLanguage(tag: String, phone: List<Locale>): Locale {
+        val wanted = Locale.forLanguageTag(tag)
+        return phone.firstOrNull { OtherAppResources.sameWords(it, wanted) } ?: wanted
+    }
 }

@@ -12,8 +12,10 @@ import java.util.Locale
 import org.visadahyu.datapavan.core.NativePacks
 import org.visadahyu.datapavan.datapack.DataPackStore
 import org.visadahyu.datapavan.labels.LabelRow
+import org.visadahyu.datapavan.labels.LabelSource
 import org.visadahyu.datapavan.labels.OtherAppResources
 import org.visadahyu.datapavan.labels.PhoneLabels
+import org.visadahyu.datapavan.labels.PhoneLocales
 
 /**
  * Debug builds only (ADR 0054): Android's own labels as this phone holds them, through MainActivity's dump, in both
@@ -22,7 +24,8 @@ import org.visadahyu.datapavan.labels.PhoneLabels
  *
  * `adb shell dumpsys activity org.visadahyu.datapavan/.MainActivity labels-read` prints, for every key of the data
  * pack's rows and each of Datapavan's eight languages, the label as Datapavan reads it with the phone set to that
- * language: `label KEY LANG SOURCE PACKAGE/NAME TEXT` (scripts/verify-labels.sh compares it with AOSP's text).
+ * language, in the phone's own region for it: `label KEY LANG SOURCE PACKAGE/NAME TEXT`, the text `-` where nothing was
+ * read (scripts/verify-labels.sh compares it with AOSP's text).
  *
  * `... labels-find LANG [--contains] [--package PACKAGE] TEXT` lists the string resources of a system app (Settings
  * unless named) whose text in LANG is TEXT, after cleaning and NFC, or contains it: `found NAME`, then the text in
@@ -45,15 +48,23 @@ object LabelsLab {
     private fun read(context: Context, writer: PrintWriter) {
         val text = DataPackStore.get(context, NativePacks).text(LabelRow.PATH)
         val rows = text?.let(LabelRow::parse).orEmpty()
-        writer.println("labels-read maker ${Build.MANUFACTURER.orEmpty().lowercase(Locale.ROOT)} sdk ${Build.VERSION.SDK_INT} rows ${rows.size}")
+        val phone = PhoneLocales.of(context)
+        writer.println(
+            "labels-read maker ${Build.MANUFACTURER.orEmpty().lowercase(Locale.ROOT)} sdk ${Build.VERSION.SDK_INT} rows ${rows.size} " +
+                "phone ${phone.joinToString(",") { it.toLanguageTag() }}",
+        )
         val keys = rows.map { it.key }.distinct()
         for (language in LANGUAGES) {
-            val locale = Locale.forLanguageTag(language)
+            // As the screen reads it: in the phone's own locale for that language where it has one, region included
+            // (the Galaxy A40's en-US said "Optimize" where a bare en gave Samsung's British "Optimise").
+            val locale = PhoneLocales.forLanguage(language, phone)
             val labels = PhoneLabels.of(context, { text }, AndroidLabels::fallback, phone = listOf(locale), own = listOf(locale))
             for (key in keys) {
                 val label = labels.label(key)
-                val place = label.row?.let { "${it.packageName ?: "handler:" + it.handler}/${it.name}" } ?: "-"
-                writer.println("label $key ${locale.language} ${label.source.name.lowercase(Locale.ROOT)} $place ${label.text}")
+                val place = label.row?.let { "${it.packageName}/${it.name}" } ?: "-"
+                // Nothing read is said as nothing: the fallback here would be Datapavan's own language, not this one's.
+                val shown = if (label.source == LabelSource.FALLBACK) "-" else label.text
+                writer.println("label $key ${locale.language} ${label.source.name.lowercase(Locale.ROOT)} $place $shown")
             }
         }
         writer.println("labels-read done")

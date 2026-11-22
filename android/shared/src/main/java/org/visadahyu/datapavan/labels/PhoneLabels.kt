@@ -2,17 +2,16 @@ package org.visadahyu.datapavan.labels
 
 import android.annotation.SuppressLint
 import android.content.Context
-import android.content.Intent
 import android.content.pm.ApplicationInfo
 import android.content.pm.PackageManager
 import android.content.res.Configuration
-import android.net.Uri
 import android.os.Build
 import java.util.Locale
 
 /**
  * [SystemLabels] on this phone (ADR 0054): the rows from the data pack, its maker and Android version, its languages
- * and Datapavan's, labels read only from system apps, and Datapavan's copies of AOSP's texts as the fallback. One per
+ * and Datapavan's, labels read only from system apps (SystemLabels checks each package once), and Datapavan's copies
+ * of AOSP's texts as the fallback. One per
  * screen, made for the screen's locales; nothing is read until a label is asked for.
  */
 object PhoneLabels {
@@ -38,12 +37,10 @@ object PhoneLabels {
             phone = phone,
             own = own,
             read = { packageName, type, name, locales ->
-                val reader = synchronized(readers) {
-                    readers.getOrPut(packageName) { if (isSystem(context, packageName)) OtherAppResources.reader(context, packageName) else null }
-                }
+                val reader = synchronized(readers) { readers.getOrPut(packageName) { OtherAppResources.reader(context, packageName) } }
                 reader?.invoke(type, name, null, locales)
             },
-            handler = { action -> handler(context, action) },
+            isSystem = { packageName -> isSystem(context, packageName) },
             fallback = { key, locale ->
                 fallback(key, sdk)?.let { id ->
                     if (locale == null) {
@@ -61,18 +58,6 @@ object PhoneLabels {
         context.packageManager.getApplicationInfo(packageName, 0).flags and ApplicationInfo.FLAG_SYSTEM != 0
     } catch (e: PackageManager.NameNotFoundException) {
         false
-    }
-
-    /**
-     * The system app that opens [action] for Datapavan's own package (the audit's M5): null when none does, when Android
-     * would ask which app to use (its chooser, in the package "android"), or when the app is not a system app.
-     */
-    fun handler(context: Context, action: String): String? {
-        val withPackage = Intent(action, Uri.fromParts("package", context.packageName, null))
-        val info = context.packageManager.resolveActivity(withPackage, 0)?.activityInfo
-            ?: context.packageManager.resolveActivity(Intent(action), 0)?.activityInfo
-            ?: return null
-        return info.packageName.takeIf { it != "android" && isSystem(context, it) }
     }
 
     /** Datapavan's own resources in [locale], for its copy of a label in the phone's language. */

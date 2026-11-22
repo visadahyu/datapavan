@@ -20,16 +20,26 @@ object OtherAppResources {
     const val MAX = 80
 
     /**
-     * A label fit to quote: one line, no control or direction characters (which could turn the sentence around it), no
-     * soft hyphen or zero-width space, at most [MAX] characters. The screen isolates it: a tool's label in its own direction, Android's in the direction
-     * of the language it was read in (ADR 0054), since a right-to-left label that begins with a Latin word ("DNS
+     * A label fit to quote: one line, a control character turned into a space, no direction characters (which could turn
+     * the sentence around it), no soft hyphen or zero-width space, at most [MAX] characters. Only ASCII's whitespace
+     * collapses, so a French no-break space before a colon stays. The screen isolates it: a tool's label in its own
+     * direction, Android's in the direction of the language it was read in (ADR 0054), since a right-to-left label that begins with a Latin word ("DNS
      * خصوصی") would otherwise be laid out left to right.
      */
     fun clean(text: String): String {
-        val flat = text.filterNot { Character.getType(it) == Character.CONTROL.toInt() || it in DIRECTION_MARKS }
-            .replace(Regex("\\s+"), " ").trim()
-        return if (flat.length <= MAX) flat else flat.take(MAX - 1).trimEnd() + "…"
+        val flat = text.filterNot { it in DIRECTION_MARKS }
+            .map { if (Character.getType(it) == Character.CONTROL.toInt()) ' ' else it }.joinToString("")
+            .replace(SPACES, " ").trim(' ', '\t', '\n', '\u000B', '\u000C', '\r')
+        if (flat.codePointCount(0, flat.length) <= MAX) return flat
+        // Cut by code point, so that no character outside the basic plane is split in two.
+        return flat.substring(0, flat.offsetByCodePoints(0, MAX - 1)).trimEnd() + "…"
     }
+
+    /**
+     * ASCII's whitespace, written out: Android's regular expressions, which are ICU's, take a no-break space for \s where
+     * the JVM's do not, and a French label's no-break space before its colon must stay on the phone as in the tests.
+     */
+    private val SPACES = Regex("[ \t\n\u000B\u000C\r]+")
 
     /** Direction marks, overrides and isolates, and the soft hyphen and zero-width space that AOSP's German has. */
     private val DIRECTION_MARKS = setOf('‎', '‏', '‪', '‫', '‬', '‭', '‮', '⁦', '⁧', '⁨', '⁩', '؜', '\u00AD', '\u200B')
@@ -48,6 +58,10 @@ object OtherAppResources {
         } catch (e: SecurityException) {
             return null
         }
+        // The name its resource table goes by, which can differ from the package's: Google's permission controller,
+        // com.google.android.permissioncontroller, keeps AOSP's com.android.permissioncontroller there (seen on the
+        // Android 11 emulator, 2026-11-22), so a lookup by the package's own name finds nothing.
+        val table = resourcePackage(other.resources, other.applicationInfo.labelRes) ?: packageName
         val cache = HashMap<List<Locale>, Resources>()
         return { type, name, index, locales ->
             val resources = synchronized(cache) {
@@ -56,9 +70,13 @@ object OtherAppResources {
                     other.createConfigurationContext(configuration).resources
                 }
             }
-            read(resources, packageName, type, name, index)
+            read(resources, table, type, name, index)
         }
     }
+
+    /** The package name of [resources]' own table, from one of its resources ([id], the app's label), or null. */
+    fun resourcePackage(resources: Resources, id: Int): String? =
+        if (id == 0) null else runCatching { resources.getResourcePackageName(id) }.getOrNull()
 
     /**
      * One label of another app's [resources] by its name. The name is all Datapavan has of the other app's
