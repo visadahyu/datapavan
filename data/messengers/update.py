@@ -1,5 +1,5 @@
 # SPDX-License-Identifier: Apache-2.0
-"""Fetches Telegram's published address ranges again for Watch's inference of MTProto proxies (ADR 0052).
+"""Fetches Telegram's published address ranges again for Datapavan Advanced's inference of MTProto proxies (ADR 0052).
 
     python3 -I data/messengers/update.py
     python3 -I data/messengers/update.py --self-test    (no fetch: the bounds below)
@@ -12,7 +12,7 @@ runs it again with DATAPAVAN_ACCEPT_CHANGE=1, having read the change; then teleg
 byte for byte, so that its SHA-256 stays the fetched file's.
 
 clients.tsv and names.tsv are the project's own lists (CC0), kept by hand with a source for each row.
-core/net/src/messengers.rs reads all three; they ship compiled into Watch's engine, and are kept out of the
+core/net/src/messengers.rs reads all three; they ship compiled into the network part's engine, and are kept out of the
 data pack, as the resolvers are: an update needs an app release.
 """
 import datetime

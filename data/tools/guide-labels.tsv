@@ -1,6 +1,6 @@
 # SPDX-License-Identifier: CC0-1.0
 # The tools' own labels that the guides quote (guide-steps.tsv), as each tool's source has them at guides.tsv's commit.
-# They are data, not Datapavan's words: never translated by ADR 0030's process. Where the tool is installed, Watch reads
+# They are data, not Datapavan's words: never translated by ADR 0030's process. Where the tool is installed, Advanced reads
 # the label from the tool itself by its resource name, in the tool's language (guides/ToolLabels.kt); otherwise it shows
 # the text here, in the phone's language where the tool's source has it, else in English.
 # Columns:

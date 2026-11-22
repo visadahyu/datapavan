@@ -1,6 +1,6 @@
 # SPDX-License-Identifier: Apache-2.0
-"""Builds Watch's table from IP address to network and organisation (ADR 0036) from DB-IP's IP to ASN
-Lite, the month's release.
+"""Builds Datapavan Advanced's table from IP address to network and organisation (ADR 0036) from DB-IP's IP
+to ASN Lite, the month's release.
 
     python3 -I data/dbip-asn/update.py [release month, default the current one, as 2026-11]
 
@@ -12,7 +12,7 @@ last table, until a person runs it again with DATAPAVAN_ACCEPT_CHANGE=1.
 What it keeps: ranges of public addresses (both ends global by Python's `ipaddress`) announced by
 public AS numbers, with neighbouring ranges of the same AS merged, and one name per AS, the one that
 covers the most addresses. Private, reserved and documentation addresses and AS numbers are dropped:
-Watch names local addresses itself, and nobody owns the others.
+Datapavan names local addresses itself, and nobody owns the others.
 
 asn.bin, little-endian, in blocks that are each compressed on their own (raw deflate), so that a
 lookup reads and inflates one block of a few kilobytes and the table stays about 2.7 MB:

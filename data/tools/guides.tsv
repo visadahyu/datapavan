@@ -3,22 +3,22 @@
 # mode, step by step"). One row per guide, in the order of the tool usage matrix (global, read 2026-11-21) among the
 # tools with a proxy mode, then the rest of tools.tsv's proxy tools in its order, then the tools that run only as a VPN.
 # Steps and notes are in guide-steps.tsv, the tools' own labels in guide-labels.tsv. scripts/guides.py checks all three
-# against tools.tsv, and writes the website's pages from them and Watch's English strings.
+# against tools.tsv, and writes the website's pages from them and the network part's English strings.
 # Columns:
 #   guide            the guide's name, also its page's: docs/site/guides/<guide>/
 #   packages         the tools.tsv packages it covers, comma separated
-#   page             proxy (steps to run the tool in its proxy mode), wireguard (it runs only as a VPN, and Watch carries a
-#                    WireGuard configuration instead, W7), vpn (it runs only as a VPN: Watch cannot run beside it), or
-#                    waiting (no steps until it is tried with Watch)
+#   page             proxy (steps to run the tool in its proxy mode), wireguard (it runs only as a VPN, and Advanced carries
+#                    a WireGuard configuration instead, W7), vpn (it runs only as a VPN: Advanced cannot run beside it),
+#                    or waiting (no steps until it is tried with Advanced)
 #   version          the tool's version the steps are read at; '-' for none
 #   source           the repository at that version's release tag
 #   commit           the commit the tag points to; every link of this guide's steps and labels is at it
 #   listener         the SOCKS5 and HTTP listeners in proxy mode, as tools.tsv's proxy column; where tools.tsv says 'profile',
-#                    the one the guide's steps set, which Watch's finder greets
+#                    the one the guide's steps set, which Advanced's finder greets
 #   listener-source  the line that sets that default, or names the field
 #   auth             as tools.tsv's auth column
 #   auth-source      the line that shows it
-#   checked          the version tried with Watch (on an emulator or a phone) (docs/spikes/2026-11-real-tools.md), or waiting: a tool waits for
+#   checked          the version tried with Advanced (on an emulator or a phone) (docs/spikes/2026-11-real-tools.md), or waiting: a tool waits for
 #                    a device check until the maintainer gives the word for it (the 2026-11-11 method: the developer's own
 #                    release, its signer checked)
 #   note             free text
@@ -52,7 +52,7 @@ psiphon-play	com.psiphon3.subscription	waiting	-	-	-	-	-	-	-	waiting	Its code is
 tor-vpn	org.torproject.vpn	vpn	-	-	-	-	-	-	-	-	-
 proton-vpn	ch.protonvpn.android,ch.protonvpn.android.reproducible	wireguard	-	-	-	-	-	-	-	-	-
 lantern	org.getlantern.lantern	vpn	-	-	-	-	-	-	-	-	-
-amnezia-vpn	org.amnezia.vpn	vpn	-	-	-	-	-	-	-	-	Its configurations are mostly AmneziaWG's or Xray's, which Watch does not carry (ADR 0035, point 14)
+amnezia-vpn	org.amnezia.vpn	vpn	-	-	-	-	-	-	-	-	Its configurations are mostly AmneziaWG's or Xray's, which Datapavan Advanced does not carry (ADR 0035, point 14)
 amneziawg	org.amnezia.awg	vpn	-	-	-	-	-	-	-	-	AmneziaWG's obfuscation is not WireGuard's protocol (ADR 0035, point 14)
 happ	com.happproxy,su.happ.proxyutility	waiting	-	-	-	-	-	-	-	waiting	Closed source
 defyx	de.unboundtech.defyxvpn	waiting	-	-	-	-	-	-	-	waiting	Its core, DXcore, is a private build

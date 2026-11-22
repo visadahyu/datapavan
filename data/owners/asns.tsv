@@ -1,11 +1,11 @@
 # SPDX-License-Identifier: CC0-1.0
-# The companies behind well-known networks (ADR 0036, decision 4): Watch names a flow that only its network names
+# The companies behind well-known networks (ADR 0036, decision 4): Datapavan names a flow that only its network names
 # after the company of entities.tsv, and says whether that network also hosts other companies' servers. One row per
 # AS number. Columns:
 #   asn              the AS number
 #   entity           an entity of entities.tsv
 #   hosting          yes: the company sells cloud, CDN or hosting services, so a server there may be another company's
-#                    and Watch names the network, not the service; no: the company sells none
+#                    and Datapavan names the network, not the service; no: the company sells none
 #   registry         the AS name and organisation as the registry's RDAP record shows them, "NAME / Organisation"
 #   registry-source  that RDAP record
 #   link-source      a page linking the registry's organisation to the entity, or '-' when the names match

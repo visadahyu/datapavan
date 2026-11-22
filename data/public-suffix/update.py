@@ -1,7 +1,7 @@
 # SPDX-License-Identifier: Apache-2.0
-"""Writes the ICANN section of the public suffix list (publicsuffix.org) for Watch's resolver (W8, part 1, fix
-round, review S-C1): a network's search domain that is a public suffix (`com`, `co.uk`) is never the network's
-own, and Watch ignores it.
+"""Writes the ICANN section of the public suffix list (publicsuffix.org) for Datapavan Advanced's resolver (W8, part
+1, fix round, review S-C1): a network's search domain that is a public suffix (`com`, `co.uk`) is never the network's
+own, and Advanced ignores it.
 
     python3 -I data/public-suffix/update.py PATH-TO-public_suffix_list.dat [version of the copy]
 

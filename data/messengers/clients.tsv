@@ -1,5 +1,5 @@
 # SPDX-License-Identifier: CC0-1.0
-# The Android packages of the messengers whose built-in proxies Watch infers (ADR 0052): their makers' own clients.
+# The Android packages of the messengers whose built-in proxies Datapavan Advanced infers (ADR 0052): their makers' own clients.
 # One row per package. Columns: family (telegram, whatsapp, signal), package, the app, where the package name is
 # read (the maker's own page, asset-links file or source at a pinned commit; the asset-links file as data/owners read it), checked.
 telegram	org.telegram.messenger	Telegram	https://raw.githubusercontent.com/DrKLO/Telegram/21f7d109da6ab3506c9e9577f98c6a38771ab335/gradle.properties	2026-11-20

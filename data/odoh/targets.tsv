@@ -1,5 +1,5 @@
 # SPDX-License-Identifier: CC0-1.0
-# Public Oblivious DoH targets (RFC 9230) that Watch's engine may use (ADR 0042, W8). A target sees the question but
+# Public Oblivious DoH targets (RFC 9230) that the network part's engine may use (ADR 0042, W8). A target sees the question but
 # not the user's address. Every value has its source in sources.tsv; read and measured on 2026-11-20 (SOURCE).
 # Columns:
 #   id             short name, lower case

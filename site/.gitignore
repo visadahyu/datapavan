@@ -2,5 +2,5 @@ content/privacy/index.en.md
 data/changes.json
 .hugo_build.lock
 resources/
-# Written by scripts/guides.py from data/tools/guide*.tsv and Watch's strings (scripts/build-site.sh).
+# Written by scripts/guides.py from data/tools/guide*.tsv and the network part's strings (scripts/build-site.sh).
 content/guides/

@@ -1,11 +1,11 @@
 # SPDX-License-Identifier: CC0-1.0
-# Each guide's steps and notes (guides.tsv), in order within each part. The words are Watch's strings (android/watch/
-# src/main/res/values/strings_untranslated.xml, translated under ADR 0030); the tool's labels fill them in.
+# Each guide's steps and notes (guides.tsv), in order within each part. The words are the network part's strings
+# (android/network/src/main/res/values/strings.xml, translated under ADR 0030); the tool's labels fill them in.
 # Columns:
 #   guide    a guide of guides.tsv
 #   part     on (turn proxy mode on and start), password (set the proxy's user name and password), asks (what the tool
 #            asks for), back (go back to VPN mode), note (a fact the user needs, or the page of a tool with no steps)
-#   string   the Watch string that says it
+#   string   the network part's string that says it
 #   labels   what fills the string's places, in order, comma separated: a key of guide-labels.tsv for this guide, or
 #            '=TEXT' for a value; '-' for none
 #   source   the line of the tool's code (at guides.tsv's commit) that shows it; 'sources.tsv' where tools.tsv's own
