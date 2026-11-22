@@ -607,7 +607,7 @@ private fun AppDetail(entry: AppEntry, trackers: AppTrackers?, trackerInfo: Map<
             item {
                 SectionTitle(R.string.detail_special)
                 Text(
-                    app.special.sortedBy { it.ordinal }.map { stringResource(specialName(it)) }.ifEmpty { listOf(stringResource(R.string.detail_none)) }.joinToString("\n"),
+                    app.special.sortedBy { it.ordinal }.map { specialText(it) }.ifEmpty { listOf(stringResource(R.string.detail_none)) }.joinToString("\n"),
                     style = MaterialTheme.typography.bodyMedium,
                 )
                 Spacer(Modifier.height(8.dp))
@@ -674,7 +674,7 @@ internal fun appSettings(packageName: String) =
     Intent(Settings.ACTION_APPLICATION_DETAILS_SETTINGS, Uri.fromParts("package", packageName, null))
 
 @Composable
-internal fun FindingCard(kind: FindingKind, company: String?, action: Pair<Int, () -> Unit>?) {
+internal fun FindingCard(kind: FindingKind, company: String?, action: Pair<String, () -> Unit>?) {
     Card(modifier = Modifier.fillMaxWidth()) {
         Column(Modifier.padding(12.dp)) {
             Row(verticalAlignment = Alignment.CenterVertically) {
@@ -684,7 +684,7 @@ internal fun FindingCard(kind: FindingKind, company: String?, action: Pair<Int, 
             }
             Spacer(Modifier.height(4.dp))
             Text(stringResource(body(kind), company.orEmpty()), style = MaterialTheme.typography.bodyMedium)
-            action?.let { (label, onClick) -> TextButton(onClick = onClick) { Text(stringResource(label)) } }
+            action?.let { (label, onClick) -> TextButton(onClick = onClick) { Text(label) } }
         }
     }
 }
@@ -700,7 +700,9 @@ private fun DisableGuide(packageName: String) {
         Column(Modifier.padding(12.dp)) {
             Text(stringResource(R.string.guide_title), style = MaterialTheme.typography.titleSmall)
             Spacer(Modifier.height(4.dp))
-            Text(stringResource(R.string.guide_steps), style = MaterialTheme.typography.bodyMedium)
+            // The button is named as Android names it on the app's page (ADR 0054).
+            Text(stringResource(R.string.guide_steps_quoted, quotedLabel("disable")), style = MaterialTheme.typography.bodyMedium)
+            AndroidLabelsNote(listOf("disable"))
             Spacer(Modifier.height(8.dp))
             SelectionContainer {
                 Column {
@@ -731,9 +733,16 @@ private fun SeverityDot(severity: Severity) {
     }
 }
 
-internal fun deviceAction(kind: FindingKind): Pair<Int, Intent>? = when (kind) {
-    FindingKind.USB_DEBUGGING, FindingKind.WIRELESS_DEBUGGING -> R.string.action_developer_settings to Intent(Settings.ACTION_APPLICATION_DEVELOPMENT_SETTINGS)
-    FindingKind.USER_CERTIFICATE_AUTHORITY -> R.string.action_security_settings to Intent(Settings.ACTION_SECURITY_SETTINGS)
+/**
+ * A phone finding's button: the page it opens, named by Android's own label where the page has one Datapavan can read
+ * ([label], ADR 0054), else by Datapavan's words ([own]): Android does not tell an app whether its security settings
+ * open as "Security", "Security & privacy" or a maker's own page.
+ */
+internal class DeviceAction(val label: String?, @StringRes val own: Int?, val intent: Intent)
+
+internal fun deviceAction(kind: FindingKind): DeviceAction? = when (kind) {
+    FindingKind.USB_DEBUGGING, FindingKind.WIRELESS_DEBUGGING -> DeviceAction("developer_options", null, Intent(Settings.ACTION_APPLICATION_DEVELOPMENT_SETTINGS))
+    FindingKind.USER_CERTIFICATE_AUTHORITY -> DeviceAction(null, R.string.action_security_settings, Intent(Settings.ACTION_SECURITY_SETTINGS))
     else -> null
 }
 
@@ -745,16 +754,18 @@ private fun severityName(severity: Severity) = when (severity) {
     Severity.INFO -> R.string.severity_info
 }
 
+/**
+ * Datapavan's own name of a kind of special access, where Android's words do not name it; the others are Android's
+ * labels, read from the phone ([specialText], ADR 0054).
+ */
 @StringRes
 internal fun specialName(access: SpecialAccess) = when (access) {
     SpecialAccess.ACCESSIBILITY -> R.string.special_accessibility
     SpecialAccess.NOTIFICATION_LISTENER -> R.string.special_notification_listener
-    SpecialAccess.DEVICE_ADMIN -> R.string.special_device_admin
-    SpecialAccess.OVERLAY -> R.string.special_overlay
-    SpecialAccess.USAGE_ACCESS -> R.string.special_usage_access
-    SpecialAccess.INSTALL_UNKNOWN_APPS -> R.string.special_install_unknown_apps
-    SpecialAccess.ALL_FILES -> R.string.special_all_files
     SpecialAccess.BATTERY_EXEMPT -> R.string.special_battery_exempt
+    SpecialAccess.DEVICE_ADMIN, SpecialAccess.OVERLAY, SpecialAccess.USAGE_ACCESS, SpecialAccess.INSTALL_UNKNOWN_APPS,
+    SpecialAccess.ALL_FILES,
+    -> error("$access is named by Android's label (AndroidLabels.special)")
 }
 
 @StringRes

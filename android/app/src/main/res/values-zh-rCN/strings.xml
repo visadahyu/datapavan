@@ -43,13 +43,7 @@
     <string name="severity_info">提示</string>
     <string name="special_accessibility">无障碍服务</string>
     <string name="special_notification_listener">读取通知</string>
-    <string name="special_device_admin">设备管理应用</string>
-    <string name="special_overlay">显示在其他应用的上层</string>
-    <string name="special_usage_access">使用情况访问权限</string>
-    <string name="special_install_unknown_apps">安装未知应用</string>
-    <string name="special_all_files">所有文件访问权限</string>
     <string name="special_battery_exempt">电池使用无限制</string>
-    <string name="action_developer_settings">打开开发者选项</string>
     <string name="action_security_settings">打开安全设置</string>
     <string name="finding_vpn_remote_control_title">可以控制手机的 VPN 应用</string>
     <string name="finding_vpn_remote_control_body">此 VPN 应用还拥有一些权限，可以读取屏幕或通知，或控制手机，而您的流量本来就经过它。除非您知道它为什么需要这些权限，否则请撤销这些权限或卸载此应用。</string>
@@ -96,10 +90,8 @@
     <string name="usage_access_two_steps">Datapavan 是通过文件安装的，因此 Android 可能会锁定使用情况访问权限的开关。这时需要两个步骤。</string>
     <!-- %1$s is the button usage_access_button. -->
     <string name="usage_access_step_try">1. 点按“%1$s”。如果开关显示为灰色，或者 Android 不允许您开启它，请回到这里。</string>
-    <!-- %1$s is the button usage_access_app_info, %3$s the button usage_access_button. %2$s is restricted_settings_label, perhaps in the phone's language, as its Settings show it. -->
+    <!-- %1$s is the button usage_access_app_info, %3$s the button usage_access_button. %2$s is Android's own label for this choice, read from the phone's Settings in its language, or android_label_restricted_settings (ADR 0054). -->
     <string name="usage_access_step_allow">2. 点按“%1$s”，然后点按该页面顶部的菜单（⋮）。选择“%2$s”（完成第 1 步后才会显示在那里），然后确认。之后再次点按“%3$s”。</string>
-    <!-- Android's own words for this choice in an app's info menu: AOSP Settings' app_restricted_settings_lockscreen_title in this language. The phone shows exactly these. -->
-    <string name="restricted_settings_label">允许受限制的设置</string>
     <string name="usage_access_app_info">打开应用信息</string>
     <string name="usage_reading">正在读取 Android 的记录…</string>
     <string name="usage_missing">网络使用情况和上次打开时间需要使用情况访问权限，您可以在“概览”页面授予。</string>
@@ -300,7 +292,6 @@
     <string name="detail_state_enabled">已启用</string>
     <string name="detail_state_disabled">已停用</string>
     <string name="guide_title">如何关闭</string>
-    <string name="guide_steps">1. 在系统设置中打开此应用。\n2. 点按“停用”或“关闭”。\n3. 如果按钮显示为灰色，说明手机厂商阻止了此操作。您可以改为通过 USB 调试，从电脑上为当前用户移除此应用；此操作可以撤销。</string>
     <string name="guide_remove">为当前用户移除：</string>
     <string name="guide_restore">恢复：</string>
 
@@ -413,7 +404,6 @@
     <string name="plan_care_untested">Datapavan 尚未在您的手机上测试过这项操作。停用预装应用可能会使手机的其他部分无法工作。此应用能否停用，由 Android 在此应用的页面上决定，您也可以在那里重新启用它。</string>
     <string name="plan_care_continue">我明白了，继续</string>
     <string name="plan_uninstall_note">卸载会删除此应用的数据，Datapavan 无法恢复这些数据。</string>
-    <string name="plan_device_admins_note">设备管理应用列在安全设置中；有些手机将它们放在其他安全设置下。</string>
     <string name="plan_nothing_yet">目前还没有任何更改。</string>
     <string name="plan_changed">已更改：%1$s</string>
     <string name="plan_next">下一项</string>
@@ -428,11 +418,8 @@
     <string name="plan_done">完成</string>
 
     <string name="plan_wireless_title">无线调试已开启</string>
-    <string name="plan_wireless_body">配对后，同一网络上的电脑可以控制手机。除非您现在正在使用，否则请在开发者选项中将其关闭。</string>
     <string name="plan_authority_title">您安装的证书授权中心</string>
-    <string name="plan_authority_body">持有其密钥的人可以读取信任它的应用的加密连接。除非您的工作或学校需要，否则请在“加密与凭据”中将其移除。</string>
     <string name="plan_usb_title">USB 调试已开启</string>
-    <string name="plan_usb_body">在您允许后，通过数据线连接的电脑可以控制手机。除非您现在正在使用，否则请在开发者选项中将其关闭。</string>
     <string name="plan_control_title">%1$s 可以读取屏幕或代您操作</string>
     <string name="plan_control_body">拥有此权限的应用可以读取屏幕上或通知中的内容，或在手机上执行操作。除非您依赖此功能，否则请将其关闭。</string>
     <string name="plan_copy_title">%1$s 与官方应用不同</string>
@@ -444,7 +431,6 @@
     <plurals name="plan_not_opened_title">
         <item quantity="other">%1$s，%2$d 天未打开</item>
     </plurals>
-    <string name="plan_not_opened_sensitive_body">它仍持有下列权限。请移除您不需要的权限，或让 Android 在此应用未使用时移除权限。</string>
     <string name="plan_not_opened_other_body">它仍持有某项权限，或曾在后台使用数据。请移除您不需要的权限，或在它的页面上卸载此应用。</string>
     <string name="plan_preinstalled_title">%1$s 随手机预装</string>
     <string name="plan_preinstalled_body">如果您不使用它，Android 可能允许您在它的页面上将其停用。</string>
@@ -460,17 +446,7 @@
     <string name="plan_short_preinstalled">随手机预装</string>
 
     <string name="screen_app_info">应用页面</string>
-    <string name="screen_unused">闲置应用设置</string>
-    <string name="screen_accessibility">无障碍功能</string>
-    <string name="screen_notification_listener">通知使用权</string>
     <string name="screen_device_admins">安全设置</string>
-    <string name="screen_install_unknown">安装未知应用</string>
-    <string name="screen_overlay">显示在其他应用的上层</string>
-    <string name="screen_usage_access">使用情况访问权限</string>
-    <string name="screen_all_files">所有文件访问权限</string>
-    <string name="screen_battery">电池优化</string>
-    <string name="screen_vpn">VPN 设置</string>
-    <string name="screen_developer">开发者选项</string>
     <string name="screen_security">安全设置</string>
 
     <string name="change_uninstalled">已卸载</string>
@@ -679,4 +655,50 @@
     <string name="licences_data_note">Datapavan 用来与您的应用和手机进行比对的数据库有各自的许可，例如 εxodus 跟踪器列表的 Open Database License。设置中的“数据来源”页面列出了每个数据库及其许可和来源。</string>
     <!-- A line of a list of parts that the screen could not read: shown as it is. -->
     <string name="licences_unread">按列表原样显示：%1$s</string>
+    <!-- Android's own label: Settings' usage_access at android-15.0.0_r36. -->
+    <string name="android_label_usage_access">使用情况访问权限</string>
+    <!-- Android's own label: Settings' usage_access at android-16.0.0_r4. -->
+    <string name="android_label_usage_access_api36">应用使用情况数据</string>
+    <!-- Android's own label: SettingsLib's install_other_apps at android-15.0.0_r36. -->
+    <string name="android_label_install_unknown_apps">安装未知应用</string>
+    <!-- Android's own label: SettingsLib's install_other_apps at android-17.0.0_r1. -->
+    <string name="android_label_install_unknown_apps_api37">安装未知应用</string>
+    <!-- Android's own label: Settings' manage_device_admin at android-15.0.0_r36. -->
+    <string name="android_label_device_admin">设备管理应用</string>
+    <!-- Android's own label: Settings' manage_device_admin at android-16.0.0_r4. -->
+    <string name="android_label_device_admin_api36">设备管理</string>
+    <!-- Android's own label: Settings' manage_device_admin at android-17.0.0_r1. -->
+    <string name="android_label_device_admin_api37">设备管理</string>
+    <!-- Android's own label: Settings' accessibility_settings at android-15.0.0_r36. -->
+    <string name="android_label_accessibility">无障碍功能</string>
+    <!-- Android's own label: Settings' accessibility_settings at android-16.0.0_r4. -->
+    <string name="android_label_accessibility_api36">无障碍功能</string>
+    <!-- Android's own label: Settings' high_power_apps at android-15.0.0_r36. -->
+    <string name="android_label_battery_optimisation">电池优化</string>
+    <!-- Android's own label: SettingsLib's development_settings_title at android-15.0.0_r36. -->
+    <string name="android_label_developer_options">开发者选项</string>
+    <!-- Android's own label: SettingsLib's enable_adb at android-15.0.0_r36. -->
+    <string name="android_label_usb_debugging">USB 调试</string>
+    <!-- Android's own label: SettingsLib's enable_adb_wireless at android-15.0.0_r36. -->
+    <string name="android_label_wireless_debugging">无线调试</string>
+    <!-- Android's own label: Settings' encryption_and_credential_settings_title at android-15.0.0_r36. -->
+    <string name="android_label_encryption_credentials">加密与凭据</string>
+    <!-- Android's own label: Settings' encryption_and_credential_settings_title at android-17.0.0_r1. -->
+    <string name="android_label_encryption_credentials_api37">加密与凭据</string>
+    <!-- Android's own label: Settings' disable_text at android-15.0.0_r36. -->
+    <string name="android_label_disable">停用</string>
+    <!-- Android's own label: Settings' system_alert_window_settings at android-15.0.0_r36. -->
+    <string name="android_label_overlay">显示在其他应用的上层</string>
+    <!-- Android's own label: Settings' system_alert_window_settings at android-16.0.0_r4. -->
+    <string name="android_label_overlay_api36">显示在其他应用的上层</string>
+    <!-- Android's own label: Settings' manage_external_storage_title at android-15.0.0_r36. -->
+    <string name="android_label_all_files_access">所有文件访问权限</string>
+    <!-- Android's own label: Settings' manage_notification_access_title at android-15.0.0_r36. -->
+    <string name="android_label_notification_access">读取、回复和控制通知</string>
+    <!-- Android's own label: Settings' vpn_settings_title at android-15.0.0_r36. -->
+    <string name="android_label_vpn">VPN</string>
+    <!-- Android's own label: Settings' unused_apps_switch at android-15.0.0_r36. -->
+    <string name="android_label_unused_app_setting">暂停闲置应用的活动</string>
+    <!-- Android's own label: Settings' app_restricted_settings_lockscreen_title at android-15.0.0_r36. -->
+    <string name="android_label_restricted_settings">允许受限制的设置</string>
 </resources>

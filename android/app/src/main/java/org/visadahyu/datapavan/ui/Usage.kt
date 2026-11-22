@@ -1,12 +1,9 @@
 package org.visadahyu.datapavan.ui
 
-import android.app.LocaleManager
 import android.content.Context
 import android.content.Intent
 import android.content.pm.PackageInstaller
 import android.content.pm.PackageManager
-import android.content.res.Configuration
-import android.content.res.Resources
 import android.net.Uri
 import android.os.Build
 import android.provider.Settings
@@ -33,7 +30,6 @@ import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
 import java.text.DateFormat
 import java.util.Date
-import java.util.Locale
 import org.visadahyu.datapavan.BuildConfig
 import org.visadahyu.datapavan.R
 import org.visadahyu.datapavan.audit.AppFacts
@@ -73,7 +69,7 @@ internal fun UsageOverview(usage: UsageState, days: Int, apps: List<AppFacts>, o
  * Says what usage access allows and what Datapavan reads, then opens the system's page for it. Installed
  * from a file, Android may lock the switch; the two steps around that lock come before the buttons, so
  * they are read before the first tap. "Allow restricted settings" shows in the app's info only after a
- * first try, so trying comes first. Its name is given as the phone's Settings show it.
+ * first try, so trying comes first. Its name is read from the phone's Settings, in the phone's language (ADR 0054).
  */
 @Composable
 internal fun UsageAccessCard() {
@@ -91,13 +87,14 @@ internal fun UsageAccessCard() {
             // Some vendors' settings put their own alarming screen in front of the switch (seen on Xiaomi).
             Note(stringResource(R.string.usage_access_phone_warning))
             if (fromFile) {
-                val label = remember { restrictedSettingsLabel(context) }
+                val label = quotedLabel("restricted_settings")
                 Spacer(Modifier.height(8.dp))
                 Text(stringResource(R.string.usage_access_two_steps), style = MaterialTheme.typography.bodyMedium)
                 Spacer(Modifier.height(4.dp))
                 Text(stringResource(R.string.usage_access_step_try, allow), style = MaterialTheme.typography.bodyMedium)
                 Spacer(Modifier.height(4.dp))
                 Text(stringResource(R.string.usage_access_step_allow, appInfo, label, allow), style = MaterialTheme.typography.bodyMedium)
+                AndroidLabelsNote(listOf("restricted_settings"))
             }
             TextButton(onClick = { openUsageAccess(context) }) { Text(allow) }
             if (fromFile) {
@@ -106,47 +103,6 @@ internal fun UsageAccessCard() {
                 }) { Text(appInfo) }
             }
         }
-    }
-}
-
-/**
- * "Allow restricted settings" as the phone's Settings name it. Settings follow the phone's language,
- * which can differ from Datapavan's (an English phone with Datapavan in Persian, on a Galaxy A56). The
- * label is AOSP's, in Datapavan's own resources; when Datapavan has no such language, its own is used.
- */
-private fun restrictedSettingsLabel(context: Context): String {
-    val own = context.getString(R.string.restricted_settings_label)
-    val app = context.resources.configuration.locales[0]
-    val system = PhoneLabel.locale(systemLocale(context), app) ?: return own
-    val configuration = Configuration(context.resources.configuration).apply { setLocale(system) }
-    return isolate(context.createConfigurationContext(configuration).getString(R.string.restricted_settings_label))
-}
-
-/**
- * The phone's own language. From Android 13 an app's own language also changes what
- * Resources.getSystem() reports in its process (seen on the Android 17 emulator), so it is asked from
- * LocaleManager; before, Datapavan sets its language only in its activity's context.
- */
-private fun systemLocale(context: Context): Locale =
-    if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
-        context.getSystemService(LocaleManager::class.java).systemLocales[0]
-    } else {
-        Resources.getSystem().configuration.locales[0]
-    }
-
-/** Which language a label from the phone's Settings is shown in. */
-internal object PhoneLabel {
-    private val LANGUAGES = AppLanguage.entries.mapNotNull { it.tag?.let(Locale::forLanguageTag)?.language }.toSet()
-    private val TRADITIONAL_CHINESE = setOf("TW", "HK", "MO")
-
-    /**
-     * The phone's locale when its language differs from the app's and Datapavan has it; null to keep
-     * the app's. Traditional Chinese is not among Datapavan's languages, which has Simplified only.
-     */
-    fun locale(system: Locale, app: Locale): Locale? {
-        if (system.language == app.language || system.language !in LANGUAGES) return null
-        if (system.language == "zh" && (system.script == "Hant" || system.country in TRADITIONAL_CHINESE)) return null
-        return system
     }
 }
 

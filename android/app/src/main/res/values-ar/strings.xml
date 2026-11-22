@@ -43,13 +43,7 @@
     <string name="severity_info">ملاحظة</string>
     <string name="special_accessibility">خدمة تسهيل الاستخدام</string>
     <string name="special_notification_listener">قراءة الإشعارات</string>
-    <string name="special_device_admin">مشرف الجهاز</string>
-    <string name="special_overlay">إظهار فوق التطبيقات الأخرى</string>
-    <string name="special_usage_access">الوصول إلى بيانات الاستخدام</string>
-    <string name="special_install_unknown_apps">تثبيت التطبيقات غير المعروفة</string>
-    <string name="special_all_files">الوصول إلى كل الملفات</string>
     <string name="special_battery_exempt">استخدام البطارية غير المحدّد بقيود</string>
-    <string name="action_developer_settings">فتح خيارات المطورين</string>
     <string name="action_security_settings">فتح إعدادات الأمان</string>
     <string name="finding_vpn_remote_control_title">تطبيق VPN يمكنه التحكم في الهاتف</string>
     <string name="finding_vpn_remote_control_body">لدى تطبيق VPN هذا أيضًا وصول يتيح له قراءة الشاشة أو الإشعارات أو التحكم في الهاتف، وحركة بياناتك تمر عبره أصلًا. إذا لم تكن تعرف سبب حاجته إلى ذلك، فألغِ هذا الوصول أو ألغِ تثبيت التطبيق.</string>
@@ -99,10 +93,8 @@
     <string name="usage_access_two_steps">ثُبِّت هذا التطبيق من ملف، لذا قد يقفل Android مفتاح تبديل الوصول إلى بيانات الاستخدام. وعندها يلزم اتباع خطوتين.</string>
     <!-- %1$s is the button usage_access_button. -->
     <string name="usage_access_step_try">١. انقر على «%1$s». إذا كان مفتاح التبديل رماديًا، أو لم يسمح لك Android بتفعيله، فعُد إلى هنا.</string>
-    <!-- %1$s is the button usage_access_app_info, %3$s the button usage_access_button. %2$s is restricted_settings_label, perhaps in the phone's language, as its Settings show it. -->
+    <!-- %1$s is the button usage_access_app_info, %3$s the button usage_access_button. %2$s is Android's own label for this choice, read from the phone's Settings in its language, or android_label_restricted_settings (ADR 0054). -->
     <string name="usage_access_step_allow">٢. انقر على «%1$s»، ثم على القائمة (⋮) في أعلى تلك الصفحة. اختر «%2$s»، وهو خيار لا يظهر هناك إلا بعد الخطوة ١، ثم أكِّد اختيارك. بعد ذلك انقر على «%3$s» مرة أخرى.</string>
-    <!-- Android's own words for this choice in an app's info menu: AOSP Settings' app_restricted_settings_lockscreen_title in this language. The phone shows exactly these. -->
-    <string name="restricted_settings_label">السماح بالإعدادات المحظورة</string>
     <string name="usage_access_app_info">فتح معلومات التطبيق</string>
     <string name="usage_reading">جارٍ قراءة سجلات Android…</string>
     <string name="usage_missing">يحتاج استخدام الشبكة وآخر فتح للتطبيق إلى الوصول إلى بيانات الاستخدام، ويمكنك السماح به في شاشة «الملخّص».</string>
@@ -329,7 +321,6 @@
     <string name="detail_state_enabled">مفعَّل</string>
     <string name="detail_state_disabled">غير مفعَّل</string>
     <string name="guide_title">كيفية إيقافه</string>
-    <string name="guide_steps">١. افتح التطبيق في إعدادات النظام.\n٢. انقر على «إيقاف» أو «تعطيل».\n٣. إذا كان الزر رماديًا، فإن الشركة المصنّعة للهاتف تمنع ذلك. من جهاز كمبيوتر مع تفعيل تصحيح أخطاء USB، يمكنك بدلًا من ذلك إزالة التطبيق لمستخدمك، ويمكن التراجع عن هذا.</string>
     <string name="guide_remove">الإزالة لمستخدمك:</string>
     <string name="guide_restore">استعادته:</string>
 
@@ -441,7 +432,6 @@
     <string name="plan_care_untested">لم يختبر Datapavan هذا على هاتفك. إيقاف تطبيق مثبَّت مسبقًا يمكن أن يمنع أجزاء أخرى من الهاتف من العمل. يحدّد Android في صفحة التطبيق ما إذا كان يمكن إيقافه، ويمكنك إعادة تفعيله من هناك.</string>
     <string name="plan_care_continue">فهمت، متابعة</string>
     <string name="plan_uninstall_note">إلغاء التثبيت يحذف بيانات التطبيق، ولا يستطيع Datapavan استعادتها.</string>
-    <string name="plan_device_admins_note">تطبيقات مشرف الجهاز مدرجة في إعدادات الأمان، وتضعها بعض الهواتف ضمن إعدادات أمان أخرى.</string>
     <string name="plan_nothing_yet">لم يتغيّر شيء حتى الآن.</string>
     <string name="plan_changed">تم التغيير: %1$s</string>
     <string name="plan_next">التالي</string>
@@ -456,11 +446,8 @@
     <string name="plan_done">تم</string>
 
     <string name="plan_wireless_title">تصحيح الأخطاء اللاسلكي مفعَّل</string>
-    <string name="plan_wireless_body">يمكن لجهاز كمبيوتر على الشبكة نفسها التحكم في الهاتف بعد إقرانه. أوقِفه من خيارات المطورين إلا إذا كنت تستخدمه الآن.</string>
     <string name="plan_authority_title">مرجع مصدّق قمت بتثبيته</string>
-    <string name="plan_authority_body">يمكن لمن يملك مفتاحه قراءة الاتصالات المشفَّرة للتطبيقات التي تثق به. أزِله من «التشفير وبيانات الاعتماد» إلا إذا كان عملك أو مدرستك يحتاج إليه.</string>
     <string name="plan_usb_title">تصحيح أخطاء USB مفعَّل</string>
-    <string name="plan_usb_body">يمكن لجهاز كمبيوتر موصول بكابل التحكم في الهاتف بعد أن تسمح له. أوقِفه من خيارات المطورين إلا إذا كنت تستخدمه الآن.</string>
     <string name="plan_control_title">%1$s يمكنه قراءة الشاشة أو التصرف نيابةً عنك</string>
     <string name="plan_control_body">مع هذا الوصول، يمكن للتطبيق قراءة ما على الشاشة أو في الإشعارات، أو اتخاذ إجراءات على الهاتف. أوقِفه إلا إذا كنت تعتمد عليه.</string>
     <string name="plan_copy_title">%1$s يختلف عن التطبيق الرسمي</string>
@@ -477,7 +464,6 @@
         <item quantity="many">%1$s، لم يُفتح منذ %2$d يومًا</item>
         <item quantity="other">%1$s، لم يُفتح منذ %2$d يوم</item>
     </plurals>
-    <string name="plan_not_opened_sensitive_body">لا يزال لديه الوصول الموضَّح أدناه. أزِل ما لا تحتاج إليه، أو دع Android يزيل الأذونات ما دام التطبيق غير مستخدَم.</string>
     <string name="plan_not_opened_other_body">لا يزال لديه إذن، أو استخدم بيانات في الخلفية. أزِل ما لا تحتاج إليه، أو ألغِ تثبيت التطبيق من صفحته.</string>
     <string name="plan_preinstalled_title">%1$s جاء مع الهاتف</string>
     <string name="plan_preinstalled_body">إذا لم تكن تستخدمه، فقد يتيح لك Android إيقافه من صفحته.</string>
@@ -493,17 +479,7 @@
     <string name="plan_short_preinstalled">جاء مع الهاتف</string>
 
     <string name="screen_app_info">صفحة التطبيق</string>
-    <string name="screen_unused">إعداد التطبيق غير المستخدَم</string>
-    <string name="screen_accessibility">تسهيل الاستخدام</string>
-    <string name="screen_notification_listener">الوصول إلى الإشعارات</string>
     <string name="screen_device_admins">إعدادات الأمان</string>
-    <string name="screen_install_unknown">تثبيت التطبيقات غير المعروفة</string>
-    <string name="screen_overlay">إظهار فوق التطبيقات الأخرى</string>
-    <string name="screen_usage_access">الوصول إلى بيانات الاستخدام</string>
-    <string name="screen_all_files">الوصول إلى كل الملفات</string>
-    <string name="screen_battery">تحسين البطارية</string>
-    <string name="screen_vpn">إعدادات شبكة VPN</string>
-    <string name="screen_developer">خيارات المطورين</string>
     <string name="screen_security">إعدادات الأمان</string>
 
     <string name="change_uninstalled">أُلغي تثبيته</string>
@@ -727,4 +703,50 @@
     <string name="licences_data_note">قواعد البيانات التي يقارن بها Datapavan تطبيقاتك وهاتفك لها تراخيصها الخاصة، مثل ترخيص Open Database License لقائمة أدوات التتبّع εxodus. وتذكر صفحة «مصادر البيانات» في الإعدادات كل قاعدة منها مع ترخيصها ومن أين تأتي.</string>
     <!-- A line of a list of parts that the screen could not read: shown as it is. -->
     <string name="licences_unread">معروض كما ورد في القائمة: %1$s</string>
+    <!-- Android's own label: Settings' usage_access at android-15.0.0_r36. -->
+    <string name="android_label_usage_access">الوصول إلى بيانات الاستخدام</string>
+    <!-- Android's own label: Settings' usage_access at android-16.0.0_r4. -->
+    <string name="android_label_usage_access_api36">بيانات استخدام التطبيق</string>
+    <!-- Android's own label: SettingsLib's install_other_apps at android-15.0.0_r36. -->
+    <string name="android_label_install_unknown_apps">تثبيت التطبيقات غير المعروفة</string>
+    <!-- Android's own label: SettingsLib's install_other_apps at android-17.0.0_r1. -->
+    <string name="android_label_install_unknown_apps_api37">تثبيت التطبيقات غير المعروفة</string>
+    <!-- Android's own label: Settings' manage_device_admin at android-15.0.0_r36. -->
+    <string name="android_label_device_admin">تطبيقات مشرف الجهاز</string>
+    <!-- Android's own label: Settings' manage_device_admin at android-16.0.0_r4. -->
+    <string name="android_label_device_admin_api36">مشرف الجهاز</string>
+    <!-- Android's own label: Settings' manage_device_admin at android-17.0.0_r1. -->
+    <string name="android_label_device_admin_api37">مشرف الجهاز</string>
+    <!-- Android's own label: Settings' accessibility_settings at android-15.0.0_r36. -->
+    <string name="android_label_accessibility">تسهيل الاستخدام</string>
+    <!-- Android's own label: Settings' accessibility_settings at android-16.0.0_r4. -->
+    <string name="android_label_accessibility_api36">أدوات تسهيل الاستخدام</string>
+    <!-- Android's own label: Settings' high_power_apps at android-15.0.0_r36. -->
+    <string name="android_label_battery_optimisation">تحسين البطارية</string>
+    <!-- Android's own label: SettingsLib's development_settings_title at android-15.0.0_r36. -->
+    <string name="android_label_developer_options">خيارات المطورين</string>
+    <!-- Android's own label: SettingsLib's enable_adb at android-15.0.0_r36. -->
+    <string name="android_label_usb_debugging">تصحيح أخطاء USB</string>
+    <!-- Android's own label: SettingsLib's enable_adb_wireless at android-15.0.0_r36. -->
+    <string name="android_label_wireless_debugging">تصحيح الأخطاء اللاسلكي</string>
+    <!-- Android's own label: Settings' encryption_and_credential_settings_title at android-15.0.0_r36. -->
+    <string name="android_label_encryption_credentials">التشفير وبيانات الاعتماد</string>
+    <!-- Android's own label: Settings' encryption_and_credential_settings_title at android-17.0.0_r1. -->
+    <string name="android_label_encryption_credentials_api37">التشفير وبيانات الاعتماد</string>
+    <!-- Android's own label: Settings' disable_text at android-15.0.0_r36. -->
+    <string name="android_label_disable">إيقاف</string>
+    <!-- Android's own label: Settings' system_alert_window_settings at android-15.0.0_r36. -->
+    <string name="android_label_overlay">إظهار فوق التطبيقات الأخرى</string>
+    <!-- Android's own label: Settings' system_alert_window_settings at android-16.0.0_r4. -->
+    <string name="android_label_overlay_api36">الظهور فوق التطبيقات الأخرى</string>
+    <!-- Android's own label: Settings' manage_external_storage_title at android-15.0.0_r36. -->
+    <string name="android_label_all_files_access">الوصول إلى كل الملفات</string>
+    <!-- Android's own label: Settings' manage_notification_access_title at android-15.0.0_r36. -->
+    <string name="android_label_notification_access">قراءة الإشعارات والردّ عليها والتحكّم فيها</string>
+    <!-- Android's own label: Settings' vpn_settings_title at android-15.0.0_r36. -->
+    <string name="android_label_vpn">شبكة VPN</string>
+    <!-- Android's own label: Settings' unused_apps_switch at android-15.0.0_r36. -->
+    <string name="android_label_unused_app_setting">إيقاف نشاط التطبيق مؤقتًا عند عدم استخدامه</string>
+    <!-- Android's own label: Settings' app_restricted_settings_lockscreen_title at android-15.0.0_r36. -->
+    <string name="android_label_restricted_settings">السماح بالإعدادات المحظورة</string>
 </resources>

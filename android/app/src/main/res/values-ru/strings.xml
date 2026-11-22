@@ -41,13 +41,7 @@
     <string name="severity_info">Заметка</string>
     <string name="special_accessibility">Сервис специальных возможностей</string>
     <string name="special_notification_listener">Читает уведомления</string>
-    <string name="special_device_admin">Администратор устройства</string>
-    <string name="special_overlay">Поверх других приложений</string>
-    <string name="special_usage_access">Доступ к данным об использовании</string>
-    <string name="special_install_unknown_apps">Установка неизвестных приложений</string>
-    <string name="special_all_files">Доступ ко всем файлам</string>
     <string name="special_battery_exempt">Расход заряда без ограничений</string>
-    <string name="action_developer_settings">Открыть раздел «Для разработчиков»</string>
     <string name="action_security_settings">Открыть настройки безопасности</string>
     <string name="finding_vpn_remote_control_title">VPN-приложение, которое может управлять телефоном</string>
     <string name="finding_vpn_remote_control_body">У этого VPN-приложения есть также доступ, который позволяет ему читать экран или уведомления либо управлять телефоном, а ваш трафик и так проходит через него. Если вы не знаете, зачем ему это нужно, отзовите доступ или удалите приложение.</string>
@@ -94,10 +88,8 @@
     <string name="usage_access_two_steps">Datapavan установлен из файла, поэтому Android может заблокировать переключатель доступа к данным об использовании. Тогда понадобятся два шага.</string>
     <!-- %1$s is the button usage_access_button. -->
     <string name="usage_access_step_try">1. Нажмите «%1$s». Если переключатель неактивен или Android не даёт его включить, вернитесь сюда.</string>
-    <!-- %1$s is the button usage_access_app_info, %3$s the button usage_access_button. %2$s is restricted_settings_label, perhaps in the phone's language, as its Settings show it. -->
+    <!-- %1$s is the button usage_access_app_info, %3$s the button usage_access_button. %2$s is Android's own label for this choice, read from the phone's Settings in its language, or android_label_restricted_settings (ADR 0054). -->
     <string name="usage_access_step_allow">2. Нажмите «%1$s», а затем меню (⋮) вверху открывшейся страницы. Выберите пункт «%2$s», который появляется там только после шага 1, и подтвердите. Затем снова нажмите «%3$s».</string>
-    <!-- Android's own words for this choice in an app's info menu: AOSP Settings' app_restricted_settings_lockscreen_title in this language. The phone shows exactly these. -->
-    <string name="restricted_settings_label">Разрешить доступ к настройкам</string>
     <string name="usage_access_app_info">Открыть сведения о приложении</string>
     <string name="usage_reading">Читаем записи Android…</string>
     <string name="usage_missing">Для передачи данных и времени последнего открытия нужен доступ к данным об использовании. Его можно разрешить на экране «Сводка».</string>
@@ -311,7 +303,6 @@
     <string name="detail_state_enabled">Включено</string>
     <string name="detail_state_disabled">Отключено</string>
     <string name="guide_title">Как это отключить</string>
-    <string name="guide_steps">1. Откройте приложение в настройках системы.\n2. Нажмите «Отключить» или «Выключить».\n3. Если кнопка неактивна, её блокирует производитель телефона. С компьютера с отладкой по USB можно вместо этого удалить приложение для вашего пользователя; это можно отменить.</string>
     <string name="guide_remove">Удалить для вашего пользователя:</string>
     <string name="guide_restore">Вернуть:</string>
 
@@ -419,7 +410,6 @@
     <string name="plan_care_untested">Datapavan не проверял это на вашем телефоне. Если отключить предустановленное приложение, другие части телефона могут перестать работать. Можно ли его отключить, решает Android на странице приложения, и там же его можно включить снова.</string>
     <string name="plan_care_continue">Я понимаю, продолжить</string>
     <string name="plan_uninstall_note">Удаление стирает данные приложения, и Datapavan не может их вернуть.</string>
-    <string name="plan_device_admins_note">Приложения администратора устройства находятся в настройках безопасности; на некоторых телефонах — в других настройках безопасности.</string>
     <string name="plan_nothing_yet">Пока ничего не изменилось.</string>
     <string name="plan_changed">Изменено: %1$s</string>
     <string name="plan_next">Далее</string>
@@ -434,11 +424,8 @@
     <string name="plan_done">Готово</string>
 
     <string name="plan_wireless_title">Включена отладка по Wi-Fi</string>
-    <string name="plan_wireless_body">Компьютер в той же сети может управлять телефоном после сопряжения. Выключите её в разделе «Для разработчиков», если сейчас ею не пользуетесь.</string>
     <string name="plan_authority_title">Установленный вами центр сертификации</string>
-    <string name="plan_authority_body">Тот, у кого есть его ключ, может читать зашифрованные соединения приложений, которые ему доверяют. Удалите его в разделе «Шифрование и учётные данные», если он не нужен для работы или учёбы.</string>
     <string name="plan_usb_title">Включена отладка по USB</string>
-    <string name="plan_usb_body">Компьютер, подключённый кабелем, может управлять телефоном, когда вы это разрешите. Выключите её в разделе «Для разработчиков», если сейчас ею не пользуетесь.</string>
     <string name="plan_control_title">%1$s может читать экран или действовать за вас</string>
     <string name="plan_control_body">С таким доступом приложение может читать то, что на экране или в уведомлениях, либо выполнять действия на телефоне. Отключите его, если вы на него не полагаетесь.</string>
     <string name="plan_copy_title">%1$s отличается от официального приложения</string>
@@ -453,7 +440,6 @@
         <item quantity="many">%1$s: не открывалось %2$d дней</item>
         <item quantity="other">%1$s: не открывалось %2$d дня</item>
     </plurals>
-    <string name="plan_not_opened_sensitive_body">У него всё ещё есть доступ, указанный ниже. Уберите то, что вам не нужно, или разрешите Android убирать разрешения, пока приложение не используется.</string>
     <string name="plan_not_opened_other_body">У него всё ещё есть разрешение, или оно использовало данные в фоновом режиме. Уберите то, что вам не нужно, или удалите приложение на его странице.</string>
     <string name="plan_preinstalled_title">Приложение %1$s предустановлено на телефоне</string>
     <string name="plan_preinstalled_body">Если вы им не пользуетесь, Android может позволить отключить его на его странице.</string>
@@ -469,17 +455,7 @@
     <string name="plan_short_preinstalled">Предустановлено на телефоне</string>
 
     <string name="screen_app_info">Страница приложения</string>
-    <string name="screen_unused">Настройки неиспользуемых приложений</string>
-    <string name="screen_accessibility">Специальные возможности</string>
-    <string name="screen_notification_listener">Доступ к уведомлениям</string>
     <string name="screen_device_admins">Настройки безопасности</string>
-    <string name="screen_install_unknown">Установка неизвестных приложений</string>
-    <string name="screen_overlay">Поверх других приложений</string>
-    <string name="screen_usage_access">Доступ к данным об использовании</string>
-    <string name="screen_all_files">Доступ ко всем файлам</string>
-    <string name="screen_battery">Экономия заряда батареи</string>
-    <string name="screen_vpn">Настройки VPN</string>
-    <string name="screen_developer">Для разработчиков</string>
     <string name="screen_security">Настройки безопасности</string>
 
     <string name="change_uninstalled">удалено</string>
@@ -695,4 +671,50 @@
     <string name="licences_data_note">У баз данных, с которыми Datapavan сравнивает ваши приложения и ваш телефон, есть собственные лицензии, например Open Database License у списка трекеров εxodus. На странице «Источники данных» в настройках названа каждая база, её лицензия и источник.</string>
     <!-- A line of a list of parts that the screen could not read: shown as it is. -->
     <string name="licences_unread">Показано так, как в списке: %1$s</string>
+    <!-- Android's own label: Settings' usage_access at android-15.0.0_r36. -->
+    <string name="android_label_usage_access">Доступ к данным об использовании</string>
+    <!-- Android's own label: Settings' usage_access at android-16.0.0_r4. -->
+    <string name="android_label_usage_access_api36">Данные об использовании приложений</string>
+    <!-- Android's own label: SettingsLib's install_other_apps at android-15.0.0_r36. -->
+    <string name="android_label_install_unknown_apps">Установка неизвестных приложений</string>
+    <!-- Android's own label: SettingsLib's install_other_apps at android-17.0.0_r1. -->
+    <string name="android_label_install_unknown_apps_api37">Установка неизвестных приложений</string>
+    <!-- Android's own label: Settings' manage_device_admin at android-15.0.0_r36. -->
+    <string name="android_label_device_admin">Приложения администратора устройства</string>
+    <!-- Android's own label: Settings' manage_device_admin at android-16.0.0_r4. -->
+    <string name="android_label_device_admin_api36">Администратор устройства</string>
+    <!-- Android's own label: Settings' manage_device_admin at android-17.0.0_r1. -->
+    <string name="android_label_device_admin_api37">Администрирование устройства</string>
+    <!-- Android's own label: Settings' accessibility_settings at android-15.0.0_r36. -->
+    <string name="android_label_accessibility">Спец. возможности</string>
+    <!-- Android's own label: Settings' accessibility_settings at android-16.0.0_r4. -->
+    <string name="android_label_accessibility_api36">Специальные возможности</string>
+    <!-- Android's own label: Settings' high_power_apps at android-15.0.0_r36. -->
+    <string name="android_label_battery_optimisation">Экономия заряда батареи</string>
+    <!-- Android's own label: SettingsLib's development_settings_title at android-15.0.0_r36. -->
+    <string name="android_label_developer_options">Для разработчиков</string>
+    <!-- Android's own label: SettingsLib's enable_adb at android-15.0.0_r36. -->
+    <string name="android_label_usb_debugging">Отладка по USB</string>
+    <!-- Android's own label: SettingsLib's enable_adb_wireless at android-15.0.0_r36. -->
+    <string name="android_label_wireless_debugging">Отладка по Wi-Fi</string>
+    <!-- Android's own label: Settings' encryption_and_credential_settings_title at android-15.0.0_r36. -->
+    <string name="android_label_encryption_credentials">Шифрование и учетные данные</string>
+    <!-- Android's own label: Settings' encryption_and_credential_settings_title at android-17.0.0_r1. -->
+    <string name="android_label_encryption_credentials_api37">Шифрование и учетные данные</string>
+    <!-- Android's own label: Settings' disable_text at android-15.0.0_r36. -->
+    <string name="android_label_disable">Отключить</string>
+    <!-- Android's own label: Settings' system_alert_window_settings at android-15.0.0_r36. -->
+    <string name="android_label_overlay">Поверх других приложений</string>
+    <!-- Android's own label: Settings' system_alert_window_settings at android-16.0.0_r4. -->
+    <string name="android_label_overlay_api36">Поверх других приложений</string>
+    <!-- Android's own label: Settings' manage_external_storage_title at android-15.0.0_r36. -->
+    <string name="android_label_all_files_access">Доступ ко всем файлам</string>
+    <!-- Android's own label: Settings' manage_notification_access_title at android-15.0.0_r36. -->
+    <string name="android_label_notification_access">Чтение уведомлений, управление ими и ответы на них</string>
+    <!-- Android's own label: Settings' vpn_settings_title at android-15.0.0_r36. -->
+    <string name="android_label_vpn">VPN</string>
+    <!-- Android's own label: Settings' unused_apps_switch at android-15.0.0_r36. -->
+    <string name="android_label_unused_app_setting">Приостановить работу в неактивный период</string>
+    <!-- Android's own label: Settings' app_restricted_settings_lockscreen_title at android-15.0.0_r36. -->
+    <string name="android_label_restricted_settings">Разрешить доступ к настройкам</string>
 </resources>

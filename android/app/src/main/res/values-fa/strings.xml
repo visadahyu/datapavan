@@ -43,13 +43,7 @@
     <string name="severity_info">نکته</string>
     <string name="special_accessibility">سرویس دسترس‌پذیری</string>
     <string name="special_notification_listener">خواندن اعلان‌ها</string>
-    <string name="special_device_admin">سرپرست دستگاه</string>
-    <string name="special_overlay">نمایش روی سایر برنامه‌ها</string>
-    <string name="special_usage_access">دسترسی به داده‌های مصرف</string>
-    <string name="special_install_unknown_apps">نصب برنامه‌های ناشناس</string>
-    <string name="special_all_files">دسترسی به همه فایل‌ها</string>
     <string name="special_battery_exempt">مصرف باتری نامحدود</string>
-    <string name="action_developer_settings">باز کردن گزینه‌های توسعه‌دهندگان</string>
     <string name="action_security_settings">باز کردن تنظیمات امنیتی</string>
     <string name="finding_vpn_remote_control_title">برنامه وی‌پی‌انی که می‌تواند گوشی را کنترل کند</string>
     <string name="finding_vpn_remote_control_body">این برنامه وی‌پی‌ان دسترسی‌ای هم دارد که با آن می‌تواند صفحه یا اعلان‌ها را بخواند یا گوشی را کنترل کند، و ترافیک شما هم از همین برنامه می‌گذرد. اگر نمی‌دانید چرا به آن نیاز دارد، این دسترسی را از آن بردارید یا برنامه را حذف کنید.</string>
@@ -99,10 +93,8 @@
     <string name="usage_access_two_steps">این برنامه از فایل نصب شده است، برای همین ممکن است اندروید کلید دسترسی به داده‌های مصرف را قفل کند. در این صورت دو مرحله لازم است.</string>
     <!-- %1$s is the button usage_access_button. -->
     <string name="usage_access_step_try">۱. «%1$s» را بزنید. اگر کلید خاکستری است یا اندروید نمی‌گذارد آن را روشن کنید، به اینجا برگردید.</string>
-    <!-- %1$s is the button usage_access_app_info, %3$s the button usage_access_button. %2$s is restricted_settings_label, perhaps in the phone's language, as its Settings show it. -->
+    <!-- %1$s is the button usage_access_app_info, %3$s the button usage_access_button. %2$s is Android's own label for this choice, read from the phone's Settings in its language, or android_label_restricted_settings (ADR 0054). -->
     <string name="usage_access_step_allow">۲. «%1$s» را بزنید و بعد در بالای همان صفحه منوی (⋮) را بزنید. گزینه «%2$s» را انتخاب کنید (این گزینه فقط پس از مرحله ۱ آنجا دیده می‌شود) و تأیید کنید. بعد دوباره «%3$s» را بزنید.</string>
-    <!-- Android's own words for this choice in an app's info menu: AOSP Settings' app_restricted_settings_lockscreen_title in this language. The phone shows exactly these. -->
-    <string name="restricted_settings_label">اجازه دادن به تنظیمات محدودشده</string>
     <string name="usage_access_app_info">باز کردن اطلاعات برنامه</string>
     <string name="usage_reading">در حال خواندن سوابق اندروید…</string>
     <string name="usage_missing">مصرف شبکه و آخرین باز شدن به دسترسی به داده‌های مصرف نیاز دارند، که می‌توانید در صفحه اصلی اجازه‌اش را بدهید.</string>
@@ -308,7 +300,6 @@
     <string name="detail_state_enabled">فعال</string>
     <string name="detail_state_disabled">غیرفعال</string>
     <string name="guide_title">چطور خاموشش کنیم</string>
-    <string name="guide_steps">۱. برنامه را در تنظیمات سیستم باز کنید.\n۲. گزینه غیرفعال کردن یا خاموش کردن را بزنید.\n۳. اگر دکمه خاکستری است، سازنده گوشی جلوی آن را گرفته است. در این صورت با یک رایانه و اشکال‌زدایی USB می‌توانید برنامه را برای کاربر خودتان حذف کنید؛ این کار برگشت‌پذیر است.</string>
     <string name="guide_remove">حذف برای کاربر شما:</string>
     <string name="guide_restore">برگرداندن:</string>
 
@@ -420,7 +411,6 @@
     <string name="plan_care_untested">برنامه Datapavan این را روی گوشی شما آزمایش نکرده است. خاموش کردن یک برنامه از پیش نصب‌شده ممکن است بخش‌های دیگری از گوشی را از کار بیندازد. اندروید در صفحه برنامه تصمیم می‌گیرد که آیا می‌شود آن را خاموش کرد، و همان‌جا می‌توانید دوباره روشنش کنید.</string>
     <string name="plan_care_continue">متوجه شدم، ادامه</string>
     <string name="plan_uninstall_note">حذف کردن برنامه، داده‌های آن را پاک می‌کند و Datapavan نمی‌تواند آن‌ها را برگرداند.</string>
-    <string name="plan_device_admins_note">برنامه‌های سرپرست دستگاه در تنظیمات امنیتی فهرست شده‌اند؛ بعضی گوشی‌ها آن‌ها را زیر تنظیمات امنیتی دیگر می‌گذارند.</string>
     <string name="plan_nothing_yet">هنوز چیزی تغییر نکرده است.</string>
     <string name="plan_changed">تغییر کرد: %1$s</string>
     <string name="plan_next">بعدی</string>
@@ -435,11 +425,8 @@
     <string name="plan_done">تمام</string>
 
     <string name="plan_wireless_title">اشکال‌زدایی بی‌سیم روشن است</string>
-    <string name="plan_wireless_body">رایانه‌ای در همان شبکه پس از جفت شدن می‌تواند گوشی را کنترل کند. اگر الان از آن استفاده نمی‌کنید، در گزینه‌های توسعه‌دهندگان خاموشش کنید.</string>
     <string name="plan_authority_title">مرجع صدور گواهی که خودتان نصب کرده‌اید</string>
-    <string name="plan_authority_body">هر کس کلید آن را داشته باشد می‌تواند اتصال‌های رمزگذاری‌شده برنامه‌هایی را که به آن اعتماد می‌کنند بخواند. اگر محل کار یا مدرسه‌تان به آن نیاز ندارد، در بخش رمزگذاری و اطلاعات اعتباری حذفش کنید.</string>
     <string name="plan_usb_title">اشکال‌زدایی USB روشن است</string>
-    <string name="plan_usb_body">رایانه‌ای که با کابل وصل است، پس از اجازه شما می‌تواند گوشی را کنترل کند. اگر الان از آن استفاده نمی‌کنید، در گزینه‌های توسعه‌دهندگان خاموشش کنید.</string>
     <string name="plan_control_title">%1$s می‌تواند صفحه را بخواند یا به جای شما کاری انجام دهد</string>
     <string name="plan_control_body">با این دسترسی یک برنامه می‌تواند آنچه را روی صفحه یا در اعلان‌هاست بخواند، یا روی گوشی کاری انجام دهد. اگر به آن تکیه نمی‌کنید، خاموشش کنید.</string>
     <string name="plan_copy_title">%1$s با برنامه رسمی فرق دارد</string>
@@ -452,7 +439,6 @@
         <item quantity="one">%1$s، %2$d روز است باز نشده</item>
         <item quantity="other">%1$s، %2$d روز است باز نشده</item>
     </plurals>
-    <string name="plan_not_opened_sensitive_body">هنوز دسترسی‌های زیر را دارد. آنچه را لازم ندارید بردارید، یا بگذارید اندروید تا وقتی برنامه استفاده نمی‌شود مجوزها را بردارد.</string>
     <string name="plan_not_opened_other_body">هنوز یک مجوز دارد، یا در پس‌زمینه داده مصرف کرده است. آنچه را لازم ندارید بردارید، یا برنامه را در صفحه‌اش حذف کنید.</string>
     <string name="plan_preinstalled_title">%1$s از اول روی گوشی بوده است</string>
     <string name="plan_preinstalled_body">اگر از آن استفاده نمی‌کنید، شاید اندروید اجازه دهد در صفحه‌اش خاموشش کنید.</string>
@@ -468,17 +454,7 @@
     <string name="plan_short_preinstalled">از اول روی گوشی</string>
 
     <string name="screen_app_info">صفحه برنامه</string>
-    <string name="screen_unused">تنظیم برنامه‌های استفاده‌نشده</string>
-    <string name="screen_accessibility">دسترس‌پذیری</string>
-    <string name="screen_notification_listener">دسترسی به اعلان</string>
     <string name="screen_device_admins">تنظیمات امنیتی</string>
-    <string name="screen_install_unknown">نصب برنامه‌های ناشناس</string>
-    <string name="screen_overlay">نمایش روی سایر برنامه‌ها</string>
-    <string name="screen_usage_access">دسترسی به داده‌های مصرف</string>
-    <string name="screen_all_files">دسترسی به همه فایل‌ها</string>
-    <string name="screen_battery">بهینه‌سازی مصرف باتری</string>
-    <string name="screen_vpn">تنظیمات وی‌پی‌ان</string>
-    <string name="screen_developer">گزینه‌های توسعه‌دهندگان</string>
     <string name="screen_security">تنظیمات امنیتی</string>
 
     <string name="change_uninstalled">حذف شد</string>
@@ -690,4 +666,50 @@
     <string name="licences_data_note">پایگاه‌های داده‌ای که Datapavan برنامه‌ها و گوشی شما را با آن‌ها مقایسه می‌کند، پروانه‌های خودشان را دارند، مانند پروانه Open Database License فهرست ردیاب‌های εxodus. صفحه «منابع داده» در تنظیمات، هر کدام را با پروانه‌اش و جایی که از آن می‌آید نام می‌برد.</string>
     <!-- A line of a list of parts that the screen could not read: shown as it is. -->
     <string name="licences_unread">همان‌طور که در فهرست آمده است: %1$s</string>
+    <!-- Android's own label: Settings' usage_access at android-15.0.0_r36. -->
+    <string name="android_label_usage_access">دسترسی به داده‌های مصرف</string>
+    <!-- Android's own label: Settings' usage_access at android-16.0.0_r4. -->
+    <string name="android_label_usage_access_api36">داده‌های مصرف برنامه</string>
+    <!-- Android's own label: SettingsLib's install_other_apps at android-15.0.0_r36. -->
+    <string name="android_label_install_unknown_apps">نصب برنامه‌های ناشناس</string>
+    <!-- Android's own label: SettingsLib's install_other_apps at android-17.0.0_r1. -->
+    <string name="android_label_install_unknown_apps_api37">نصب کردن برنامه‌های ناشناس</string>
+    <!-- Android's own label: Settings' manage_device_admin at android-15.0.0_r36. -->
+    <string name="android_label_device_admin">برنامه‌های سرپرست دستگاه</string>
+    <!-- Android's own label: Settings' manage_device_admin at android-16.0.0_r4. -->
+    <string name="android_label_device_admin_api36">سرپرست دستگاه</string>
+    <!-- Android's own label: Settings' manage_device_admin at android-17.0.0_r1. -->
+    <string name="android_label_device_admin_api37">سرپرست دستگاه</string>
+    <!-- Android's own label: Settings' accessibility_settings at android-15.0.0_r36. -->
+    <string name="android_label_accessibility">دسترس‌پذیری</string>
+    <!-- Android's own label: Settings' accessibility_settings at android-16.0.0_r4. -->
+    <string name="android_label_accessibility_api36">دسترس‌پذیری</string>
+    <!-- Android's own label: Settings' high_power_apps at android-15.0.0_r36. -->
+    <string name="android_label_battery_optimisation">بهینه‌سازی مصرف باتری</string>
+    <!-- Android's own label: SettingsLib's development_settings_title at android-15.0.0_r36. -->
+    <string name="android_label_developer_options">گزینه‌های توسعه‌دهندگان</string>
+    <!-- Android's own label: SettingsLib's enable_adb at android-15.0.0_r36. -->
+    <string name="android_label_usb_debugging">اشکال‌زدایی USB</string>
+    <!-- Android's own label: SettingsLib's enable_adb_wireless at android-15.0.0_r36. -->
+    <string name="android_label_wireless_debugging">اشکال‌زدایی بی‌سیم</string>
+    <!-- Android's own label: Settings' encryption_and_credential_settings_title at android-15.0.0_r36. -->
+    <string name="android_label_encryption_credentials">رمزگذاری و اطلاعات اعتباری</string>
+    <!-- Android's own label: Settings' encryption_and_credential_settings_title at android-17.0.0_r1. -->
+    <string name="android_label_encryption_credentials_api37">رمزگذاری و اعتبارنامه</string>
+    <!-- Android's own label: Settings' disable_text at android-15.0.0_r36. -->
+    <string name="android_label_disable">غیرفعال کردن</string>
+    <!-- Android's own label: Settings' system_alert_window_settings at android-15.0.0_r36. -->
+    <string name="android_label_overlay">نمایش روی سایر برنامه‌ها</string>
+    <!-- Android's own label: Settings' system_alert_window_settings at android-16.0.0_r4. -->
+    <string name="android_label_overlay_api36">نمایش روی سایر برنامه‌ها</string>
+    <!-- Android's own label: Settings' manage_external_storage_title at android-15.0.0_r36. -->
+    <string name="android_label_all_files_access">دسترسی به همه فایل‌ها</string>
+    <!-- Android's own label: Settings' manage_notification_access_title at android-15.0.0_r36. -->
+    <string name="android_label_notification_access">خواندن، پاسخ دادن، و کنترل اعلان</string>
+    <!-- Android's own label: Settings' vpn_settings_title at android-15.0.0_r36. -->
+    <string name="android_label_vpn">VPN</string>
+    <!-- Android's own label: Settings' unused_apps_switch at android-15.0.0_r36. -->
+    <string name="android_label_unused_app_setting">مکث فعالیت‌ها در برنامه درصورت عدم‌استفاده</string>
+    <!-- Android's own label: Settings' app_restricted_settings_lockscreen_title at android-15.0.0_r36. -->
+    <string name="android_label_restricted_settings">اجازه دادن به تنظیمات محدودشده</string>
 </resources>

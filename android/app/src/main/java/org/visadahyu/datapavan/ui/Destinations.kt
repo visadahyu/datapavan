@@ -227,7 +227,12 @@ private fun androidx.compose.foundation.lazy.LazyListScope.phone(audit: AuditRes
     if (audit.deviceFindings.isEmpty()) item { Text(stringResource(R.string.device_all_clear), style = MaterialTheme.typography.bodyMedium) }
     items(audit.deviceFindings) { kind ->
         val context = LocalContext.current
-        FindingCard(kind, company = null, action = deviceAction(kind)?.let { (label, intent) -> label to { context.startActivity(intent) } })
+        FindingCard(
+            kind, company = null,
+            action = deviceAction(kind)?.let { action ->
+                (action.label?.let { labelAlone(it) } ?: stringResource(action.own!!)) to { context.startActivity(action.intent) }
+            },
+        )
     }
     item { IntegrityLine(audit.device) }
 }
@@ -326,7 +331,7 @@ internal fun PlainCard(app: AppFacts, trackers: AppTrackers?, trackerInfo: Map<I
         Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
             Text(stringResource(R.string.plain_title), style = MaterialTheme.typography.titleMedium)
             val reach = app.sensors.sortedBy { it.ordinal }.map { stringResource(sensorName(it)) } +
-                app.special.sortedBy { it.ordinal }.map { stringResource(specialName(it)) } +
+                app.special.sortedBy { it.ordinal }.map { specialText(it) } +
                 listOfNotNull(if (app.vpnAuthorised) stringResource(R.string.dormant_vpn) else null)
             PlainLine(R.string.plain_reach_title, if (reach.isEmpty()) stringResource(R.string.plain_reach_none) else reach.joinedForUser())
             PlainLine(R.string.plain_trackers_title, trackersLine(trackers, trackerInfo))

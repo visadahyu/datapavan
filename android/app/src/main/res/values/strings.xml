@@ -52,13 +52,7 @@
     <string name="severity_info">Note</string>
     <string name="special_accessibility">Accessibility service</string>
     <string name="special_notification_listener">Reads notifications</string>
-    <string name="special_device_admin">Device admin</string>
-    <string name="special_overlay">Display over other apps</string>
-    <string name="special_usage_access">Usage access</string>
-    <string name="special_install_unknown_apps">Install unknown apps</string>
-    <string name="special_all_files">Access to all files</string>
     <string name="special_battery_exempt">Unrestricted battery use</string>
-    <string name="action_developer_settings">Open developer options</string>
     <string name="action_security_settings">Open security settings</string>
     <string name="finding_vpn_remote_control_title">VPN app that can control the phone</string>
     <string name="finding_vpn_remote_control_body">This VPN app also holds access that lets it read the screen or notifications, or control the phone, and your traffic already passes through it. Unless you know why it needs this, revoke the access or uninstall the app.</string>
@@ -110,10 +104,8 @@
     <string name="usage_access_two_steps">Datapavan was installed from a file, so Android may lock the switch for usage access. Then it takes two steps.</string>
     <!-- %1$s is the button usage_access_button. -->
     <string name="usage_access_step_try">1. Tap “%1$s”. If the switch is grey, or Android does not let you turn it on, come back here.</string>
-    <!-- %1$s is the button usage_access_app_info, %3$s the button usage_access_button. %2$s is restricted_settings_label, perhaps in the phone's language, as its Settings show it. -->
+    <!-- %1$s is the button usage_access_app_info, %3$s the button usage_access_button. %2$s is Android's own label for this choice, read from the phone's Settings in its language, or android_label_restricted_settings (ADR 0054). -->
     <string name="usage_access_step_allow">2. Tap “%1$s”, then the menu (⋮) at the top of that page. Choose “%2$s”, which shows there only after step 1, and confirm. Then tap “%3$s” again.</string>
-    <!-- Android's own words for this choice in an app's info menu, from AOSP Settings' translations: the phone shows exactly these. -->
-    <string name="restricted_settings_label">Allow restricted settings</string>
     <string name="usage_access_app_info">Open app info</string>
     <string name="usage_reading">Reading Android\'s records…</string>
     <string name="usage_missing">Network use and the last opening need usage access, which you can allow on the overview.</string>
@@ -331,7 +323,6 @@
     <string name="detail_state_enabled">Enabled</string>
     <string name="detail_state_disabled">Disabled</string>
     <string name="guide_title">How to turn it off</string>
-    <string name="guide_steps">1. Open the app in system settings.\n2. Tap Disable or Turn off.\n3. If the button is greyed out, the phone maker blocks it. From a computer with USB debugging, you can remove the app for your user instead; this can be undone.</string>
     <string name="guide_remove">Remove for your user:</string>
     <string name="guide_restore">Bring it back:</string>
 
@@ -451,7 +442,6 @@
     <string name="plan_care_untested">Datapavan has not tested this on your phone. Turning off a preinstalled app can stop other parts of the phone from working. Android decides on the app\'s page whether it can be turned off, and you can turn it on again there.</string>
     <string name="plan_care_continue">I understand, continue</string>
     <string name="plan_uninstall_note">Uninstalling deletes the app\'s data, and Datapavan cannot bring it back.</string>
-    <string name="plan_device_admins_note">Device admin apps are listed in the security settings; some phones put them under other security settings.</string>
     <string name="plan_nothing_yet">Nothing has changed yet.</string>
     <string name="plan_changed">Changed: %1$s</string>
     <string name="plan_next">Next</string>
@@ -466,11 +456,8 @@
     <string name="plan_done">Done</string>
 
     <string name="plan_wireless_title">Wireless debugging is on</string>
-    <string name="plan_wireless_body">A computer on the same network can control the phone once it is paired. Turn it off in developer options unless you are using it now.</string>
     <string name="plan_authority_title">A certificate authority you installed</string>
-    <string name="plan_authority_body">Whoever holds its key can read the encrypted connections of apps that trust it. Remove it under encryption and credentials unless your work or school needs it.</string>
     <string name="plan_usb_title">USB debugging is on</string>
-    <string name="plan_usb_body">A computer connected by cable can control the phone once you allow it. Turn it off in developer options unless you are using it now.</string>
     <string name="plan_control_title">%1$s can read the screen or act for you</string>
     <string name="plan_control_body">With this access an app can read what is on the screen or in notifications, or act on the phone. Turn it off unless you rely on it.</string>
     <string name="plan_copy_title">%1$s differs from the official app</string>
@@ -483,7 +470,6 @@
         <item quantity="one">%1$s, not opened for %2$d day</item>
         <item quantity="other">%1$s, not opened for %2$d days</item>
     </plurals>
-    <string name="plan_not_opened_sensitive_body">It still holds the access below. Remove what you do not need, or let Android remove permissions while the app is not used.</string>
     <string name="plan_not_opened_other_body">It still holds a permission, or used data in the background. Remove what you do not need, or uninstall the app on its page.</string>
     <string name="plan_preinstalled_title">%1$s came with the phone</string>
     <string name="plan_preinstalled_body">If you do not use it, Android may let you turn it off on its page.</string>
@@ -499,17 +485,7 @@
     <string name="plan_short_preinstalled">Came with the phone</string>
 
     <string name="screen_app_info">App page</string>
-    <string name="screen_unused">Unused app setting</string>
-    <string name="screen_accessibility">Accessibility</string>
-    <string name="screen_notification_listener">Notification access</string>
     <string name="screen_device_admins">Security settings</string>
-    <string name="screen_install_unknown">Install unknown apps</string>
-    <string name="screen_overlay">Display over other apps</string>
-    <string name="screen_usage_access">Usage access</string>
-    <string name="screen_all_files">All files access</string>
-    <string name="screen_battery">Battery optimisation</string>
-    <string name="screen_vpn">VPN settings</string>
-    <string name="screen_developer">Developer options</string>
     <string name="screen_security">Security settings</string>
 
     <string name="change_uninstalled">uninstalled</string>
@@ -724,4 +700,55 @@
     <string name="licences_data_note">The databases Datapavan compares your apps and your phone with have licences of their own, such as the Open Database License of the εxodus tracker list. The Data sources page in Settings names each one with its licence and where it comes from.</string>
     <!-- A line of a list of parts that the screen could not read: shown as it is. -->
     <string name="licences_unread">Shown as the list has it: %1$s</string>
+         from AOSP's own translation, never translated, for where the phone gives none. scripts/android-labels.py holds
+         them to AOSP; an _apiN string is the text from Android's API level N on. -->
+    <!-- Android's own labels (ADR 0054): AOSP's text at the release most phones run, each copied in every language
+         from AOSP's own translation, never translated, for where the phone gives none. scripts/android-labels.py holds
+         them to AOSP; an _apiN string is the text from Android's API level N on. -->
+    <!-- Android's own label: Settings' usage_access at android-15.0.0_r36. -->
+    <string name="android_label_usage_access">Usage access</string>
+    <!-- Android's own label: Settings' usage_access at android-16.0.0_r4. -->
+    <string name="android_label_usage_access_api36">App usage data</string>
+    <!-- Android's own label: SettingsLib's install_other_apps at android-15.0.0_r36. -->
+    <string name="android_label_install_unknown_apps">Install unknown apps</string>
+    <!-- Android's own label: SettingsLib's install_other_apps at android-17.0.0_r1. -->
+    <string name="android_label_install_unknown_apps_api37">Install unknown apps</string>
+    <!-- Android's own label: Settings' manage_device_admin at android-15.0.0_r36. -->
+    <string name="android_label_device_admin">Device admin apps</string>
+    <!-- Android's own label: Settings' manage_device_admin at android-16.0.0_r4. -->
+    <string name="android_label_device_admin_api36">Device admin</string>
+    <!-- Android's own label: Settings' manage_device_admin at android-17.0.0_r1. -->
+    <string name="android_label_device_admin_api37">Device admin</string>
+    <!-- Android's own label: Settings' accessibility_settings at android-15.0.0_r36. -->
+    <string name="android_label_accessibility">Accessibility</string>
+    <!-- Android's own label: Settings' accessibility_settings at android-16.0.0_r4. -->
+    <string name="android_label_accessibility_api36">Accessibility</string>
+    <!-- Android's own label: Settings' high_power_apps at android-15.0.0_r36. -->
+    <string name="android_label_battery_optimisation">Battery optimization</string>
+    <!-- Android's own label: SettingsLib's development_settings_title at android-15.0.0_r36. -->
+    <string name="android_label_developer_options">Developer options</string>
+    <!-- Android's own label: SettingsLib's enable_adb at android-15.0.0_r36. -->
+    <string name="android_label_usb_debugging">USB debugging</string>
+    <!-- Android's own label: SettingsLib's enable_adb_wireless at android-15.0.0_r36. -->
+    <string name="android_label_wireless_debugging">Wireless debugging</string>
+    <!-- Android's own label: Settings' encryption_and_credential_settings_title at android-15.0.0_r36. -->
+    <string name="android_label_encryption_credentials">Encryption &amp; credentials</string>
+    <!-- Android's own label: Settings' encryption_and_credential_settings_title at android-17.0.0_r1. -->
+    <string name="android_label_encryption_credentials_api37">Encryption &amp; credentials</string>
+    <!-- Android's own label: Settings' disable_text at android-15.0.0_r36. -->
+    <string name="android_label_disable">Disable</string>
+    <!-- Android's own label: Settings' system_alert_window_settings at android-15.0.0_r36. -->
+    <string name="android_label_overlay">Display over other apps</string>
+    <!-- Android's own label: Settings' system_alert_window_settings at android-16.0.0_r4. -->
+    <string name="android_label_overlay_api36">Display over other apps</string>
+    <!-- Android's own label: Settings' manage_external_storage_title at android-15.0.0_r36. -->
+    <string name="android_label_all_files_access">All files access</string>
+    <!-- Android's own label: Settings' manage_notification_access_title at android-15.0.0_r36. -->
+    <string name="android_label_notification_access">Notification read, reply &amp; control</string>
+    <!-- Android's own label: Settings' vpn_settings_title at android-15.0.0_r36. -->
+    <string name="android_label_vpn">VPN</string>
+    <!-- Android's own label: Settings' unused_apps_switch at android-15.0.0_r36. -->
+    <string name="android_label_unused_app_setting">Pause app activity if unused</string>
+    <!-- Android's own label: Settings' app_restricted_settings_lockscreen_title at android-15.0.0_r36. -->
+    <string name="android_label_restricted_settings">Allow restricted settings</string>
 </resources>

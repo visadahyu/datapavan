@@ -10,17 +10,24 @@ import androidx.activity.ComponentActivity
 import androidx.activity.SystemBarStyle
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
+import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
+import androidx.compose.ui.platform.LocalConfiguration
+import java.io.FileDescriptor
+import java.io.PrintWriter
 import org.visadahyu.datapavan.core.NativeCore
 import org.visadahyu.datapavan.safety.ScreenProtection
+import org.visadahyu.datapavan.ui.AndroidLabels
 import org.visadahyu.datapavan.ui.AppPreferences
 import org.visadahyu.datapavan.ui.DatapavanApp
 import org.visadahyu.datapavan.ui.DatapavanTheme
 import org.visadahyu.datapavan.ui.Languages
+import org.visadahyu.datapavan.ui.LabelsLab
 import org.visadahyu.datapavan.ui.LaunchTarget
+import org.visadahyu.datapavan.ui.LocalAndroidLabels
 import org.visadahyu.datapavan.ui.ThemeMode
 import org.visadahyu.datapavan.ui.applyNightMode
 import org.visadahyu.datapavan.ui.isDark
@@ -52,17 +59,22 @@ class MainActivity : ComponentActivity() {
         if (savedInstanceState == null) launch.value = LaunchTarget.of(intent.action)
         setContent {
             var theme by remember { mutableStateOf(preferences.theme) }
+            // Android's own labels, read from the phone once for this screen's languages (ADR 0054).
+            val locales = LocalConfiguration.current.locales
+            val labels = remember(locales) { AndroidLabels.of(this) }
             DatapavanTheme(theme) {
-                DatapavanApp(
-                    engineVersion = engineVersion, usageUntil = usageUntil, usageDays = usageDays, theme = theme,
-                    launch = launch.value, onLaunched = { launch.value = null },
-                    onTheme = {
-                        theme = it
-                        preferences.theme = it
-                        edgeToEdge(it)
-                        applyNightMode(this, it)
-                    },
-                )
+                CompositionLocalProvider(LocalAndroidLabels provides labels) {
+                    DatapavanApp(
+                        engineVersion = engineVersion, usageUntil = usageUntil, usageDays = usageDays, theme = theme,
+                        launch = launch.value, onLaunched = { launch.value = null },
+                        onTheme = {
+                            theme = it
+                            preferences.theme = it
+                            edgeToEdge(it)
+                            applyNightMode(this, it)
+                        },
+                    )
+                }
             }
         }
     }
@@ -75,6 +87,20 @@ class MainActivity : ComponentActivity() {
         super.onNewIntent(intent)
         setIntent(intent)
         LaunchTarget.of(intent.action)?.let { launch.value = it }
+    }
+
+    /**
+     * Debug builds only, for scripts/verify-labels.sh and the coordinator's reading of a maker's names (ADR 0054):
+     * `adb shell dumpsys activity org.visadahyu.datapavan/.MainActivity labels-read` and `labels-find`, in
+     * [LabelsLab], which release builds do not carry. Every other dump is Android's own.
+     */
+    override fun dump(prefix: String, fd: FileDescriptor?, writer: PrintWriter, args: Array<out String>?) {
+        val debuggable = applicationInfo.flags and ApplicationInfo.FLAG_DEBUGGABLE != 0
+        if (debuggable && args?.firstOrNull()?.startsWith("labels-") == true) {
+            LabelsLab.dump(this, args.toList(), writer)
+            return
+        }
+        super.dump(prefix, fd, writer, args)
     }
 
     /** The system bars' icons in the colours of the chosen appearance. */

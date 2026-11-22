@@ -297,7 +297,7 @@ private fun PlanCard(
             Text(stringResource(R.string.plan_card_progress, index + 1, count), style = MaterialTheme.typography.labelMedium)
             Text(title(item), style = MaterialTheme.typography.titleMedium)
             Spacer(Modifier.height(4.dp))
-            Text(stringResource(body(item.reason)), style = MaterialTheme.typography.bodyMedium)
+            Text(bodyText(item.reason), style = MaterialTheme.typography.bodyMedium)
             item.app?.let { app ->
                 val held = holds(app.grantedDangerous, app.special, app.vpnAuthorised, collector)
                 if (held.isNotEmpty()) Text(stringResource(R.string.plan_holds, held.map { isolate(it) }.joinedForUser()), style = MaterialTheme.typography.bodyMedium)
@@ -316,11 +316,13 @@ private fun PlanCard(
                 else -> {
                     FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                         item.screens.filter { screenAvailable(it) }.forEach { screen ->
-                            OutlinedButton(onClick = { onOpen(screen) }) { Text(stringResource(screenName(screen))) }
+                            OutlinedButton(onClick = { onOpen(screen) }) { Text(screenText(screen)) }
                         }
                     }
                     if (item.app != null && Screen.APP_INFO in item.screens) Note(stringResource(R.string.plan_uninstall_note))
-                    if (Screen.DEVICE_ADMINS in item.screens) Note(stringResource(R.string.plan_device_admins_note))
+                    if (Screen.DEVICE_ADMINS in item.screens) Note(stringResource(R.string.plan_device_admins_note_quoted, quotedLabel("device_admin")))
+                    // Android's labels in the card, said to be Android's own names where this phone gave none (ADR 0054).
+                    AndroidLabelsNote(labelKeys(item))
                 }
             }
             if (reading) Text(stringResource(R.string.plan_reading), style = MaterialTheme.typography.bodyMedium)
@@ -454,7 +456,7 @@ private fun JournalCard(entry: JournalEntry, name: String, latest: Boolean, curr
                     Note(stringResource(R.string.journal_undo, undoable.map { undoText(it, collector) }.distinct().joinedForUser()))
                     FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                         entry.opened.filter { screenAvailable(it) }.forEach { screen ->
-                            TextButton(onClick = { open(context, screenIntent(context, screen, entry.packageName)) }) { Text(stringResource(screenName(screen))) }
+                            TextButton(onClick = { open(context, screenIntent(context, screen, entry.packageName)) }) { Text(screenText(screen)) }
                         }
                     }
                 }
@@ -491,18 +493,32 @@ private fun title(item: PlanItem): String {
     }
 }
 
-@StringRes
-private fun body(reason: PlanReason) = when (reason) {
-    PlanReason.WIRELESS_DEBUGGING -> R.string.plan_wireless_body
-    PlanReason.CERTIFICATE_AUTHORITY -> R.string.plan_authority_body
-    PlanReason.USB_DEBUGGING -> R.string.plan_usb_body
-    PlanReason.CONTROL_ACCESS -> R.string.plan_control_body
-    PlanReason.DOUBTFUL_COPY -> R.string.plan_copy_body
-    PlanReason.INSTALLS_APPS -> R.string.plan_installs_body
-    PlanReason.TRAFFIC_SHARING -> R.string.plan_sharing_body
-    PlanReason.NOT_OPENED_SENSITIVE -> R.string.plan_not_opened_sensitive_body
-    PlanReason.NOT_OPENED_OTHER -> R.string.plan_not_opened_other_body
-    PlanReason.PREINSTALLED -> R.string.plan_preinstalled_body
+/** A card's text; the cards that send the user to a page or switch name it as Android does (ADR 0054). */
+@Composable
+private fun bodyText(reason: PlanReason): String = when (reason) {
+    PlanReason.WIRELESS_DEBUGGING -> stringResource(R.string.plan_wireless_body_quoted, quotedLabel("developer_options"), quotedLabel("wireless_debugging"))
+    PlanReason.CERTIFICATE_AUTHORITY -> stringResource(R.string.plan_authority_body_quoted, quotedLabel("encryption_credentials"))
+    PlanReason.USB_DEBUGGING -> stringResource(R.string.plan_usb_body_quoted, quotedLabel("developer_options"), quotedLabel("usb_debugging"))
+    PlanReason.CONTROL_ACCESS -> stringResource(R.string.plan_control_body)
+    PlanReason.DOUBTFUL_COPY -> stringResource(R.string.plan_copy_body)
+    PlanReason.INSTALLS_APPS -> stringResource(R.string.plan_installs_body)
+    PlanReason.TRAFFIC_SHARING -> stringResource(R.string.plan_sharing_body)
+    PlanReason.NOT_OPENED_SENSITIVE -> stringResource(R.string.plan_not_opened_sensitive_body_quoted, quotedLabel("unused_app_setting"))
+    PlanReason.NOT_OPENED_OTHER -> stringResource(R.string.plan_not_opened_other_body)
+    PlanReason.PREINSTALLED -> stringResource(R.string.plan_preinstalled_body)
+}
+
+/** The Android labels a card shows: those its text quotes, and those of its screens' buttons. */
+private fun labelKeys(item: PlanItem): List<String> {
+    val quoted = when (item.reason) {
+        PlanReason.WIRELESS_DEBUGGING -> listOf("developer_options", "wireless_debugging")
+        PlanReason.CERTIFICATE_AUTHORITY -> listOf("encryption_credentials")
+        PlanReason.USB_DEBUGGING -> listOf("developer_options", "usb_debugging")
+        PlanReason.NOT_OPENED_SENSITIVE -> listOf("unused_app_setting")
+        else -> emptyList()
+    }
+    val devices = if (Screen.DEVICE_ADMINS in item.screens) listOf("device_admin") else emptyList()
+    return quoted + devices + item.screens.filter { screenAvailable(it) }.mapNotNull(::screenLabel)
 }
 
 @StringRes
@@ -532,22 +548,34 @@ private fun levelBody(level: PlanLevel) = when (level) {
     PlanLevel.STRICT -> R.string.plan_level_strict_body
 }
 
-@StringRes
-private fun screenName(screen: Screen) = when (screen) {
-    Screen.APP_INFO -> R.string.screen_app_info
-    Screen.UNUSED_APP_SETTING -> R.string.screen_unused
-    Screen.ACCESSIBILITY -> R.string.screen_accessibility
-    Screen.NOTIFICATION_LISTENER -> R.string.screen_notification_listener
-    Screen.DEVICE_ADMINS -> R.string.screen_device_admins
-    Screen.INSTALL_UNKNOWN_APPS -> R.string.screen_install_unknown
-    Screen.OVERLAY -> R.string.screen_overlay
-    Screen.USAGE_ACCESS -> R.string.screen_usage_access
-    Screen.ALL_FILES -> R.string.screen_all_files
-    Screen.BATTERY -> R.string.screen_battery
-    Screen.VPN -> R.string.screen_vpn
-    Screen.DEVELOPER_OPTIONS -> R.string.screen_developer
-    Screen.SECURITY -> R.string.screen_security
+/**
+ * The Android label a screen's button bears, the name of the page or switch it opens (ADR 0054); null for the app's
+ * own page and the security settings, which Datapavan names in its own words: the first is the app's page, titled by
+ * the app's name, and Android does not tell an app whether the second opens as "Security", "Security & privacy" or a
+ * maker's own page.
+ */
+internal fun screenLabel(screen: Screen): String? = when (screen) {
+    Screen.APP_INFO, Screen.DEVICE_ADMINS, Screen.SECURITY -> null
+    Screen.UNUSED_APP_SETTING -> "unused_app_setting"
+    Screen.ACCESSIBILITY -> "accessibility"
+    Screen.NOTIFICATION_LISTENER -> "notification_access"
+    Screen.INSTALL_UNKNOWN_APPS -> "install_unknown_apps"
+    Screen.OVERLAY -> "overlay"
+    Screen.USAGE_ACCESS -> "usage_access"
+    Screen.ALL_FILES -> "all_files_access"
+    Screen.BATTERY -> "battery_optimisation"
+    Screen.VPN -> "vpn"
+    Screen.DEVELOPER_OPTIONS -> "developer_options"
 }
+
+@Composable
+private fun screenText(screen: Screen): String = screenLabel(screen)?.let { labelAlone(it) } ?: stringResource(
+    when (screen) {
+        Screen.DEVICE_ADMINS -> R.string.screen_device_admins
+        Screen.SECURITY -> R.string.screen_security
+        else -> R.string.screen_app_info
+    },
+)
 
 @StringRes
 private fun floorName(reason: FloorReason) = when (reason) {
@@ -580,7 +608,7 @@ private fun floorName(reason: FloorReason) = when (reason) {
 private fun holds(permissions: List<String>, special: Set<SpecialAccess>, vpn: Boolean, collector: AppCollector): List<String> {
     val sensors = permissions.mapNotNull(::sensorOf).distinct().sortedBy { it.ordinal }.map { stringResource(sensorName(it)) }
     return sensors + permissions.filter { sensorOf(it) == null }.map { collector.permissionLabel(it) }.distinct() +
-        special.sortedBy { it.ordinal }.map { stringResource(specialName(it)) } +
+        special.sortedBy { it.ordinal }.map { specialText(it) } +
         listOfNotNull(if (vpn) stringResource(R.string.dormant_vpn) else null)
 }
 
@@ -614,14 +642,15 @@ private fun undoText(change: Change, collector: AppCollector): String = when (ch
     ChangeKind.PERMISSION_REMOVED -> permissionName(change.detail.orEmpty(), collector)
     ChangeKind.SPECIAL_REMOVED -> specialNamed(change.detail)
     ChangeKind.VPN_REMOVED -> stringResource(R.string.dormant_vpn)
-    ChangeKind.USB_DEBUGGING_OFF -> stringResource(R.string.plan_short_usb)
-    ChangeKind.WIRELESS_DEBUGGING_OFF -> stringResource(R.string.plan_short_wireless)
+    // The switch to turn back on, as Android names it (ADR 0054).
+    ChangeKind.USB_DEBUGGING_OFF -> labelAlone("usb_debugging")
+    ChangeKind.WIRELESS_DEBUGGING_OFF -> labelAlone("wireless_debugging")
     ChangeKind.AUTHORITY_REMOVED -> stringResource(R.string.undo_authority)
 }
 
 @Composable
 private fun specialNamed(name: String?): String =
-    SpecialAccess.entries.firstOrNull { it.name == name }?.let { stringResource(specialName(it)) } ?: name.orEmpty()
+    SpecialAccess.entries.firstOrNull { it.name == name }?.let { specialText(it) } ?: name.orEmpty()
 
 @Composable
 private fun dateText(millis: Long): String = isolate(DateFormat.getDateInstance(DateFormat.MEDIUM).format(Date(millis)))
