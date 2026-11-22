@@ -55,7 +55,7 @@ public final class GapsTable {
 
     static String results(List<List<String>> rows) {
         StringBuilder out = new StringBuilder();
-        out.append("| Behaviour | Part | Android | Result | Measured | Trials: events, rate (95 % interval) | Source (read) | What Watch does | Run |\n");
+        out.append("| Behaviour | Part | Android | Result | Measured | Trials: events, rate (95 % interval) | Source (read) | What Datapavan Advanced does | Run |\n");
         out.append("|---|---|---|---|---|---|---|---|---|\n");
         for (List<String> row : rows) {
             Map<String, String> r = named(row);

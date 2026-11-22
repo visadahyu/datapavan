@@ -264,7 +264,7 @@ public final class GapsRows {
         return row(result, measured, "AOSP's AppOpsService.getHistoricalOps, whose code answers another app's history only to the system, "
                 + "an instrumented caller, the permission controller or a holder of GET_HISTORICAL_APP_OPS_STATS, and an empty answer to anyone "
                 + "else; AppOpsManager reference (startWatchingActive)", READ,
-                "Not seen. The audit app shows which apps hold each permission (ADR 0014); the words on Watch's view: not built (ADR 0046, decision 5)");
+                "Not seen. The audit app shows which apps hold each permission (ADR 0014); the words on Advanced's view: not built (ADR 0046, decision 5)");
     }
 
     static Map<String, String> procNet(GapsRun run) {
@@ -288,7 +288,7 @@ public final class GapsRows {
         for (Map.Entry<String, List<String>> e : byAnswer.entrySet()) parts.add(String.join(", ", e.getValue()) + ": " + e.getKey());
         return row(held && files == 6 ? "held" : files == 6 ? "not held" : "in part",
                 "/proc/net/ " + (parts.isEmpty() ? "not measured" : String.join("; ", parts)),
-                "Android 10 privacy changes", READ, "Not a route Watch labels: Watch names each flow's app with getConnectionOwnerUid, as the active VPN");
+                "Android 10 privacy changes", READ, "Not a route Datapavan Advanced labels: it names each flow's app with getConnectionOwnerUid, as the active VPN");
     }
 
     static Map<String, String> loopback(GapsRun run) throws IOException {
@@ -308,10 +308,10 @@ public final class GapsRows {
                 .findFirst().orElse("not measured");
         boolean held = exchanged.get("v4") && exchanged.get("v6") && toLoopback == 0 && inCapture == 0;
         String measured = "two apps exchanged the payload over 127.0.0.1: " + yes(exchanged.get("v4")) + ", over ::1: " + yes(exchanged.get("v6"))
-                + "; Watch's flows to loopback: " + toLoopback + "; packets with the payload in the capture: " + inCapture
+                + "; the network part's flows to loopback: " + toLoopback + "; packets with the payload in the capture: " + inCapture
                 + "; a socket of an app without INTERNET: " + fixture;
         return row(held ? "held" : "not held", measured, "Local Mess disclosure, June 2025 (localmess.github.io); ADR 0034", READ,
-                "Not seen; the words on Watch's view: not built (ADR 0046, decision 5)");
+                "Not seen; the words on Advanced's view: not built (ADR 0046, decision 5)");
     }
 
     static Map<String, String> indicators(GapsRun run) {
@@ -348,7 +348,7 @@ public final class GapsRows {
         return row(allRead ? held ? "held" : "not held" : "in part", measured,
                 "Android 12 behaviour changes for all apps; Google's Help, Manage permissions from the privacy dashboard (in part: it names "
                         + "camera, microphone, calendar \"and more\", not the other groups); Android 10 privacy changes", READ,
-                "Not seen. The audit app shows which apps hold each permission (ADR 0014); the words on Watch's view: not built (ADR 0046, decision 5)");
+                "Not seen. The audit app shows which apps hold each permission (ADR 0014); the words on Advanced's view: not built (ADR 0046, decision 5)");
     }
 
     static List<Map<String, String>> carriedBySystem(GapsRun run) throws IOException {
@@ -363,7 +363,7 @@ public final class GapsRows {
         boolean held = "done".equals(answer.get("answer")) && !owners.isEmpty()
                 && owners.keySet().stream().allMatch(u -> u.equals(Integer.toString(downloads)));
         Map<String, String> download = row(owners.isEmpty() ? "in part" : held ? "held" : "not held",
-                "the download service: " + answer.getOrDefault("answer", "no answer") + ", " + answer.getOrDefault("bytes", "0") + " bytes; Watch's flows to the lab's server: "
+                "the download service: " + answer.getOrDefault("answer", "no answer") + ", " + answer.getOrDefault("bytes", "0") + " bytes; the network part's flows to the lab's server: "
                         + describe(run, owners) + "; connections in the capture: " + run.capture.getOrDefault("tcp-syn 10.0.2.2:8792", 0),
                 "NetGuard FAQ, items 8 and 66", READ, notBuilt);
         download.put("part", "download");
@@ -379,7 +379,7 @@ public final class GapsRows {
         } else {
             int browser = run.uid(handler);
             held = !owners.isEmpty() && owners.keySet().stream().allMatch(u -> u.equals(Integer.toString(browser)));
-            tab = row(owners.isEmpty() ? "in part" : held ? "held" : "not held", "the Custom Tab's handler: " + handler + "; Watch's flows to the lab's server: "
+            tab = row(owners.isEmpty() ? "in part" : held ? "held" : "not held", "the Custom Tab's handler: " + handler + "; the network part's flows to the lab's server: "
                     + describe(run, owners), "Custom Tabs overview", UNDATED, notBuilt);
         }
         tab.put("part", "tab");
@@ -422,7 +422,7 @@ public final class GapsRows {
             List<String> described = new ArrayList<>();
             for (Map.Entry<String, Integer> e : system.entrySet()) described.add(e.getValue() + " " + e.getKey());
             String networkSays = run.observed.stream().filter(l -> l.startsWith("private-dns " + mode + " ")).map(l -> l.replaceAll(".*watch=", "")).findFirst().orElse("-");
-            Map<String, String> resolver = row(result, trials + " lookups of names under .example, Private DNS " + mode + " (Watch read: " + networkSays
+            Map<String, String> resolver = row(result, trials + " lookups of names under .example, Private DNS " + mode + " (Datapavan read: " + networkSays
                     + "); their names in the capture: " + seen + (mode.equals("hostname") ? " (encrypted)" : "")
                     + "; the window's DNS flows: " + own + " under the probe's UID, " + (described.isEmpty() ? "none under a UID of the system" : String.join(", ", described))
                     + ", " + unknown + " without owner, and " + others + " of other apps, not counted"

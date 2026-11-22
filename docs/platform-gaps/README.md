@@ -3,7 +3,7 @@
 Stock Android, without root, leaves every privacy tool blind to some things and exposed in others, and these
 limits change between versions. [ADR 0048](../decisions/0048-lab-probe-of-android-gaps.md) has the lab measure
 them, version by version, with a probe app of the project's own, and publish each result beside its public
-source and what Watch does about it. This page holds the method, the results and the images they come from. The
+source and what Datapavan Advanced does about it. This page holds the method, the results and the images they come from. The
 results live in [results.csv](results.csv); the tables below are written from it by a program, never by hand,
 and CI checks that the two agree.
 
@@ -29,7 +29,7 @@ decision 4).
 
 **One command per row.** `lab/run.sh <behaviour> <api> [--trials N]` creates an AVD from the named image (under
 `build/gaps-avd`, apart from any other), boots it with `-no-snapshot -wipe-data -tcpdump` and in UTC, so that
-its clock never shows the computer's local time, installs the probe, the fixture and Watch's Advanced debug build
+its clock never shows the computer's local time, installs the probe, the fixture and Datapavan Advanced's debug build
 where the behaviour needs them, runs the behaviour's steps, records the image's identity and the capture's
 SHA-256, then stops the emulator and deletes the AVD. Every adb command names the emulator's serial, so a phone
 plugged into the machine is never touched. The script downloads nothing: an image that is not installed is
@@ -50,9 +50,9 @@ a release APK or bundle holds one of their classes.
   clip), and records only that each read happened and how many items it returned. The microphone records one
   second into memory, which is then dropped. It holds no INTERNET permission.
 
-**Watch** is the VPN under test, its debug build from the same commit, with its debug list of flows: each flow's
+**Datapavan Advanced's network part** is the VPN under test, its debug build from the same commit, with its debug list of flows: each flow's
 protocol, addresses, the UID Android named for it (`-` when none) and its outcome. The probe changes nothing in
-Watch. An app is left out of the tunnel through Watch's own list, as a user leaves one out. A run keeps only the
+it. An app is left out of the tunnel through Advanced's own list, as a user leaves one out. A run keeps only the
 flows to the lab's own addresses (its server, the emulator's network, loopback and the tunnel) with names under
 `.example`; any other flow, such as one of the image's own components to a server near the computer's network,
 becomes `other:<port>` with its UID, so that no run tells where it ran (`lab/redact-flows.awk`).
@@ -60,7 +60,7 @@ becomes `other:<port>` with its UID, so that no run tells where it ran (`lab/red
 
 **The capture is the ground truth** where traffic matters: the emulator's own capture sees every packet that
 leaves the virtual phone, whoever sent it, on its cellular network; it does not see the emulator's Wi-Fi, so the
-run turns Wi-Fi off after boot. A row that rests on what Watch logged is checked against it. The run
+run turns Wi-Fi off after boot. A row that rests on what the network part logged is checked against it. The run
 keeps a summary of the capture with its raw output (`capture.txt`: connections and datagrams to the lab's
 server, packets holding the probe's payloads, and the names of the probe's lookups); the capture itself stays on the machine that ran it, under
 `build/gaps-runs`, since it also holds the emulator's own traffic to Google's services. Its SHA-256 is in the
@@ -68,20 +68,20 @@ run's `run.txt`.
 
 **What each behaviour's run does:**
 - `vpn-seen`: the probe reads its own network, every network `getAllNetworks` lists, and every interface,
-  three times: with no VPN, inside Watch's tunnel, and left out of it.
+  three times: with no VPN, inside Advanced's tunnel, and left out of it.
 - `appops-closed`: the probe watches the microphone and the camera with `startWatchingActive` while the fixture
   records, then records with its own microphone (the control); then it asks `getHistoricalOps` for every app's
   history, and for its own (the control), as installed, with the emulator's setting that opens hidden APIs to
   apps, with `GET_APP_OPS_STATS` granted over adb, and with both.
 - `proc-net`: the probe tries to read `/proc/net/tcp`, `tcp6`, `udp`, `udp6`, `unix` and `route`.
-- `loopback`: the probe and its peer exchange a fixed payload over 127.0.0.1 and `::1` while Watch runs; the
-  run reads Watch's flows and the capture for it. The fixture tries to open a socket too.
+- `loopback`: the probe and its peer exchange a fixed payload over 127.0.0.1 and `::1` while the network part runs;
+  the run reads its flows and the capture for it. The fixture tries to open a socket too.
 - `indicators`: the fixture reads contacts, the call log, SMS, an image and the clipboard, then records with the
   microphone. The run records Android's toasts, the status bar's privacy chip as accessibility sees it,
   SystemUI's list of privacy items, the notifications, and the privacy dashboard with its other permissions.
 - `carried-by-system`: the download service fetches a file from the lab's server; a Custom Tab opens one of
   its pages; and the probe looks up names under `.example`, with Private DNS off, automatic and strict. The run
-  reads which UID Watch was given for each. Push messages need a Firebase project, an account, and wait for the
+  reads which UID the network part was given for each. Push messages need a Firebase project, an account, and wait for the
   maintainer's word. `--parts` runs some of these parts only; the resolver's part is a timing one.
 - `short-lived`: UDP and TCP sockets to the lab's server that close at once, against sockets kept open (the
   control); the run finds each trial's flow by its local port and reads its owner.
@@ -133,7 +133,7 @@ to be read and dated.
 | `ci95` | Wilson's 95 % interval of the rate | `low-high`, or `-` |
 | `source` | The public source of the behaviour; "in part" where it states only some of what the row measures, and what it states | text |
 | `source_read` | When the source was read | a date, followed by the sources it covers when it does not cover all; or `-` |
-| `watch` | What Watch does, and tells the user, about it (ADR 0048, decision 3), on `main`'s build | text; `not built` with its gate where it is not built yet |
+| `watch` | What Datapavan Advanced does, and tells the user, about it (ADR 0048, decision 3), on `main`'s build | text; `not built` with its gate where it is not built yet |
 | `probe_commit` | The commit of the probe that ran | 12 hex digits (`-dirty` if `lab/` had changes not committed) |
 | `date` | The run's date | `YYYY-MM-DD` |
 | `run` | The raw output, beside this page | `runs/<run>` |
@@ -143,7 +143,7 @@ to be read and dated.
 ## Results
 
 <!-- results: written from results.csv by lab/gaps-tools; do not edit -->
-| Behaviour | Part | Android | Result | Measured | Trials: events, rate (95 % interval) | Source (read) | What Watch does | Run |
+| Behaviour | Part | Android | Result | Measured | Trials: events, rate (95 % interval) | Source (read) | What Datapavan Advanced does | Run |
 |---|---|---|---|---|---|---|---|---|
 | `vpn-seen` | - | 10 | held | inside the tunnel: own network a VPN, a VPN in getAllNetworks, interface tun0 fd00:1:fd00:1:fd00:1:fd00:1/128,10.1.10.1/32; left out: own network not a VPN (cellular), a VPN in getAllNetworks, interface tun0 fd00:1:fd00:1:fd00:1:fd00:1/128,10.1.10.1/32; no VPN: own network not a VPN (cellular), no VPN in getAllNetworks, no tun interface | - | Android's references for NetworkCapabilities, ConnectivityManager and VpnService.Builder; ADR 0041 (-) | Common tunnel addresses (ADR 0041, decision 3); says that every app can tell a VPN is on, and that an app left out may still find the VPN interface | [2026-11-14](runs/20261114T132105Z-vpn-seen-api29) |
 | `vpn-seen` | - | 11 | held | inside the tunnel: own network a VPN, a VPN in getAllNetworks, interface tun0 fd00:1:fd00:1:fd00:1:fd00:1/128,10.1.10.1/32; left out: own network not a VPN (cellular), a VPN in getAllNetworks, interface tun0 fd00:1:fd00:1:fd00:1:fd00:1/128,10.1.10.1/32; no VPN: own network not a VPN (cellular), no VPN in getAllNetworks, no tun interface | - | Android's references for NetworkCapabilities, ConnectivityManager and VpnService.Builder; ADR 0041 (-) | Common tunnel addresses (ADR 0041, decision 3); says that every app can tell a VPN is on, and that an app left out may still find the VPN interface | [2026-11-14](runs/20261114T121946Z-vpn-seen-api30) |
@@ -266,7 +266,7 @@ Each run writes a directory under [runs/](runs):
   threads, what ran beside it, and the capture's SHA-256;
 - `image.txt`: the image's identity;
 - `probe.log`: the probe's and the fixture's lines, as they wrote them;
-- `flows-*.txt`: Watch's flows at each point the run read them;
+- `flows-*.txt`: the network part's flows at each point the run read them;
 - `observed.txt`, `screens/`: what the run read off the emulator (toasts, the privacy chip, notifications, the
   dashboard; screenshots). In the screenshots published here, a filled box covers the status bar's clock and the
   icons beside it: these runs' emulators showed the computer's local time. The privacy chips on the right stay
@@ -277,7 +277,7 @@ Each run writes a directory under [runs/](runs):
 
 ## Repeating a row
 
-From a clone of the repository, with the Android SDK, the row's image and Watch's Advanced debug build
+From a clone of the repository, with the Android SDK, the row's image and Datapavan Advanced's debug build
 (`cd android && ./gradlew -Pdatapavan.edition=advanced --project-cache-dir .gradle-advanced :app:assembleDebug`):
 
 ```

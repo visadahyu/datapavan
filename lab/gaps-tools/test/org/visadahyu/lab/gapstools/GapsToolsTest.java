@@ -174,7 +174,7 @@ public final class GapsToolsTest {
                 "flows-after.txt", before + "tcp 10.1.10.1:2000 127.0.0.1:8794 10210 opened - - - - -\n",
                 "capture.txt", "pattern gaps-loopback 0\n"))).get(0));
         equal("not held", seen.get("result"));
-        check(seen.get("measured").contains("Watch's flows to loopback: 1"), seen.get("measured"));
+        check(seen.get("measured").contains("the network part's flows to loopback: 1"), seen.get("measured"));
     }
 
     static void testVpnSeenRowReadsEachPhase() throws Exception {
