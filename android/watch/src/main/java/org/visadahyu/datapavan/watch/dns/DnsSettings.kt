@@ -195,7 +195,19 @@ class DnsSettings private constructor(private val prefs: SharedPreferences) {
             } catch (e: RuntimeException) {
                 return List(4) { "" }
             }
-            return listOf(RELAYS, TARGETS, PAIR_TABLE, PRESETS).map { store.text(it).orEmpty() }
+            val (relays, targets, pairs, presets) = listOf(RELAYS, TARGETS, PAIR_TABLE, PRESETS).map { store.text(it).orEmpty() }
+            return listOf(forBuild(relays, debuggable), targets, pairs, presets)
+        }
+
+        /**
+         * The relays' table as this build may use it (ADR 0055): a row whose status, the twelfth column, is `debug`
+         * stays only in a debuggable build. A release build's engine and screen never see it, whatever the pack holds
+         * elsewhere: the project's own relay, until ADR 0055's gates pass.
+         */
+        fun forBuild(relays: String, debuggable: Boolean): String = if (debuggable) relays else {
+            relays.lineSequence().filterNot { line ->
+                !line.startsWith("#") && line.split('\t').getOrNull(11)?.trim() == "debug"
+            }.joinToString("\n")
         }
 
         /**

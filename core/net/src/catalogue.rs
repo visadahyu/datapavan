@@ -566,7 +566,9 @@ pub(crate) mod tests {
     #[test]
     fn the_shipped_tables_read_whole_and_both_default_pairs_pass_the_rule() {
         let c = shipped();
-        assert_eq!(c.relays.len(), 2);
+        // The project's own relay (ADR 0055) among them: the engine reads every row; a release build's tables leave
+        // it out before they reach the engine (its status column, read by Advanced's Kotlin side).
+        assert_eq!(c.relays.len(), 3);
         assert_eq!(c.targets.len(), 6);
         assert!(
             c.targets.iter().all(|t| t.key.is_some()),
@@ -691,6 +693,34 @@ pub(crate) mod tests {
             c.pairs_from("numa>cloudflare, numa>nowhere"),
             vec![(numa, 0)]
         );
+    }
+
+    /// ADR 0055: the project's own relay, in Germany and seated in Türkiye, pairs by the rule with Cloudflare's
+    /// target and crypto.sx's, and with none of dnscry.pt's, which are in Germany; no default pair names it.
+    #[test]
+    fn the_projects_own_relay_pairs_only_where_the_rule_allows() {
+        let c = shipped();
+        let Some(own) = c.relays.iter().find(|r| r.id == "datapavan") else {
+            unreachable!("in the tables")
+        };
+        assert_eq!(own.url.text(), "https://datapavan.org/odoh/proxy");
+        assert_eq!(own.behind.jurisdictions, ["DE", "TR"]);
+        let allowed: Vec<&str> = c
+            .targets
+            .iter()
+            .filter(|t| !t.filters && own.behind.clash(&t.behind).is_none())
+            .map(|t| t.id.as_str())
+            .collect();
+        assert_eq!(allowed, ["cloudflare", "crypto-sx"]);
+        for target in c.targets.iter().filter(|t| t.id.starts_with("dnscry-pt-")) {
+            assert_eq!(
+                own.behind.clash(&target.behind),
+                Some(Clash::Jurisdiction("DE".into())),
+                "{}",
+                target.id
+            );
+        }
+        assert!(c.pairs.iter().all(|&(r, _)| c.relays[r].id != "datapavan"));
     }
 
     #[test]

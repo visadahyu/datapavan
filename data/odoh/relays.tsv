@@ -1,6 +1,7 @@
 # SPDX-License-Identifier: CC0-1.0
-# Public Oblivious DoH relays (RFC 9230) that Watch's engine may use (ADR 0042, W8). A relay sees the user's address
-# but not the question. Every value has its source in sources.tsv; read and measured on 2026-11-20 (SOURCE).
+# Public Oblivious DoH relays (RFC 9230) that the engine of Advanced's network monitoring may use (ADR 0042, W8). A relay sees the user's address
+# but not the question. Every value has its source in sources.tsv; read and measured on 2026-11-20, the project's
+# own relay on 2026-11-22 (SOURCE).
 # Columns:
 #   id             short name, lower case
 #   url            the relay's https URL; the relay takes ?targethost=..&targetpath=..
@@ -13,6 +14,9 @@
 #   cdn            the CDN in front, as AS numbers
 #   pins           SPKI SHA-256 pins (sha256/BASE64); none published by any operator
 #   note           free text
+#   status         '-' for every build; debug for debuggable builds alone, which Advanced's network monitoring
+#                  leaves out of a release build's tables (ADR 0055: the project's own relay, until its gates pass)
 # '-' means none.
-numa	https://odoh-relay.numa.rs/relay	178.104.229.30	-	Numa	Razvan Dimescu	DE,RO	AS24940	-	-	Run by the Numa project on Hetzner Online (DE); the list entry, added by Razvan Dimescu himself, says Falkenstein while the address's RIPE netblock is named CLOUD-NBG1 (Nuremberg); RO is the person's own location on his GitHub profile, no seat of the Numa project is published; no logging statement for the relay on numa.rs; no AAAA record on 2026-11-20
-crypto-sx-fastly	https://odoh-relay.edgecompute.app/	151.101.1.51,151.101.65.51,151.101.129.51,151.101.193.51	2a04:4e42::307,2a04:4e42:200::307,2a04:4e42:400::307,2a04:4e42:600::307	crypto.sx	Frank Denis	FR,US	AS54113	AS54113	-	A Fastly Compute service maintained by Frank Denis (not Fastly's managed OHTTP Relay product); the host is a CNAME to ecp.map.fastly.net, anycast; FR is the person's own location on his GitHub profile, US is Fastly's seat; the same person maintains the crypto.sx target and curates the DNSCrypt lists; no logging statement for the relay
+numa	https://odoh-relay.numa.rs/relay	178.104.229.30	-	Numa	Razvan Dimescu	DE,RO	AS24940	-	-	Run by the Numa project on Hetzner Online (DE); the list entry, added by Razvan Dimescu himself, says Falkenstein while the address's RIPE netblock is named CLOUD-NBG1 (Nuremberg); RO is the person's own location on his GitHub profile, no seat of the Numa project is published; no logging statement for the relay on numa.rs; no AAAA record on 2026-11-20	-
+crypto-sx-fastly	https://odoh-relay.edgecompute.app/	151.101.1.51,151.101.65.51,151.101.129.51,151.101.193.51	2a04:4e42::307,2a04:4e42:200::307,2a04:4e42:400::307,2a04:4e42:600::307	crypto.sx	Frank Denis	FR,US	AS54113	AS54113	-	A Fastly Compute service maintained by Frank Denis (not Fastly's managed OHTTP Relay product); the host is a CNAME to ecp.map.fastly.net, anycast; FR is the person's own location on his GitHub profile, US is Fastly's seat; the same person maintains the crypto.sx target and curates the DNSCrypt lists; no logging statement for the relay	-
+datapavan	https://datapavan.org/odoh/proxy	152.53.127.102	2a0a:4cc0:c0:52d8:2892:9ff:fe91:b9c9	Datapavan	Datapavan's maintainer	DE,TR	AS197540	-	-	The project's own relay (ADR 0055, proposed): Caddy's configuration in the repository's server/ folder, on datapavan.org's server, a netcup VPS; hosting AS197540, netcup GmbH (Karlsruhe, DE), by RDAP, whose blocks are named DE-NETCUP-20190124 (IPv4) and DE-NETCUP-KVM-VIE (IPv6); DE is the hosting's seat and the server's, TR the operator's seat, where the maintainer resides; it writes no address (ADR 0055, decision 2); debuggable builds only until ADR 0055's gates pass	debug

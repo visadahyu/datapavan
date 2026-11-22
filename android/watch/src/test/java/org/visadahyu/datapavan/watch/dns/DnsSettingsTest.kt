@@ -10,6 +10,19 @@ import org.junit.Test
 
 /** The user's DNS setting as kept and as the engine reads it, and the engine's catalogue and state as the screen reads them. */
 class DnsSettingsTest {
+    /** ADR 0055: the project's own relay, `debug` in its status column, reaches a debuggable build's tables alone. */
+    @Test
+    fun aReleaseBuildLeavesTheDebugRelaysOut() {
+        val relays = File("../../data/odoh/relays.tsv").readText()
+        fun ids(table: String) = table.lines().filter { it.isNotBlank() && !it.startsWith("#") }.map { it.split('\t')[0] }
+        assertEquals(listOf("numa", "crypto-sx-fastly", "datapavan"), ids(DnsSettings.forBuild(relays, debuggable = true)))
+        val release = DnsSettings.forBuild(relays, debuggable = false)
+        assertEquals(listOf("numa", "crypto-sx-fastly"), ids(release))
+        assertFalse(release.contains("datapavan.org"))
+        // Every other line, comments included, as it was.
+        assertEquals(relays.lines().filterNot { it.startsWith("datapavan\t") }, release.lines())
+    }
+
     @Test
     fun aChoiceIsKeptAndReadBack() {
         for (choice in listOf(
