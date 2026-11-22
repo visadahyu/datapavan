@@ -187,7 +187,7 @@ class KeystoreWrap(private val alias: String = ALIAS, private val unlockedOnly: 
 
         /** Key B: needs an unlocked phone. */
         const val UNLOCKED_ALIAS = "network-tunnels-unlocked"
-        private const val TAG = "WatchTunnels"
+        private const val TAG = "NetworkTunnels"
         private const val PROVIDER = "AndroidKeyStore"
         private const val TRANSFORMATION = "AES/GCM/NoPadding"
         private const val KEY_BITS = 256

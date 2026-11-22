@@ -77,10 +77,10 @@ async fn connects_by_address_and_by_name() -> Outcome {
 #[tokio::test]
 async fn gives_the_password_only_when_the_proxy_asks() -> Outcome {
     let echo = tcp_echo().await?;
-    let right = credentials(b"watch", b"generated")?;
-    let wrong = credentials(b"watch", b"guessed")?;
+    let right = credentials(b"datapavan", b"generated")?;
+    let wrong = credentials(b"datapavan", b"guessed")?;
     let guarded = proxy(Settings {
-        password: Some((b"watch".to_vec(), b"generated".to_vec())),
+        password: Some((b"datapavan".to_vec(), b"generated".to_vec())),
         ..Settings::default()
     })
     .await?;

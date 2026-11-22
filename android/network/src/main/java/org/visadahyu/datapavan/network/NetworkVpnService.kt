@@ -125,7 +125,7 @@ class NetworkVpnService : VpnService() {
      * connect as network access, and one at a time.
      */
     private val measuring: ExecutorService = Executors.newSingleThreadExecutor { task ->
-        Thread(task, "watch-mtu").apply { isDaemon = true }
+        Thread(task, "network-mtu").apply { isDaemon = true }
     }
 
     /**
@@ -793,7 +793,7 @@ class NetworkVpnService : VpnService() {
             settings.remember(found)
             // On the main thread, behind any change the screen sent, the tunnels' routes first (M2).
             if (settings.lastTool != before) main.post { if (active) applyRoutes() }
-        }.apply { name = "watch-chain" }.start()
+        }.apply { name = "network-chain" }.start()
     }
 
     private fun start(intent: Intent?) {
@@ -1947,7 +1947,7 @@ class NetworkVpnService : VpnService() {
 
         /** Debug builds: a comma-separated list of the only apps to send through the tunnel. */
         const val EXTRA_ONLY_APPS = "only_apps"
-        private const val TAG = "Watch"
+        private const val TAG = "Network"
         private const val KEPT_FLOWS = 512
 
         /** The asset of the table from address to organisation, stored uncompressed (build.gradle.kts). */

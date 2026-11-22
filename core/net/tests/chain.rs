@@ -2578,13 +2578,13 @@ async fn a_mapping_ended_by_a_new_chain_lets_the_old_relay_go() -> Outcome {
 async fn new_credentials_for_the_tool_move_a_mapping() -> Outcome {
     let echo = udp_echo().await?;
     let settings = Settings {
-        password: Some((b"watch".to_vec(), b"secret".to_vec())),
+        password: Some((b"datapavan".to_vec(), b"secret".to_vec())),
         ..Settings::default()
     };
     let tool = proxy(settings).await?;
     let with = |password: &[u8]| {
         let mut chained = chain(tool.address);
-        chained.credentials = datapavan_net::socks5::Credentials::new(b"watch", password);
+        chained.credentials = datapavan_net::socks5::Credentials::new(b"datapavan", password);
         chained
     };
     let (engine, tunnel) = engine(with(b"secret"))?;

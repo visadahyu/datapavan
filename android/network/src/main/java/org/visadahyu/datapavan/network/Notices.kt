@@ -38,10 +38,10 @@ internal object Notices {
         DNS_FALLBACK(7_203, R.string.dns_fallback_title, R.string.dns_fallback_text),
     }
 
-    private const val CHANNEL = "watch-unlock"
+    private const val CHANNEL = "network-unlock"
 
     /** The fallback's own channel, so that the user can silence it apart from the others. */
-    private const val DNS_CHANNEL = "watch-dns"
+    private const val DNS_CHANNEL = "network-dns"
 
     /** Shows the notification [kind] while [on], and takes it away otherwise. */
     fun show(context: Context, kind: Kind, on: Boolean) {

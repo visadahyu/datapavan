@@ -43,7 +43,7 @@ class ConnectionLog internal constructor(
     /** Asked to keep the expiry job scheduled (true) or to cancel it (false). */
     private val expiryJob: (Boolean) -> Unit = {},
 ) {
-    private val worker = Executors.newSingleThreadExecutor { Thread(it, "watch-log") }
+    private val worker = Executors.newSingleThreadExecutor { Thread(it, "network-log") }
     private var database: Database? = null
 
     /** Today's day key in memory, by day: the key's row and the key. Other days' are cleared. */
@@ -434,7 +434,7 @@ class ConnectionLog internal constructor(
     }
 
     companion object {
-        private const val TAG = "WatchLog"
+        private const val TAG = "NetworkLog"
         private const val NAME = "log.db"
         private const val PREFS = "log"
         private const val ALIAS = "network-log"

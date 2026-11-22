@@ -21,7 +21,7 @@ object QrClient {
     /** How long Watch waits for the process to start and answer: its own limit, and a margin to start it. */
     private const val WAIT_MS = QrService.TIME_LIMIT_MS + 5_000L
 
-    private val callbacks = Executors.newSingleThreadExecutor { Thread(it, "watch-qr-binding").apply { isDaemon = true } }
+    private val callbacks = Executors.newSingleThreadExecutor { Thread(it, "network-qr-binding").apply { isDaemon = true } }
 
     /** The code's text in [picture], which this closes, or why not; the caller zeroes the text after use. */
     fun decode(context: Context, picture: ParcelFileDescriptor): QrDecode.Result = picture.use {

@@ -54,7 +54,7 @@ internal class StateTracker(private val context: Context, private val tell: (Byt
     private val core = UsageStates(
         notificationDelay = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) NOTIFICATION_DELAY_MS else 0,
     )
-    private val worker = ScheduledThreadPoolExecutor(1) { task -> Thread(task, "watch-states").apply { isDaemon = true } }.apply {
+    private val worker = ScheduledThreadPoolExecutor(1) { task -> Thread(task, "network-states").apply { isDaemon = true } }.apply {
         // A reading waiting for its turn is dropped at the stop, which reads a last time itself.
         executeExistingDelayedTasksAfterShutdownPolicy = false
         removeOnCancelPolicy = true

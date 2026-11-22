@@ -34,7 +34,7 @@ internal fun NetworkEntry() {
             Spacer(Modifier.height(8.dp))
             OutlinedButton(
                 onClick = { context.startActivity(Intent().setClassName(context, NETWORK_SCREEN)) },
-                modifier = Modifier.testTag("open-watch"),
+                modifier = Modifier.testTag("open-network"),
             ) { Text(stringResource(R.string.watch_entry_open)) }
         }
     }
@@ -53,7 +53,7 @@ internal fun NetworkNowEntry(packageName: String) {
     val context = LocalContext.current
     OutlinedButton(
         onClick = { context.startActivity(Intent().setClassName(context, NETWORK_NOW).putExtra(NETWORK_NOW_PACKAGE, packageName)) },
-        modifier = Modifier.padding(vertical = 8.dp).testTag("open-watch-now"),
+        modifier = Modifier.padding(vertical = 8.dp).testTag("open-network-now"),
     ) { Text(stringResource(R.string.watch_now_open)) }
 }
 

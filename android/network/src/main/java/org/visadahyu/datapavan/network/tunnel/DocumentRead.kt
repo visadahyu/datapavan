@@ -32,7 +32,7 @@ object DocumentRead {
         data object TooSlow : Result
     }
 
-    private val timer = Executors.newSingleThreadScheduledExecutor { Thread(it, "watch-import-limit").apply { isDaemon = true } }
+    private val timer = Executors.newSingleThreadScheduledExecutor { Thread(it, "network-import-limit").apply { isDaemon = true } }
 
     /**
      * Opens the document with [open] and reads at most [max] bytes of it, all within [limitMs]. Past the limit

@@ -373,7 +373,7 @@ class MainActivity : ComponentActivity() {
                 showSettings()
                 if (found != null) applyChain()
             }
-        }.apply { name = "watch-tool" }.start()
+        }.apply { name = "network-tool" }.start()
     }
 
     /** Shows the chain's settings as stored. */
@@ -434,7 +434,7 @@ class MainActivity : ComponentActivity() {
                 // changed meanwhile kept (fix round, screens review m3).
                 proposeApps()
             }
-        }.apply { name = "watch-apps" }.start()
+        }.apply { name = "network-apps" }.start()
     }
 
     /** Copies Watch's password for the tool, marked sensitive so that Android does not show it. */
@@ -737,7 +737,7 @@ class MainActivity : ComponentActivity() {
 
     /** Runs [task] on a thread of its own: a document's or a picture's read, which may wait on its provider. */
     private fun reading(task: () -> Unit) {
-        Thread(task, "watch-import").apply { isDaemon = true }.start()
+        Thread(task, "network-import").apply { isDaemon = true }.start()
     }
 
     /**

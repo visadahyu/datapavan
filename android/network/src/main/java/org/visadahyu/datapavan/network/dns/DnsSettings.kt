@@ -180,7 +180,7 @@ class DnsSettings private constructor(private val prefs: SharedPreferences) {
         private var instance: DnsSettings? = null
 
         fun of(context: Context): DnsSettings = instance ?: synchronized(this) {
-            instance ?: DnsSettings(context.applicationContext.getSharedPreferences("watch-dns", Context.MODE_PRIVATE)).also { instance = it }
+            instance ?: DnsSettings(context.applicationContext.getSharedPreferences("network-dns", Context.MODE_PRIVATE)).also { instance = it }
         }
 
         /** The four tables: the DNS lab's in a debug build that has them, else the data pack's. */

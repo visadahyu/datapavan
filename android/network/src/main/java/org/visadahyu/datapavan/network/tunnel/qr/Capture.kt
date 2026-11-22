@@ -24,8 +24,8 @@ import java.security.SecureRandom
 object Capture {
     private const val FOLDER = "qr-capture"
 
-    /** The FileProvider's authority (the watch module's manifest). */
-    fun authority(context: Context) = "${context.packageName}.watch.capture"
+    /** The FileProvider's authority (the network module's manifest). */
+    fun authority(context: Context) = "${context.packageName}.network.capture"
 
     /** A new, empty file for one photo, its name drawn at random. */
     fun newFile(context: Context): File {

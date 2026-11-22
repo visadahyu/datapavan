@@ -92,7 +92,7 @@ fail() {
 }
 
 # The steps of Watch's searches for the tool, which a debug build logs (Tools.search).
-search_log() { adb logcat -d -s WatchChain | tr -d '\r' | sed -n 's/.*WatchChain: //p'; }
+search_log() { adb logcat -d -s NetworkChain | tr -d '\r' | sed -n 's/.*NetworkChain: //p'; }
 
 vpn_up() {
     local uid vpns
@@ -117,7 +117,7 @@ TOOL_UID=$(adb shell cmd package list packages -U "$TOOL" | tr -d '\r' | sed -n 
 
 adb logcat -c
 adb shell am start-foreground-service -n "$TOOL/.ToolService" --ei port "$TOOL_PORT" \
-    --es user watch --es password "$PASSWORD" --es map "watch.test=$HOST" >/dev/null
+    --es user datapavan --es password "$PASSWORD" --es map "watch.test=$HOST" >/dev/null
 for _ in $(seq 1 10); do tool_log | grep -q "^listening" && break; sleep 1; done
 tool_log | grep -q "^listening $TOOL_PORT" || fail "the test tool does not listen"
 
@@ -139,7 +139,7 @@ done
 [ "$found" = "$expected" ] || fail "Watch did not find the tool as expected: $found"
 echo "ok: Watch found the tool, its port, its owner and that it wants a password"
 
-chained=$(dump chain 127.0.0.1 "$TOOL_PORT" "$TOOL_UID" udp "$SHELL_UID" watch "$PASSWORD")
+chained=$(dump chain 127.0.0.1 "$TOOL_PORT" "$TOOL_UID" udp "$SHELL_UID" datapavan "$PASSWORD")
 grep -q "chain on" <<<"$chained" || fail "the chain did not turn on; Watch's dump said: ${chained:-nothing}"
 
 answer=$(ping_from_shell "$HOST")
@@ -163,7 +163,7 @@ grep -q chained-udp <<<"$echo" || fail "UDP through the tool's relay: no echo ($
 grep -q "^associate$" <<<"$(tool_log)" || fail "the tool was not asked for a UDP relay"
 echo "ok: UDP through the tool's relay, by name"
 
-chained=$(dump chain 127.0.0.1 "$TOOL_PORT" "$TOOL_UID" udp "$SHELL_UID" watch wrong-password)
+chained=$(dump chain 127.0.0.1 "$TOOL_PORT" "$TOOL_UID" udp "$SHELL_UID" datapavan wrong-password)
 grep -q "chain on" <<<"$chained" || fail "the chain with a wrong password did not turn on; Watch's dump said: ${chained:-nothing}"
 grep -q pong <<<"$(ping_from_shell "$HOST")" && fail "a wrong password was let through"
 grep -q "^password refused$" <<<"$(tool_log)" || fail "the tool did not see the wrong password"
@@ -179,7 +179,7 @@ echo "ok: no password in Android's log or in Watch's dump"
 # The tool stops. A sentinel on this computer, outside Android, notes every TCP connection and UDP
 # datagram that reaches its port: the emulator's own capture does not see what goes over its Wi-Fi.
 # A control from Watch's own UID, which goes directly, shows that the sentinel sees what leaves.
-chained=$(dump chain 127.0.0.1 "$TOOL_PORT" "$TOOL_UID" udp "$SHELL_UID" watch "$PASSWORD")
+chained=$(dump chain 127.0.0.1 "$TOOL_PORT" "$TOOL_UID" udp "$SHELL_UID" datapavan "$PASSWORD")
 grep -q "chain on" <<<"$chained" || fail "the chain did not turn on again; Watch's dump said: ${chained:-nothing}"
 adb shell am force-stop "$TOOL"
 SENTINEL_PORT=$((PORT + 3))

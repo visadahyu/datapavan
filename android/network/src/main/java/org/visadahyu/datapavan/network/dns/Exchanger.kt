@@ -94,9 +94,9 @@ class Exchanger(
     private val probes = ConcurrentHashMap<Long, (Int, ByteArray?) -> Unit>()
     private val probeTickets = java.util.concurrent.atomic.AtomicLong(0)
     private val timers: ScheduledExecutorService = Executors.newSingleThreadScheduledExecutor { task ->
-        Thread(task, "watch-dns-timer").apply { isDaemon = true }
+        Thread(task, "network-dns-timer").apply { isDaemon = true }
     }
-    private val work = Executors.newCachedThreadPool { task -> Thread(task, "watch-dns").apply { isDaemon = true } }
+    private val work = Executors.newCachedThreadPool { task -> Thread(task, "network-dns").apply { isDaemon = true } }
     private val trust: X509TrustManager by lazy { given ?: SystemTrust.android(host.extraRoots) }
     private val dot by lazy { DotClient(::socketFor, ::sslFor, timers, work, ::reply) }
 

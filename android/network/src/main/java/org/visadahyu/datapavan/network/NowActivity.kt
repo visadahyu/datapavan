@@ -70,7 +70,7 @@ import org.visadahyu.datapavan.network.ui.rowOf
  * same app's row or its history ([MainActivity.logSwitchIntent]; the brief's point 11).
  */
 class NowActivity : ComponentActivity() {
-    private val worker = Executors.newSingleThreadExecutor { Thread(it, "watch-now") }.asCoroutineDispatcher()
+    private val worker = Executors.newSingleThreadExecutor { Thread(it, "network-now") }.asCoroutineDispatcher()
     private val snapshot = mutableStateOf<Snapshot?>(null)
     private val names = mutableStateMapOf<Int?, AppNames.Named>()
     private val groups = mutableStateMapOf<Int?, String?>()

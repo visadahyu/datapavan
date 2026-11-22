@@ -19,7 +19,7 @@ import org.visadahyu.datapavan.network.Engine
  */
 internal class BlockingHandover(private val context: Context) {
     private val worker: ExecutorService = Executors.newSingleThreadExecutor { task ->
-        Thread(task, "watch-blocking").apply { isDaemon = true }
+        Thread(task, "network-blocking").apply { isDaemon = true }
     }
 
     /** The table's bytes last handed to the engine's library, and what was read with them. Worker only. */
@@ -89,6 +89,6 @@ internal class BlockingHandover(private val context: Context) {
     }
 
     private companion object {
-        const val TAG = "Watch"
+        const val TAG = "Network"
     }
 }

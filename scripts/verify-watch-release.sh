@@ -107,7 +107,7 @@ allow_vpn "$PKG" || fail "Android did not take the VPN consent for $PKG"
 for attempt in 1 2; do
     start_audit "$PKG" || fail "the audit of the release build did not show its summary"
     open_tab network || fail "no network page in the release build's audit"
-    tap_id open-watch || fail "no way to Watch on the release build's network page"
+    tap_id open-network || fail "no way to Watch on the release build's network page"
     # Watch's screen opens over the audit: its button is looked for once the screen shows it.
     within 15 screen_has "Turn on" || echo "  Watch's screen showed no \"Turn on\" within 15 s"
     if ! tap_text "Turn on"; then

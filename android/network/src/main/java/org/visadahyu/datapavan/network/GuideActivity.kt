@@ -54,7 +54,7 @@ class GuideActivity : ComponentActivity() {
             val labels = ToolLabels(book, guide, read, phone = PhoneLocales.of(this), own = PhoneLocales.own(this))
             val shown = GuideView.of(book, guide, name, labels) { first, second -> getString(R.string.label_with_own, first, second) }
             runOnUiThread { view.value = shown }
-        }.apply { name = "watch-guide" }.start()
+        }.apply { name = "network-guide" }.start()
     }
 
     companion object {

@@ -51,7 +51,7 @@ object Tools {
     }
 
     /** The tag of the search's lines in a debug build's log. */
-    const val TAG = "WatchChain"
+    const val TAG = "NetworkChain"
 
     @Suppress("DEPRECATION")
     private fun uidOf(packages: PackageManager, packageName: String): Int? = try {

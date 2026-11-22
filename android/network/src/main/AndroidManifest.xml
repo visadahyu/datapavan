@@ -139,7 +139,7 @@
         -->
         <provider
             android:name="androidx.core.content.FileProvider"
-            android:authorities="${applicationId}.watch.capture"
+            android:authorities="${applicationId}.network.capture"
             android:exported="false"
             android:grantUriPermissions="true"
             android:process=":network">

@@ -120,7 +120,7 @@ class ChainSettings private constructor(private val prefs: SharedPreferences) {
 
     companion object {
         /** The user name Watch offers with its password; Hiddify's is fixed (data/tools). */
-        const val USER = "watch"
+        const val USER = "datapavan"
         private const val HIDDIFY = "app.hiddify.com"
 
         private const val FILE = "chain"

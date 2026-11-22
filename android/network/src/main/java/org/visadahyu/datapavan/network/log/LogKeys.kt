@@ -102,7 +102,7 @@ class KeystoreWrap(private val prefs: SharedPreferences, private val alias: Stri
     }
 
     private companion object {
-        const val TAG = "WatchLog"
+        const val TAG = "NetworkLog"
         const val PROVIDER = "AndroidKeyStore"
         const val UNLOCKED_ONLY = "log_key_unlocked_only"
         const val TRANSFORMATION = "RSA/ECB/OAEPWithSHA-256AndMGF1Padding"

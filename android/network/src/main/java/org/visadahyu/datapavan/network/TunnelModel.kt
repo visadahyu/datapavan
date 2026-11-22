@@ -36,7 +36,7 @@ internal class TunnelModel : ViewModel() {
          * threads of their own, never here (fix round, security review M2).
          */
         val worker = ThreadPoolExecutor(0, 1, 30, TimeUnit.SECONDS, LinkedBlockingQueue()) { task ->
-            Thread(task, "watch-tunnels").apply { isDaemon = true }
+            Thread(task, "network-tunnels").apply { isDaemon = true }
         }
     }
 }

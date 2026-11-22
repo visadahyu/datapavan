@@ -45,7 +45,7 @@ object LogModel {
             running = true
         }
         state.set("log-model running seed $seed step 0/$steps")
-        thread(name = "watch-log-model") {
+        thread(name = "network-log-model") {
             val outcome = try {
                 Run(context.applicationContext, seed, steps, state).go()
             } catch (e: Exception) {

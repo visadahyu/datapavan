@@ -426,7 +426,7 @@ mod tests {
 
     #[test]
     fn greets_with_the_password_method_only_when_it_has_credentials() {
-        let Some(credentials) = Credentials::new(b"watch", b"secret") else {
+        let Some(credentials) = Credentials::new(b"datapavan", b"secret") else {
             unreachable!("valid credentials")
         };
         assert_eq!(greeting(None), [5, 1, 0]);
@@ -442,7 +442,8 @@ mod tests {
         assert_eq!(
             password_request(&credentials),
             [
-                1, 5, b'w', b'a', b't', b'c', b'h', 6, b's', b'e', b'c', b'r', b'e', b't'
+                1, 9, b'd', b'a', b't', b'a', b'p', b'a', b'v', b'a', b'n', 6, b's', b'e', b'c',
+                b'r', b'e', b't'
             ]
         );
         assert_eq!(password_status([1, 0]), Ok(()));
