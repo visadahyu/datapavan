@@ -5,7 +5,7 @@ import java.time.ZoneId
 
 /**
  * The time as the connection log reads it: the moment, and the phone's time zone, both read anew each
- * time, since the user or the network can change either while Watch runs. Android sets the zone anew in
+ * time, since the user or the network can change either while the network part runs. Android sets the zone anew in
  * every running process when it changes (`ACTION_TIMEZONE_CHANGED`, which resets Java's default zone), so
  * the next record is filed in the new one.
  */

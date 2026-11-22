@@ -24,8 +24,9 @@ import org.visadahyu.datapavan.network.guides.GuideView
 
 /**
  * One tool's guide (W8, part 3b; ADR 0041, "How the per-tool guides are built"): how to run it in proxy mode beside
- * Watch, or why it cannot run beside it, block by block as [GuideView] fills them, the steps numbered within each part.
- * Nothing here links out: no download, no store, no tool named as better than another. Null while the labels are read.
+ * the network part, or why it cannot run beside it, block by block as [GuideView] fills them, the steps numbered within
+ * each part. Nothing here links out: no download, no store, no tool named as better than another. Null while the labels
+ * are read.
  */
 @Composable
 internal fun GuideScreen(view: GuideView?) {

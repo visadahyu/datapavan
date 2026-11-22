@@ -11,29 +11,30 @@ import android.content.pm.PackageManager
 import android.os.Build
 
 /**
- * Watch's two notifications about its WireGuard configurations (W7, part 2, fix round; the maintainer's decisions
- * of 2026-11-20, ADR 0035). Each names no provider and no configuration, on the lock screen or off it, whose
- * version is its title alone; each opens Watch's screen. From Android 13 they show only once the user allows
- * Watch's notifications, which W9's onboarding asks.
+ * The network part's two notifications about its WireGuard configurations (W7, part 2, fix round; the maintainer's
+ * decisions of 2026-11-20, ADR 0035). Each names no provider and no configuration, on the lock screen or off it, whose
+ * version is its title alone; each opens the network screen. From Android 13 they show only once the user allows
+ * the network part's notifications, which W9's onboarding asks.
  */
 internal object Notices {
     /** What a notification is for. */
     enum class Kind(val id: Int, val title: Int, val text: Int) {
         /**
-         * Configurations under key B wait for the phone's unlock: with ADR 0047's profile on, Watch started again
-         * while the phone is locked cannot open them, and their apps wait until the unlock, when it goes.
+         * Configurations under key B wait for the phone's unlock: with ADR 0047's profile on, the network part started
+         * again while the phone is locked cannot open them, and their apps wait until the unlock, when it goes.
          */
         UNLOCK(7_201, R.string.unlock_title, R.string.unlock_text),
 
         /**
-         * What Watch kept of its configurations can no longer be opened (key A gone for good): every app is held
-         * until the user chooses on Watch's screen, when it goes.
+         * What the network part kept of its configurations can no longer be opened (key A gone for good): every app is
+         * held until the user chooses on the network screen, when it goes.
          */
         LOST(7_202, R.string.lost_title, R.string.lost_text),
 
         /**
          * Direct apps' names go to the network's resolver, since no encrypted way answers (W8, part 1): only when
-         * the user turned it on, since Watch has no tile until W9; it goes as soon as an encrypted way answers.
+         * the user turned it on, since the network part has no tile until W9; it goes as soon as an encrypted way
+         * answers.
          */
         DNS_FALLBACK(7_203, R.string.dns_fallback_title, R.string.dns_fallback_text),
     }

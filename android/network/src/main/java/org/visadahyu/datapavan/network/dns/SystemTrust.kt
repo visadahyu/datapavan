@@ -8,9 +8,10 @@ import javax.net.ssl.TrustManagerFactory
 import javax.net.ssl.X509TrustManager
 
 /**
- * The certificates Watch's encrypted resolver accepts (W8, part 1, ADR 0042, "How it is built", point 1): chains to
- * the roots Android ships, never to a certificate authority the user or an administrator installed, which could be
- * a network's or an abuser's, and, where the dataset gives pins for an endpoint, a chain that holds one of them.
+ * The certificates the network part's encrypted resolver accepts (W8, part 1, ADR 0042, "How it is built", point 1):
+ * chains to the roots Android ships, never to a certificate authority the user or an administrator installed, which
+ * could be a network's or an abuser's, and, where the dataset gives pins for an endpoint, a chain that holds one of
+ * them.
  *
  * Android keeps its roots in `AndroidCAStore` under aliases that begin `system:` and the user's under `user:`; only
  * the first are taken. Debug builds may add the DNS lab's test root ([extra]), never release builds.

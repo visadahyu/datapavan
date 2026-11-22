@@ -19,8 +19,8 @@ import androidx.compose.ui.unit.dp
 import org.visadahyu.datapavan.R
 
 /**
- * Datapavan Advanced only (ADR 0045): the way from the audit's network page to Watch, which shows where
- * each app connects. Watch's screen is in the same app but not in the audit's code, so it is opened by its
+ * Datapavan Advanced only (ADR 0045): the way from the audit's network page to the network part, which shows where
+ * each app connects. The network screen is in the same app but not in the audit's code, so it is opened by its
  * class name; Basic has no such screen and never shows this card.
  */
 @Composable
@@ -40,13 +40,13 @@ internal fun NetworkEntry() {
     }
 }
 
-/** Watch's screen, in the :network library. */
+/** The network screen, in the :network library. */
 private const val NETWORK_SCREEN = "org.visadahyu.datapavan.network.MainActivity"
 
 /**
- * Datapavan Advanced only: from the audit's page of an app, Watch's view "Now" for that app (ADR 0046, decision
- * 2 (d)), which says what it sent and whether the user was using it. Opened by class name with the app's package
- * name and nothing else, as [NetworkEntry] opens Watch's screen.
+ * Datapavan Advanced only: from the audit's page of an app, the network part's view "Now" for that app (ADR 0046,
+ * decision 2 (d)), which says what it sent and whether the user was using it. Opened by class name with the app's
+ * package name and nothing else, as [NetworkEntry] opens the network screen.
  */
 @Composable
 internal fun NetworkNowEntry(packageName: String) {
@@ -57,6 +57,6 @@ internal fun NetworkNowEntry(packageName: String) {
     ) { Text(stringResource(R.string.network_now_open)) }
 }
 
-/** Watch's view "Now", in the :network library, and the one extra it reads: a package name. */
+/** The network part's view "Now", in the :network library, and the one extra it reads: a package name. */
 private const val NETWORK_NOW = "org.visadahyu.datapavan.network.NowActivity"
 private const val NETWORK_NOW_PACKAGE = "package"

@@ -15,7 +15,7 @@ import org.visadahyu.datapavan.network.blocking.Tallies.Tally
 import org.visadahyu.datapavan.network.blocking.TrackerCode
 
 /**
- * What "Now", the history and Watch's screen say of tracker blocking (W8, part 3a; the brief's points 6 to 8): each
+ * What "Now", the history and the network screen say of tracker blocking (W8, part 3a; the brief's points 6 to 8): each
  * branch as the pure rules choose it, and the words, held to ADR 0025's list.
  */
 class BlockingLinesTest {
@@ -182,8 +182,8 @@ class BlockingLinesTest {
     }
 
     /**
-     * Watch's screen: the switch, its notes and what is not covered always; the tool's option only while it is chained;
-     * the pause only while blocking is on, and while paused its end and "Block again now".
+     * The network screen: the switch, its notes and what is not covered always; the tool's option only while it is
+     * chained; the pause only while blocking is on, and while paused its end and "Block again now".
      */
     @Test
     fun theNetworkScreensSection() {
@@ -236,7 +236,7 @@ class BlockingLinesTest {
         assertTrue(blocking.getValue("blocking_lookups").contains("lookups"))
     }
 
-    /** Watch's English strings and plurals (their "other" form), by name. */
+    /** The network part's English strings and plurals (their "other" form), by name. */
     private fun strings(): Map<String, String> {
         val text = listOf("strings.xml", "strings_untranslated.xml").map { File("src/main/res/values/$it") }.filter { it.isFile }
             .joinToString("") { it.readText() }

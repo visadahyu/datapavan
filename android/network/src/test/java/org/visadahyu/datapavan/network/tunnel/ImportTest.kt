@@ -83,7 +83,7 @@ class ImportTest {
         assertEquals(listOf("org.example.mail"), proposal.proposed)
         assertEquals(setOf("org.example.mail"), proposal.ticked)
         assertEquals(listOf("org.example.gone"), proposal.notInstalled)
-        // Installed but not among the apps the user can choose, and left out of Watch: each said apart (m2).
+        // Installed but not among the apps the user can choose, and left out of the network part: each said apart (m2).
         assertEquals(listOf("org.example.noicon"), proposal.notChoosable)
         assertEquals(listOf("org.example.out"), proposal.leftOut)
         assertEquals(emptyList<String>(), proposal.excluded)
@@ -109,7 +109,7 @@ class ImportTest {
         val read = Import.read(except) as Import.Described
         val choosable = listOf("org.example.chat", "org.example.mail", "org.example.maps", "org.visadahyu.datapavan.advanced", "org.example.out")
         val proposal = propose(read, choosable, elsewhere = setOf("org.example.maps"))
-        assertEquals("never Watch, never an app left out of Watch", listOf("org.example.chat", "org.example.maps"), proposal.proposed)
+        assertEquals("never the network part, never an app left out of the network part", listOf("org.example.chat", "org.example.maps"), proposal.proposed)
         assertEquals(setOf("org.example.chat"), proposal.ticked)
         assertEquals("the apps it leaves out, by name", listOf("org.example.mail"), proposal.excluded)
         assertEquals(listOf("org.example.gone"), proposal.notInstalled)

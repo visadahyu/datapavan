@@ -61,7 +61,7 @@ class BlockingSettingsTest {
         // A second tap starts its hour again.
         settings.allowApp("com.example.other", now + 30 * 60_000)
         assertEquals(mapOf("com.example.other" to now + 90 * 60_000), settings.appsAllowed(now + 30 * 60_000))
-        // Watch itself is never allowed: it is never covered.
+        // The network part itself is never allowed: it is never covered.
         settings.allowApp("org.visadahyu.datapavan.advanced", now)
         assertFalse("org.visadahyu.datapavan.advanced" in settings.appsAllowed(now))
     }

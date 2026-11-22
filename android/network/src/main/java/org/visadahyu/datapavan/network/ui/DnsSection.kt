@@ -48,7 +48,7 @@ import org.visadahyu.datapavan.network.dns.DnsCatalogue
 import org.visadahyu.datapavan.network.dns.DnsSettings
 import org.visadahyu.datapavan.network.dns.DnsStatus
 
-/** What Watch's screen shows of the names of apps that go directly (W8, part 1). */
+/** What the network screen shows of the names of apps that go directly (W8, part 1). */
 internal data class DnsView(
     val running: Boolean,
     val status: DnsStatus?,
@@ -57,7 +57,7 @@ internal data class DnsView(
     /** "Only this resolver" (W8's fix round, review R-M1). */
     val only: Boolean,
     val notify: Boolean,
-    /** Android refused Watch's notifications when the user turned "Notify me" on (review R-M3). */
+    /** Android refused the network part's notifications when the user turned "Notify me" on (review R-M3). */
     val notifyRefused: Boolean,
     /** The pairs the user set, `relay>target` by commas; empty for the defaults. */
     val pairs: String,
@@ -65,7 +65,7 @@ internal data class DnsView(
     /** The last check of the user's own resolver, while the screen shows it. */
     val probe: Probe?,
 ) {
-    /** The check of the user's own resolver before Watch saves it (review R-M1). */
+    /** The check of the user's own resolver before the network part saves it (review R-M1). */
     sealed interface Probe {
         data object Asking : Probe
 
@@ -88,9 +88,9 @@ internal class DnsActions(
 
 /**
  * The names of apps that go directly (W8, part 1, ADR 0042, and its fix round): which way they go now, the fallback
- * while it lasts, when Android's strict Private DNS takes them past Watch (that note alone then), the user's choice
- * of resolver with each service's card and what happens if it fails, "only this resolver", the strict setting with
- * what it costs and what it cannot cover, the network's own domains, the ODoH pairs, and the fallback's
+ * while it lasts, when Android's strict Private DNS takes them past the network part (that note alone then), the user's
+ * choice of resolver with each service's card and what happens if it fails, "only this resolver", the strict setting
+ * with what it costs and what it cannot cover, the network's own domains, the ODoH pairs, and the fallback's
  * notification. Nothing of the names themselves is shown or kept.
  */
 @Composable
@@ -106,7 +106,8 @@ internal fun DnsSection(view: DnsView, privateDns: PrivateDns?, actions: DnsActi
             modifier = Modifier.semantics { heading() },
         )
         if (privateDns is PrivateDns.Strict) {
-            // Android sends every name past Watch: this note alone, not what Watch would do (review R-m5).
+            // Android sends every name past the network part: this note alone, not what the network part would do
+            // (review R-m5).
             Text(
                 stringResource(
                     R.string.dns_private_dns_strict_quoted, bidi.unicodeWrap(privateDns.host),
@@ -323,9 +324,9 @@ private fun Service(presets: List<DnsCatalogue.Preset>, choice: DnsSettings.Choi
 }
 
 /**
- * The user's own DoH or DoT resolver: a URL or a host, and its addresses, since Watch never looks a resolver's name
- * up. Tested with one query before it is saved, and the result shown (review R-M1). The fields are left to right,
- * with a URL's keyboard; a refusal is tied to its field and read out (review R-m6).
+ * The user's own DoH or DoT resolver: a URL or a host, and its addresses, since the network part never looks a
+ * resolver's name up. Tested with one query before it is saved, and the result shown (review R-M1). The fields are left
+ * to right, with a URL's keyboard; a refusal is tied to its field and read out (review R-m6).
  */
 @Composable
 private fun Custom(view: DnsView, typing: Boolean, actions: DnsActions, onTyping: (Boolean) -> Unit) {

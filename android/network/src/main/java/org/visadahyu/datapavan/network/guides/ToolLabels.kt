@@ -85,7 +85,8 @@ class ToolLabels(
         /**
          * Reads labels from the installed [packageName]: its resources opened for the locales asked, without its code.
          * Null when the package is not installed or Android cannot open it. Advanced sees every app (the audit's
-         * QUERY_ALL_PACKAGES, ADR 0014), and Watch's own launcher query (ADR 0034) covers any tool a user can open.
+         * QUERY_ALL_PACKAGES, ADR 0014), and the network part's own launcher query (ADR 0034) covers any tool a user
+         * can open.
          */
         fun reader(context: Context, packageName: String): ((Resource, List<Locale>) -> String?)? =
             OtherAppResources.reader(context, packageName)?.let { read -> { resource, locales -> read(resource.type, resource.name, resource.index, locales) } }

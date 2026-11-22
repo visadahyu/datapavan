@@ -19,7 +19,7 @@ import javax.crypto.spec.GCMParameterSpec
  * which apps go through it, and whether their destinations are logged. The last proxy is kept so that,
  * when the tool is stopped as the tunnel starts, the chained apps still wait instead of going directly.
  *
- * The password Watch offers for the tool's proxy is made here, once, and kept encrypted under a key in
+ * The password the network part offers for the tool's proxy is made here, once, and kept encrypted under a key in
  * the Android Keystore; it is shown to the user to set in the tool, and never logged.
  */
 class ChainSettings private constructor(private val prefs: SharedPreferences) {
@@ -43,7 +43,7 @@ class ChainSettings private constructor(private val prefs: SharedPreferences) {
 
     /**
      * Whether the chosen apps' UDP goes through the tool too (ADR 0041, decision 5). Off unless the user turns it on:
-     * no tool is known to tie its UDP relay to the app that opened it, so while the relay carries Watch's
+     * no tool is known to tie its UDP relay to the app that opened it, so while the relay carries the network part's
      * datagrams, any app on the phone can send through it, password or not. Off, the chain is TCP only.
      */
     var udp: Boolean
@@ -71,11 +71,11 @@ class ChainSettings private constructor(private val prefs: SharedPreferences) {
         }
     }
 
-    /** A tool's proxy as Watch last found it. */
+    /** A tool's proxy as the network part last found it. */
     data class Remembered(val packageName: String, val host: String, val port: Int, val udp: Boolean)
 
     /**
-     * The password Watch offers for the tool's proxy, made on first use: 20 characters of letters and
+     * The password the network part offers for the tool's proxy, made on first use: 20 characters of letters and
      * digits, about 116 bits, with no character a keyboard or a tool's settings could mangle. Null when
      * the Keystore cannot keep it.
      */
@@ -119,7 +119,7 @@ class ChainSettings private constructor(private val prefs: SharedPreferences) {
     }
 
     companion object {
-        /** The user name Watch offers with its password; Hiddify's is fixed (data/tools). */
+        /** The user name the network part offers with its password; Hiddify's is fixed (data/tools). */
         const val USER = "datapavan"
         private const val HIDDIFY = "app.hiddify.com"
 

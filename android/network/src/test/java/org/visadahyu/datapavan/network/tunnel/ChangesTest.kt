@@ -9,9 +9,9 @@ import org.junit.Assert.assertTrue
 import org.junit.Test
 
 /**
- * A change of the configurations from Watch's screen ends alone when the store throws (W7, part 2, fix round,
+ * A change of the configurations from the network screen ends alone when the store throws (W7, part 2, fix round,
  * security review M3): a full disk, a Keystore error and a slot removed while the confirmation was open each give a
- * reason to say, never an exception on the store's worker, which would end Watch's process and the VPN with it; the
+ * reason to say, never an exception on the store's worker, which would end the network process and the VPN with it; the
  * store stays as it was, and the configuration's bytes are zeroed whatever happens.
  */
 class ChangesTest {

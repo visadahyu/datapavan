@@ -3,8 +3,9 @@ package org.visadahyu.datapavan.network.blocking
 /**
  * The setting tracker blocking is handed to the engine in ([org.visadahyu.datapavan.network.Engine.nativeBlocking]), as a
  * pure function the JVM tests hold: one `key value...` a line, whole each time, so that nothing the engine holds is
- * older than what Watch keeps. The times are what is left now, at most each allowance's length ([Allowances.left]);
- * the engine turns them into deadlines on the time since the phone started, which no clock change moves.
+ * older than what the network part keeps. The times are what is left now, at most each allowance's length
+ * ([Allowances.left]); the engine turns them into deadlines on the time since the phone started, which no clock change
+ * moves.
  */
 object Handover {
     /**

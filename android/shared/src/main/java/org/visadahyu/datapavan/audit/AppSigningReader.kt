@@ -10,7 +10,7 @@ import java.util.Locale
 /**
  * The signing certificates of an installed app, as SHA-256 of each certificate the way apksigner
  * prints it, for matching against ADR 0018's list. [info] must be read with
- * `PackageManager.GET_SIGNING_CERTIFICATES`. Shared by the audit app and Watch (android/shared).
+ * `PackageManager.GET_SIGNING_CERTIFICATES`. Shared by the audit app and the network part (android/shared).
  */
 fun appSigning(info: PackageInfo): AppSigning? {
     val signing = info.signingInfo ?: return null

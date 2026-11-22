@@ -9,10 +9,10 @@ import org.visadahyu.datapavan.network.tunnel.Import
 import org.visadahyu.datapavan.network.ui.TunnelsView
 
 /**
- * What Watch's screen holds of the WireGuard configurations across its recreation (W7, part 2, fix round, screens
+ * What the network screen holds of the WireGuard configurations across its recreation (W7, part 2, fix round, screens
  * review M1): a rotation, a dark-mode switch or a font change makes the screen anew, and the confirmation the user
  * had open, with its name and ticks, comes back with it, as does an answer the store's worker gives meanwhile. The
- * configuration on its way is held here, in Watch's process alone, never in a saved state, which Android copies out
+ * configuration on its way is held here, in the network process alone, never in a saved state, which Android copies out
  * of the process; its bytes are zeroed when it is saved or cancelled, and when the screen finishes ([onCleared]).
  */
 internal class TunnelModel : ViewModel() {

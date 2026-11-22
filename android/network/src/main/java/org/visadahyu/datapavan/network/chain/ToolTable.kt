@@ -24,7 +24,7 @@ data class KnownTool(
     /** Its SOCKS5 proxy takes host names, which ADR 0038 needs. */
     val names: Boolean?,
 ) {
-    /** The listeners Watch may greet: SOCKS5 ones only, on the loopback. */
+    /** The listeners the network part may greet: SOCKS5 ones only, on the loopback. */
     val socksListeners: List<Listener> get() = listeners.filter { it.socks }
 }
 

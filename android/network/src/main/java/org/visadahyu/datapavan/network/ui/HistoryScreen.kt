@@ -169,8 +169,8 @@ internal fun HistoryScreen(
                     val proxy = entry.proxy?.let { proxyFacts(it, entry.ip, entry.port, entry.asn, appGroup, companies) }
                     val bytes = stringResource(R.string.now_destination_bytes, size(context, entry.sent), size(context, entry.received))
                     when (val why = History.leftOut(entry, view.tool)) {
-                        // A proxy's flow the engine left out for the switch: its kind, how Watch knows, and the
-                        // facts that name nothing (ADR 0052).
+                        // A proxy's flow the engine left out for the switch: its kind, how the network part knows, and
+                        // the facts that name nothing (ADR 0052).
                         History.LeftOut.PROXY -> HiddenProxy(
                             proxyRow(checkNotNull(proxy), past = true), bytes, onLogSwitch,
                             marksOf(emptyList(), appGroup, trackers, companies, entry.proxy?.trackers.orEmpty()),
@@ -226,7 +226,7 @@ internal fun leftOutWords(why: History.LeftOut): Int = when (why) {
     History.LeftOut.PROXY, History.LeftOut.TOOL_SERVERS, History.LeftOut.NO_ROUTE -> R.string.history_left_out_off
 }
 
-/** How long the log keeps its records and how it keeps them shut, as Watch's screen says it (ADR 0037). */
+/** How long the log keeps its records and how it keeps them shut, as the network screen says it (ADR 0037). */
 @Composable
 private fun LockFacts(view: HistoryView) {
     if (view.retentionDays == 0) {

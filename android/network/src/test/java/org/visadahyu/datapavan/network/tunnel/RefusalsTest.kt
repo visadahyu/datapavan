@@ -12,7 +12,7 @@ import org.visadahyu.datapavan.network.tunnel.qr.QrDecode
 /**
  * Every refusal the engine can give has words on the screen (W7, part 2): the codes are read from the parser's own
  * source (core/net's `Refusal::code`) and the bridge's (core/network-jni), so that a code added there without words
- * here fails this test; and each string they name is in Watch's strings.
+ * here fails this test; and each string they name is in the network part's strings.
  */
 class RefusalsTest {
     private val root = File("../..")
@@ -34,7 +34,10 @@ class RefusalsTest {
     private fun stringName(id: Int): String? =
         (R.string::class.java.fields + R.plurals::class.java.fields).firstOrNull { it.getInt(null) == id }?.name
 
-    /** Every English strings file of Watch: strings.xml, and strings_untranslated.xml while strings wait for ADR 0030. */
+    /**
+     * Every English strings file of the network part: strings.xml, and strings_untranslated.xml while strings wait for
+     * ADR 0030.
+     */
     private fun strings(): String = listOf("strings.xml", "strings_untranslated.xml")
         .map { File("src/main/res/values/$it") }.filter { it.isFile }
         .joinToString("\n") { it.readText() }
@@ -52,7 +55,7 @@ class RefusalsTest {
             assertNotNull("no string for $code", name)
             // Each code's own words, by the strings' names, so that two codes' words cannot change places unseen.
             assertEquals("refused_" + code.replace('-', '_'), name)
-            assertTrue("$name is not in Watch's strings", xml.contains("name=\"$name\""))
+            assertTrue("$name is not in the network part's strings", xml.contains("name=\"$name\""))
         }
         assertNull(Refusals.of("never-given"))
     }
@@ -75,7 +78,10 @@ class RefusalsTest {
         assertEquals("each its own", names.size, names.toSet().size)
     }
 
-    /** The engine's bound is said with the number Watch keeps, in a plural, never written into the words (m8). */
+    /**
+     * The engine's bound is said with the number the network part keeps, in a plural, never written into the words
+     * (m8).
+     */
     @Test
     fun the_bound_is_said_with_the_stores_number() {
         assertEquals(R.plurals.refused_too_many, Refusals.of("too-many"))

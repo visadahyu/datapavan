@@ -10,7 +10,7 @@ import android.util.Log
 import java.net.InetSocketAddress
 import org.visadahyu.datapavan.network.guides.Guides
 
-/** Finding the user's tool from any part of Watch (W6). Blocking: call it off the main thread. */
+/** Finding the user's tool from any part of the network part (W6). Blocking: call it off the main thread. */
 object Tools {
     /** Android numbers users by the hundred thousand UIDs (`UserHandle.PER_USER_RANGE`). */
     private const val PER_USER_RANGE = 100_000
@@ -33,7 +33,7 @@ object Tools {
     private const val TEST_ASSET = "tools-test.tsv"
 
     /**
-     * Searches for the user's tool once. [from] names the part of Watch that asks (the screen, the
+     * Searches for the user's tool once. [from] names the part of the network part that asks (the screen, the
      * service), for the debug log: only a debuggable build writes the search's steps to Android's log,
      * under the tag [TAG]. A release build writes nothing there, since the lines name the user's tool.
      */

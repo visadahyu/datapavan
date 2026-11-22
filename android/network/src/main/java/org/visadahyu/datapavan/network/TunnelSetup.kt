@@ -1,23 +1,23 @@
 package org.visadahyu.datapavan.network
 
 /**
- * What of a tunnel's setup decides whether the running engine may take the tunnel when Watch sets it up
+ * What of a tunnel's setup decides whether the running engine may take the tunnel when the network part sets it up
  * again (ADR 0044, unit 12b): the tunnel's [addresses], to which the apps' connections and the engine's
- * listeners are bound, and the apps Watch handed Android's `Builder`, in the order it handed them.
+ * listeners are bound, and the apps the network part handed Android's `Builder`, in the order it handed them.
  *
  * Android keeps the VPN network, and updates it in place, only when `allowBypass` and the allowed and
  * disallowed apps are as before, the apps compared as ordered lists (AOSP's
- * `Vpn.updateLinkPropertiesInPlaceIfPossible`, read in review, not measured on a device); Watch never calls
+ * `Vpn.updateLinkPropertiesInPlaceIfPossible`, read in review, not measured on a device); the network part never calls
  * `allowBypass`, so only the lists can differ. Otherwise Android connects a new network, with a new netId,
  * before the old one goes, and netd marks the packets that arrive on the tunnel with the network's netId,
- * which the connections Watch's engine accepted keep (`tcp_fwmark_accept`): once the old network goes they
+ * which the connections the network part's engine accepted keep (`tcp_fwmark_accept`): once the old network goes they
  * route nowhere, and a new engine, whose connections reset at once, is the better end for them.
  */
 internal data class TunnelSetup(
     val addresses: TunnelAddresses.Set,
-    /** The apps only allowed in the tunnel, in the order Watch added them; debug builds' test only. */
+    /** The apps only allowed in the tunnel, in the order the network part added them; debug builds' test only. */
     val allowedApps: List<String>,
-    /** The apps left out of the tunnel, in the order Watch added them. */
+    /** The apps left out of the tunnel, in the order the network part added them. */
     val disallowedApps: List<String>,
 ) {
     companion object {

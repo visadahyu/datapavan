@@ -31,11 +31,11 @@ import org.visadahyu.datapavan.network.activity.Snapshot
  * what the user turned on can be turned off), or when a row of "Now" or the history linked to it.
  */
 internal object LogSwitch {
-    /** The places Watch's screen draws it, in the screen's order. */
+    /** The places the network screen draws it, in the screen's order. */
     enum class Place { CHAIN, TUNNELS, ALONE }
 
     /**
-     * What Watch's screen knows for it: whether an app's own proxy was seen since the engine started
+     * What the network screen knows for it: whether an app's own proxy was seen since the engine started
      * ([proxiesSeen]), whether a row linked to it ([asked], kept across a rotation), and how many links are still
      * to bring it into view ([asks]).
      */
@@ -65,9 +65,9 @@ internal object LogSwitch {
     fun proxiesSeen(counters: LongArray): Boolean = counters.getOrElse(DECLARED) { 0 } + counters.getOrElse(INFERRED) { 0 } > 0
 
     /**
-     * Whether a proxy was seen, read again from the engine's [counters] while Watch is [running]: once seen, it stays
-     * so until Watch stops, so that the moment between two engines of a hand-over, which reads no counter, does not
-     * take the switch away.
+     * Whether a proxy was seen, read again from the engine's [counters] while the network part is [running]: once seen,
+     * it stays so until the network part stops, so that the moment between two engines of a hand-over, which reads no
+     * counter, does not take the switch away.
      */
     fun seen(before: Boolean, running: Boolean, counters: () -> LongArray): Boolean = running && (before || proxiesSeen(counters()))
 
@@ -79,10 +79,10 @@ internal object LogSwitch {
     const val INFERRED = 63
 
     /**
-     * The flags of a row's link to the switch (`MainActivity.logSwitchIntent`): single-top only, so that Watch's screen
-     * opens above "Now" and Back comes back to where the user was, the same app's row or its history (W8 part 3a, the
-     * brief's point 11). `CLEAR_TOP` closed "Now" and everything above Watch's screen; a new task or a reorder would take
-     * the user elsewhere on Back.
+     * The flags of a row's link to the switch (`MainActivity.logSwitchIntent`): single-top only, so that the network
+     * screen opens above "Now" and Back comes back to where the user was, the same app's row or its history (W8 part
+     * 3a, the brief's point 11). `CLEAR_TOP` closed "Now" and everything above the network screen; a new task or a
+     * reorder would take the user elsewhere on Back.
      */
     const val LINK_FLAGS = android.content.Intent.FLAG_ACTIVITY_SINGLE_TOP
 }
@@ -91,7 +91,7 @@ internal object LogSwitch {
 internal fun Modifier.bringingIntoView(requester: BringIntoViewRequester?): Modifier =
     if (requester == null) this else bringIntoViewRequester(requester)
 
-/** The link under a row that the switch leaves out: it opens Watch's screen at the switch. */
+/** The link under a row that the switch leaves out: it opens the network screen at the switch. */
 @Composable
 internal fun LogSwitchLink(onClick: () -> Unit) {
     TextButton(onClick = onClick) { Text(stringResource(R.string.log_switch_open)) }

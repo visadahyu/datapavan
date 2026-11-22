@@ -14,7 +14,7 @@ import java.io.InputStream
  * system file picker (ADR 0015, decision 11). Datapavan has no network access, so this is the only
  * way data changes between app updates. An imported pack is stored as it arrived, signature and all,
  * in app-private storage that backups exclude, and its signature is checked again whenever it is
- * loaded. [native] is the Rust reader of the process: the audit's, or Watch's in Watch's process, which
+ * loaded. [native] is the Rust reader of the process: the audit's, or the network part's in the network process, which
  * reads the same files with the same rules (W5's third part).
  */
 class DataPackStore private constructor(
@@ -24,7 +24,7 @@ class DataPackStore private constructor(
     private val native: PackNative,
     /**
      * Whether this store deletes an imported pack that no longer applies: the audit's, which imports packs,
-     * does; Watch's, which only reads them in a process of its own, never does, so that it cannot delete a
+     * does; the network part's, which only reads them in a process of its own, never does, so that it cannot delete a
      * pack the audit is writing that moment (review c1 of W5's third part, engine, m5).
      */
     private val cleans: Boolean,
@@ -131,8 +131,8 @@ class DataPackStore private constructor(
         }
 
         /**
-         * A store of its own, which reads the pack again and is gone with its last reference: for Watch, which
-         * needs one file of the pack now and then and keeps no copy of the pack in its memory.
+         * A store of its own, which reads the pack again and is gone with its last reference: for the network part,
+         * which needs one file of the pack now and then and keeps no copy of the pack in its memory.
          */
         fun read(context: Context, native: PackNative): DataPackStore =
             DataPackStore(context.assets, context.contentResolver, File(context.noBackupFilesDir, "datapack"), native, cleans = false)

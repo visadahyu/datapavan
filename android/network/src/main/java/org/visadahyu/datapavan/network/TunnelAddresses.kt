@@ -7,13 +7,13 @@ import java.net.InetAddress
  * The tunnel's addresses (ADR 0041, decision 3), the same two sets as the engine's `Addresses` in
  * core/net/src/engine.rs; [TunnelAddressesTest] reads that file and fails if they drift apart.
  *
- * Any app can read the tunnel's address and prefix. Watch takes the ones that NetGuard, TrackerControl
+ * Any app can read the tunnel's address and prefix. The network part takes the ones that NetGuard, TrackerControl
  * and InviZible Pro give their tunnels ([COMMON]): an app that reads them finds a local firewall, the
- * kind of app Watch is, not Watch itself. The project stays open about what it is; the phone does not
- * tell other apps which tool its user chose.
+ * kind of app the network part is, not the network part itself. The project stays open about what it is; the phone does
+ * not tell other apps which tool its user chose.
  *
  * A network that uses those addresses itself, as Comcast Business gateways do with 10.1.10.1, would lose
- * its router and resolver to the tunnel, so there Watch takes its earlier, rarer addresses ([SPARE]).
+ * its router and resolver to the tunnel, so there the network part takes its earlier, rarer addresses ([SPARE]).
  */
 object TunnelAddresses {
     /** One set: the tunnel's own address (a /32 or a /128), the engine's fake peer, and its DNS server. */

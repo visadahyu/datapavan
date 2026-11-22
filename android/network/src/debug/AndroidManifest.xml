@@ -3,7 +3,7 @@
     xmlns:tools="http://schemas.android.com/tools">
 
     <!--
-        Debug builds only: the emulator checks (scripts/verify-network.sh and the others) start Watch's
+        Debug builds only: the emulator checks (scripts/verify-network.sh and the others) start the network part's
         tunnel through its screen with adb, which can open only an exported activity. The screen honours
         their extras only in a debuggable build (MainActivity.kt). Release builds keep it unexported, and
         app/build.gradle.kts checks that.

@@ -8,18 +8,18 @@ import java.nio.file.Files
 import java.nio.file.StandardCopyOption
 
 /**
- * The WireGuard configurations Watch keeps (W7, part 2, ADR 0035), each in a slot of its own, numbered from 1 and
- * never numbered again while an app is routed to it, in files under [dir], which is in Watch's `noBackupFilesDir`:
- * out of cloud backup and device-to-device transfer, as the application's data extraction rules also say of every
- * file of both editions.
+ * The WireGuard configurations the network part keeps (W7, part 2, ADR 0035), each in a slot of its own, numbered from
+ * 1 and never numbered again while an app is routed to it, in files under [dir], which is in the network part's
+ * `noBackupFilesDir`: out of cloud backup and device-to-device transfer, as the application's data extraction rules
+ * also say of every file of both editions.
  *
  * Two Keystore keys (AES-256-GCM, [KeystoreWrap]; the maintainer's decision of 2026-11-20, ADR 0035): key A ([wrap])
  * opens at any time, key B ([unlockedWrap]) only while the phone is unlocked (`setUnlockedDeviceRequired`). Each
  * configuration's text and name are wrapped apart, with the slot's number bound to each, under key B while ADR
  * 0047's profile for phones that may be searched is on ([State.profile], [setProfile]), under key A otherwise; each
- * file says which key wrapped it. What decides a route is wrapped under key A alone, so that Watch, started again
- * while the phone is locked, still knows which apps to hold and holds them, never sending one directly: the slots in
- * order, the default first, "Local network directly", the next number, the profile, and each app routed to a slot
+ * file says which key wrapped it. What decides a route is wrapped under key A alone, so that the network part, started
+ * again while the phone is locked, still knows which apps to hold and holds them, never sending one directly: the slots
+ * in order, the default first, "Local network directly", the next number, the profile, and each app routed to a slot
  * by package name ([State]).
  *
  * The text never becomes a `String`: it is handed in and out as bytes, which the caller zeroes after use. A change
@@ -99,7 +99,10 @@ class TunnelStore(
         /** The key works only on an unlocked phone, which is locked. */
         data object Locked : Name
 
-        /** The Keystore or the disk erred: it cannot be opened now, and Watch tries again ([Opened.Unavailable]). */
+        /**
+         * The Keystore or the disk erred: it cannot be opened now, and the network part tries again
+         * ([Opened.Unavailable]).
+         */
         data object Unavailable : Name
 
         /** The key is gone or the wrap damaged: the configuration cannot be opened again. */

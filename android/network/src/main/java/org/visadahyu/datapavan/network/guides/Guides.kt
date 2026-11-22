@@ -7,7 +7,10 @@ import org.visadahyu.datapavan.network.chain.KnownTool
 /** A link from the chain section to one installed tool's guide (W8, part 3b). */
 data class GuideLink(val guide: String, val packageName: String, val name: String, val page: Page)
 
-/** The guides from any part of Watch: the chain section, the guide's screen, the tool's finder and, in W9, onboarding. */
+/**
+ * The guides from any part of the network part: the chain section, the guide's screen, the tool's finder and, in W9,
+ * onboarding.
+ */
 object Guides {
     /**
      * The guides as the build put them in the assets, and in debug builds also the test tool's (src/debug/assets),
@@ -29,8 +32,8 @@ object Guides {
 
     /**
      * The guide of each tool of the table installed here, in the guides' order. Android hides a VPN's owner from other
-     * apps (FoundTool.ownerConfirmed), so Watch cannot tell which tool runs as the VPN now: it links every installed
-     * one, rather than "the tool running as a VPN". Blocking: call it off the main thread.
+     * apps (FoundTool.ownerConfirmed), so the network part cannot tell which tool runs as the VPN now: it links every
+     * installed one, rather than "the tool running as a VPN". Blocking: call it off the main thread.
      */
     fun installed(book: GuideBook, table: List<KnownTool>, isInstalled: (String) -> Boolean): List<GuideLink> {
         val names = table.associate { it.packageName to it.name }
@@ -41,8 +44,8 @@ object Guides {
 
     /**
      * The table with the listeners the guides name for tools whose profile sets them (tools.tsv's `profile`): the guide
-     * has the user set that port in the tool, so Watch's finder greets it there, and only there (ADR 0041). The owner
-     * Android names for the port still decides whether it is the tool's.
+     * has the user set that port in the tool, so the network part's finder greets it there, and only there (ADR 0041).
+     * The owner Android names for the port still decides whether it is the tool's.
      */
     fun withNamedPorts(table: List<KnownTool>, book: GuideBook): List<KnownTool> = table.map { tool ->
         val guide = book.guideOf(tool.packageName)

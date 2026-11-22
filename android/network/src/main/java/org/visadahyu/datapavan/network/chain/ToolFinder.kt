@@ -13,16 +13,16 @@ data class FoundTool(
     val uid: Int,
     val host: String,
     val port: Int,
-    /** The proxy refused Watch's greeting without a password: the user set one in the tool. */
+    /** The proxy refused the network part's greeting without a password: the user set one in the tool. */
     val needsPassword: Boolean,
     /**
      * Whether Android named the tool as the owner of the port: true, false (another app listens there,
-     * so it is not this tool), or null when Android could not say, as when Watch is not the active VPN.
+     * so it is not this tool), or null when Android could not say, as when the network part is not the active VPN.
      */
     val ownerConfirmed: Boolean?,
 )
 
-/** What Watch found of the user's tools. */
+/** What the network part found of the user's tools. */
 sealed interface ToolSearch {
     /** No tool of the table with a proxy mode is installed. */
     data object NoneInstalled : ToolSearch
@@ -46,7 +46,7 @@ class ToolFinder(
     private val table: List<KnownTool>,
     /** Android's owner of the TCP connection from `local` to `remote`, or null when it cannot say. */
     private val ownerOf: (local: InetSocketAddress, remote: InetSocketAddress) -> Int?,
-    /** The Android user Watch runs in: some tools add its number to their port (0 in the main user). */
+    /** The Android user the network part runs in: some tools add its number to their port (0 in the main user). */
     private val userId: Int,
     /**
      * Why a port was passed over, and what the search found, for debug builds' log (Tools.search):
@@ -55,7 +55,7 @@ class ToolFinder(
      */
     private val note: (String) -> Unit = {},
     /**
-     * The tools whose refused ports are tried again after a pause: the one Watch found last
+     * The tools whose refused ports are tried again after a pause: the one the network part found last
      * (ChainSettings.lastTool), so that a user who never ran a tool in proxy mode does not wait.
      */
     private val retryRefused: Set<String> = emptySet(),

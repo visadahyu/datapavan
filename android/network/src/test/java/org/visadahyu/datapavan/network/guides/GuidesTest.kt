@@ -17,7 +17,10 @@ import org.visadahyu.datapavan.network.chain.ToolTable
 import org.visadahyu.datapavan.network.ui.chainGuideLinks
 import kotlin.concurrent.thread
 
-/** The per-tool guides as Watch reads them (W8, part 3b): the data, its words, the chain section's links and the finder. */
+/**
+ * The per-tool guides as the network part reads them (W8, part 3b): the data, its words, the chain section's links and
+ * the finder.
+ */
 class GuidesTest {
     private val data = File("../../data/tools")
     private val book = GuideBook.parse(
@@ -49,7 +52,10 @@ class GuidesTest {
         assertEquals(Page.VPN, book.guideOf("org.amnezia.awg")!!.page)
     }
 
-    /** Every string the data or a page names is one of Watch's, in the table the screen looks names up in, with as many places as are filled. */
+    /**
+     * Every string the data or a page names is one of the network part's, in the table the screen looks names up in,
+     * with as many places as are filled.
+     */
     @Test
     fun everyStringOfTheDataIsTheModules() {
         for (guide in book.guides) {
@@ -72,7 +78,7 @@ class GuidesTest {
 
     /**
      * The guides' words keep ADR 0025's list (decision 4: no word that judges), and the brief's: they never recommend a
-     * tool or point to a download. The WireGuard page quotes Watch's own heading as it reads.
+     * tool or point to a download. The WireGuard page quotes the network part's own heading as it reads.
      */
     @Test
     fun theGuidesWordsNeitherJudgeNorRecommend() {
@@ -154,8 +160,8 @@ class GuidesTest {
     }
 
     /**
-     * Watch's screen says what the website says: each block's English sentence, filled as the site fills it, is on the
-     * built page, in the same order (scripts/guides.py writes the pages from the same data and words).
+     * The network screen says what the website says: each block's English sentence, filled as the site fills it, is on
+     * the built page, in the same order (scripts/guides.py writes the pages from the same data and words).
      */
     @Test
     fun theScreenSaysWhatTheSiteSays() {

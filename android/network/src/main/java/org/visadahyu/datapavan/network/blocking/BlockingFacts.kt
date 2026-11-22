@@ -17,12 +17,12 @@ import org.visadahyu.datapavan.network.NetworkPacks
 import org.visadahyu.datapavan.network.chain.ChainSettings
 
 /**
- * What Watch worked out for tracker blocking from the phone and the data pack (W8, part 3a; ADR 0053), for the engine's
- * setting ([Handover]) and for "Now" and the history alike, so that the screens say what the engine was told: the
- * [table] as Kotlin read it ([BlockingTable.EMPTY] for none, or one refused), the engine's [counts] of it (rows, `block`,
- * `keep`, `code`; empty for none), the εxodus [trackers] that name its rows, the UIDs [covered], the [browsers] found,
- * the rows [decided] for each covered UID ([Grades.forApp]), and each installed package's UID ([uids]), by which
- * allowances kept by package are handed over. Nothing here is written anywhere.
+ * What the network part worked out for tracker blocking from the phone and the data pack (W8, part 3a; ADR 0053), for
+ * the engine's setting ([Handover]) and for "Now" and the history alike, so that the screens say what the engine was
+ * told: the [table] as Kotlin read it ([BlockingTable.EMPTY] for none, or one refused), the engine's [counts] of it
+ * (rows, `block`, `keep`, `code`; empty for none), the εxodus [trackers] that name its rows, the UIDs [covered], the
+ * [browsers] found, the rows [decided] for each covered UID ([Grades.forApp]), and each installed package's UID
+ * ([uids]), by which allowances kept by package are handed over. Nothing here is written anywhere.
  */
 internal class BlockingFacts(
     val table: BlockingTable,
@@ -142,8 +142,8 @@ internal class BlockingFacts(
 }
 
 /**
- * The facts the running service last handed the engine, for the screens of Watch's process; null before it handed any
- * in this process, and then a screen reads its own ([BlockingFacts.read] with no hand).
+ * The facts the running service last handed the engine, for the screens of the network process; null before it handed
+ * any in this process, and then a screen reads its own ([BlockingFacts.read] with no hand).
  */
 internal object BlockingState {
     private val state = MutableStateFlow<BlockingFacts?>(null)

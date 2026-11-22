@@ -74,8 +74,8 @@ object QrDecode {
     }
 
     /**
-     * What Watch reads of the decoder's answer: the text, bounded again here, since a decoder a picture subverted
-     * may send anything; else the failure its number names, and "stopped" for a number that names none.
+     * What the network part reads of the decoder's answer: the text, bounded again here, since a decoder a picture
+     * subverted may send anything; else the failure its number names, and "stopped" for a number that names none.
      */
     fun fromAnswer(text: ByteArray?, failure: IntArray): Result {
         if (text != null) {

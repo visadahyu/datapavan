@@ -25,7 +25,7 @@ data class Snapshot(
     /** When the screen last came on, the start of the window [SINCE_SCREEN_ON]; 0 when not known. */
     val screenOnSince: Long,
     /**
-     * The window [WHILE_OFF]: when the screen went off, 0 for no window (it has not gone off since Watch
+     * The window [WHILE_OFF]: when the screen went off, 0 for no window (it has not gone off since the network part
      * started, or the live memory was cleared since), and when it came on again, 0 while it is still off.
      */
     val offFrom: Long,
@@ -54,7 +54,10 @@ data class Snapshot(
          * off (ADR 0046, decision 3, as decided on 2026-11-19): the engine says so, the view does not guess it.
          */
         val serversHidden: Boolean = false,
-        /** The WireGuard tunnel it went through with its destinations not kept, by Watch's number; 0 for none. */
+        /**
+         * The WireGuard tunnel it went through with its destinations not kept, by the network part's number; 0 for
+         * none.
+         */
         val throughTunnel: Long = 0,
     ) {
         fun up(window: Int, column: Int): Long = bytes[(window * COLUMNS + column) * 2]

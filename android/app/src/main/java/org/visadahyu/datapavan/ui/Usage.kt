@@ -81,7 +81,7 @@ internal fun UsageAccessCard() {
         Column(Modifier.padding(12.dp)) {
             Text(stringResource(R.string.usage_access_title), style = MaterialTheme.typography.titleSmall)
             Spacer(Modifier.height(4.dp))
-            // Advanced also reads which app was on screen and when, for Watch (ADR 0046): its own text says so.
+            // Advanced also reads which app is on screen and when, for the network part (ADR 0046): it says so.
             val body = if (BuildConfig.ADVANCED) R.string.usage_access_body_advanced else R.string.usage_access_body
             Text(stringResource(body), style = MaterialTheme.typography.bodyMedium)
             // Datapavan's name for the access stays; the phone's own names for its page and switch follow, where the

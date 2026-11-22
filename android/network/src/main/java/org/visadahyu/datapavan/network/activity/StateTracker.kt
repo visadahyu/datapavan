@@ -25,7 +25,7 @@ import java.util.concurrent.atomic.AtomicBoolean
 import org.visadahyu.datapavan.audit.hasUsageAccess
 
 /**
- * Reads the apps' states from Android's usage events for the engine (ADR 0046, decision 1), in Watch's
+ * Reads the apps' states from Android's usage events for the engine (ADR 0046, decision 1), in the network part's
  * process beside the tunnel it serves; [UsageStates] places them. It lives in `:network`, which cannot
  * depend on `:app`, and needs nothing of the audit but the rule of usage access, which `android/shared`
  * holds for both.
@@ -35,7 +35,7 @@ import org.visadahyu.datapavan.audit.hasUsageAccess
  * left some still waiting), at most every 5 seconds with the screen on and once a minute with it off, an
  * ask that comes sooner waiting for its turn ([ReadingRules]); once when the screen turns off, for what was
  * sent while it was on; at once when the screen comes on, as the live view may open, when the wall clock is
- * set, and when Watch starts and stops. No alarm wakes the phone: a reading waiting for its turn is made
+ * set, and when the network part starts and stops. No alarm wakes the phone: a reading waiting for its turn is made
  * when the phone is awake. The screen's state comes from the events and from `ACTION_SCREEN_ON` and
  * `ACTION_SCREEN_OFF`, received while the tunnel runs, which need no permission.
  *
@@ -280,8 +280,8 @@ internal class StateTracker(private val context: Context, private val tell: (Byt
      * The usage events from `from` to `until`, of the kinds the states need; null when Android refuses them.
      * From Android 15 the query asks for those kinds only, so that the day read back after a start copies no
      * other event across (review b1, Kotlin, nit 10). Called only once [hasUsageAccess] said yes: usage
-     * access is the package's, declared by the audit's manifest (`:app`, ADR 0022), which Watch's process
-     * shares, so Watch's library declares nothing new (ADR 0046: "No new permission").
+     * access is the package's, declared by the audit's manifest (`:app`, ADR 0022), which the network process
+     * shares, so the network part's library declares nothing new (ADR 0046: "No new permission").
      */
     @SuppressLint("MissingPermission")
     private fun events(from: Long, until: Long): List<UsageStates.Event>? {
@@ -327,7 +327,7 @@ internal class StateTracker(private val context: Context, private val tell: (Byt
         /** The longest Android 12 and later may wait before it shows a foreground service's notification. */
         private const val NOTIFICATION_DELAY_MS = 10_000L
 
-        /** How long Watch's stop waits for its last reading. */
+        /** How long the network part's stop waits for its last reading. */
         private const val STOP_WAIT_MS = 2_000L
 
         private val KINDS = mapOf(

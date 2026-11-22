@@ -6,9 +6,9 @@ import org.visadahyu.datapavan.network.log.LogRecord
 
 /**
  * What "Now" and each app's history say of an app's own proxy (W8, part 2a; ADR 0052), as a pure function the JVM
- * tests hold: the proxy's kind, how Watch knows it (read from the connection, or inferred from where and how it
- * connects), where it is, and the facts beside it. Never who runs it: an address's organisation hosts it, it does not
- * run it (ADR 0036, decision 4); never whether the user chose it; never a password, which the engine never keeps.
+ * tests hold: the proxy's kind, how the network part knows it (read from the connection, or inferred from where and how
+ * it connects), where it is, and the facts beside it. Never who runs it: an address's organisation hosts it, it does
+ * not run it (ADR 0036, decision 4); never whether the user chose it; never a password, which the engine never keeps.
  */
 object ProxyFacts {
     /** Where a proxy's address is: on the user's local network, in a network the organisation table names, or neither. */
@@ -27,9 +27,9 @@ object ProxyFacts {
      * the switch ([LogRecord.Proxy.leftOut], never read from an address of zeros): then only the kind and the facts
      * that name nothing are shown. [at] is the proxy's own name or its address, with its port; [asked] the
      * destination asked for, with its port, for a declared proxy, and empty for a plain request's while the switch
-     * is off ([askedLeftOut]); [maker] the company whose network the address is not, where Watch can tell; [cover]
-     * and [coverOwner] the name an inferred proxy's hello sent and, where the owners' table names both, the company
-     * it belongs to beside the network's.
+     * is off ([askedLeftOut]); [maker] the company whose network the address is not, where the network part can tell;
+     * [cover] and [coverOwner] the name an inferred proxy's hello sent and, where the owners' table names both, the
+     * company it belongs to beside the network's.
      */
     data class Facts(
         val kind: Kind,
@@ -116,9 +116,9 @@ object ProxyFacts {
     val COUNTERS = 61..66
 
     /**
-     * The engine's counters as Watch's dump writes them: all of them in a debuggable build; in a release, the proxies'
-     * as `-`, in their places, since they say that apps on the phone used proxies of their own, which ADR 0047's
-     * searched phone must not show (fix round of W8 part 2a, S-m5).
+     * The engine's counters as the network part's dump writes them: all of them in a debuggable build; in a release,
+     * the proxies' as `-`, in their places, since they say that apps on the phone used proxies of their own, which ADR
+     * 0047's searched phone must not show (fix round of W8 part 2a, S-m5).
      */
     fun dumpedCounters(counters: LongArray, debuggable: Boolean): List<String> =
         counters.mapIndexed { i, n -> if (debuggable || i !in COUNTERS) n.toString() else "-" }
@@ -128,7 +128,8 @@ object ProxyFacts {
 
     /**
      * Whether an address is on the user's own network: private (10/8, 172.16/12, 192.168/16), link-local, or IPv6's
-     * unique local addresses (fc00::/7). Loopback never reaches Watch: a proxy on the phone itself is not seen.
+     * unique local addresses (fc00::/7). Loopback never reaches the network part: a proxy on the phone itself is not
+     * seen.
      */
     fun isLocal(address: InetAddress): Boolean = address.isSiteLocalAddress || address.isLinkLocalAddress ||
         (address is Inet6Address && (address.address[0].toInt() and 0xfe) == 0xfc)

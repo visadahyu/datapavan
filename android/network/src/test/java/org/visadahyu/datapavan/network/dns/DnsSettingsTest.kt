@@ -102,7 +102,7 @@ class DnsSettingsTest {
         )
     }
 
-    /** The security review's nit and review n2: Watch takes a DoH URL only as the engine reads it. */
+    /** The security review's nit and review n2: the network part takes a DoH URL only as the engine reads it. */
     @Test
     fun aDohUrlIsTakenOnlyAsTheEngineReadsIt() {
         for (url in listOf(

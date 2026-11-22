@@ -35,7 +35,7 @@ data class OwnerNotes(
 
 /**
  * Which company runs each SDK's service, which company controls which, and which company publishes
- * which app (`data/owners`, ADR 0020). In the shared module since W5's third part, so that Watch's "Now"
+ * which app (`data/owners`, ADR 0020). In the shared module since W5's third part, so that the network part's "Now"
  * tells a tracker of the app's own company group as the audit's app page does. The SDKs' class prefixes join the tracker scanner's signatures.
  * Same group means both sides lead, through parents that hold the whole or a majority, to the same
  * company on the data's date; anything not recorded gives no note at all, never a guess.

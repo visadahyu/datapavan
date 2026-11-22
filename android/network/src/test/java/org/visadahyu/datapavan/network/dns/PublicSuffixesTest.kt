@@ -27,7 +27,7 @@ class PublicSuffixesTest {
             SearchDomains.accepted("com net. corp.example. Example.ORG co.uk lan corp.example uk", shipped),
         )
         assertEquals("", SearchDomains.accepted("bad..example .example ex *.example", shipped))
-        // Without the list Watch cannot tell, and takes none.
+        // Without the list the network part cannot tell, and takes none.
         assertEquals("", SearchDomains.accepted("corp.example", PublicSuffixes.parse("")))
         assertEquals(16, SearchDomains.accepted((1..20).joinToString(" ") { "d$it.example" }, shipped).split(' ').size)
     }

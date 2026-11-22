@@ -50,7 +50,7 @@ private class Listing(
     fun library(file: String): String? = native.firstOrNull { it.first == file }?.second?.library
 
     companion object {
-        /** Off the main thread: Watch's library's list is some hundred kilobytes. */
+        /** Off the main thread: the network part's library's list is some hundred kilobytes. */
         fun load(context: Context): Listing {
             val files = BuildConfig.LICENCE_FILES.split(',').filter { it.isNotBlank() }
             val jvm = LicenceList.jvm(read(context, LicenceList.JVM_TABLE), LicenceList.edition(BuildConfig.ADVANCED, BuildConfig.PLAY))

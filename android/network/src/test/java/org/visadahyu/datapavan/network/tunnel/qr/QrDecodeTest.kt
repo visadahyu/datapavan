@@ -141,7 +141,7 @@ class QrDecodeTest {
 
     /**
      * The decoder's answer crosses the binder as primitives (fix round, security review m1): the text, or the failure's
-     * number; Watch bounds the text again and reads a number that names no failure as "stopped".
+     * number; the network part bounds the text again and reads a number that names no failure as "stopped".
      */
     @Test
     fun the_decoders_answer_is_primitives_and_the_caller_bounds_it_again() {

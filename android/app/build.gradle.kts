@@ -14,7 +14,7 @@ plugins {
 // The edition (ADR 0045; ADR 0031 for Google Play), chosen with -Pdatapavan.edition:
 // - "basic", the default: Datapavan Basic, which never has network access;
 // - "lite": Datapavan Basic for Google Play, under its own package, which Google signs;
-// - "advanced": Datapavan Advanced, which adds Watch's tunnel, log and chain (the :network library).
+// - "advanced": Datapavan Advanced, which adds the network part's tunnel, log and chain (the :network library).
 // A property rather than a product flavour, so that every task, output path and recipe (F-Droid,
 // scripts/reproducible.sh, CI) still builds Basic exactly as before.
 val edition = providers.gradleProperty("datapavan.edition").orNull ?: "basic"
@@ -54,14 +54,14 @@ val basicPermissions = mapOf(
     // androidx.core defines it, app-internal, for its non-exported receivers.
     "$editionApplicationId.DYNAMIC_RECEIVER_NOT_EXPORTED_PERMISSION" to "",
 )
-// What Watch adds in Advanced (ADR 0034).
+// What the network part adds in Advanced (ADR 0034).
 val networkPermissions = mapOf(
     // Sockets, to pass each app's traffic on to where it was going.
     "android.permission.INTERNET" to "",
     // Only Android 10 and 11 need it, to follow the network under the tunnel.
     "android.permission.CHANGE_NETWORK_STATE" to "30",
     "android.permission.POST_NOTIFICATIONS" to "",
-    // Android 17: other apps' traffic to the local network leaves through Watch's sockets.
+    // Android 17: other apps' traffic to the local network leaves through the network part's sockets.
     "android.permission.ACCESS_LOCAL_NETWORK" to "",
 )
 val allowedPermissions = if (advanced) basicPermissions + networkPermissions else basicPermissions
@@ -83,7 +83,7 @@ check(neverRequested.none { it in allowedPermissions }) { "The $edition allowlis
 val allowedPermissionDefinitions = listOf("$editionApplicationId.DYNAMIC_RECEIVER_NOT_EXPORTED_PERMISSION")
 // Exported components, each with the permission that guards it ("" for none): the launcher entry, and
 // androidx's profile installer, which only the shell's DUMP may reach. Advanced's debug builds also export
-// Watch's screen for the emulator checks (network/src/debug).
+// the network screen for the emulator checks (network/src/debug).
 val allowedExported = mapOf(
     "org.visadahyu.datapavan.MainActivity" to "",
     "androidx.profileinstaller.ProfileInstallReceiver" to "android.permission.DUMP",
@@ -106,15 +106,16 @@ val requiredLibraries = buildMap {
     if (advanced) put(networkLibrary, "Java_org_visadahyu_datapavan_network_Engine_nativeStart")
 }
 val forbiddenLibraries = if (advanced) emptyList() else listOf(networkLibrary)
-// The methods of NetworkVpnService that Watch's library calls back by name (core/network-jni/src/lib.rs), which
-// R8 must neither remove nor rename (network/proguard-rules.pro).
+// The methods of NetworkVpnService that the network part's library calls back by name (core/network-jni/src/lib.rs),
+// which R8 must neither remove nor rename (network/proguard-rules.pro).
 val jniCallbacks = if (advanced) listOf("ownerUid", "protectSocket", "logRecords", "statesWanted", "resolveEndpoint", "routeOfApp", "exchange", "dnsChanged") else emptyList()
 
 // The licence texts every APK carries under assets/licences/ (NOTICE, W7's fix round, review M4): NOTICE, LICENSE,
-// and the texts of every crate inside its native libraries (licences/, scripts/licences.py); Advanced adds Watch's
-// library's, with GotaTun's, whose package carries none. scripts/check.sh android checks the release APKs hold them.
-// The licence screen offers them in this order and reads its list of components from them (ui/LicenceList.kt), with
-// the table of the Java and Kotlin libraries, which checkJvmComponents holds to each variant's classpath (W7, part 2).
+// and the texts of every crate inside its native libraries (licences/, scripts/licences.py); Advanced adds the network
+// part's library's, with GotaTun's, whose package carries none. scripts/check.sh android checks the release APKs hold
+// them. The licence screen offers them in this order and reads its list of components from them (ui/LicenceList.kt),
+// with the table of the Java and Kotlin libraries, which checkJvmComponents holds to each variant's classpath (W7, part
+// 2).
 val licenceFiles = buildList {
     add("NOTICE")
     add("LICENSE")
@@ -150,7 +151,7 @@ android {
         // Basic on Google Play ("lite"): Google Play updates it, so it says nothing of newer versions; About
         // names both editions.
         buildConfigField("boolean", "PLAY", lite.toString())
-        // Whether Watch is in this build: the audit then opens it from its network page.
+        // Whether the network part is in this build: the audit then opens it from its network page.
         buildConfigField("boolean", "ADVANCED", advanced.toString())
         // What users are taught this edition never asks for, the build's own list, for the page "Is this copy
         // genuine?" (ADR 0045, decision 4).
@@ -196,7 +197,7 @@ android {
     }
 
     androidResources {
-        // Advanced: Watch's table from address to organisation (ADR 0036) is read in place, which needs
+        // Advanced: the network part's table from address to organisation (ADR 0036) is read in place, which needs
         // it stored.
         if (advanced) noCompress += "bin"
         generateLocaleConfig = true
@@ -489,8 +490,9 @@ abstract class BundledDataTask : DefaultTask() {
         val path = Regex("[A-Za-z0-9_-][A-Za-z0-9._-]*(/[A-Za-z0-9_-][A-Za-z0-9._-]*)*")
         val files = source.walkTopDown()
             .filter { it.isFile && it.parentFile != source && it.extension !in setOf("py", "sh") && !it.name.startsWith(".") }
-            // Datasets that only Watch uses go into Watch's APK, not the audit app's (ADR 0036): the
-            // organisation table, and the resolvers and the messengers (ADR 0052) compiled into Watch's engine.
+            // Datasets that only the network part uses go into Advanced's APK, not the audit app's (ADR 0036): the
+            // organisation table, and the resolvers and the messengers (ADR 0052) compiled into the network part's
+            // engine.
             .filter { it.relativeTo(source).invariantSeparatorsPath.substringBefore('/') !in setOf("dbip-asn", "resolvers", "messengers") }
             .map { it.relativeTo(source).invariantSeparatorsPath to it }
             .sortedBy { it.first }
@@ -642,7 +644,7 @@ abstract class ManifestAllowlistCheck : DefaultTask() {
 
 /**
  * Fails if a built APK lacks a native library the edition needs for a shipped ABI, if a library does not
- * export its JNI symbol, if it carries one the edition must not (Basic never carries Watch's engine), or if
+ * export its JNI symbol, if it carries one the edition must not (Basic never carries the network part's engine), or if
  * the APK's code lacks a method a library calls back by name: R8 would have removed or renamed it, and the
  * engine would fail at run time without a word.
  */
@@ -707,7 +709,7 @@ abstract class ApkNativeLibraryCheck : DefaultTask() {
                     .joinToString("") { entry -> String(zip.getInputStream(entry).use { it.readBytes() }, Charsets.ISO_8859_1) }
                 callbacks.get().forEach { name ->
                     if (!code.contains(name)) {
-                        throw GradleException("${element.outputFile}: no method $name in its code; Watch's library calls it by name (network/proguard-rules.pro)")
+                        throw GradleException("${element.outputFile}: no method $name in its code; the network part's library calls it by name (network/proguard-rules.pro)")
                     }
                     lines += "OK $apk keeps $name"
                 }

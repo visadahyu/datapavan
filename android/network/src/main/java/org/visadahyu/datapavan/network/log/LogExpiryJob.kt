@@ -9,11 +9,11 @@ import android.content.Context
 import java.util.concurrent.TimeUnit
 
 /**
- * Runs the connection log's expiry about every six hours, for the days when nothing else starts Watch
+ * Runs the connection log's expiry about every six hours, for the days when nothing else starts the network part
  * (ADR 0037): a tunnel turned off before a trip still loses its old days. Android decides when a job
  * runs, and on some makers' phones it seldom runs one for an app the user has not opened in a long time.
  * The job does not survive a restart of the phone (that would need the permission to start at boot,
- * which ADR 0034 does not give Watch); the next start of Watch's process schedules it again, and expires
+ * which ADR 0034 does not give the network part); the next start of the network process schedules it again, and expires
  * the log itself as it does.
  */
 class LogExpiryJob : JobService() {

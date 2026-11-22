@@ -3,13 +3,13 @@ package org.visadahyu.datapavan.network.tunnel
 /**
  * Each app's one route (ADR 0035, routes decided on 2026-11-19; W7, part 2): directly, through the user's tool
  * (W6's chain), or through one WireGuard configuration. An app's tunnel wins over the chain's "every app but the
- * tool" (the maintainer's answer 3): the app's own route is the more specific choice. An app left out of Watch
- * (ADR 0041) passes through none of them. Pure, for the JVM tests; the screen and the service read it.
+ * tool" (the maintainer's answer 3): the app's own route is the more specific choice. An app left out of the network
+ * part (ADR 0041) passes through none of them. Pure, for the JVM tests; the screen and the service read it.
  */
 object Routes {
     /** Where an app's traffic goes. */
     sealed interface Route {
-        /** To the internet directly, through Watch. */
+        /** To the internet directly, through the network part. */
         data object Direct : Route
 
         /** Through the user's circumvention tool. */
@@ -21,7 +21,7 @@ object Routes {
         /** Routed to a configuration since removed, whose apps the user chose to keep waiting: nothing goes out. */
         data class Waiting(val slot: Int) : Route
 
-        /** Left out of Watch: outside its tunnel, through none of these. */
+        /** Left out of the network part: outside its tunnel, through none of these. */
         data object LeftOut : Route
     }
 

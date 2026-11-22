@@ -12,8 +12,8 @@ import android.provider.Settings
 
 /**
  * Whether this app holds usage access (`PACKAGE_USAGE_STATS`, ADR 0022), by the rule system Settings uses:
- * an explicit allow, or the default mode with the permission granted. One rule for the audit's reader and
- * Watch's tracker of the apps' states (ADR 0046), which run in two processes of one package (android/shared).
+ * an explicit allow, or the default mode with the permission granted. One rule for the audit's reader and the
+ * network part's tracker of the apps' states (ADR 0046), in two processes of one package (android/shared).
  */
 fun hasUsageAccess(context: Context): Boolean {
     val mode = context.getSystemService(AppOpsManager::class.java)
@@ -24,7 +24,7 @@ fun hasUsageAccess(context: Context): Boolean {
 
 /**
  * Opens Android's usage access settings: the page for Datapavan itself where the system offers one, otherwise
- * the list of all apps. The audit's route, which Watch's view "Now" takes too (W5's third part).
+ * the list of all apps. The audit's route, which the network part's view "Now" takes too (W5's third part).
  */
 fun openUsageAccess(context: Context) {
     val own = Intent(Settings.ACTION_USAGE_ACCESS_SETTINGS, Uri.fromParts("package", context.packageName, null))

@@ -93,7 +93,7 @@ class TunnelStoreTest {
         assertEquals(1, slot)
         assertArrayEquals(text, opened(store, 1))
         assertEquals(TunnelStore.Name.Known("Proton NL-FREE#1"), store.name(1))
-        // A store opened afresh, as after Watch started again, reads the same from the files.
+        // A store opened afresh, as after the network part started again, reads the same from the files.
         val again = store()
         assertArrayEquals(text, opened(again, 1))
         assertEquals(TunnelStore.Name.Known("Proton NL-FREE#1"), again.name(1))

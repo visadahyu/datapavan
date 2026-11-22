@@ -5,11 +5,12 @@ import java.security.GeneralSecurityException
 import java.security.ProviderException
 
 /**
- * A change of the configurations' store from Watch's screen, run on the store's worker (W7, part 2, fix round,
+ * A change of the configurations' store from the network screen, run on the store's worker (W7, part 2, fix round,
  * security review M3). Whatever the store throws, a full disk, a Keystore error, or a slot removed while the
- * confirmation was open, ends that change alone, never Watch's process, which carries the VPN: until Android
- * started it again, every app would go outside Watch. The store's changes are all or nothing ([TunnelStore]), so it
- * is left as it was, and the screen says in plain words that nothing was saved, and why where that is known.
+ * confirmation was open, ends that change alone, never the network process, which carries the VPN: until Android
+ * started it again, every app would go outside the network part. The store's changes are all or nothing
+ * ([TunnelStore]), so it is left as it was, and the screen says in plain words that nothing was saved, and why where
+ * that is known.
  */
 object Changes {
     /** Why a change was not saved. */

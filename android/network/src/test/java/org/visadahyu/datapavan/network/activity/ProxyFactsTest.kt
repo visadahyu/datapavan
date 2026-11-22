@@ -90,8 +90,8 @@ class ProxyFactsTest {
     /**
      * The strings of apps' own proxies, and of the switch they follow with the rows that name it, keep ADR 0025's words
      * (decision 4: no word that judges or implies intent) and the brief's: never "operator", never "proxy-like", no
-     * intent ("look like", "disguise", "pretend", "fake", "hide"; screens review M2 of W8 part 2a), and how Watch knows
-     * is always said; and the rows quote the switch's label word for word.
+     * intent ("look like", "disguise", "pretend", "fake", "hide"; screens review M2 of W8 part 2a), and how the network
+     * part knows is always said; and the rows quote the switch's label word for word.
      */
     @Test
     fun theProxyStringsUseNoWordThatJudges() {

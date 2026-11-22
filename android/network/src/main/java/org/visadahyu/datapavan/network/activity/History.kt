@@ -82,7 +82,7 @@ object History {
     private val ANY: InetAddress = InetAddress.getByAddress(ByteArray(4))
 
     /**
-     * One day of an app's history: its segments, newest first; how many names it looked up through Watch's
+     * One day of an app's history: its segments, newest first; how many names it looked up through the network part's
      * own DNS address; and how many records under its UID are older than the app (its first install time),
      * which belong to an app since removed that held the same UID, and are not shown as this app's.
      */

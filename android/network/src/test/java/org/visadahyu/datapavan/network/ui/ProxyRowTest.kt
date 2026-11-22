@@ -19,8 +19,8 @@ class ProxyRowTest {
     private fun texts(row: ProxyRow) = listOfNotNull(row.header?.text) + row.lines.map { it.text }
 
     /**
-     * With the switch off, an inferred proxy still says how Watch knows, and the facts that name nothing: never stated
-     * as a fact, never "its own". The header stands for the destination, and the row links to the switch.
+     * With the switch off, an inferred proxy still says how the network part knows, and the facts that name nothing:
+     * never stated as a fact, never "its own". The header stands for the destination, and the row links to the switch.
      */
     @Test
     fun aProxyLeftOutSaysHowItIsKnownAndLinksToTheSwitch() {
@@ -49,7 +49,7 @@ class ProxyRowTest {
         assertEquals(listOf(R.string.proxy_asked, R.string.proxy_network_unknown, R.string.proxy_setting), texts(proxyRow(kept, past = false)))
     }
 
-    /** With the switch on, a declared proxy and an inferred one say how Watch knows in their first line. */
+    /** With the switch on, a declared proxy and an inferred one say how the network part knows in their first line. */
     @Test
     fun aProxyKeptSaysWhereAndHowItIsKnown() {
         val socks = ProxyFacts.of(
@@ -75,8 +75,8 @@ class ProxyRowTest {
     }
 
     /**
-     * Screens review m3: where Watch cannot name the network, the maker's network the address is not in is still said
-     * (ADR 0052, decision 6: "always"), and where it can, the one line says both.
+     * Screens review m3: where the network part cannot name the network, the maker's network the address is not in is
+     * still said (ADR 0052, decision 6: "always"), and where it can, the one line says both.
      */
     @Test
     fun theMakersNetworkIsSaidWhenTheNetworkIsUnknown() {
@@ -98,8 +98,8 @@ class ProxyRowTest {
     }
 
     /**
-     * A plain request in a proxy's form is never called a proxy: its line says what it asked for and how Watch knows,
-     * and with the switch off that what it asked for is not shown, linking to the switch.
+     * A plain request in a proxy's form is never called a proxy: its line says what it asked for and how the network
+     * part knows, and with the switch off that what it asked for is not shown, linking to the switch.
      */
     @Test
     fun aPlainRequestSaysWhatItAskedForNeverThatItsServerIsAProxy() {

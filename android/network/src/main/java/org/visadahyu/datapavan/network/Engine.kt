@@ -88,7 +88,7 @@ internal object Engine {
      * chained apps or null for every app but the tool, [udp] whether the tool carries UDP, and
      * [logDestinations] whether chained flows' destinations go to the log. An empty [proxy] turns
      * chaining off. Returns whether a chain is on; false when no engine runs, as at a start, where
-     * Watch sets the chain before the engine (unit 12b), or for a moment while the tunnel is set up
+     * the network part sets the chain before the engine (unit 12b), or for a moment while the tunnel is set up
      * again with other addresses: the chain is kept all the same, and the next engine starts with it
      * (ADR 0044, unit 12). Stopping the tunnel forgets it.
      */
@@ -146,13 +146,16 @@ internal object Engine {
     external fun nativeTunnelRoutes(uids: IntArray, tunnels: IntArray, logDestinations: Boolean)
 
     /**
-     * Every installed app's UID, while Watch routes any app (a configuration or the tool), or null when it routes
-     * none (W7, part 2, fix round, the maintainer's word of 2026-11-20): a flow of a UID outside them, an app
+     * Every installed app's UID, while the network part routes any app (a configuration or the tool), or null when it
+     * routes none (W7, part 2, fix round, the maintainer's word of 2026-11-20): a flow of a UID outside them, an app
      * installed since, waits while the engine asks [NetworkVpnService.routeOfApp], and goes nowhere until it answers.
      */
     external fun nativeKnownApps(uids: IntArray?)
 
-    /** Debug builds: the engine's answers for the apps Watch did not name, one per line, `uid direct|tool|tunnel:N|refused`. */
+    /**
+     * Debug builds: the engine's answers for the apps the network part did not name, one per line, `uid
+     * direct|tool|tunnel:N|refused`.
+     */
     external fun nativeAppAnswers(): String
 
     /**
@@ -194,7 +197,7 @@ internal object Engine {
 
     /**
      * Checks a data pack's signature against [keys] and reads its header, with the same Rust code as the audit
-     * ([org.visadahyu.datapavan.datapack.PackNative]), so that Watch reads the pack the audit verifies.
+     * ([org.visadahyu.datapavan.datapack.PackNative]), so that the network part reads the pack the audit verifies.
      */
     external fun nativeReadDataPack(pack: ByteArray, keys: String): IntArray
 
@@ -204,7 +207,7 @@ internal object Engine {
     /**
      * Reads the εxodus network signatures of the data pack's `exodus/trackers.tsv` ([table]) and keeps them for
      * [nativeTrackersOf], in place of any before: how many trackers have one, how many alternatives were read
-     * and how many were refused as outside the subset Watch matches; empty for a table that is not one. No
+     * and how many were refused as outside the subset the network part matches; empty for a table that is not one. No
      * engine needs to run.
      */
     external fun nativeTrackers(table: ByteArray): IntArray
@@ -227,8 +230,9 @@ internal object Engine {
     /**
      * The messengers' apps whose built-in proxies the engine infers, each UID of [uids] of the family at the same
      * place in [families] (0 Telegram, 1 WhatsApp, 2 Signal), and the proxies Android's setting names, one `host port`
-     * a line in [android] (W8, part 2a, ADR 0052), and whether Private DNS is strict on Watch's network ([strictDns]),
-     * which hides the apps' lookups from Watch. Kept for the engines to come, as the chain is.
+     * a line in [android] (W8, part 2a, ADR 0052), and whether Private DNS is strict on the network part's network
+     * ([strictDns]), which hides the apps' lookups from the network part. Kept for the engines to come, as the chain
+     * is.
      */
     external fun nativeProxies(families: IntArray, uids: IntArray, android: String, strictDns: Boolean)
 
@@ -279,7 +283,10 @@ internal object Engine {
      */
     external fun nativeDnsTimesClear()
 
-    /** The ways of the four tables for Watch's screen, as [org.visadahyu.datapavan.network.dns.DnsCatalogue] reads them. */
+    /**
+     * The ways of the four tables for the network screen, as [org.visadahyu.datapavan.network.dns.DnsCatalogue] reads
+     * them.
+     */
     external fun nativeDnsCatalogue(relays: String, targets: String, pairs: String, presets: String): String
 
     /**
@@ -312,7 +319,7 @@ internal object Engine {
     external fun nativeBlocked(): String
 }
 
-/** Watch's Rust reader of data packs (core/engine's `datapack`, through Watch's own library). */
+/** The network part's Rust reader of data packs (core/engine's `datapack`, through the network part's own library). */
 internal object NetworkPacks : org.visadahyu.datapavan.datapack.PackNative {
     override fun readDataPack(pack: ByteArray, keys: String): IntArray = Engine.nativeReadDataPack(pack, keys)
 

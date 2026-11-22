@@ -32,7 +32,7 @@ class StatesTest {
     @Test
     fun theEngineReadsWhatThisSideWrites() {
         val text = buildString {
-            append("# Readings of the apps' states as Watch's Kotlin side writes them (States.kt; core/net/src/states.rs,\n")
+            append("# Readings of the apps' states as the network part's Kotlin side writes them (States.kt; core/net/src/states.rs,\n")
             append("# version 2), one a line, in hex. Written by StatesTest, which fails when this side writes otherwise;\n")
             append("# run it with DATAPAVAN_WRITE_FIXTURE=1 to write it anew. Read by the engine's test\n")
             append("# the_kotlin_sides_states_are_read_as_written. Not edited by hand.\n")

@@ -61,7 +61,7 @@ import org.visadahyu.datapavan.network.ui.NetworkScreen
 import org.visadahyu.datapavan.network.ui.NetworkTheme
 
 class MainActivity : ComponentActivity() {
-    /** Android refused the VPN consent the last time Watch asked. */
+    /** Android refused the VPN consent the last time the network part asked. */
     private val refused = mutableStateOf(false)
 
     /** How long the connection log keeps its records, and whether the user just deleted it. */
@@ -85,15 +85,15 @@ class MainActivity : ComponentActivity() {
     )
 
     /**
-     * Android 13 and later: the fallback's notification shows only once the user allows Watch's notifications, so
-     * "Notify me" asks for that when it is turned on; refused, it stays off and the screen says why (W8's fix round,
-     * review R-M3).
+     * Android 13 and later: the fallback's notification shows only once the user allows the network part's
+     * notifications, so "Notify me" asks for that when it is turned on; refused, it stays off and the screen says why
+     * (W8's fix round, review R-M3).
      */
     private val askNotifications = registerForActivityResult(ActivityResultContracts.RequestPermission()) { granted ->
         if (granted) setNotify(true) else dns.value = dns.value.copy(notify = false, notifyRefused = true)
     }
 
-    /** Whether Android lets Watch post notifications. */
+    /** Whether Android lets the network part post notifications. */
     private fun notificationsAllowed(): Boolean = android.os.Build.VERSION.SDK_INT < android.os.Build.VERSION_CODES.TIRAMISU ||
         checkSelfPermission(android.Manifest.permission.POST_NOTIFICATIONS) == PackageManager.PERMISSION_GRANTED
 
@@ -188,7 +188,7 @@ class MainActivity : ComponentActivity() {
     /** A picture of a QR code, from the photo picker (the documents screen where there is none): no permission. */
     private val pickPicture = registerForActivityResult(ActivityResultContracts.PickVisualMedia()) { uri -> uri?.let(::importPicture) }
 
-    /** A photo of a QR code, taken by the phone's own camera for Watch, which never holds CAMERA. */
+    /** A photo of a QR code, taken by the phone's own camera for the network part, which never holds CAMERA. */
     private val takePhoto = registerForActivityResult(ActivityResultContracts.StartActivityForResult()) { result ->
         photoTaken(result.resultCode == RESULT_OK)
     }
@@ -248,7 +248,7 @@ class MainActivity : ComponentActivity() {
                     deleted = deleted.value,
                     logLock = logLock,
                     screenLock = screenLock.value,
-                    // An app left out does not pass through Watch, so it cannot be chained either.
+                    // An app left out does not pass through the network part, so it cannot be chained either.
                     chain = chain.value.copy(choices = chain.value.choices.filter { it.packageName !in leftOut.value }),
                     chainActions = chainActions,
                     tunnels = tunnels.value,
@@ -350,7 +350,7 @@ class MainActivity : ComponentActivity() {
             val settings = ChainSettings.of(this)
             val found = (search as? ToolSearch.Answering)?.found
             found?.let(settings::remember)
-            // A tool that takes a password gets Watch's; one that cannot is not offered one.
+            // A tool that takes a password gets the network part's; one that cannot is not offered one.
             val password = found?.takeIf { it.tool.auth != "none" }?.let { settings.password() }
             val key = found?.let { ToolKeys.verdict(this, it.tool.packageName) }
             // The tool the chain went through last names the switch that turns the chain off while
@@ -391,7 +391,7 @@ class MainActivity : ComponentActivity() {
 
     /**
      * Leaves an app out of the tunnel, or takes it back (ADR 0041). An app left out leaves the chain too,
-     * since it no longer passes through Watch. A tunnel that is up is set up again for the change.
+     * since it no longer passes through the network part. A tunnel that is up is set up again for the change.
      */
     private fun leaveOut(packageName: String, out: Boolean) {
         val store = LeftOut.of(this)
@@ -416,7 +416,7 @@ class MainActivity : ComponentActivity() {
         }
     }
 
-    /** The apps the user can open, by name, but Watch and the tool: the ones the user may chain. */
+    /** The apps the user can open, by name, but the network part and the tool: the ones the user may chain. */
     private fun loadChoices() {
         Thread {
             val tool = ChainSettings.of(this).lastTool?.packageName
@@ -437,7 +437,7 @@ class MainActivity : ComponentActivity() {
         }.apply { name = "network-apps" }.start()
     }
 
-    /** Copies Watch's password for the tool, marked sensitive so that Android does not show it. */
+    /** Copies the network part's password for the tool, marked sensitive so that Android does not show it. */
     private fun copyPassword() {
         val password = chain.value.password ?: return
         val clip = ClipData.newPlainText(getString(R.string.chain_copy), password)
@@ -508,8 +508,8 @@ class MainActivity : ComponentActivity() {
     )
 
     /**
-     * What the user chose once what Watch kept could no longer be opened: the store forgets it all, marker and
-     * wraps, the apps go their way, and with [again] the documents screen opens for a configuration (the
+     * What the user chose once what the network part kept could no longer be opened: the store forgets it all, marker
+     * and wraps, the apps go their way, and with [again] the documents screen opens for a configuration (the
      * maintainer's word of 2026-11-20).
      */
     private fun chooseAfterLoss(again: Boolean) {
@@ -769,7 +769,7 @@ class MainActivity : ComponentActivity() {
         }
     }
 
-    /** Asks the phone's own camera for a photo of a QR code, written to a file of Watch's own. */
+    /** Asks the phone's own camera for a photo of a QR code, written to a file of the network part's own. */
     private fun takeQrPhoto() {
         replacing = null
         tunnels.value = tunnels.value.copy(message = null, photoDeleted = false)
@@ -970,7 +970,7 @@ class MainActivity : ComponentActivity() {
         try {
             consent.launch(ask)
         } catch (e: ActivityNotFoundException) {
-            // Some builds of Android have no consent screen; Watch cannot become the VPN there.
+            // Some builds of Android have no consent screen; the network part cannot become the VPN there.
             refused.value = true
         }
     }
@@ -1000,10 +1000,10 @@ class MainActivity : ComponentActivity() {
         private const val EXTRA_LOG_SWITCH = "log_switch"
 
         /**
-         * Watch's screen at the switch "Log where apps connect ...", for a row of "Now" or the history that links to it:
-         * opened above "Now", which stays beneath it as it was, so that Back brings the user to the same app's row or its
-         * history (the brief's point 11 of W8 part 3a: the link used `CLEAR_TOP`, which closed "Now"). Its flags are
-         * [LogSwitch.LINK_FLAGS], which LogSwitchTest holds.
+         * The network screen at the switch "Log where apps connect ...", for a row of "Now" or the history that links
+         * to it: opened above "Now", which stays beneath it as it was, so that Back brings the user to the same app's
+         * row or its history (the brief's point 11 of W8 part 3a: the link used `CLEAR_TOP`, which closed "Now"). Its
+         * flags are [LogSwitch.LINK_FLAGS], which LogSwitchTest holds.
          */
         internal fun logSwitchIntent(context: android.content.Context): Intent =
             Intent(context, MainActivity::class.java)

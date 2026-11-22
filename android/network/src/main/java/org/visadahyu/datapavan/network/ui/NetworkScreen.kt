@@ -46,7 +46,7 @@ import org.visadahyu.datapavan.network.R
 import org.visadahyu.datapavan.network.log.ConnectionLog
 
 /**
- * Watch's one screen: what it is for, whether it is on, the switch, while it is on what Private DNS
+ * The network part's one screen: what it is for, whether it is on, the switch, while it is on what Private DNS
  * hides from it (W3), the user's circumvention tool and the apps sent through it (W6), the WireGuard
  * configurations and each app's way (W7, part 2), what other apps see of a VPN and the apps left out (ADR
  * 0041), how long the connection log keeps its records, with its wipe (W4), and screenshots (ADR 0040). The switch
@@ -178,7 +178,7 @@ internal fun NetworkScreen(
     }
 }
 
-/** Why Watch reads fewer names while Private DNS encrypts the lookups, and what it still names. */
+/** Why the network part reads fewer names while Private DNS encrypts the lookups, and what it still names. */
 @Composable
 private fun PrivateDnsNote(privateDns: PrivateDns) {
     Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
@@ -276,7 +276,7 @@ private fun LogSettings(
 
 /**
  * Every screen blocks screenshots and screen recordings (ADR 0040). A person who needs a screenshot to ask
- * for help allows it here for one minute; it is blocked again then, or when Watch leaves the screen.
+ * for help allows it here for one minute; it is blocked again then, or when the network part leaves the screen.
  */
 @Composable
 private fun ScreenshotSetting() {
@@ -301,8 +301,8 @@ private fun ScreenshotSetting() {
 }
 
 /**
- * Every app can tell that a VPN is on, and Watch cannot hide that (ADR 0041): this section says so, and
- * lets the user leave out an app that does not work with Watch. The list of apps opens on request.
+ * Every app can tell that a VPN is on, and the network part cannot hide that (ADR 0041): this section says so, and
+ * lets the user leave out an app that does not work with the network part. The list of apps opens on request.
  */
 @Composable
 private fun LeftOutSection(leftOut: Set<String>, choices: List<AppChoice>, onLoadApps: () -> Unit, onLeaveOut: (String, Boolean) -> Unit) {

@@ -8,8 +8,8 @@ import org.visadahyu.datapavan.network.tunnel.Routes.Route
 
 /**
  * Each app's one route (W7, part 2): a tunnel wins over the chain's "every app but the tool", a removed slot holds
- * its apps, an app left out passes through nothing of Watch's, the choices the screen offers, what a choice changes
- * in the chain beside it, and what the engine gets.
+ * its apps, an app left out passes through nothing of the network part's, the choices the screen offers, what a choice
+ * changes in the chain beside it, and what the engine gets.
  */
 class RoutesTest {
     private val tool = "org.example.tool"

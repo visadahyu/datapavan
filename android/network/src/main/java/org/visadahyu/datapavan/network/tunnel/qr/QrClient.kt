@@ -13,12 +13,12 @@ import java.util.concurrent.TimeUnit
 import java.util.concurrent.atomic.AtomicReference
 
 /**
- * Watch's side of the QR decoder (W7, part 2): binds [QrService]'s isolated process for one picture, hands it the
- * picture as a read-only descriptor, and lets it go, which ends that process. Called off the main thread; the
+ * The network part's side of the QR decoder (W7, part 2): binds [QrService]'s isolated process for one picture, hands
+ * it the picture as a read-only descriptor, and lets it go, which ends that process. Called off the main thread; the
  * binding's callbacks come on a thread of their own, so a caller on any thread but theirs may wait.
  */
 object QrClient {
-    /** How long Watch waits for the process to start and answer: its own limit, and a margin to start it. */
+    /** How long the network part waits for the process to start and answer: its own limit, and a margin to start it. */
     private const val WAIT_MS = QrService.TIME_LIMIT_MS + 5_000L
 
     private val callbacks = Executors.newSingleThreadExecutor { Thread(it, "network-qr-binding").apply { isDaemon = true } }

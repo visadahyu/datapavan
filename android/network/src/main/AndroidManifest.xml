@@ -3,7 +3,7 @@
     xmlns:tools="http://schemas.android.com/tools">
 
     <!--
-        Watch (ADR 0029, ADR 0045): the tunnel, its log and the chain, the part of Datapavan Advanced
+        The network part (ADR 0029, ADR 0045): the tunnel, its log and the chain, the part of Datapavan Advanced
         that uses the network. Only Advanced includes this library. Its permissions are those of ADR
         0034; app/build.gradle.kts fails the build if Advanced's merged manifest holds any other, and if
         Basic's holds any of these that Basic does not allow. The application's own manifest sets the
@@ -14,7 +14,7 @@
     <!-- Which network is beneath the tunnel, its DNS server, and when it changes. -->
     <uses-permission android:name="android.permission.ACCESS_NETWORK_STATE" />
     <!--
-        Android 10 and 11 only: Watch is inside its own tunnel, so it follows the network beneath
+        Android 10 and 11 only: the network part is inside its own tunnel, so it follows the network beneath
         with requestNetwork, which needs this. From Android 12 a best-matching callback does without.
     -->
     <uses-permission
@@ -22,7 +22,7 @@
         android:maxSdkVersion="30" />
     <!--
         Android 17: every app's traffic to the local network (a printer, a TV, the router's page) leaves
-        through Watch's sockets, which Android checks as Watch's (ADR 0034).
+        through the network part's sockets, which Android checks as the network part's (ADR 0034).
     -->
     <uses-permission android:name="android.permission.ACCESS_LOCAL_NETWORK" />
     <!--
@@ -39,9 +39,9 @@
     <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
 
     <!--
-        Package visibility (ADR 0034): every app a user can open, so that Watch finds the user's tool of
+        Package visibility (ADR 0034): every app a user can open, so that the network part finds the user's tool of
         the table (data/tools) and lists the apps the user may chain through it (W6). Not
-        QUERY_ALL_PACKAGES; Watch writes no list of apps anywhere.
+        QUERY_ALL_PACKAGES; the network part writes no list of apps anywhere.
     -->
     <queries>
         <intent>
@@ -70,10 +70,10 @@
         <!--
             The network part runs in a process of its own, ":network": its screen, its tunnel and its log's expiry. The
             part that faces the network then shares no memory with the audit, a crash of either leaves the
-            other running, and Watch keeps its own memory budget (scripts/verify-network-release.sh). They
-            talk only through the intent that opens Watch's screen.
+            other running, and the network part keeps its own memory budget (scripts/verify-network-release.sh). They
+            talk only through the intent that opens the network screen.
 
-            Watch's screen, opened from the audit's network page. Not exported: Advanced has one launcher
+            The network screen, opened from the audit's network page. Not exported: Advanced has one launcher
             entry, the audit's. Debug builds export it for the emulator checks (src/debug).
         -->
         <activity
@@ -84,8 +84,8 @@
             android:theme="@style/Theme.Network" />
 
         <!--
-            "Now" and each app's history (ADR 0046, decision 2 (d)), in Watch's process: opened from Watch's
-            screen, and from the audit's page of an app with a package name and nothing else. Not exported;
+            "Now" and each app's history (ADR 0046, decision 2 (d)), in the network process: opened from the network
+            part's screen, and from the audit's page of an app with a package name and nothing else. Not exported;
             W9's summary and tile open it the same way.
         -->
         <activity
@@ -95,8 +95,8 @@
             android:theme="@style/Theme.Network" />
 
         <!--
-            A tool's guide for proxy mode (W8, part 3b), in Watch's process: opened from the chain section's links, and in
-            W9 from onboarding. Not exported.
+            A tool's guide for proxy mode (W8, part 3b), in the network process: opened from the chain section's links,
+            and in W9 from onboarding. Not exported.
         -->
         <activity
             android:name=".GuideActivity"
@@ -113,7 +113,7 @@
             <intent-filter>
                 <action android:name="android.net.VpnService" />
             </intent-filter>
-            <!-- Watch may be the always-on VPN (docs/VPN.md, "Connectivity and fail mode"). -->
+            <!-- The network part may be the always-on VPN (docs/VPN.md, "Connectivity and fail mode"). -->
             <meta-data
                 android:name="android.net.VpnService.SUPPORTS_ALWAYS_ON"
                 android:value="true" />
@@ -121,8 +121,8 @@
 
         <!--
             The QR decoder of a WireGuard configuration's picture (W7, part 2; ADR 0035, question 10), in an isolated
-            process with no permissions, no network and none of Watch's files, as the audit's parsers are (ADR 0045,
-            decision 9): it gets the picture as a file descriptor and gives back only the code's text
+            process with no permissions, no network and none of the network part's files, as the audit's parsers are
+            (ADR 0045, decision 9): it gets the picture as a file descriptor and gives back only the code's text
             (tunnel/qr/QrService.kt). app/build.gradle.kts fails the build unless it stays isolated.
         -->
         <service
@@ -132,10 +132,11 @@
             android:process=":qr" />
 
         <!--
-            The file the phone's own camera writes a QR code's photo to for Watch (tunnel/qr/Capture.kt): one file in
-            Watch's cache at a time, granted to the camera for writing alone and taken back once it answers; the photo
-            is deleted once read. Watch never holds CAMERA. In Watch's process, so that the photo's file is opened
-            there alone, not in the audit's (W7, part 2, fix round, the security review's nit).
+            The file the phone's own camera writes a QR code's photo to for the network part (tunnel/qr/Capture.kt): one
+            file in The network part's cache at a time, granted to the camera for writing alone and taken back once it
+            answers; the photo is deleted once read. The network part never holds CAMERA. In the network process, so
+            that the photo's file is opened there alone, not in the audit's (W7, part 2, fix round, the security
+            review's nit).
         -->
         <provider
             android:name="androidx.core.content.FileProvider"
@@ -148,7 +149,10 @@
                 android:resource="@xml/network_capture_paths" />
         </provider>
 
-        <!-- The connection log's expiry, on days nothing else starts Watch (ADR 0037). Only Android may bind to it. -->
+        <!--
+            The connection log's expiry, on days nothing else starts the network part (ADR 0037). Only Android may
+            bind to it.
+        -->
         <service
             android:name=".log.LogExpiryJob"
             android:exported="false"

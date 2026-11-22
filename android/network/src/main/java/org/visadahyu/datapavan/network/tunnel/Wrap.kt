@@ -20,8 +20,8 @@ import javax.crypto.SecretKeyFactory
 import javax.crypto.spec.GCMParameterSpec
 
 /**
- * Wraps what Watch keeps of a WireGuard configuration (W7, part 2, ADR 0035): its text and its name, each sealed
- * apart, so that showing a name never opens a key. [TunnelStore] holds the files; this is the key. Behind an
+ * Wraps what the network part keeps of a WireGuard configuration (W7, part 2, ADR 0035): its text and its name, each
+ * sealed apart, so that showing a name never opens a key. [TunnelStore] holds the files; this is the key. Behind an
  * interface so that the JVM tests hold the store with a wrap of their own.
  */
 interface Wrap {
@@ -80,7 +80,7 @@ enum class KeyHome { STRONGBOX, TRUSTED_ENVIRONMENT, SECURE_HARDWARE, SOFTWARE, 
  *
  * Two such keys (the maintainer's decision of 2026-11-20, ADR 0035): [ALIAS], key A, which opens at any time, and
  * [UNLOCKED_ALIAS], key B, made with [unlockedOnly] (`setUnlockedDeviceRequired`), which from Android 12 the
- * Keystore makes unusable while the phone is locked, even to code running as Watch. [TunnelStore] wraps the
+ * Keystore makes unusable while the phone is locked, even to code running as the network part. [TunnelStore] wraps the
  * configurations under key B while ADR 0047's profile is on, and what decides the routes under key A always.
  */
 class KeystoreWrap(private val alias: String = ALIAS, private val unlockedOnly: Boolean = false) : Wrap {
@@ -194,7 +194,10 @@ class KeystoreWrap(private val alias: String = ALIAS, private val unlockedOnly: 
         const val IV_BYTES = 12
         const val TAG_BITS = 128
 
-        /** Whether the phone is locked now, for an error the Keystore gave without saying why; set by Watch's process. */
+        /**
+         * Whether the phone is locked now, for an error the Keystore gave without saying why; set by the network
+         * process.
+         */
         @Volatile
         var locked: () -> Boolean = { false }
 

@@ -87,7 +87,7 @@ internal data class PendingView(
     fun with(next: Import.Proposal): PendingView = copy(proposal = next, chosen = if (proposal == null) next.ticked else chosen)
 }
 
-/** The WireGuard part of Watch's screen. */
+/** The WireGuard part of the network screen. */
 internal data class TunnelsView(
     val configurations: List<ConfigurationView> = emptyList(),
     val home: KeyHome? = null,
@@ -102,7 +102,7 @@ internal data class TunnelsView(
     /** Each slot's name as shown, removed ones included. */
     val names: Map<Int, String> = emptyMap(),
     val logDestinations: Boolean = false,
-    /** What Watch kept can no longer be opened, and every app is held until the user chooses. */
+    /** What the network part kept can no longer be opened, and every app is held until the user chooses. */
     val lost: Boolean = false,
 ) {
     /**
@@ -236,8 +236,8 @@ internal fun TunnelsSection(
 }
 
 /**
- * What Watch kept of the configurations can no longer be opened (key A gone for good), and every app is held: the
- * user chooses to add the configurations again or to let the apps go their way; either forgets what was kept.
+ * What the network part kept of the configurations can no longer be opened (key A gone for good), and every app is
+ * held: the user chooses to add the configurations again or to let the apps go their way; either forgets what was kept.
  */
 @Composable
 private fun LostCard(actions: TunnelActions) {
@@ -551,8 +551,8 @@ private fun AppRow(app: AppChoice, pending: PendingView, way: Routes.Route, tool
 
 /**
  * Each app's one way, in one place the user can read (W7, part 2): directly, through the tool, or through one
- * configuration; an app routed to a removed configuration waits, an app left out of Watch passes through none.
- * The list opens on request; each app's choices open under it.
+ * configuration; an app routed to a removed configuration waits, an app left out of the network part passes through
+ * none. The list opens on request; each app's choices open under it.
  */
 @Composable
 internal fun RoutesSection(

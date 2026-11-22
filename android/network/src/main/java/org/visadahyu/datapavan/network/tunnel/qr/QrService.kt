@@ -18,18 +18,18 @@ import java.util.concurrent.TimeoutException
 /**
  * The QR decoder of a WireGuard configuration's picture (W7, part 2; ADR 0035, question 10), in an isolated process
  * of its own, `:qr`, as the audit's parsers of untrusted input are (ADR 0045, decision 9): no permissions, no
- * network, none of Watch's files. A picture is hostile input until it is read, through Android's image decoders and
- * ZXing alike; a picture that subverted either would find nothing here worth taking. It gets the picture as a
- * read-only file descriptor and gives back only the QR code's text, at most [QrDecode.MAX_TEXT] bytes, or why not, as
- * primitives ([QrDecode.answer]).
+ * network, none of the network part's files. A picture is hostile input until it is read, through Android's image
+ * decoders and ZXing alike; a picture that subverted either would find nothing here worth taking. It gets the picture
+ * as a read-only file descriptor and gives back only the QR code's text, at most [QrDecode.MAX_TEXT] bytes, or why not,
+ * as primitives ([QrDecode.answer]).
  *
  * Bounds: a picture larger than [QrDecode.MAX_SIDE] a side, by its header, is not decoded; one that is, is brought
  * down to at most [QrDecode.TARGET] a side while Android decodes it, and refused if it still holds more than
  * [QrDecode.MAX_PIXELS];
  * the whole read has [TIME_LIMIT_MS], after which the answer is "too slow" and the process ends. ZXing holds the
- * text as a `String` while it reads it, here alone: the process ends once Watch lets it go ([onDestroy]), and that
- * memory with it. Bound only by Watch ([QrClient]); an isolated service cannot be exported, and the build fails
- * unless it stays isolated (app/build.gradle.kts).
+ * text as a `String` while it reads it, here alone: the process ends once the network part lets it go ([onDestroy]),
+ * and that memory with it. Bound only by the network part ([QrClient]); an isolated service cannot be exported, and the
+ * build fails unless it stays isolated (app/build.gradle.kts).
  */
 class QrService : Service() {
     private val reader = Executors.newSingleThreadExecutor { Thread(it, "qr-read").apply { isDaemon = true } }
@@ -95,7 +95,7 @@ class QrService : Service() {
     override fun onDestroy() {
         super.onDestroy()
         reader.shutdownNow()
-        // Watch let it go: the process, the only place the text was a String, ends after this call returns.
+        // The network part let it go: the process, the only place the text was a String, ends after this call returns.
         Handler(Looper.getMainLooper()).post { Process.killProcess(Process.myPid()) }
     }
 

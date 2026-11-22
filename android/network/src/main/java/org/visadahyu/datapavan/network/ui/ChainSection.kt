@@ -44,7 +44,7 @@ internal data class AppChoice(val packageName: String, val label: String)
 
 /** The user's chain as the screen shows it (W6). */
 internal data class ChainView(
-    /** What Watch found of the user's tool; null while it looks. */
+    /** What the network part found of the user's tool; null while it looks. */
     val search: ToolSearch?,
     val on: Boolean,
     val allApps: Boolean,
@@ -52,7 +52,7 @@ internal data class ChainView(
     val logDestinations: Boolean,
     /** Whether the user chose to send the apps' UDP through the tool too (ADR 0041, decision 5). */
     val udp: Boolean,
-    /** The user name and password Watch offers for the tool's proxy, when the tool takes one. */
+    /** The user name and password the network part offers for the tool's proxy, when the tool takes one. */
     val user: String?,
     val password: String?,
     /** The apps the user can choose from, loaded once the user asks to choose. */
@@ -80,7 +80,7 @@ internal class ChainActions(
 )
 
 /**
- * Watch beside the user's circumvention tool (W6, docs/VPN.md): which tool it found, the switch that
+ * The network part beside the user's circumvention tool (W6, docs/VPN.md): which tool it found, the switch that
  * sends apps through it, which apps, what its proxy lets other apps on the phone do and the password
  * that keeps them off it (ADR 0041, decision 5), whether UDP goes through it too, and the switch that logs where
  * chained apps connect, with the rest it covers (LogSwitch). A tool's name keeps its own direction inside a
@@ -123,7 +123,7 @@ internal fun ChainSection(
         }
         // A chain that is on stays one tap from off, whatever the search says now: while the tool does
         // not answer, the apps sent through it wait, and the user must be able to let them go directly
-        // (CI, 2026-11-12: without this switch, only turning Watch off could end the wait).
+        // (CI, 2026-11-12: without this switch, only turning the network part off could end the wait).
         if (view.on && view.search !is ToolSearch.Answering) {
             val tool = bidi.unicodeWrap(view.chainedName ?: "")
             LabelledSwitch(stringResource(R.string.chain_switch, tool), checked = true, onChange = actions.onOn)
@@ -134,7 +134,8 @@ internal fun ChainSection(
 
 /**
  * The guide of each tool of the table installed here (W8, part 3b), whatever the search found: Android hides a VPN's
- * owner from other apps, so Watch cannot tell which tool runs as the VPN, and links them all ([chainGuideLinks]).
+ * owner from other apps, so the network part cannot tell which tool runs as the VPN, and links them all
+ * ([chainGuideLinks]).
  */
 @Composable
 private fun GuideLinks(guides: List<GuideLink>, onGuide: (GuideLink) -> Unit) {
@@ -147,7 +148,10 @@ private fun GuideLinks(guides: List<GuideLink>, onGuide: (GuideLink) -> Unit) {
     }
 }
 
-/** Each installed tool's link and the words of its button: steps for proxy mode, or what the tool and Watch can do. */
+/**
+ * Each installed tool's link and the words of its button: steps for proxy mode, or what the tool and the network part
+ * can do.
+ */
 internal fun chainGuideLinks(guides: List<GuideLink>): List<Pair<GuideLink, Int>> =
     guides.distinctBy { it.guide }.map { it to if (it.page == Page.PROXY) R.string.chain_guide_proxy else R.string.chain_guide_other }
 
@@ -244,9 +248,9 @@ private fun Answering(
 }
 
 /**
- * What the tool's proxy lets other apps on the phone do (ADR 0041, decision 5), from Watch's greeting: one that
- * asks no password can be used by any of them, which is said plainly, with whether the tool can take one;
- * one that asks a password keeps them out, though any app can still find it. Watch chains either way.
+ * What the tool's proxy lets other apps on the phone do (ADR 0041, decision 5), from the network part's greeting: one
+ * that asks no password can be used by any of them, which is said plainly, with whether the tool can take one;
+ * one that asks a password keeps them out, though any app can still find it. The network part chains either way.
  */
 @Composable
 private fun ProxyDoor(search: ToolSearch.Answering, tool: String) {
@@ -286,7 +290,7 @@ private fun KeyVerdict(verdict: SignatureVerdict) {
             Text(stringResource(text, app), style = body, color = MaterialTheme.colorScheme.error)
             Fingerprint(verdict.fingerprint)
         }
-        // Watch looks for the table's package names only, so a build under another name is never the tool.
+        // The network part looks for the table's package names only, so a build under another name is never the tool.
         is SignatureVerdict.Disguised -> Unit
     }
 }

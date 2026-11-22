@@ -5,7 +5,10 @@ import org.junit.Assert.assertTrue
 import org.junit.Test
 import org.visadahyu.datapavan.network.tunnel.TunnelStates.Shown
 
-/** Each configuration's state as the screen says it (W7, part 2), from the engine's lines and what Watch knows. */
+/**
+ * Each configuration's state as the screen says it (W7, part 2), from the engine's lines and what the network part
+ * knows.
+ */
 class TunnelStatesTest {
     @Test
     fun the_engines_lines_read_and_nothing_else() {
@@ -27,7 +30,7 @@ class TunnelStatesTest {
         assertEquals(Shown.Missing, TunnelStates.shown(true, known, null))
         assertEquals(Shown.Idle, TunnelStates.shown(true, known, lines[4]))
         assertEquals(Shown.Off, TunnelStates.shown(false, known, lines[1]))
-        assertEquals("a lost key is said even while Watch is off", Shown.Lost, TunnelStates.shown(false, TunnelStore.Name.Lost, null))
+        assertEquals("a lost key is said even while the network part is off", Shown.Lost, TunnelStates.shown(false, TunnelStore.Name.Lost, null))
         assertEquals(Shown.Locked, TunnelStates.shown(true, TunnelStore.Name.Locked, lines[1]))
     }
 

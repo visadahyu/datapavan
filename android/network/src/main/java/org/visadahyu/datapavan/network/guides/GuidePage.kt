@@ -2,9 +2,9 @@ package org.visadahyu.datapavan.network.guides
 
 /**
  * A guide as the screen shows it, block by block: the same blocks in the same order as its page on the website
- * (scripts/guides.py, `blocks`), so that the site says what Watch says. Each block names a Watch string; its places
- * are filled by the tool's name, its version, a value, or one of the tool's labels, which the screen reads from the
- * installed tool ([ToolLabels]).
+ * (scripts/guides.py, `blocks`), so that the site says what the network part says. Each block names one of the
+ * network part's strings; its places are filled by the tool's name, its version, a value, or one of the tool's labels,
+ * which the screen reads from the installed tool ([ToolLabels]).
  */
 object GuidePage {
     sealed interface Fill {

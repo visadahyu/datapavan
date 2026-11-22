@@ -34,7 +34,7 @@ class ToolFinderTest {
                             write(byteArrayOf(5, method.toByte()))
                             flush()
                         }
-                        // Open until Watch closes, as a proxy waits for the request after the greeting.
+                        // Open until the network part closes, as a proxy waits for the request after the greeting.
                         while (input.read() >= 0) Unit
                     }
                 }

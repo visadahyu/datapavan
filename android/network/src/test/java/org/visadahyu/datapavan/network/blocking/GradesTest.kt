@@ -11,7 +11,8 @@ import org.visadahyu.datapavan.network.blocking.Grades.Decided
 
 /**
  * A row joined to εxodus's tracker by its SDK's package prefix, a code-dependent row decided by the app's own code, the
- * vendor's exceptions by package and certificate, and the audit's scan as Watch reads it (W8, part 3a; ADR 0053).
+ * vendor's exceptions by package and certificate, and the audit's scan as the network part reads it (W8, part 3a; ADR
+ * 0053).
  */
 class GradesTest {
     private val table = checkNotNull(BlockingTable.parse(File("../../data/blocking/hosts.tsv").readText()))

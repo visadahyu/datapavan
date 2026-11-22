@@ -4,7 +4,7 @@ plugins {
 
 // Code every edition shares (ADR 0045, decision 10): the rules that judge a copy's signing key (ADR 0018)
 // and the protection of every screen (ADR 0040). A library rather than a source directory added to each
-// module, since Advanced includes Watch's module and would otherwise compile the same classes twice.
+// module, since Advanced includes the network part's module and would otherwise compile the same classes twice.
 android {
     namespace = "org.visadahyu.datapavan.shared"
     compileSdk = 37

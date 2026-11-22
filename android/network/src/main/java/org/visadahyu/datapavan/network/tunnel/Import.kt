@@ -97,8 +97,8 @@ object Import {
      *   waits for a removed one, is not ticked, and the screen says where it moves from if the user ticks it;
      * - [excluded]: with `ExcludedApplications`, the apps it leaves out that the user has, which the screen names;
      * - [notInstalled], [notChoosable] (installed but not among the apps the user can choose, as an app with no icon
-     *   to open it, or the user's tool) and [leftOut] (left out of Watch), each said apart.
-     * Watch itself is never in any of them.
+     *   to open it, or the user's tool) and [leftOut] (left out of the network part), each said apart.
+     * The network part itself is never in any of them.
      */
     data class Proposal(
         val proposed: List<String>,
@@ -110,9 +110,9 @@ object Import {
     )
 
     /**
-     * [choosable]: the apps the user can choose, in the screen's order, Watch and the apps left out of it not among
-     * them; [installed] asks Android whether a package is installed at all; [goesDirectly] whether an app goes
-     * directly now, neither through the tool nor through a configuration nor waiting for one.
+     * [choosable]: the apps the user can choose, in the screen's order, the network part and the apps left out of it
+     * not among them; [installed] asks Android whether a package is installed at all; [goesDirectly] whether an app
+     * goes directly now, neither through the tool nor through a configuration nor waiting for one.
      */
     fun propose(
         described: Described,
@@ -154,7 +154,7 @@ object Import {
     }
 
     /**
-     * A configuration on its way to the store, held by Watch's process alone, never in a saved state that Android
+     * A configuration on its way to the store, held by the network process alone, never in a saved state that Android
      * would copy out of the process: its bytes, zeroed by [close] once it is saved or cancelled.
      */
     class Pending(text: ByteArray, val described: Described, val name: String) : AutoCloseable {
@@ -170,7 +170,7 @@ object Import {
     }
 
     /**
-     * Where Watch's screen keeps the configuration on its way while the confirmation is open (fix round, screens
+     * Where the network screen keeps the configuration on its way while the confirmation is open (fix round, screens
      * review M1): it survives the screen's recreation for a rotation, a dark-mode switch or a font change, and its
      * bytes are zeroed when another takes its place, when it is dropped (cancel, or the screen finishing), and by
      * whoever [take]s it to save it.

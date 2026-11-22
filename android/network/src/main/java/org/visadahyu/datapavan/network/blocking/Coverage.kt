@@ -2,11 +2,11 @@ package org.visadahyu.datapavan.network.blocking
 
 /**
  * Which apps tracker blocking covers (W8, part 3a; ADR 0053, point 5 of the brief), as pure rules the JVM tests hold:
- * the apps the user installed, by UID, and nothing that came with the phone. Never Watch itself, never Android's own
- * UIDs (below 10000, the system's 1000 among them), never Google Play services, never the user's circumvention tool,
- * whose connections show cover names that may be any popular host, and no browser unless the user includes them: a
- * browser opens any website, whose hosts are the user's choice. Who publishes an app plays no part: an app of the
- * tracker's own company is covered as any other (decision 2).
+ * the apps the user installed, by UID, and nothing that came with the phone. Never the network part itself, never
+ * Android's own UIDs (below 10000, the system's 1000 among them), never Google Play services, never the user's
+ * circumvention tool, whose connections show cover names that may be any popular host, and no browser unless the user
+ * includes them: a browser opens any website, whose hosts are the user's choice. Who publishes an app plays no part: an
+ * app of the tracker's own company is covered as any other (decision 2).
  */
 object Coverage {
     /** `android.os.Process.FIRST_APPLICATION_UID`: UIDs below it are Android's own. */
@@ -28,9 +28,10 @@ object Coverage {
     data class App(val uid: Int, val packageName: String, val system: Boolean)
 
     /**
-     * The UIDs covered among [apps]: those of packages the user installed, [self] (Watch's own), [playServices] and
-     * [tool] (the user's tool's, while one is known) left out, and the [browsers] unless [includeBrowsers]. Packages that
-     * share a UID share its traffic, so a UID is covered only where every package that holds it may be.
+     * The UIDs covered among [apps]: those of packages the user installed, [self] (the network part's own),
+     * [playServices] and [tool] (the user's tool's, while one is known) left out, and the [browsers] unless
+     * [includeBrowsers]. Packages that share a UID share its traffic, so a UID is covered only where every package that
+     * holds it may be.
      */
     fun covered(
         apps: List<App>,

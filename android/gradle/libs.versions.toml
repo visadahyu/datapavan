@@ -17,7 +17,7 @@ okhttp = "5.5.1"
 [libraries]
 androidx-activity-compose = { module = "androidx.activity:activity-compose", version.ref = "activityCompose" }
 androidx-lifecycle-runtime = { module = "androidx.lifecycle:lifecycle-runtime", version.ref = "lifecycle" }
-# Already in the graph through Activity; declared because Watch's screen keeps the import's confirmation in a
+# Already in the graph through Activity; declared because the network screen keeps the import's confirmation in a
 # ViewModel across its recreation (W7, part 2, fix round).
 androidx-lifecycle-viewmodel = { module = "androidx.lifecycle:lifecycle-viewmodel", version.ref = "lifecycle" }
 androidx-startup-runtime = { module = "androidx.startup:startup-runtime", version.ref = "startup" }

@@ -20,7 +20,7 @@ import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 
 /**
- * Watch's connection log (W4, ADR 0037): the engine's records, each sealed under a key for its day,
+ * The network part's connection log (W4, ADR 0037): the engine's records, each sealed under a key for its day,
  * in app-private SQLite. A day key lives in memory only while its day is today, and on disk only
  * wrapped by the Keystore key pair, whose private key works only on an unlocked phone. Expiry deletes
  * the days past retention, rows and keys together; the wipe deletes the database and the key pair.

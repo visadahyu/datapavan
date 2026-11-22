@@ -160,7 +160,10 @@ class UsageStatesTest {
         assertEquals(listOf(inUse(A, at(10), at(100) + grace), serving(B, at(150), at(160)), serving(C, at(20), at(100))), reading.intervals)
     }
 
-    /** Watch starting again reads back to the phone's start: a service started three hours before, still running, is with its notification from Watch's start. */
+    /**
+     * The network part starting again reads back to the phone's start: a service started three hours before, still
+     * running, is with its notification from the network part's start.
+     */
     @Test
     fun aRestartFindsWhatIsOpenFromThePhonesStart() {
         val states = UsageStates()
@@ -380,7 +383,7 @@ class UsageStatesTest {
 
     /**
      * A first reading reads back to the phone's start, so that a foreground service started a day or more
-     * before Watch is seen; so do the readings after one that knew nothing and after one the engine did not
+     * before the network part is seen; so do the readings after one that knew nothing and after one the engine did not
      * take (review b2 of W5's second part, fresh, M1: it read back a day).
      */
     @Test

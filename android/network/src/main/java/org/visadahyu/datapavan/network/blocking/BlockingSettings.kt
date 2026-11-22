@@ -5,8 +5,8 @@ import android.content.SharedPreferences
 import androidx.core.content.edit
 
 /**
- * The user's tracker blocking (W8, part 3a; ADR 0053), in the preferences `blocking` of Watch's process: whether it is
- * on (off until the user turns it on), whether it includes browsers, whether it blocks the user's tool's own tracker
+ * The user's tracker blocking (W8, part 3a; ADR 0053), in the preferences `blocking` of the network process: whether it
+ * is on (off until the user turns it on), whether it includes browsers, whether it blocks the user's tool's own tracker
  * lookups by DNS, the global pause, and the undo: apps allowed for an hour ([allowApp]) and rows allowed in one app
  * until blocked again ([allowEntries]). Apps and rows are kept by package and host, never by UID, which an app gets
  * anew when it is installed again; [Handover] gives them UIDs each time it hands the setting over.
@@ -16,8 +16,8 @@ import androidx.core.content.edit
  * cannot stretch one; the engine then holds the rest as a deadline on the time since the phone started. Nothing of
  * what blocking counted is kept here or anywhere else (ADR 0047): the engine's tallies are memory only.
  *
- * ADR 0047's profile keeps these behind Watch's lock and wipes them with a wipe, as the apps left out of the tunnel
- * are (`left_out`): W9's wipe calls [wipe] beside them. Nothing else here records what an app did.
+ * ADR 0047's profile keeps these behind the network part's lock and wipes them with a wipe, as the apps left out of the
+ * tunnel are (`left_out`): W9's wipe calls [wipe] beside them. Nothing else here records what an app did.
  */
 class BlockingSettings internal constructor(private val store: Store, private val self: String = "") {
     /** Where the settings are kept: SharedPreferences on the phone ([of]), a map in the JVM tests. */

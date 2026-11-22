@@ -99,8 +99,8 @@ class DnsSettings private constructor(private val prefs: SharedPreferences) {
              * A resolver the user typed, or null when it does not read: a DoH URL (`https://host[:port][/path]`) or a
              * DoT host (`host[:port]`), read as the engine reads them (`Url::parse`, `dot_url`: a host of letters,
              * digits, hyphens and dots, a path of RFC 3986's unreserved characters and `/`, no query, user or space;
-             * W8's fix round), and one to sixteen IP addresses, since Watch never looks a resolver's name up in plain
-             * DNS. Persian and Arabic digits and commas, as a Persian keyboard types them, read as ASCII ones
+             * W8's fix round), and one to sixteen IP addresses, since the network part never looks a resolver's name up
+             * in plain DNS. Persian and Arabic digits and commas, as a Persian keyboard types them, read as ASCII ones
              * (review R-m6). Nothing typed makes it throw (review S-M2).
              */
             fun custom(at: String, addresses: String): Choice? = try {
@@ -173,7 +173,10 @@ class DnsSettings private constructor(private val prefs: SharedPreferences) {
         /** The ICANN section of the public suffix list (W8's fix round, review S-C1). */
         const val SUFFIXES = "public-suffix/icann.dat"
 
-        /** Debug builds: the DNS lab's tables and root, put in Watch's files by scripts/verify-dns.sh, in place of the pack's. */
+        /**
+         * Debug builds: the DNS lab's tables and root, put in the network part's files by scripts/verify-dns.sh, in
+         * place of the pack's.
+         */
         const val LAB_DIR = "dnslab"
 
         @Volatile
@@ -213,8 +216,8 @@ class DnsSettings private constructor(private val prefs: SharedPreferences) {
         }
 
         /**
-         * The public suffixes of the data pack, for [SearchDomains]; empty when the pack does not read, and then Watch
-         * accepts no search domain at all.
+         * The public suffixes of the data pack, for [SearchDomains]; empty when the pack does not read, and then the
+         * network part accepts no search domain at all.
          */
         fun suffixes(context: Context): PublicSuffixes = try {
             PublicSuffixes.parse(DataPackStore.read(context, NetworkPacks).text(SUFFIXES).orEmpty())

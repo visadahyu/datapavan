@@ -48,9 +48,9 @@ object TunnelStates {
         )
     }
 
-    /** What the screen says of a configuration, from its line and what Watch knows. */
+    /** What the screen says of a configuration, from its line and what the network part knows. */
     sealed interface Shown {
-        /** Watch is off: it holds no tunnel. */
+        /** The network part is off: it holds no tunnel. */
         data object Off : Shown
 
         /**

@@ -14,7 +14,10 @@ class CoverageTest {
     private fun covered(apps: List<App>, tool: Int? = null, browsers: Set<String> = emptySet(), include: Boolean = false) =
         Coverage.covered(apps, self = SELF, playServices = PLAY, tool = tool, browsers = browsers, includeBrowsers = include)
 
-    /** The apps the user installed are covered; Android's own UIDs, apps that came with the phone and Watch are not. */
+    /**
+     * The apps the user installed are covered; Android's own UIDs, apps that came with the phone and the network part
+     * are not.
+     */
     @Test
     fun theAppsTheUserInstalledAreCovered() {
         val apps = listOf(

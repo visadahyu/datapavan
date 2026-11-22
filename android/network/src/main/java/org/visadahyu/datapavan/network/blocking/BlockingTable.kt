@@ -1,11 +1,12 @@
 package org.visadahyu.datapavan.network.blocking
 
 /**
- * Tracker blocking's graded table as Watch's Kotlin side reads it (W8, part 3a; ADR 0053): `blocking/hosts.tsv` of the
- * data pack the audit verifies, with a debug build's row for the lab's names after it ([LabRow]). The engine reads the
- * same bytes for its decisions (core/net/src/blocking.rs); this reads them for what the engine leaves to Kotlin: each
- * row's SDK, the Java package prefix that joins it to εxodus's tracker of the same SDK ([TrackerCode]), the condition
- * of a grade the app's own code decides ([Grades]), and the function the screens say.
+ * Tracker blocking's graded table as the network part's Kotlin side reads it (W8, part 3a; ADR 0053):
+ * `blocking/hosts.tsv` of the data pack the audit verifies, with a debug build's row for the lab's names after it
+ * ([LabRow]). The engine reads the same bytes for its decisions (core/net/src/blocking.rs); this reads them for what
+ * the engine leaves to Kotlin: each row's SDK, the Java package prefix that joins it to εxodus's tracker of the same
+ * SDK ([TrackerCode]), the condition of a grade the app's own code decides ([Grades]), and the function the screens
+ * say.
  *
  * Its rules are the engine's, so that the two never read one table two ways: a line that is not nine columns, a host
  * that is not a DNS name, a grade or a condition it does not know, a host twice, or more rows than [MAX_ROWS] refuses
@@ -155,8 +156,8 @@ class BlockingTable private constructor(
 /**
  * The rows of `blocking/exceptions.tsv` (ADR 0053): an SDK vendor's own app, by its package AND its signing certificate,
  * keeps a host the table grades `block` or `code`, for that app's own function. Granted for function only, never
- * because one company owns both the app and the tracker (decision 2): Watch never adds one by company, and an app whose
- * certificate is not the one written here is blocked as any other.
+ * because one company owns both the app and the tracker (decision 2): the network part never adds one by company, and
+ * an app whose certificate is not the one written here is blocked as any other.
  */
 object Exceptions {
     /** The file's place in the data pack. */

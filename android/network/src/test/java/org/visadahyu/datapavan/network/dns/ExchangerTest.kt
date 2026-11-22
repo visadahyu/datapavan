@@ -375,7 +375,10 @@ class ExchangerTest {
         assertEquals(29L, reply().first)
     }
 
-    /** Review S-m2: a socket to a tool off the loopback (on the LAN) is protected from Watch's own tunnel; one on the loopback needs not. */
+    /**
+     * Review S-m2: a socket to a tool off the loopback (on the LAN) is protected from the network part's own tunnel;
+     * one on the loopback needs not.
+     */
     @Test
     fun aToolOffTheLoopbackIsProtected() {
         val protectedSockets = mutableListOf<Socket>()

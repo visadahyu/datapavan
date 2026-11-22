@@ -24,7 +24,7 @@ import androidx.compose.ui.unit.dp
 import org.visadahyu.datapavan.network.R
 
 /**
- * Tracker blocking's settings on Watch's screen (W8, part 3a; ADR 0053): "Block trackers" ([on], off until the user
+ * Tracker blocking's settings on the network screen (W8, part 3a; ADR 0053): "Block trackers" ([on], off until the user
  * turns it on), "Also block in browsers" ([browsers]), and, only while the user's tool carries the apps ([toolChained]),
  * "Also block your tool's own tracker lookups" ([toolDns]); and the global pause, which names no app, with its end
  * ([pausedUntil], on the phone's clock).
@@ -37,7 +37,7 @@ internal data class BlockingSettingsView(
     val pausedUntil: Long? = null,
 )
 
-/** What the user can change of blocking on Watch's screen. */
+/** What the user can change of blocking on the network screen. */
 internal class BlockingSettingsActions(
     val onOn: (Boolean) -> Unit = {},
     val onBrowsers: (Boolean) -> Unit = {},

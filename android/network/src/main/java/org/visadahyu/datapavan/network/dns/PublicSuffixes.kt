@@ -3,10 +3,11 @@ package org.visadahyu.datapavan.network.dns
 /**
  * The ICANN section of the public suffix list, as the data pack carries it (`public-suffix/icann.dat`, W8's fix round,
  * review S-C1): the domains under which anyone may register a name (`com`, `co.uk`, `*.ck` but not `www.ck`). A
- * network's search domain that is one of them is never the network's own, so Watch ignores it ([SearchDomains]).
+ * network's search domain that is one of them is never the network's own, so the network part ignores it
+ * ([SearchDomains]).
  */
 class PublicSuffixes private constructor(private val rules: Set<String>) {
-    /** Whether the list holds anything: without it, Watch accepts no search domain. */
+    /** Whether the list holds anything: without it, the network part accepts no search domain. */
     val known: Boolean get() = rules.isNotEmpty()
 
     /**
@@ -32,15 +33,15 @@ class PublicSuffixes private constructor(private val rules: Set<String>) {
     }
 }
 
-/** Which of a network's search domains Watch takes as the network's own (W8's fix round, review S-C1). */
+/** Which of a network's search domains the network part takes as the network's own (W8's fix round, review S-C1). */
 object SearchDomains {
-    /** Watch keeps at most this many, as the engine does. */
+    /** The network part keeps at most this many, as the engine does. */
     private const val MOST = 16
 
     /**
      * The domains of [domains] (Android's `LinkProperties.getDomains`, by spaces or commas) that may be the
      * network's own: not a single label, not a public suffix of [suffixes], each once, lower case, at most [MOST];
-     * none at all without the list, since then Watch cannot tell.
+     * none at all without the list, since then the network part cannot tell.
      */
     fun accepted(domains: String, suffixes: PublicSuffixes): String {
         if (!suffixes.known) return ""

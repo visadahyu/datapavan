@@ -5,7 +5,7 @@ plugins {
     alias(libs.plugins.kotlin.compose)
 }
 
-// Watch (ADR 0029, ADR 0045): the tunnel, its log and the chain, as a library that only Datapavan Advanced
+// The network part (ADR 0029, ADR 0045): the tunnel, its log and the chain, as a library that only Datapavan Advanced
 // includes, so that Datapavan Basic never carries the Rust engine or a reason to hold INTERNET. The
 // application's build (app/build.gradle.kts) checks the merged manifest of each edition against its own
 // allowlist, and that Advanced's APK holds this library's native code and keeps the methods it calls back.
@@ -60,8 +60,8 @@ dependencies {
     // isolated process of tunnel/qr/QrService.kt (W7, part 2; ADR 0035, question 10).
     implementation(libs.zxing.core)
     // OkHttp 5 (Apache-2.0), pinned, with Okio (Apache-2.0): DoH and Oblivious DoH for direct apps' names over HTTP/2
-    // on Android's own TLS, from sockets Watch protects and binds to the network beneath (W8, part 1; ADR 0042). No
-    // User-Agent, no Accept-Encoding, no cookies, no cache (dns/Exchanger.kt).
+    // on Android's own TLS, from sockets the network part protects and binds to the network beneath (W8, part 1; ADR
+    // 0042). No User-Agent, no Accept-Encoding, no cookies, no cache (dns/Exchanger.kt).
     implementation(libs.okhttp)
     testImplementation(libs.junit)
     // The JVM tests of DoH and Oblivious DoH over OkHttp (W8's fix round, review R-M4): OkHttp's own test server,
@@ -169,7 +169,10 @@ val remappedRustFlags = cargoHome.map { home ->
     )
 }
 
-/** Copies the table of tools (data/tools, W6) into the assets, for Watch to find the user's tool, and its guides (W8, part 3b). */
+/**
+ * Copies the table of tools (data/tools, W6) into the assets, for the network part to find the user's tool, and its
+ * guides (W8, part 3b).
+ */
 abstract class ToolTable : DefaultTask() {
     @get:InputFile
     @get:PathSensitive(PathSensitivity.NONE)
@@ -267,10 +270,10 @@ androidComponents {
     }
 }
 
-// The unit tests read these files while they run (Watch's English strings, the datasets, the engine's sources whose
-// codes and addresses they hold Kotlin to), so a change to any of them must run the tests again: undeclared, Gradle
-// took the tests as up to date when W7 part 2's strings moved out of strings_untranslated.xml, and only CI's fresh
-// run found the two tests that still read it.
+// The unit tests read these files while they run (the network part's English strings, the datasets, the engine's
+// sources whose codes and addresses they hold Kotlin to), so a change to any of them must run the tests again:
+// undeclared, Gradle took the tests as up to date when W7 part 2's strings moved out of strings_untranslated.xml, and
+// only CI's fresh run found the two tests that still read it.
 tasks.withType<Test>().configureEach {
     inputs.dir(layout.projectDirectory.dir("src/main/res/values")).withPathSensitivity(PathSensitivity.RELATIVE)
         .withPropertyName("englishStrings")

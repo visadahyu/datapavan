@@ -51,10 +51,10 @@ import org.visadahyu.datapavan.network.ui.NetworkTheme
 import org.visadahyu.datapavan.network.ui.rowOf
 
 /**
- * Watch's view "Now" and each app's history (ADR 0046, decision 2 (d)), in Watch's process, opened by a
- * non-exported intent as Watch's screen is: from Watch's screen, and in Advanced from the audit's page of an
+ * The network part's view "Now" and each app's history (ADR 0046, decision 2 (d)), in the network process, opened by a
+ * non-exported intent as the network screen is: from the network screen, and in Advanced from the audit's page of an
  * app, with [EXTRA_PACKAGE], a package name and nothing else, to show that app. The summary and the tile
- * (W9) open it the same way. It goes behind Watch's own lock when W9 brings it (ADR 0040).
+ * (W9) open it the same way. It goes behind the network part's own lock when W9 brings it (ADR 0040).
  *
  * The engine's snapshot is read once a second while "Now" is on screen, and not at all otherwise, nor while
  * an app's history shows (the call costs about a millisecond); names, the tables of trackers and companies,
@@ -66,8 +66,8 @@ import org.visadahyu.datapavan.network.ui.rowOf
  * Tracker blocking (W8, part 3a; ADR 0053) is read with each snapshot: what the engine counted in memory, the facts the
  * service handed it, and the user's allowances. The one-tap undo writes the allowance and has the running service hand
  * the setting again at once; it takes effect within seconds, since apps keep a failed lookup for a moment. A row's link
- * to "Log where apps connect ..." opens Watch's screen above this one, which stays where the user was beneath it, the
- * same app's row or its history ([MainActivity.logSwitchIntent]; the brief's point 11).
+ * to "Log where apps connect ..." opens the network screen above this one, which stays where the user was beneath it,
+ * the same app's row or its history ([MainActivity.logSwitchIntent]; the brief's point 11).
  */
 class NowActivity : ComponentActivity() {
     private val worker = Executors.newSingleThreadExecutor { Thread(it, "network-now") }.asCoroutineDispatcher()
@@ -160,7 +160,8 @@ class NowActivity : ComponentActivity() {
                     onDay = ::showDay,
                     onCloseHistory = { history.value = null },
                     onAllowAccess = { org.visadahyu.datapavan.audit.openUsageAccess(this) },
-                    // A row the switch "Log where apps connect ..." leaves out opens Watch's screen at it, above this one.
+                    // A row the switch "Log where apps connect ..." leaves out opens the network screen at it, above
+                    // this one.
                     onLogSwitch = { startActivity(MainActivity.logSwitchIntent(this)) },
                     blockingActions = blockingActions,
                 )
@@ -395,7 +396,10 @@ class NowActivity : ComponentActivity() {
     }
 
     companion object {
-        /** Watch's "Now" screen, for the intents that open it (Watch's screen, the audit, and W9's summary and tile). */
+        /**
+         * The network part's "Now" screen, for the intents that open it (the network screen, the audit, and W9's
+         * summary and tile).
+         */
         const val CLASS_NAME = "org.visadahyu.datapavan.network.NowActivity"
 
         /** The one app to show, by package name: the only thing that crosses from the audit's page. */
@@ -429,7 +433,7 @@ class NowActivity : ComponentActivity() {
         /**
          * Hands the engine's library the network signatures of `exodus/trackers.tsv` in the data pack the audit
          * verifies, the current one, and reads the owners' tables (ADR 0020) from the same pack, once each time
-         * this screen opens; no copy of the pack is kept. Watch's process only reads the pack's files: it never
+         * this screen opens; no copy of the pack is kept. The network process only reads the pack's files: it never
          * deletes them, which the audit's process does for a pack that no longer applies (review c1, engine,
          * m5). Returns what the library read: how many trackers have a network signature, how many alternatives
          * it read and how many it refused; empty for none.

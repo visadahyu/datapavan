@@ -24,7 +24,7 @@ sealed interface LogRecord {
      * its notification, in the background, or none and why. It is the state of the seconds its bytes were
      * counted in, a second with a moment of use being in use whole, or for a part with no bytes the state of
      * its end; quiet seconds of another state beyond the 120 that a cut walks back are not cut out (ADR 0037's
-     * note). Records of versions 1 and 2, written before Watch told states, have none: "not told".
+     * note). Records of versions 1 and 2, written before the network part told states, have none: "not told".
      */
     val state: Int
 
@@ -61,7 +61,7 @@ sealed interface LogRecord {
         override val state: Int = AppState.NOT_TOLD,
         /**
          * Its route (version 4, W7): [VIA_DIRECT], [VIA_TOOL] or [VIA_TUNNEL], and for a tunnel its number,
-         * which Watch gave the configuration; records before version 4, which went directly or through the
+         * which the network part gave the configuration; records before version 4, which went directly or through the
          * tool, say [VIA_UNKNOWN].
          */
         val via: Int = VIA_DIRECT,
@@ -161,7 +161,7 @@ sealed interface LogRecord {
         }
     }
 
-    /** Lookups the app sent to Watch's own DNS address, and their packets' bytes on the tunnel. */
+    /** Lookups the app sent to the network part's own DNS address, and their packets' bytes on the tunnel. */
     data class Lookups(
         override val uid: Int?,
         override val start: Long,
@@ -335,7 +335,7 @@ object AppState {
     /** Only in the live view: a second its state was not told for yet, which may still come. */
     const val NOT_YET = 4
 
-    /** Why there is none: Watch has no usage access. */
+    /** Why there is none: the network part has no usage access. */
     const val NO_ACCESS = 0x10
 
     /** Android gave no usage events, as before the first unlock after a restart. */
@@ -347,7 +347,10 @@ object AppState {
     /** Android did not name the flow's app. */
     const val NO_APP = 0x40
 
-    /** Nothing was told for it: before Watch's first reading, in a gap a clock set back left, or when Watch stopped first. */
+    /**
+     * Nothing was told for it: before the network part's first reading, in a gap a clock set back left, or when the
+     * network part stopped first.
+     */
     const val NOT_TOLD = 0x50
 
     /** The state of a code: [NONE], [IN_USE], [NOTIFICATION], [BACKGROUND] or [NOT_YET]. */

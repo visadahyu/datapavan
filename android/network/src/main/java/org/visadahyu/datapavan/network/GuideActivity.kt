@@ -21,7 +21,7 @@ import org.visadahyu.datapavan.network.ui.GuideScreen
 import org.visadahyu.datapavan.network.ui.NetworkTheme
 
 /**
- * One tool's guide for proxy mode (W8, part 3b; ADR 0041, "How the per-tool guides are built"), in Watch's process,
+ * One tool's guide for proxy mode (W8, part 3b; ADR 0041, "How the per-tool guides are built"), in the network process,
  * opened by a non-exported intent from the chain section's links, and in W9 from onboarding, with [EXTRA_GUIDE] and
  * the installed tool's [EXTRA_PACKAGE], whose own labels the guide quotes. The tool's labels are read off the main
  * thread; nothing of the tool runs. Protected from screenshots as every screen is (ADR 0040).
@@ -61,7 +61,7 @@ class GuideActivity : ComponentActivity() {
         const val EXTRA_GUIDE = "guide"
         const val EXTRA_PACKAGE = "package"
 
-        /** Debug builds only, as on Watch's screen: screenshots allowed for a script. */
+        /** Debug builds only, as on the network screen: screenshots allowed for a script. */
         const val EXTRA_SCREENSHOTS = "screenshots"
 
         fun intent(context: Context, guide: String, packageName: String?): Intent =

@@ -13,13 +13,14 @@ import java.io.File
 import java.security.SecureRandom
 
 /**
- * A photo of a WireGuard configuration's QR code, taken by the phone's own camera app for Watch (W7, part 2; ADR
- * 0035, question 10): Watch never holds `CAMERA`. The camera writes the photo to a file of Watch's own, in its
- * cache, through a URI of Watch's FileProvider granted for writing to that one file, and revoked once the camera
- * answers. The photo holds the configuration's private key, so the file is deleted right after it is read, when
- * reading fails, when the camera is cancelled, and, for one a crash left, at Watch's next start ([deleteLeftovers]).
- * Since Android 11 only a preinstalled camera answers `ACTION_IMAGE_CAPTURE`; on Android 10 the intent names the
- * preinstalled camera itself, so that on every version only the phone's own camera sees the picture.
+ * A photo of a WireGuard configuration's QR code, taken by the phone's own camera app for the network part (W7, part 2;
+ * ADR 0035, question 10): the network part never holds `CAMERA`. The camera writes the photo to a file of the network
+ * part's own, in its cache, through a URI of the network part's FileProvider granted for writing to that one file, and
+ * revoked once the camera answers. The photo holds the configuration's private key, so the file is deleted right after
+ * it is read, when reading fails, when the camera is cancelled, and, for one a crash left, at the network part's next
+ * start ([deleteLeftovers]). Since Android 11 only a preinstalled camera answers `ACTION_IMAGE_CAPTURE`; on Android 10
+ * the intent names the preinstalled camera itself, so that on every version only the phone's own camera sees the
+ * picture.
  */
 object Capture {
     private const val FOLDER = "qr-capture"
@@ -78,9 +79,10 @@ object Capture {
     }
 
     /**
-     * A photo whose camera never answered, as when Watch's screen finishes while the camera has it (its task removed
-     * from Recents) and Watch's process lives on (fix round, security review m7): the write grant is taken back by
-     * [revoke], so that the camera cannot write the file again, and the file is deleted, whatever the revoke does.
+     * A photo whose camera never answered, as when the network screen finishes while the camera has it (its task
+     * removed from Recents) and the network process lives on (fix round, security review m7): the write grant is taken
+     * back by [revoke], so that the camera cannot write the file again, and the file is deleted, whatever the revoke
+     * does.
      */
     fun abandon(file: File, revoke: () -> Unit) {
         try {

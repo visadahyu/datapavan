@@ -38,19 +38,19 @@ import okhttp3.Response
 import org.visadahyu.datapavan.network.Engine
 
 /**
- * Carries the exchanges of Watch's encrypted resolver (W8, part 1, ADR 0042, "How it is built", point 1): the engine
- * holds no TLS, and hands each exchange here; this answers it later with [Engine.nativeExchanged], never on the
- * engine's thread. DoH and ODoH go over OkHttp, pinned, with HTTP/2; DoT over Android's own TLS; both are
+ * Carries the exchanges of the network part's encrypted resolver (W8, part 1, ADR 0042, "How it is built", point 1):
+ * the engine holds no TLS, and hands each exchange here; this answers it later with [Engine.nativeExchanged], never on
+ * the engine's thread. DoH and ODoH go over OkHttp, pinned, with HTTP/2; DoT over Android's own TLS; both are
  * Conscrypt, whose ClientHello is every Android app's. The network's resolver is asked through Android's own
  * resolver on the network beneath ([DnsResolver]), which keeps the phone's Private DNS as it was.
  *
  * What it sends: no `User-Agent`, no `Accept-Encoding` (compression would undo the padding), no cookie, no cache.
  * Where: every server is reached at the addresses the data pack gives ([Dns] answers only those, never a lookup),
- * from a socket protected from Watch's own tunnel and bound to the network beneath, or through the user's tool
- * ([ToolSocket]). Which certificates: Android's own roots only, never a user's or an administrator's ([SystemTrust]),
- * with the endpoint's pins where the dataset gives them, each exchange with its own addresses and pins (W8's fix
- * round). One client per network beneath, so that TLS sessions are resumed only on the network they began on; no
- * 0-RTT (Conscrypt sends no early data); connections idle for 60 s are closed and opened again on demand. Nothing of
+ * from a socket protected from the network part's own tunnel and bound to the network beneath, or through the user's
+ * tool ([ToolSocket]). Which certificates: Android's own roots only, never a user's or an administrator's
+ * ([SystemTrust]), with the endpoint's pins where the dataset gives them, each exchange with its own addresses and pins
+ * (W8's fix round). One client per network beneath, so that TLS sessions are resumed only on the network they began on;
+ * no 0-RTT (Conscrypt sends no early data); connections idle for 60 s are closed and opened again on demand. Nothing of
  * an exchange runs on the caller's thread, the engine's only one (review S-m5): the clients, the TLS context and
  * Android's roots are built on [work], and [warm] builds them ahead, when the service starts and the network changes.
  */
@@ -61,12 +61,14 @@ class Exchanger(
     /** The certificates accepted: Android's own roots and [Host.extraRoots] ([SystemTrust]), or a test's. */
     private val given: X509TrustManager? = null,
 ) {
-    /** What the exchanger needs of Watch's VPN service. */
+    /** What the exchanger needs of the network part's VPN service. */
     interface Host {
-        /** Keeps [socket] out of Watch's own tunnel. */
+        /** Keeps [socket] out of the network part's own tunnel. */
         fun protect(socket: Socket): Boolean
 
-        /** Keeps [socket] out of Watch's own tunnel: debug builds' resolver of the network, for the DNS lab. */
+        /**
+         * Keeps [socket] out of the network part's own tunnel: debug builds' resolver of the network, for the DNS lab.
+         */
         fun protect(socket: java.net.DatagramSocket): Boolean = false
 
         /** The network beneath the tunnel, or null for none. */
@@ -261,8 +263,9 @@ class Exchanger(
     /** The sockets OkHttp and the DoT client open. */
     private inner class Sockets(private val through: Through?) : SocketFactory() {
         override fun createSocket(): Socket {
-            // A tool on the loopback is reached as it is; one elsewhere (on the LAN) would loop through Watch's own
-            // tunnel, where Watch's UID is: its socket is protected and bound as any other (review S-m2).
+            // A tool on the loopback is reached as it is; one elsewhere (on the LAN) would loop through the network
+            // part's own tunnel, where the network part's UID is: its socket is protected and bound as any other
+            // (review S-m2).
             val socket = when {
                 through == null -> Socket()
                 through.proxy.address.isLoopbackAddress -> return ToolSocket(through.proxy, through.user, through.password)

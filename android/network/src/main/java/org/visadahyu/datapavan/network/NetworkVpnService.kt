@@ -35,12 +35,12 @@ import org.visadahyu.datapavan.network.log.ConnectionLog
 import org.visadahyu.datapavan.network.log.LogRecord
 
 /**
- * Watch's VPN (docs/VPN.md). Every app's traffic enters the tunnel, and the packet engine in Rust
+ * The network part's VPN (docs/VPN.md). Every app's traffic enters the tunnel, and the packet engine in Rust
  * ([Engine]) passes it on to where it was going over sockets this service protects, after asking
- * Android whose each flow is. Watch is inside its own tunnel, as the engine needs (ADR 0012).
+ * Android whose each flow is. The network part is inside its own tunnel, as the engine needs (ADR 0012).
  *
- * Android starts this service in two ways: from Watch's screen with [ACTION_START] or [ACTION_STOP],
- * and with [VpnService.SERVICE_INTERFACE] when the user made Watch the always-on VPN. Both start the
+ * Android starts this service in two ways: from the network screen with [ACTION_START] or [ACTION_STOP],
+ * and with [VpnService.SERVICE_INTERFACE] when the user made the network part the always-on VPN. Both start the
  * tunnel. Android binds to the service while the tunnel is up, which keeps it running (ADR 0034).
  */
 class NetworkVpnService : VpnService() {
@@ -92,7 +92,7 @@ class NetworkVpnService : VpnService() {
     private var setupsAnew = 0
 
     /**
-     * When the engine's counters began, by [SystemClock.elapsedRealtime]: at Watch's start of its engine,
+     * When the engine's counters began, by [SystemClock.elapsedRealtime]: at the network part's start of its engine,
      * and kept when a new engine takes the tunnel, to which the old one hands its counters. A test that
      * reads a counter twice tells by it an engine started afresh between, whose counters began again at
      * 0, from one that counted nothing (ADR 0044, unit 9b, fix round 2).
@@ -234,7 +234,7 @@ class NetworkVpnService : VpnService() {
     }
 
     /**
-     * Follows Private DNS on Watch's own default network, which is its VPN while the tunnel is up:
+     * Follows Private DNS on the network part's own default network, which is its VPN while the tunnel is up:
      * what Android does with the lookups of every app in the tunnel.
      */
     private val ownNetwork = object : ConnectivityManager.NetworkCallback() {
@@ -271,7 +271,8 @@ class NetworkVpnService : VpnService() {
             ACTION_APPLY_BLOCKING -> if (active) blocking.apply(full = intent.getBooleanExtra(EXTRA_FULL, true))
             // The apps left out are part of the tunnel's own setup: it is set up again. The routes first: an app taken
             // back has its tunnel's or the chain's route in the engine before its packets come into the tunnel again,
-            // never going directly; an app left out leaves them, as it leaves Watch (fix round, security review M1).
+            // never going directly; an app left out leaves them, as it leaves the network part (fix round, security
+            // review M1).
             ACTION_APPLY_LEFT_OUT -> {
                 if (active) applyRoutes()
                 setUpAgain()
@@ -283,7 +284,7 @@ class NetworkVpnService : VpnService() {
 
     /**
      * Starts the tunnel with the first hop's MTU of the network beneath, measured off the main thread
-     * first. Before the tunnel is up no network beneath is followed yet, and Watch's sockets take the
+     * first. Before the tunnel is up no network beneath is followed yet, and the network part's sockets take the
      * default network.
      */
     private fun startMeasured(intent: Intent?) {
@@ -304,7 +305,7 @@ class NetworkVpnService : VpnService() {
      * The tunnel's MTU follows the network beneath: [network]'s first hop is measured again, off the
      * main thread, and when it brings another value, by [TunnelMtu.next], the tunnel is set up again with
      * it, as for an address clash (ADR 0041). The apps' own kernels then meet that hop as they would
-     * without Watch. Within one network the MTU rises only ten minutes after the last setup, so that a
+     * without the network part. Within one network the MTU rises only ten minutes after the last setup, so that a
      * route that flaps cannot set the tunnel up again and again.
      */
     private fun remeasure(network: Network) {
@@ -381,8 +382,8 @@ class NetworkVpnService : VpnService() {
     }
 
     /**
-     * Hands the engine every app's route again from what Watch keeps, the tunnels' before the chain's: each by its
-     * UID as Android has it now. Main thread only.
+     * Hands the engine every app's route again from what the network part keeps, the tunnels' before the chain's: each
+     * by its UID as Android has it now. Main thread only.
      */
     private fun applyRoutes() {
         applyTunnels()
@@ -429,8 +430,8 @@ class NetworkVpnService : VpnService() {
             messengers.map { it.first }.toIntArray(),
             messengers.map { it.second }.toIntArray(),
             android.joinToString("\n"),
-            // With Private DNS strict, Android's resolver asks its provider over TLS: Watch sees no app's lookups,
-            // and a messenger's hello no answer tied is no evidence of its proxy (ADR 0052, fix round's S-M3).
+            // With Private DNS strict, Android's resolver asks its provider over TLS: the network part sees no app's
+            // lookups, and a messenger's hello no answer tied is no evidence of its proxy (ADR 0052, fix round's S-M3).
             dnsState.value is PrivateDns.Strict,
         )
     }
@@ -458,7 +459,7 @@ class NetworkVpnService : VpnService() {
      * Follows the apps installed, installed again, updated and removed while the tunnel runs (fix round, security
      * review M1): routes go by UID, and an app installed again (another build in place of the store's) has a new one,
      * so every route is handed to the engine again from the store and the chain's settings, which name apps by
-     * package. Without this, such an app went its other way, directly perhaps, until Watch started again.
+     * package. Without this, such an app went its other way, directly perhaps, until the network part started again.
      */
     private fun followPackages() {
         if (packages != null || packagesOff) return
@@ -528,7 +529,7 @@ class NetworkVpnService : VpnService() {
     /**
      * Hands the user's chain (W6) to the engine: the tool's proxy where it last answered, its password
      * where the tool takes one, the tool's UID, and the chained apps. It runs before any traffic, from
-     * what Watch remembers, so that chained apps never go directly while the tool is looked for again;
+     * what the network part remembers, so that chained apps never go directly while the tool is looked for again;
      * a tool that is not there leaves them waiting, not going directly.
      */
     private fun applyChain() {
@@ -587,8 +588,8 @@ class NetworkVpnService : VpnService() {
     private var routesSet: List<Pair<Int, Int>> = emptyList()
 
     /**
-     * Hands the engine the WireGuard configurations Watch keeps and each app's tunnel (W7, part 2), before any
-     * traffic at a start, as the chain is, and again when the screen changes them: each configuration's text is
+     * Hands the engine the WireGuard configurations the network part keeps and each app's tunnel (W7, part 2), before
+     * any traffic at a start, as the chain is, and again when the screen changes them: each configuration's text is
      * opened only to be set and zeroed at once; a configuration whose wrap cannot be opened, because its key is gone
      * or needs an unlocked phone, is not set, and its apps wait, routed to it, never going directly. The engine
      * keeps them for the engines to come while none runs; the default tunnel goes first.
@@ -605,7 +606,7 @@ class NetworkVpnService : VpnService() {
             Log.w(TAG, "The configurations' state could not be read", e)
             if (e is org.visadahyu.datapavan.network.tunnel.TunnelStore.StateLost) {
                 // Lost for good, while the store held a configuration or a route: every app is held, also while
-                // it runs, until the user chooses on Watch's screen, which one notification opens (the
+                // it runs, until the user chooses on the network screen, which one notification opens (the
                 // maintainer's word of 2026-11-20). Trying again would not open it.
                 holdEveryApp()
                 Notices.show(this, Notices.Kind.LOST, true)
@@ -660,8 +661,9 @@ class NetworkVpnService : VpnService() {
         )
         routesSet = handed
         routesKnown = true
-        // Every installed app's UID, while any app is routed: one installed since is asked of Watch at its first
-        // flow (routeOfApp), never sent on a default way before Watch says where (the maintainer, 2026-11-20).
+        // Every installed app's UID, while any app is routed: one installed since is asked of the network part at its
+        // first flow (routeOfApp), never sent on a default way before the network part says where (the maintainer,
+        // 2026-11-20).
         val chain = org.visadahyu.datapavan.network.chain.ChainSettings.of(this)
         Engine.nativeKnownApps(if (state.routes.isNotEmpty() || (chain.on && chain.lastTool != null)) installedUids() else null)
         if (locked) waitForUnlock() else stopWaitingForUnlock()
@@ -679,11 +681,11 @@ class NetworkVpnService : VpnService() {
     }
 
     /**
-     * Called by the engine, on a thread of its own, for a flow of the app [uid], which Watch did not name when it
-     * last handed its routes over (an app installed since, as one installed again with a new UID): where the store
-     * sends its packages, `tunnel N`, `tool` or `direct`, by the rules the routes are handed by; empty where Watch
-     * cannot say, as while the state cannot be opened, and the engine then refuses the flow. The engine waits for it
-     * at most three seconds (`ASK_BOUND`), so nothing here may wait on the main thread.
+     * Called by the engine, on a thread of its own, for a flow of the app [uid], which the network part did not name
+     * when it last handed its routes over (an app installed since, as one installed again with a new UID): where the
+     * store sends its packages, `tunnel N`, `tool` or `direct`, by the rules the routes are handed by; empty where the
+     * network part cannot say, as while the state cannot be opened, and the engine then refuses the flow. The engine
+     * waits for it at most three seconds (`ASK_BOUND`), so nothing here may wait on the main thread.
      */
     @Suppress("unused")
     fun routeOfApp(uid: Int): String {
@@ -721,7 +723,7 @@ class NetworkVpnService : VpnService() {
         val uids = packageManager.getInstalledApplications(0).map { it.uid }.distinct()
         Engine.nativeTunnelOrder(intArrayOf(HOLD_TUNNEL))
         Engine.nativeTunnelRoutes(uids.toIntArray(), IntArray(uids.size) { HOLD_TUNNEL }, logDestinations = false)
-        // An app installed meanwhile is asked of Watch, which cannot say: it is held too.
+        // An app installed meanwhile is asked of the network part, which cannot say: it is held too.
         Engine.nativeKnownApps(uids.toIntArray())
         routesSet = uids.map { it to HOLD_TUNNEL }
         Log.w(TAG, "Every app is held until the configurations' state opens")
@@ -801,8 +803,8 @@ class NetworkVpnService : VpnService() {
         onlyApps = intent?.getStringExtra(EXTRA_ONLY_APPS)?.takeIf { debuggable }?.split(',')?.filter { it.isNotBlank() }
         // The chain before the engine, so that a chained app's first packet goes through the tool (W6,
         // ADR 0044, unit 12b), and before the tunnel too: from establish() on the apps' packets wait in
-        // it until the engine reads them, and setting the chain reads Watch's settings and the tool table
-        // and may use the Keystore. It needs no tunnel: with no engine running, Watch's native side keeps
+        // it until the engine reads them, and setting the chain reads the network part's settings and the tool table
+        // and may use the Keystore. It needs no tunnel: with no engine running, the network part's native side keeps
         // the chain, nativeChain says false, which applyChain does not read, and the first engine starts
         // with it. The screen shows the chain's settings and whether the tunnel runs, neither of which
         // this changes. A start that fails, at establish() or after, stops, which forgets the chain.
@@ -839,7 +841,7 @@ class NetworkVpnService : VpnService() {
             .addCapability(NetworkCapabilities.NET_CAPABILITY_NOT_VPN)
             .build()
         val handler = Handler(Looper.getMainLooper())
-        // Watch is inside its own tunnel, so its default network is its own VPN. From Android 12 the
+        // The network part is inside its own tunnel, so its default network is its own VPN. From Android 12 the
         // best-matching callback follows the network beneath; before, requestNetwork does, with
         // CHANGE_NETWORK_STATE, and brings up no other network when the current one matches (ADR 0034).
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
@@ -869,7 +871,7 @@ class NetworkVpnService : VpnService() {
      * would route nowhere once it goes; reset at once by the new engine, the apps open new ones. When the
      * addresses differ, for an address clash (ADR 0041) or the debug `addresses-force`, the apps'
      * connections are bound to the old addresses and cannot go on, nor the engine's listeners and
-     * rewriting. The old engine hands the new one, before its first packet, its chain as Watch last set
+     * rewriting. The old engine hands the new one, before its first packet, its chain as the network part last set
      * it, the network's resolver, its stand-ins, names and counters (`Engine::hand_over`, re-review of
      * unit 12, major 1), so that no chained app's packet goes directly meanwhile; its flows begin anew.
      * Either way nothing is set on the engine again after, so that no chain read from older settings
@@ -950,7 +952,7 @@ class NetworkVpnService : VpnService() {
             .addDnsServer(addresses.dns6)
             // The engine reads until "would block" (spike, finding 8).
             .setBlocking(false)
-            // A VPN that targets Android 10 or later is metered unless it says otherwise. Watch is
+            // A VPN that targets Android 10 or later is metered unless it says otherwise. The network part is
             // local, so the network keeps the meteredness of the Wi-Fi or mobile network beneath it.
             .setMetered(false)
         // A tunnel set up again keeps the network beneath that the callback named; Android takes the
@@ -1085,7 +1087,7 @@ class NetworkVpnService : VpnService() {
         dnsState.value = null
     }
 
-    /** Another VPN took Android's one VPN slot, or the user turned Watch off in Settings. */
+    /** Another VPN took Android's one VPN slot, or the user turned the network part off in Settings. */
     override fun onRevoke() {
         stop()
     }
@@ -1185,7 +1187,10 @@ class NetworkVpnService : VpnService() {
         Engine.nativeDnsNetwork(now.first, now.second)
     }
 
-    /** Debug builds: the DNS lab's test root that scripts/verify-dns.sh put in Watch's files; none in release builds. */
+    /**
+     * Debug builds: the DNS lab's test root that scripts/verify-dns.sh put in the network part's files; none in release
+     * builds.
+     */
     private fun labRoots(): List<java.security.cert.X509Certificate> {
         if (!debuggable) return emptyList()
         val file = java.io.File(java.io.File(filesDir, org.visadahyu.datapavan.network.dns.DnsSettings.LAB_DIR), "ca.pem")
@@ -1511,7 +1516,7 @@ class NetworkVpnService : VpnService() {
 
     /**
      * Debug builds only, for W7's emulator check (scripts/verify-wireguard.sh): `tunnel-add ID FILE [local]`
-     * sets the WireGuard configuration in the file FILE of Watch's private storage (its files directory,
+     * sets the WireGuard configuration in the file FILE of the network part's private storage (its files directory,
      * which `run-as` writes) as the tunnel ID, "Local network directly" on with `local`, and prints `tunnel-set
      * ID` and a `tunnel-apps ID only|except PACKAGE` line for each app the configuration names, or `tunnel-refused
      * ID WHY`; `tunnel-remove ID` removes its configuration, its routes kept, so that its apps wait;
@@ -1524,10 +1529,10 @@ class NetworkVpnService : VpnService() {
      * Debug builds only, for scripts/verify-dns.sh (W8, part 1): `dns-strict on|off`, `dns-only on|off`, `dns-choice
      * odoh`, `dns-choice preset ID`, `dns-choice doh|dot AT ADDRS`, `dns-pairs SPEC|default`, `dns-notify on|off` and
      * `dns-refresh LOW HIGH|off` (seconds a target's key fetch waits after a 401) set the user's setting; `dns-apply`
-     * hands the engine the tables again (the lab's, where the check put them in Watch's files) and prints what it
-     * read; every one of them applies the setting. `dns-search DOMAINS` (by commas) hands the engine those search
-     * domains as Android's would be, through the public suffix list, and prints `dns-search-set` and what it kept.
-     * `dns-network-resolver ADDRESS:PORT|android` asks the network's resolver there in plain DNS, for the lab, in
+     * hands the engine the tables again (the lab's, where the check put them in the network part's files) and prints
+     * what it read; every one of them applies the setting. `dns-search DOMAINS` (by commas) hands the engine those
+     * search domains as Android's would be, through the public suffix list, and prints `dns-search-set` and what it
+     * kept. `dns-network-resolver ADDRESS:PORT|android` asks the network's resolver there in plain DNS, for the lab, in
      * place of Android's resolver of the network ([org.visadahyu.datapavan.network.dns.Exchanger.networkResolverForTests]).
      * `dns-times-clear` forgets the durations the engine kept, so that the dump's `dns-latency` lines read only the
      * exchanges after it (the speed budget's check, ADR 0039), and prints `dns-times-cleared`.
@@ -1646,10 +1651,10 @@ class NetworkVpnService : VpnService() {
      * address or
      * endpoint. `tunnel-key-time` opens each configuration as a start does and prints `tunnel-opened N MS` (zeroed at
      * once). `tunnel-key-probe make|open|clear` measures a key that needs an unlocked phone, as ADR 0035 asks of
-     * `setUnlockedDeviceRequired`: `make` makes one (alias `watch-tunnels-probe`) and wraps 32 random bytes in Watch's
-     * files, `open` unwraps them and prints `tunnel-key-probe open ok|locked|lost MS`, `clear` deletes both. `qr-decode
-     * FILE` hands the file FILE of Watch's files directory to the QR decoder's isolated process and prints
-     * `qr-decoded BYTES MS` or `qr-failed WHY MS`, never the text.
+     * `setUnlockedDeviceRequired`: `make` makes one (alias `network-tunnels-probe`) and wraps 32 random bytes in the
+     * network part's files, `open` unwraps them and prints `tunnel-key-probe open ok|locked|lost MS`, `clear` deletes
+     * both. `qr-decode FILE` hands the file FILE of the network part's files directory to the QR decoder's isolated
+     * process and prints `qr-decoded BYTES MS` or `qr-failed WHY MS`, never the text.
      */
     private fun debugStore(args: List<String>, writer: PrintWriter) {
         val store = org.visadahyu.datapavan.network.tunnel.TunnelStore.of(this)
@@ -1690,9 +1695,9 @@ class NetworkVpnService : VpnService() {
             writer.println("tunnel-unlock waiting ${if (unlockWait != null) "yes" else "no"} seen $unlocksSeen")
             writer.println("tunnel-key ${store.home().name.lowercase()}")
         }
-        // The package receiver off and on again, for the check that an app installed again is asked of Watch at its
-        // first flow (the maintainer, 2026-11-20); and key A deleted, as a Keystore reset would, for the check of a
-        // state lost for good.
+        // The package receiver off and on again, for the check that an app installed again is asked of the network part
+        // at its first flow (the maintainer, 2026-11-20); and key A deleted, as a Keystore reset would, for the check
+        // of a state lost for good.
         when (args.indexOf("packages-follow").takeIf { it >= 0 }?.let { args.getOrNull(it + 1) }) {
             "off" -> {
                 packagesOff = true
@@ -1727,7 +1732,7 @@ class NetworkVpnService : VpnService() {
         }
         val probe = args.indexOf("tunnel-key-probe").takeIf { it >= 0 }?.let { args.getOrNull(it + 1) }
         if (probe != null) {
-            // The store sets how Watch tells a locked phone; the probe's key is read the same way.
+            // The store sets how the network part tells a locked phone; the probe's key is read the same way.
             org.visadahyu.datapavan.network.tunnel.TunnelStore.of(this)
             val wrap = org.visadahyu.datapavan.network.tunnel.KeystoreWrap(PROBE_ALIAS, unlockedOnly = true)
             val file = java.io.File(filesDir, "tunnel-key-probe")
@@ -1845,7 +1850,7 @@ class NetworkVpnService : VpnService() {
         }
     }
 
-    /** Debug builds' `find-tool`: what Watch found of the user's tool, one line, for W6's checks. */
+    /** Debug builds' `find-tool`: what the network part found of the user's tool, one line, for W6's checks. */
     private fun describe(search: org.visadahyu.datapavan.network.chain.ToolSearch): String = when (search) {
         org.visadahyu.datapavan.network.chain.ToolSearch.NoneInstalled -> "tool none"
         is org.visadahyu.datapavan.network.chain.ToolSearch.NotAnswering ->
@@ -1901,16 +1906,16 @@ class NetworkVpnService : VpnService() {
         /** The chain's settings changed: hand them to the engine (W6). */
         const val ACTION_APPLY_CHAIN = "org.visadahyu.datapavan.network.APPLY_CHAIN"
 
-        /** From Watch's screen: the WireGuard configurations or their apps changed (W7, part 2). */
+        /** From the network screen: the WireGuard configurations or their apps changed (W7, part 2). */
         const val ACTION_APPLY_TUNNELS = "org.visadahyu.datapavan.network.APPLY_TUNNELS"
 
-        /** From Watch's screen: the apps left out changed, so the tunnel is set up again if it is up. */
+        /** From the network screen: the apps left out changed, so the tunnel is set up again if it is up. */
         const val ACTION_APPLY_LEFT_OUT = "org.visadahyu.datapavan.network.APPLY_LEFT_OUT"
 
         /**
-         * From Watch's screens: tracker blocking changed (W8, part 3a), handed to the engine again; [EXTRA_FULL] false for
-         * a tap of the undo or the pause, which reads nothing of the phone again, true (the default) for a setting that
-         * changes what is covered.
+         * From the network screens: tracker blocking changed (W8, part 3a), handed to the engine again; [EXTRA_FULL]
+         * false for a tap of the undo or the pause, which reads nothing of the phone again, true (the default) for a
+         * setting that changes what is covered.
          */
         const val ACTION_APPLY_BLOCKING = "org.visadahyu.datapavan.network.APPLY_BLOCKING"
         const val EXTRA_FULL = "full"
@@ -1956,12 +1961,15 @@ class NetworkVpnService : VpnService() {
 
         private val state = MutableStateFlow(false)
 
-        /** Whether the tunnel is up, for Watch's own screens. */
+        /** Whether the tunnel is up, for the network part's own screens. */
         val running: StateFlow<Boolean> = state.asStateFlow()
 
         private val dnsState = MutableStateFlow<PrivateDns?>(null)
 
-        /** Private DNS on Watch's network while the tunnel is up, else null, for Watch's own screens. */
+        /**
+         * Private DNS on the network part's network while the tunnel is up, else null, for the network part's own
+         * screens.
+         */
         val privateDns: StateFlow<PrivateDns?> = dnsState.asStateFlow()
 
         /** The exchanger of the service that runs, for the screen's check of a resolver ([Exchanger.probe]); else null. */

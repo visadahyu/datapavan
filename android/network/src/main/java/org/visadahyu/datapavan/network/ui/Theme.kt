@@ -11,7 +11,7 @@ import androidx.compose.ui.graphics.Color
 /**
  * The brand's colours (brand/README.md), the same as the audit app's (app/.../ui/Theme.kt, where
  * ThemeTest measures their contrast): lapis and clay in light mode, light lapis and night in dark mode.
- * scripts/check.sh fails if the two copies differ. They move into a shared module when Watch's screens
+ * scripts/check.sh fails if the two copies differ. They move into a shared module when the network screens
  * grow (W5).
  */
 internal val LightColors: ColorScheme = lightColorScheme(

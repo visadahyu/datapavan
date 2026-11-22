@@ -8,7 +8,7 @@ import org.visadahyu.datapavan.network.tunnel.Import
 import org.visadahyu.datapavan.network.tunnel.TunnelStates
 import org.visadahyu.datapavan.network.tunnel.TunnelStore
 
-/** What the WireGuard part of Watch's screen shows (W7, part 2, fix round). */
+/** What the WireGuard part of the network screen shows (W7, part 2, fix round). */
 class TunnelsViewTest {
     private fun configuration(slot: Int) =
         ConfigurationView(slot, TunnelStore.Name.Known("c$slot"), local = false, apps = 0, shown = TunnelStates.Shown.Idle, plainDns = false)

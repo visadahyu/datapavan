@@ -62,9 +62,9 @@ object Grades {
  * The audit's scan of each app's code, as it keeps it between audits (`noBackupFilesDir/tracker-scan.tsv`, written by
  * the app's `ScanCache`, in the same package and so the same files in Advanced): a first line `data<TAB>version`, the
  * version of the signatures it was made with, then one line per app, `package<TAB>lastUpdate<TAB>unreadable<TAB>
- * embedded<TAB>referenced`, the ids by commas. Read here, in Watch's process, without the audit's classes: Watch only
- * needs the εxodus ids the app's code holds. Under ADR 0047's profile the audit keeps no such file, and every
- * code-dependent row is then kept.
+ * embedded<TAB>referenced`, the ids by commas. Read here, in the network process, without the audit's classes: the
+ * network part only needs the εxodus ids the app's code holds. Under ADR 0047's profile the audit keeps no such file,
+ * and every code-dependent row is then kept.
  */
 object ScanResults {
     /** The file's name in the app's no-backup files. */

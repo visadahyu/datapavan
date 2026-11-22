@@ -3,11 +3,11 @@ package org.visadahyu.datapavan.network.guides
 import org.visadahyu.datapavan.ui.isolate
 
 /**
- * A guide's screen with every place filled (W8, part 3b): the title's string, then [GuidePage]'s blocks, each a Watch
- * string by name and the text of its places, and last the line that says where the quoted labels come from. A label
- * read from the installed tool is shown in the phone's language, followed by Datapavan's where the two differ, set by
- * the translatable pattern [both] (brackets, full-width in Chinese); every tool's word keeps its own direction inside
- * the sentence.
+ * A guide's screen with every place filled (W8, part 3b): the title's string, then [GuidePage]'s blocks, each a network
+ * part string by name and the text of its places, and last the line that says where the quoted labels come from. A
+ * label read from the installed tool is shown in the phone's language, followed by Datapavan's where the two differ,
+ * set by the translatable pattern [both] (brackets, full-width in Chinese); every tool's word keeps its own direction
+ * inside the sentence.
  */
 data class GuideView(val title: String, val tool: String, val blocks: List<Shown>) {
     data class Shown(val kind: GuidePage.Kind, val string: String, val args: List<String>)

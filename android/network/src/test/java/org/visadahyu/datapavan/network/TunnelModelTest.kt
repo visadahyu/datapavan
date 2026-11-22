@@ -9,9 +9,9 @@ import org.junit.Test
 import org.visadahyu.datapavan.network.tunnel.Import
 
 /**
- * Watch's screen keeps the import's confirmation across its recreation, and zeroes the configuration's bytes when the
- * screen finishes (W7, part 2, fix round, screens review M1): the model outlives a rotation, a dark-mode switch or a
- * font change, which keep its store, and is cleared when the screen is gone for good, which clears it.
+ * The network screen keeps the import's confirmation across its recreation, and zeroes the configuration's bytes when
+ * the screen finishes (W7, part 2, fix round, screens review M1): the model outlives a rotation, a dark-mode switch or
+ * a font change, which keep its store, and is cleared when the screen is gone for good, which clears it.
  */
 class TunnelModelTest {
     private val described = Import.read(

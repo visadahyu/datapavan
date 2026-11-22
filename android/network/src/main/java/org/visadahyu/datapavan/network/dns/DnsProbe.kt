@@ -6,9 +6,10 @@ import java.security.cert.X509Certificate
 import org.visadahyu.datapavan.network.NetworkVpnService
 
 /**
- * The screen's check of the user's own resolver before Watch saves it (W8's fix round, review R-M1): one query, by
- * the running service's [Exchanger], from a socket protected from Watch's tunnel and bound to the network beneath, as
- * the engine's own exchanges go; while Watch is off, from an exchanger of its own, on the phone's default network.
+ * The screen's check of the user's own resolver before the network part saves it (W8's fix round, review R-M1): one
+ * query, by the running service's [Exchanger], from a socket protected from the network part's tunnel and bound to the
+ * network beneath, as the engine's own exchanges go; while the network part is off, from an exchanger of its own, on
+ * the phone's default network.
  */
 object DnsProbe {
     private val standalone by lazy {

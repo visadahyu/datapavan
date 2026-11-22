@@ -15,7 +15,7 @@ import kotlin.concurrent.thread
 import kotlin.random.Random
 
 /**
- * Debug builds only (scripts/verify-log.sh): a model-based test of the connection log, run inside Watch
+ * Debug builds only (scripts/verify-log.sh): a model-based test of the connection log, run inside the network part
  * on the phone, with Android's own SQLite and the phone's own Keystore.
  *
  * From a seed it draws a sequence of what can happen to the log: writes, reads, the clock moving on,
@@ -26,7 +26,7 @@ import kotlin.random.Random
  * not:
  *
  * - nothing past retention or wiped is ever read again, even after the clock is set back;
- * - after any moment Watch runs expiry, the file holds no day past retention, and with retention 0 there
+ * - after any moment the network part runs expiry, the file holds no day past retention, and with retention 0 there
  *   is no file and no key;
  * - an earlier day does not open on a locked phone;
  * - every record written while nothing failed is read back whole on an unlocked phone, so a failure
@@ -230,7 +230,7 @@ private class Run(private val context: Context, private val seed: Long, private 
 
     private fun firstKept() = today() - retention + 1
 
-    /** What Watch's expiry does, as the model sees it: days past retention, or everything, are gone. */
+    /** What the network part's expiry does, as the model sees it: days past retention, or everything, are gone. */
     private fun expireModel() {
         val first = firstKept()
         val leaving = expected.values.filter { retention == 0 || it.day < first }
@@ -240,7 +240,7 @@ private class Run(private val context: Context, private val seed: Long, private 
         }
     }
 
-    // Events. Each answers whether it is a moment at which Watch runs expiry.
+    // Events. Each answers whether it is a moment at which the network part runs expiry.
 
     private fun write(): Boolean {
         val count = 1 + random.nextInt(5)

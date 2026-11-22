@@ -5,7 +5,7 @@ import kotlin.random.Random
 
 /**
  * The tunnel's MTU (ADR 0044, decision 5 as amended): the first hop's of the network beneath, as the
- * phone's kernel reports it, so that each app's own kernel meets that hop as it would without Watch.
+ * phone's kernel reports it, so that each app's own kernel meets that hop as it would without the network part.
  * A datagram larger than the hop is then fragmented by the app's kernel, which the engine puts
  * together again, or refused by it at once, by the app socket's own setting. An MTU the engine had to
  * answer for itself, as a router does, would lose datagrams of connected sockets and of sockets that

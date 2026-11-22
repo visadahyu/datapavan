@@ -249,7 +249,7 @@ private fun Facts(view: NowView, snapshot: Snapshot?, onAllowAccess: () -> Unit)
     if (!view.running) {
         Text(stringResource(R.string.now_network_off), style = MaterialTheme.typography.bodyMedium)
     }
-    // The global pause, which names no app (W8, part 3a); its end and the tap that ends it are on Watch's screen.
+    // The global pause, which names no app (W8, part 3a); its end and the tap that ends it are on the network screen.
     val paused = view.blocking.pausedUntil
     if (view.running && view.blocking.on && paused != null) {
         Text(stringResource(R.string.blocking_paused_now, whenText(context, paused)), style = MaterialTheme.typography.bodyMedium)
@@ -408,8 +408,8 @@ private fun Destinations(context: Context, app: Snapshot.App, window: Int, view:
         val bytes = stringResource(R.string.now_destination_bytes, size(context, place.bytes[window * 2]), size(context, place.bytes[window * 2 + 1]))
         val proxy = place.proxy?.let { proxyFacts(it, place.address, place.port, place.asn, view.groups[app.uid], view.companies) }
         if (proxy != null && !proxy.kept) {
-            // A proxy's flow the engine left out for the switch: its kind, how Watch knows, and the facts that name
-            // nothing (ADR 0052), with the link to the switch.
+            // A proxy's flow the engine left out for the switch: its kind, how the network part knows, and the facts
+            // that name nothing (ADR 0052), with the link to the switch.
             val marks = marksOf(emptyList(), view.groups[app.uid], view.trackers, view.companies, place.proxy?.trackers.orEmpty())
             HiddenProxy(proxyRow(proxy, past = false), bytes, onLogSwitch, marks)
             continue
@@ -451,7 +451,7 @@ internal fun Place(
     through: String? = null,
     /** What the row says of the proxy it went through, if one (ADR 0052). */
     proxy: ProxyRow? = null,
-    /** Opens Watch's screen at the switch, for a row that the switch leaves something out of. */
+    /** Opens the network screen at the switch, for a row that the switch leaves something out of. */
     onLogSwitch: () -> Unit = {},
 ) {
     Text(isolateLtr(name), style = MaterialTheme.typography.bodyLarge)
@@ -492,8 +492,8 @@ private fun MarkLines(marks: List<TrackerMarks.Mark>) {
 }
 
 /**
- * A proxy's flow left out for the switch: its kind, how Watch knows and the facts that name nothing, the trackers'
- * marks the engine kept of it (a tracker's company, never an address or a name), then the link.
+ * A proxy's flow left out for the switch: its kind, how the network part knows and the facts that name nothing, the
+ * trackers' marks the engine kept of it (a tracker's company, never an address or a name), then the link.
  */
 @Composable
 internal fun HiddenProxy(row: ProxyRow, bytes: String, onLogSwitch: () -> Unit, marks: List<TrackerMarks.Mark> = emptyList()) {
@@ -549,11 +549,12 @@ internal data class ProxyRow(val header: ProxyLine?, val lines: List<ProxyLine>,
 
 /**
  * The row of a destination's proxy [facts], in "Now" or, [past], in the history, as a pure function the JVM tests
- * hold. How Watch knows is always said, the switch on or off: "Read from the connection" or "Inferred from where and
- * how it connects". A flow left out for the switch shows its kind, Android's setting in its own words, and the facts
- * that name nothing (the maker's network it is not in, a password unencrypted). A plain request in a proxy's form
- * is never called a proxy: its line says what it asked for, or with the switch off that this is not shown. Where
- * Watch cannot name the network, the maker's network the address is not in is still said (ADR 0052, decision 6).
+ * hold. How the network part knows is always said, the switch on or off: "Read from the connection" or "Inferred from
+ * where and how it connects". A flow left out for the switch shows its kind, Android's setting in its own words, and
+ * the facts that name nothing (the maker's network it is not in, a password unencrypted). A plain request in a proxy's
+ * form is never called a proxy: its line says what it asked for, or with the switch off that this is not shown. Where
+ * the network part cannot name the network, the maker's network the address is not in is still said (ADR 0052, decision
+ * 6).
  */
 internal fun proxyRow(facts: ProxyFacts.Facts, past: Boolean): ProxyRow {
     val lines = mutableListOf<ProxyLine>()

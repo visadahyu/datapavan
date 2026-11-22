@@ -7,7 +7,7 @@ import org.junit.Test
 import org.visadahyu.datapavan.network.activity.Snapshot
 import org.visadahyu.datapavan.network.log.AppState
 
-/** Where Watch's screen draws "Log where apps connect ..." (fix round of W8 part 2a, screens review M4). */
+/** Where the network screen draws "Log where apps connect ..." (fix round of W8 part 2a, screens review M4). */
 class LogSwitchTest {
     private fun counters(declared: Long = 0, inferred: Long = 0) =
         LongArray(67).also {
@@ -63,7 +63,10 @@ class LogSwitchTest {
         assertEquals(setOf(LogSwitch.Place.ALONE), LogSwitch.places(false, false, proxiesSeen = false, asked = false, on = true))
     }
 
-    /** Once seen, a proxy stays seen while Watch runs, between two engines too; Watch stopped, none is. */
+    /**
+     * Once seen, a proxy stays seen while the network part runs, between two engines too; the network part stopped,
+     * none is.
+     */
     @Test
     fun aProxySeenStaysSeenWhileTheTunnelRuns() {
         assertTrue(LogSwitch.seen(before = false, running = true) { counters(inferred = 1) })
@@ -73,9 +76,10 @@ class LogSwitchTest {
     }
 
     /**
-     * A row's link opens Watch's screen above "Now" and leaves "Now" as it was beneath it, so that Back comes back to the
-     * same app's row or its history (W8 part 3a, the brief's point 11): no flag that closes what is above Watch's screen
-     * (`CLEAR_TOP`, which the link used and which closed "Now"), and none that takes the user to another task on Back.
+     * A row's link opens the network screen above "Now" and leaves "Now" as it was beneath it, so that Back comes back
+     * to the same app's row or its history (W8 part 3a, the brief's point 11): no flag that closes what is above the
+     * network screen (`CLEAR_TOP`, which the link used and which closed "Now"), and none that takes the user to another
+     * task on Back.
      */
     @Test
     fun aRowsLinkKeepsNowBeneathTheSwitch() {

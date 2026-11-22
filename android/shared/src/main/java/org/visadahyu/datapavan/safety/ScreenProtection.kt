@@ -49,8 +49,8 @@ object ScreenProtection {
         protect()
         activity.lifecycle.addObserver(
             object : DefaultLifecycleObserver {
-                // The window on screen is the one the setting acts on: a process with two screens, as Watch's
-                // with "Now", takes back the first's when it comes back (review c1 of W5's third part, screens,
+                // The window on screen is the one the setting acts on: a process with two screens, as the network
+                // part's with "Now", takes back the first's when it comes back (review c1 of W5's third part, screens,
                 // m1: the second's end left the setting acting on no window).
                 override fun onResume(owner: LifecycleOwner) {
                     window = activity.window

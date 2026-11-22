@@ -8,7 +8,7 @@ import java.util.Locale
 /**
  * The datasets of one data pack (ADR 0015 and 0017, docs/DATA-PACKS.md): the files under `data/`
  * in the repository, by path, for example `exodus/trackers.tsv`. In the shared module since W5's third
- * part, so that Watch reads the table of trackers from the pack the audit verifies, with the same rules.
+ * part, so that the network part reads the table of trackers from the pack the audit verifies, with the same rules.
  */
 class DataPack(
     /** The pack as read, which the ranges below point into. */
@@ -117,8 +117,8 @@ sealed interface PackReading {
 
 /**
  * The Rust reader of packs, which checks a pack's signature before anything else (core/engine's
- * `datapack`): the audit's library (`NativeCore`) in the audit's process, Watch's (`Engine`) in Watch's,
- * both built from the same code.
+ * `datapack`): the audit's library (`NativeCore`) in the audit's process, the network part's (`Engine`) in the network
+ * part's, both built from the same code.
  */
 interface PackNative {
     /**

@@ -8,7 +8,7 @@ private const val FIRST_STRONG_ISOLATE = '\u2068'
 private const val POP_DIRECTIONAL_ISOLATE = '\u2069'
 
 /**
- * In the shared module since W5's third part, so that Watch's screens isolate destinations as the audit does.
+ * In the shared module since W5's third part, so that the network screens isolate destinations as the audit does.
  *
  * Wraps a technical token that is always left-to-right (domain, IP address, package name,
  * version) in a Unicode left-to-right isolate, so that it cannot reorder the surrounding

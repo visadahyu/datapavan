@@ -20,7 +20,7 @@ class DataPackStoreTest {
     }
 
     /**
-     * A pack that no longer applies is deleted only by a store that cleans, the audit's; Watch's process reads
+     * A pack that no longer applies is deleted only by a store that cleans, the audit's; the network process reads
      * without deleting, so that it cannot undo an import the audit is writing that moment (review c1 of W5's
      * third part, engine, m5).
      */

@@ -8,10 +8,10 @@ enum class Page {
     /** Steps to run the tool in its proxy mode, read from its source. */
     PROXY,
 
-    /** It runs only as a VPN, and Watch carries a WireGuard configuration instead (W7). */
+    /** It runs only as a VPN, and the network part carries a WireGuard configuration instead (W7). */
     WIREGUARD,
 
-    /** It runs only as a VPN: Watch cannot run beside it. */
+    /** It runs only as a VPN: the network part cannot run beside it. */
     VPN,
 
     /** No steps until a check on a phone: its code is closed, or its source does not settle its proxy mode. */
@@ -32,7 +32,7 @@ data class Guide(
     val listeners: List<Listener>,
     /** `none`, `optional` or `default`, as tools.tsv. */
     val auth: String?,
-    /** Whether it was tried with Watch at [version]. */
+    /** Whether it was tried with the network part at [version]. */
     val checked: Boolean,
 )
 
@@ -45,7 +45,7 @@ sealed interface Arg {
     data class Value(val text: String) : Arg
 }
 
-/** One step or note of a guide (guide-steps.tsv): the Watch string that says it, and what fills its places. */
+/** One step or note of a guide (guide-steps.tsv): the network part's string that says it, and what fills its places. */
 data class Step(val guide: String, val part: Part, val string: String, val args: List<Arg>)
 
 /** A label of the tool's own (guide-labels.tsv): its text as the source has it, and where the installed tool keeps it. */
