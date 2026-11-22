@@ -1,6 +1,6 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources xmlns:tools="http://schemas.android.com/tools">
-    <string name="watch_tagline">Sehen Sie, wohin jede App auf Ihrem Telefon eine Verbindung aufbaut.</string>
+    <string name="network_tagline">Sehen Sie, wohin jede App auf Ihrem Telefon eine Verbindung aufbaut.</string>
     <string name="status_on">Watch ist an.</string>
     <string name="status_off">Watch ist aus.</string>
     <string name="turn_on">Einschalten</string>
@@ -76,7 +76,7 @@
 
     <string name="now_title">Now</string>
     <string name="now_intro">Apps, die das Netzwerk genutzt haben, und ob Sie sie zu dieser Zeit benutzt haben.</string>
-    <string name="now_watch_off">Watch ist aus und sieht daher keinen Datenverkehr. Schalten Sie es auf dem Bildschirm von Watch ein.</string>
+    <string name="now_network_off">Watch ist aus und sieht daher keinen Datenverkehr. Schalten Sie es auf dem Bildschirm von Watch ein.</string>
     <string name="now_no_access">Watch kann nicht erkennen, welche App Sie benutzen, weil es keinen Zugriff auf Nutzungsdaten hat. Apps erscheinen ohne Zustand.</string>
     <string name="now_allow_access">Zugriff auf Nutzungsdaten erlauben</string>
     <string name="now_locked">Welche App Sie benutzen, erscheint, sobald das Telefon nach dem Start zum ersten Mal entsperrt wurde.</string>

@@ -28,14 +28,14 @@ internal fun NetworkEntry() {
     val context = LocalContext.current
     Card(modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 8.dp)) {
         Column(Modifier.padding(12.dp)) {
-            Text(stringResource(R.string.watch_entry_title), style = MaterialTheme.typography.titleSmall)
+            Text(stringResource(R.string.network_entry_title), style = MaterialTheme.typography.titleSmall)
             Spacer(Modifier.height(4.dp))
-            Text(stringResource(R.string.watch_entry_body), style = MaterialTheme.typography.bodyMedium)
+            Text(stringResource(R.string.network_entry_body), style = MaterialTheme.typography.bodyMedium)
             Spacer(Modifier.height(8.dp))
             OutlinedButton(
                 onClick = { context.startActivity(Intent().setClassName(context, NETWORK_SCREEN)) },
                 modifier = Modifier.testTag("open-network"),
-            ) { Text(stringResource(R.string.watch_entry_open)) }
+            ) { Text(stringResource(R.string.network_entry_open)) }
         }
     }
 }
@@ -54,7 +54,7 @@ internal fun NetworkNowEntry(packageName: String) {
     OutlinedButton(
         onClick = { context.startActivity(Intent().setClassName(context, NETWORK_NOW).putExtra(NETWORK_NOW_PACKAGE, packageName)) },
         modifier = Modifier.padding(vertical = 8.dp).testTag("open-network-now"),
-    ) { Text(stringResource(R.string.watch_now_open)) }
+    ) { Text(stringResource(R.string.network_now_open)) }
 }
 
 /** Watch's view "Now", in the :network library, and the one extra it reads: a package name. */

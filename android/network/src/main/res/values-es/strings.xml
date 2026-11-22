@@ -1,6 +1,6 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources xmlns:tools="http://schemas.android.com/tools">
-    <string name="watch_tagline">Mira a dónde se conecta cada app de tu teléfono.</string>
+    <string name="network_tagline">Mira a dónde se conecta cada app de tu teléfono.</string>
     <string name="status_on">Watch está activado.</string>
     <string name="status_off">Watch está desactivado.</string>
     <string name="turn_on">Activar</string>
@@ -78,7 +78,7 @@
 
     <string name="now_title">Now</string>
     <string name="now_intro">Apps que usaron la red, y si las estabas usando en ese momento.</string>
-    <string name="now_watch_off">Watch está desactivado, así que no ve ningún tráfico. Actívalo en la pantalla de Watch.</string>
+    <string name="now_network_off">Watch está desactivado, así que no ve ningún tráfico. Actívalo en la pantalla de Watch.</string>
     <string name="now_no_access">Watch no puede saber qué app estás usando, porque no tiene acceso a datos de uso. Las apps aparecen sin estado.</string>
     <string name="now_allow_access">Permitir acceso a datos de uso</string>
     <string name="now_locked">La app que estás usando se muestra tras el primer desbloqueo desde el arranque del teléfono.</string>

@@ -1,6 +1,6 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources xmlns:tools="http://schemas.android.com/tools">
-    <string name="watch_tagline">Смотрите, куда подключается каждое приложение на вашем телефоне.</string>
+    <string name="network_tagline">Смотрите, куда подключается каждое приложение на вашем телефоне.</string>
     <string name="status_on">Watch включён.</string>
     <string name="status_off">Watch выключен.</string>
     <string name="turn_on">Включить</string>
@@ -80,7 +80,7 @@
 
     <string name="now_title">Now</string>
     <string name="now_intro">Приложения, которые использовали сеть, и пользовались ли вы ими в это время.</string>
-    <string name="now_watch_off">Watch выключен, поэтому не видит трафика. Включите его на экране Watch.</string>
+    <string name="now_network_off">Watch выключен, поэтому не видит трафика. Включите его на экране Watch.</string>
     <string name="now_no_access">Watch не может определить, каким приложением вы пользуетесь, потому что у него нет доступа к данным об использовании. Приложения показаны без состояния.</string>
     <string name="now_allow_access">Разрешить доступ к данным об использовании</string>
     <string name="now_locked">Каким приложением вы пользуетесь, будет видно после первой разблокировки с момента включения телефона.</string>

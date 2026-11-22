@@ -1,6 +1,6 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources xmlns:tools="http://schemas.android.com/tools">
-    <string name="watch_tagline">查看您手机上的每个应用连接到哪里。</string>
+    <string name="network_tagline">查看您手机上的每个应用连接到哪里。</string>
     <string name="status_on">Watch 已开启。</string>
     <string name="status_off">Watch 已关闭。</string>
     <string name="turn_on">开启</string>
@@ -74,7 +74,7 @@
 
     <string name="now_title">Now</string>
     <string name="now_intro">使用过网络的应用，以及当时您是否在使用它们。</string>
-    <string name="now_watch_off">Watch 已关闭，因此看不到任何流量。请在 Watch 的页面中开启它。</string>
+    <string name="now_network_off">Watch 已关闭，因此看不到任何流量。请在 Watch 的页面中开启它。</string>
     <string name="now_no_access">Watch 无法得知您正在使用哪个应用，因为它没有使用情况访问权限。各应用显示时不带状态。</string>
     <string name="now_allow_access">授予使用情况访问权限</string>
     <string name="now_locked">手机启动后首次解锁之后，才会显示您正在使用哪个应用。</string>

@@ -2,7 +2,7 @@
 <resources xmlns:tools="http://schemas.android.com/tools">
     <!-- The product's name, the same in every language (docs/NAMES.md). -->
     <string name="app_name" translatable="false">Datapavan Watch</string>
-    <string name="watch_tagline">See where each app on your phone connects.</string>
+    <string name="network_tagline">See where each app on your phone connects.</string>
     <!-- Whether Watch's VPN is running. -->
     <string name="status_on">Watch is on.</string>
     <string name="status_off">Watch is off.</string>
@@ -109,7 +109,7 @@
 
     <string name="now_title">Now</string>
     <string name="now_intro">Apps that used the network, and whether you were using them at the time.</string>
-    <string name="now_watch_off">Watch is off, so it sees no traffic. Turn it on in Watch\'s screen.</string>
+    <string name="now_network_off">Watch is off, so it sees no traffic. Turn it on in Watch\'s screen.</string>
     <string name="now_no_access">Watch cannot tell which app you are using, because it has no usage access. Apps show without a state.</string>
     <string name="now_allow_access">Allow usage access</string>
     <string name="now_locked">Which app you are using shows after the first unlock since the phone started.</string>

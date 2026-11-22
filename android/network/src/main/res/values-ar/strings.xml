@@ -1,6 +1,6 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources xmlns:tools="http://schemas.android.com/tools">
-    <string name="watch_tagline">اعرف إلى أين يتصل كل تطبيق على هاتفك.</string>
+    <string name="network_tagline">اعرف إلى أين يتصل كل تطبيق على هاتفك.</string>
     <string name="status_on">خدمة Watch تعمل.</string>
     <string name="status_off">خدمة Watch متوقفة.</string>
     <string name="turn_on">تشغيل</string>
@@ -84,7 +84,7 @@
 
     <string name="now_title">Now</string>
     <string name="now_intro">التطبيقات التي استخدمت الشبكة، وهل كنت تستخدمها في ذلك الوقت.</string>
-    <string name="now_watch_off">خدمة Watch متوقفة، لذا لا ترى أي حركة بيانات. شغّلها من شاشة Watch.</string>
+    <string name="now_network_off">خدمة Watch متوقفة، لذا لا ترى أي حركة بيانات. شغّلها من شاشة Watch.</string>
     <string name="now_no_access">لا يستطيع Watch معرفة التطبيق الذي تستخدمه، لأنه لا يملك الوصول إلى بيانات الاستخدام. تظهر التطبيقات بلا حالة.</string>
     <string name="now_allow_access">السماح بالوصول إلى بيانات الاستخدام</string>
     <string name="now_locked">يظهر التطبيق الذي تستخدمه بعد أول فتح لقفل الهاتف منذ تشغيله.</string>

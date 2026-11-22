@@ -1,6 +1,6 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources xmlns:tools="http://schemas.android.com/tools">
-    <string name="watch_tagline">Voyez où se connecte chaque appli de votre téléphone.</string>
+    <string name="network_tagline">Voyez où se connecte chaque appli de votre téléphone.</string>
     <string name="status_on">Watch est activé.</string>
     <string name="status_off">Watch est désactivé.</string>
     <string name="turn_on">Activer</string>
@@ -78,7 +78,7 @@
 
     <string name="now_title">Now</string>
     <string name="now_intro">Les applis qui ont utilisé le réseau, et si vous les utilisiez à ce moment-là.</string>
-    <string name="now_watch_off">Watch est désactivé, il ne voit donc aucun trafic. Activez-le sur l\'écran de Watch.</string>
+    <string name="now_network_off">Watch est désactivé, il ne voit donc aucun trafic. Activez-le sur l\'écran de Watch.</string>
     <string name="now_no_access">Watch ne peut pas savoir quelle appli vous utilisez, car il n\'a pas accès aux données d\'utilisation. Les applis s\'affichent sans état.</string>
     <string name="now_allow_access">Autoriser l\'accès aux données d\'utilisation</string>
     <string name="now_locked">L\'appli que vous utilisez s\'affiche après le premier déverrouillage depuis le démarrage du téléphone.</string>

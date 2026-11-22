@@ -1,6 +1,6 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources xmlns:tools="http://schemas.android.com/tools">
-    <string name="watch_tagline">ببینید هر برنامه روی گوشی شما به کجا وصل می‌شود.</string>
+    <string name="network_tagline">ببینید هر برنامه روی گوشی شما به کجا وصل می‌شود.</string>
     <string name="status_on">سرویس Watch روشن است.</string>
     <string name="status_off">سرویس Watch خاموش است.</string>
     <string name="turn_on">روشن کردن</string>
@@ -76,7 +76,7 @@
 
     <string name="now_title">Now</string>
     <string name="now_intro">برنامه‌هایی که از شبکه استفاده کردند، و اینکه آن موقع از آن‌ها استفاده می‌کردید یا نه.</string>
-    <string name="now_watch_off">سرویس Watch خاموش است، پس هیچ ترافیکی نمی‌بیند. آن را در صفحهٔ Watch روشن کنید.</string>
+    <string name="now_network_off">سرویس Watch خاموش است، پس هیچ ترافیکی نمی‌بیند. آن را در صفحهٔ Watch روشن کنید.</string>
     <string name="now_no_access">سرویس Watch نمی‌تواند بفهمد از کدام برنامه استفاده می‌کنید، چون دسترسی به داده‌های مصرف ندارد. برنامه‌ها بدون وضعیت نشان داده می‌شوند.</string>
     <string name="now_allow_access">اجازه دسترسی به داده‌های مصرف</string>
     <string name="now_locked">پس از اولین باز کردن قفل گوشی بعد از روشن شدنش، نشان داده می‌شود که از کدام برنامه استفاده می‌کنید.</string>

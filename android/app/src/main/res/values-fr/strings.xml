@@ -639,12 +639,12 @@
     <string name="screenshots_allowed">Les captures d\'écran sont autorisées. Elles seront de nouveau bloquées après une minute, ou dès que vous quitterez l\'appli.</string>
     <string name="screenshots_block">Bloquer les captures d\'écran maintenant</string>
     <!-- Datapavan Advanced only: the way from the network page to Watch (ui/WatchEntry.kt, ADR 0045). -->
-    <string name="watch_entry_body">Voyez où se connecte chaque appli de votre téléphone, en temps réel. Watch fonctionne en tant que VPN sur ce téléphone. Il n\'utilise Internet que pour acheminer le trafic de chaque appli, et n\'envoie rien à Datapavan.</string>
-    <string name="watch_entry_open">Ouvrir Watch</string>
+    <string name="network_entry_body">Voyez où se connecte chaque appli de votre téléphone, en temps réel. Watch fonctionne en tant que VPN sur ce téléphone. Il n\'utilise Internet que pour acheminer le trafic de chaque appli, et n\'envoie rien à Datapavan.</string>
+    <string name="network_entry_open">Ouvrir Watch</string>
 
     <!-- W5, part 3 (ADR 0046): the way into Watch's "Now" from an app's page, Advanced only. -->
     <!-- Datapavan Advanced, on an app's page: opens Watch's view "Now" for that app. -->
-    <string name="watch_now_open">Voir ce que cette appli envoie maintenant</string>
+    <string name="network_now_open">Voir ce que cette appli envoie maintenant</string>
 
     <!-- W7, part 2 (ADR 0035, release gate): the licence screen. -->
     <!-- The licence screen: the heading over the full texts the app carries. -->

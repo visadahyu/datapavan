@@ -247,7 +247,7 @@ private fun NowList(
 private fun Facts(view: NowView, snapshot: Snapshot?, onAllowAccess: () -> Unit) {
     val context = LocalContext.current
     if (!view.running) {
-        Text(stringResource(R.string.now_watch_off), style = MaterialTheme.typography.bodyMedium)
+        Text(stringResource(R.string.now_network_off), style = MaterialTheme.typography.bodyMedium)
     }
     // The global pause, which names no app (W8, part 3a); its end and the tap that ends it are on Watch's screen.
     val paused = view.blocking.pausedUntil

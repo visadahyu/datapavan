@@ -124,7 +124,7 @@ internal fun NetworkScreen(
                 color = MaterialTheme.colorScheme.primary,
                 modifier = Modifier.semantics { heading() },
             )
-            Text(stringResource(R.string.watch_tagline), style = MaterialTheme.typography.bodyLarge)
+            Text(stringResource(R.string.network_tagline), style = MaterialTheme.typography.bodyLarge)
             Text(
                 stringResource(if (running) R.string.status_on else R.string.status_off),
                 style = MaterialTheme.typography.titleMedium,

@@ -81,7 +81,7 @@
             android:exported="false"
             android:process=":network"
             android:launchMode="singleTop"
-            android:theme="@style/Theme.Watch" />
+            android:theme="@style/Theme.Network" />
 
         <!--
             "Now" and each app's history (ADR 0046, decision 2 (d)), in Watch's process: opened from Watch's
@@ -92,7 +92,7 @@
             android:name=".NowActivity"
             android:exported="false"
             android:process=":network"
-            android:theme="@style/Theme.Watch" />
+            android:theme="@style/Theme.Network" />
 
         <!--
             A tool's guide for proxy mode (W8, part 3b), in Watch's process: opened from the chain section's links, and in
@@ -102,7 +102,7 @@
             android:name=".GuideActivity"
             android:exported="false"
             android:process=":network"
-            android:theme="@style/Theme.Watch" />
+            android:theme="@style/Theme.Network" />
 
         <!-- Only Android may bind to it (BIND_VPN_SERVICE). -->
         <service
@@ -145,7 +145,7 @@
             android:process=":network">
             <meta-data
                 android:name="android.support.FILE_PROVIDER_PATHS"
-                android:resource="@xml/watch_capture_paths" />
+                android:resource="@xml/network_capture_paths" />
         </provider>
 
         <!-- The connection log's expiry, on days nothing else starts Watch (ADR 0037). Only Android may bind to it. -->

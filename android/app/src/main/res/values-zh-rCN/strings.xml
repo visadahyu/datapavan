@@ -619,12 +619,12 @@
     <string name="screenshots_allowed">现在允许截图。一分钟后，或者您一离开此应用，截图就会再次被阻止。</string>
     <string name="screenshots_block">立即阻止截图</string>
     <!-- Datapavan Advanced only: the way from the network page to Watch (ui/WatchEntry.kt, ADR 0045). -->
-    <string name="watch_entry_body">实时查看您手机上的每个应用连接到哪里。Watch 在这部手机上作为 VPN 运行。它使用互联网只是为了转发每个应用的流量，不会向 Datapavan 发送任何内容。</string>
-    <string name="watch_entry_open">打开 Watch</string>
+    <string name="network_entry_body">实时查看您手机上的每个应用连接到哪里。Watch 在这部手机上作为 VPN 运行。它使用互联网只是为了转发每个应用的流量，不会向 Datapavan 发送任何内容。</string>
+    <string name="network_entry_open">打开 Watch</string>
 
     <!-- W5, part 3 (ADR 0046): the way into Watch's "Now" from an app's page, Advanced only. -->
     <!-- Datapavan Advanced, on an app's page: opens Watch's view "Now" for that app. -->
-    <string name="watch_now_open">查看此应用此刻在发送什么</string>
+    <string name="network_now_open">查看此应用此刻在发送什么</string>
 
     <!-- W7, part 2 (ADR 0035, release gate): the licence screen. -->
     <!-- The licence screen: the heading over the full texts the app carries. -->
