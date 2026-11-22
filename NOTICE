@@ -8,6 +8,12 @@ carries them (written by scripts/licences.py, which scripts/check.sh holds curre
 none: licences/MPL-2.0.txt and licences/gotatun-BSD-3-Clause.txt are its texts. Every APK carries this file,
 LICENSE and those texts as assets, under licences/.
 
+Android's own labels (docs/decisions/0054-android-labels-read-from-the-phone.md): the android_label_* strings in
+both modules' strings.xml, and scripts/testdata/android-labels-aosp.tsv, are the Android Open Source Project's text,
+from Settings, SettingsLib and the permission controller at the tags their comments name: Apache License 2.0, whose
+text is LICENSE. Source: https://android.googlesource.com. The dataset data/android-labels holds resource names only,
+under CC0 1.0.
+
 Datapavan Advanced's Watch, WireGuard upstream (W7, docs/decisions/0035-wireguard-upstream.md):
 
 - GotaTun 0.10.3, Mullvad VPN AB, and Cloudflare, Inc. for the BoringTun code it began as.

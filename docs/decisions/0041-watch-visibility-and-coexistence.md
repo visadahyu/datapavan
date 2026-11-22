@@ -5,6 +5,10 @@
 - Amended by [ADR 0048](0048-lab-probe-of-android-gaps.md) on 2026-11-15: decision 2's probe app is built there, and
   its runs happen on the maintainer's machine rather than "on every Android version in CI".
 - Extended on 2026-11-21 (W8, part 3b): "How the per-tool guides are built", below, with the coordinator's decisions.
+- Its way of reading another app's labels (point 6 of "How the per-tool guides are built") also reads Android's own
+  labels since [ADR 0054](0054-android-labels-read-from-the-phone.md), from the shared module, which also fixed two of
+  its faults: the phone's languages now come from LocaleManager from Android 13, and a tool's language counts as
+  present only where its words differ from its default ones.
 
 ## Context
 

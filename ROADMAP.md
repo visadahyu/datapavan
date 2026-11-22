@@ -160,7 +160,9 @@ through the user's tool ([ADR 0038](docs/decisions/0038-dns-of-chained-apps.md))
 that go directly ([ADR 0042](docs/decisions/0042-dns-of-apps-that-go-directly.md)), apps' built-in proxies named
 ([ADR 0052](docs/decisions/0052-apps-built-in-proxies.md)), tracker blocking
 ([ADR 0053](docs/decisions/0053-tracker-blocking.md)) and the per-tool guides, translated; an ODoH relay of the
-project's own is proposed in [ADR 0055](docs/decisions/0055-an-odoh-relay-of-the-projects-own.md); W9 is not built yet
+project's own is proposed in [ADR 0055](docs/decisions/0055-an-odoh-relay-of-the-projects-own.md); Android's own labels, read from the phone in both
+editions ([ADR 0054](docs/decisions/0054-android-labels-read-from-the-phone.md), accepted 2026-11-21), are built on
+`android-labels` on 2026-11-22; W9 is not built yet
 ([DESIGN.md §13.2](docs/DESIGN.md#132-v020-datapavan-advanced-the-connection-log-next-to-circumvention-tools) has what is left).
 How W5's per-app view is met, live, with which apps sent while the user was not using them, is decided in
 [ADR 0046](docs/decisions/0046-live-activity.md) (2026-11-14), and a profile for people whose phone may be searched,

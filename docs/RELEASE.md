@@ -67,7 +67,7 @@ The steps stay here for the day a key must be replaced. Step 4 was done on the s
    refuses an edition while a module it carries still has one with entries. No build gate holds this: lint lets
    the file pass on purpose, and CI builds the release before the translations land.
 3. **Checks.** `scripts/check.sh all`, the emulator scripts (`smoke.sh`, `verify-audit.sh`,
-   `verify-plan.sh`, `verify-shortcuts.sh`, `verify-datapack.sh`, `screenshots.sh`) on the CI image
+   `verify-plan.sh`, `verify-shortcuts.sh`, `verify-datapack.sh`, `verify-labels.sh`, `screenshots.sh`) on the CI image
    `dp-api35-ci`, and `scripts/reproducible.sh`, which builds the release twice from clean checkouts in
    different directories and fails unless the two unsigned APKs are identical. Then
    `scripts/release-rehearsal.sh --install` runs steps 5 and 6 for Basic with throwaway keys and puts the signed

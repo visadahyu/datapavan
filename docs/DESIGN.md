@@ -2,7 +2,7 @@
 
 | | |
 |---|---|
-| Version | 0.2 (draft, revised 2026-11-22: three editions, ADR 0045; what apps sent while not in use, shown live, ADR 0046, accepted 2026-11-15; a profile for phones that may be searched, ADR 0047, accepted 2026-11-15; a lab probe of where stock Android leaves privacy tools blind or exposed, ADR 0048, accepted 2026-11-15; the editions' names and one version line, the maintainer, 2026-11-14; a signing key for each edition, ready to rotate, backed up in shares, ADR 0049, accepted 2026-11-15; mobile operators and SIM cards, ADR 0050, accepted 2026-11-15; two lanes of work and an isolated machine for suspect apps, ADR 0051, accepted 2026-11-15; apps' built-in proxies named, ADR 0052, proposed 2026-11-20, its fix round 2026-11-21; tracker blocking with a one-tap undo, ADR 0053, proposed 2026-11-21; an ODoH relay of the project's own, ADR 0055, proposed 2026-11-22) |
+| Version | 0.2 (draft, revised 2026-11-22: three editions, ADR 0045; what apps sent while not in use, shown live, ADR 0046, accepted 2026-11-15; a profile for phones that may be searched, ADR 0047, accepted 2026-11-15; a lab probe of where stock Android leaves privacy tools blind or exposed, ADR 0048, accepted 2026-11-15; the editions' names and one version line, the maintainer, 2026-11-14; a signing key for each edition, ready to rotate, backed up in shares, ADR 0049, accepted 2026-11-15; mobile operators and SIM cards, ADR 0050, accepted 2026-11-15; two lanes of work and an isolated machine for suspect apps, ADR 0051, accepted 2026-11-15; apps' built-in proxies named, ADR 0052, proposed 2026-11-20, its fix round 2026-11-21; tracker blocking with a one-tap undo, ADR 0053, proposed 2026-11-21; an ODoH relay of the project's own, ADR 0055, proposed 2026-11-22; Android's own labels read from the phone, ADR 0054, accepted 2026-11-21) |
 | Date | 2026-10-28 |
 | Scope | Stage 1: the layer app for stock Android, with no root |
 | Status | The whole design, much of it not built yet. The [README](../README.md) says what exists today |
@@ -298,6 +298,8 @@ datapavan/
   scripts/smoke.sh     smoke test on an emulator or phone over adb; CI calls it
   scripts/verify-audit.sh   end-to-end check of the audit's findings on an emulator; CI calls it
   scripts/verify-datapack.sh   end-to-end check of data pack imports through the file picker; CI calls it
+  scripts/verify-labels.sh     Android's own labels read from the phone against AOSP's text, and the screens that quote them (ADR 0054); CI calls it
+  scripts/android-labels.py    the data check of data/android-labels and the android_label_* fallbacks; --fetch reads AOSP's text
   scripts/datapack-test.py  signs test packs with the public test key in scripts/testdata (debug builds only)
   scripts/fixture-app/ test app with risky access, built without Gradle, for verify-audit.sh
   scripts/screenshots.sh    screenshots in every language with an accessibility check (a11y-check.py); CI calls it
@@ -1239,6 +1241,7 @@ Each decision is recorded in full, with context and consequences, as an ADR in
 | [0051](decisions/0051-two-lanes-and-an-analysis-machine.md) | Two lanes of work, and an isolated machine for suspect apps | Accepted |
 | [0052](decisions/0052-apps-built-in-proxies.md) | Apps' built-in proxies named: read from the connection, or inferred with substitution | Proposed |
 | [0053](decisions/0053-tracker-blocking.md) | Tracker blocking: hosts graded by what they do, the same in every app, refused before a byte leaves, undone in one tap | Proposed |
+| [0054](decisions/0054-android-labels-read-from-the-phone.md) | Android's own labels, read from the phone | Accepted |
 | [0055](decisions/0055-an-odoh-relay-of-the-projects-own.md) | An Oblivious DoH relay of the project's own, and a bounded exception to ADR 0016 | Proposed |
 
 ## 15. Names
