@@ -16,7 +16,7 @@
 
 ## Context
 
-DESIGN.md's W8 row: "Tracker blocking stays off until the user turns it on, and is undone in one tap." Watch already
+DESIGN.md's W8 row: "Tracker blocking stays off until the user turns it on, and is undone in one tap." Advanced already
 names every app's flows by app, server name, DNS answer and the address's organisation, and marks tracker
 destinations from the εxodus network signatures (ADR 0046).
 
@@ -76,7 +76,7 @@ shared parent (`googleapis.com`, `google.com`, `facebook.com`, `amazonaws.com`, 
 (e) **ADR 0046's decision 4 is amended** *(coordinator)*: εxodus names the tracker, and its hosts come from εxodus's
 signature or from the graded table with a primary source. A row joins its εxodus tracker at run time by its package
 prefix against the εxodus code signatures (one is a prefix of the other): a collective database (ODbL 4.5a), not a
-derivative, and the table holds no εxodus data. **Why:** without it, Watch could neither block nor mark
+derivative, and the table holds no εxodus data. **Why:** without it, Advanced could neither block nor mark
 `app-measurement.com`.
 
 (f) **Other lists are leads only** *(coordinator)*: DuckDuckGo's tracker lists and privacy configuration (CC BY-NC-SA
@@ -107,9 +107,10 @@ anything. Test: an app the owners table gives to Google reaching an AdMob host i
 ### 3. DNS
 
 (a) **Where the decision sits** *(coordinator)*: before part 1's cache and its stale window, for every record type,
-HTTPS and SVCB included, on every way Watch answers an app's lookup: the encrypted resolver, the network's resolver,
-a chained app's stand-ins and other questions, DNS over TCP to Watch's address, a WireGuard-tunnelled app's lookups,
-and Watch's cache of the network's answers. A question a row blocks for the app is answered at once and asks no one.
+HTTPS and SVCB included, on every way the engine answers an app's lookup: the encrypted resolver, the network's
+resolver, a chained app's stand-ins and other questions, DNS over TCP to the tunnel's DNS address, a
+WireGuard-tunnelled app's lookups, and the engine's cache of the network's answers. A question a row blocks for the
+app is answered at once and asks no one.
 
 (b) **The answer**: "no data" with an SOA in the authority section, its time to live 0 and its `MINIMUM` 0
 *(coordinator)*. Never the null address, which sends the app to the phone's own loopback, outside the tunnel, where
@@ -120,7 +121,7 @@ every app with a time to live of 0 too *(coordinator)*, so that no app's answer 
 or a block is not delayed by a cached answer.
 
 (d) **CNAME chains**: each name of an answer's chain is matched, which closes CNAME cloaking, for apps whose names
-Watch resolves.
+the engine resolves.
 
 (e) **Limits, stated**: chained apps' names are resolved by the user's tool (ADR 0038), so only the question's name is
 matched, never a chain; strict Private DNS and apps' own encrypted DNS take the DNS path away, leaving the connection
@@ -136,7 +137,7 @@ hello, from plain HTTP's `Host`, or, for a chained app, from its stand-in's name
 tool, and decided before anything is written upstream or to the tool. A hold that runs out sends what it held, unread.
 
 (b) **Blocking by address** *(coordinator)*: only through the ask-first path, so that Android names the app before
-anything leaves, and only for an address that an answer Watch passed, still held, tied to blocked names alone, and
+anything leaves, and only for an address that an answer the engine passed, still held, tied to blocked names alone, and
 never inside a network that the organisation table does not name as a company's own: a CDN, a cloud or a host sells
 room to others (ADR 0036). Google's networks host Google Cloud, so a Google tracker is never blocked by its address.
 
@@ -153,8 +154,9 @@ refuses QUIC elsewhere, so that Cronet falls back to TCP at once, where the hell
 later bytes, either way, so that a block set again, or an hour that ran out, resets it at its next byte (HTTP/2
 pools many requests on one connection).
 
-(f) **WireGuard-tunnelled apps** are blocked where Watch has their names, at their lookups to Watch's address. Their
-connections run end to end inside the tunnel (ADR 0035), so their hellos are not held. **Accepted limit.**
+(f) **WireGuard-tunnelled apps** are blocked where the engine has their names, at their lookups to the tunnel's DNS
+address. Their connections run end to end inside the tunnel (ADR 0035), so their hellos are not held. **Accepted
+limit.**
 
 (g) **Coalescing**: a tracker request coalesced onto a `keep` connection (HTTP/2's connection reuse) is not seen.
 **Accepted limit**, frontier research.
@@ -167,11 +169,11 @@ authority, so that App Links apps do not count. **Why:** a browser opens any web
 site's, not the browser's.
 
 (b) **Not covered by this part**, and the screen says so: apps that came with the phone, UID 1000 and Google Play
-services. Flows Android names no app for, and Watch's own, are never blocked.
+services. Flows Android names no app for, and Datapavan's own, are never blocked.
 
 (c) **The user's tool** (ADR 0046, decision 3): its connections are never blocked by their hello, since a cover name
 may be any popular host, and a wrong block cuts circumvention. An option, off by default, blocks the tool's own SDK
-lookups by DNS alone *(coordinator)*, because Watch protects data from the tools too.
+lookups by DNS alone *(coordinator)*, because Advanced protects data from the tools too.
 
 ### 6. The undo
 
@@ -184,7 +186,7 @@ tested with real users (decision 10).
 (b) **Per row**: under the app, each row it reached has its own allow, until blocked again, or one per company where
 one εxodus signature names several of its trackers.
 
-(c) **A global pause**: ten minutes, naming no app, on Watch's main screen *(coordinator)*. Breakage shows inside the
+(c) **A global pause**: ten minutes, naming no app, on the network screen *(coordinator)*. Breakage shows inside the
 broken app, and no notification may name it (ADR 0046). **The tile** that would carry it is W9's and does not exist
 yet: the pause joins it there. Ten minutes, not an hour: it lifts every app's blocks at once.
 
@@ -206,12 +208,12 @@ will carry only the pause.
 (a) **The log**: a blocked flow is a flow with a blocked state (the log's version 6: outcome 4, and the SDK of the row
 that blocked it).
 
-(b) **Chained apps**: their rows follow "Log where these apps connect": while it is off, the row's SDK, which names a
-tracker and its company, is kept, and the host is not.
+(b) **Chained apps**: their rows follow "Log where apps connect through your tool, WireGuard or a proxy": while it is
+off, the row's SDK, which names a tracker and its company, is kept, and the host is not.
 
-(c) **The profile** (ADR 0047): allowances are kept behind Watch's lock and wiped by a wipe, as the apps left out of the
-tunnel are (a new row of ADR 0047's table). Nothing of blocking is recorded under it: its counts are in memory and
-cleared with the live view, and the log does not run. This joins W9's must in DESIGN.md.
+(c) **The profile** (ADR 0047): allowances are kept behind Advanced's lock and wiped by a wipe, as the apps left out
+of the tunnel are (a new row of ADR 0047's table). Nothing of blocking is recorded under it: its counts are in memory
+and cleared with the live view, and the log does not run. This joins W9's must in DESIGN.md.
 
 ### 9. Checks
 
@@ -230,7 +232,7 @@ The words of the allow and the pause are checked with real users under ADR 0046'
 
 ## Consequences
 
-- Watch blocks trackers by what each host does, the same in every app, and refuses a flow before any byte of its
+- Advanced blocks trackers by what each host does, the same in every app, and refuses a flow before any byte of its
   payload leaves; as far as the research found, no tool without root states its grades with their sources, holds a
   hello until its name is read, keeps Android's cache from carrying one app's answer to another, or offers a timed
   undo.
@@ -238,10 +240,10 @@ The words of the allow and the pause are checked with real users under ADR 0046'
   (4 c); WireGuard-tunnelled apps by their lookups alone (4 f); coalescing (4 g); chained apps' CNAME chains, strict
   Private DNS and apps' own encrypted DNS (3 e); browsers, preinstalled apps, UID 1000 and Play services by default
   (5); an app's own proxy's inner hello is not held (ADR 0052 reads it after the handshake); hosts that wait for
-  lane 2 (1 g); the first flows after Watch starts, before the setting is handed over; and, at the moment blocking
-  is turned on, the answers Android's cache already holds for blocked names, which keep their addresses for their
-  time to live (no app can flush that cache; found on the emulator): their connections are still refused by their
-  hello, and every answer after is kept for no time.
+  lane 2 (1 g); the first flows after the network part starts, before the setting is handed over; and, at the moment
+  blocking is turned on, the answers Android's cache already holds for blocked names, which keep their addresses for
+  their time to live (no app can flush that cache; found on the emulator): their connections are still refused by
+  their hello, and every answer after is kept for no time.
 - The table needs keeping: SDKs change their hosts. It is re-checked at least every six months, as the other datasets
   are, and at each update of the lane-2 brief's results.
 - Frontier research: grades that depend on code signatures and their error on real apps; data sent late, after an
@@ -262,28 +264,28 @@ The words of the allow and the pause are checked with real users under ADR 0046'
   names them. Judgement calls, each in its row: Branch's API hosts `keep` (their answers carry the deep links apps route
   on); Adjust's GDPR hosts `keep` (they carry the user's request to erase the device's data); OneSignal's API `keep`
   (push registration); Firebase installations and Remote Config `keep`.
-- **The engine** (`core/net`): the table's reader and the `Host` reader in `blocking.rs` (`Table::parse`, `find` on label
-  boundaries, `http_host`); the blocked answer in `answers.rs` (`blocked`) and the chain's names in `dns.rs` (`chain`);
-  the decision, the tallies, the ties of addresses and the gates in `engine/blocks.rs` (`Blocks::blocks` the one rule;
-  `Shared::lookup_blocked`, `answer_blocked`, `tie`, `address_verdict`, `blocked_flow`; `Gate::feed`, `QuicGate`), called
-  from every DNS way (`resolver::answer` before its cache, `lookups::answer`, `Loop::udp`'s open and opening flows,
-  `relayed` on the network's answers, the cache of direct answers, DNS over TCP by the app's UID, `tunnels.rs` for a
-  tunnelled app), from `tcp::upstream`'s ask-first path (`blocked_before`: a stand-in's name, a tied address), from
-  `tcp::relay` (the gate on the app's side, the row decided again on both sides), and from `udp.rs` (`gated` on both
-  ways a datagram leaves for a peer, the refusal as ICMP "port unreachable" in `count_sent`). The setting comes whole
-  through `watch-jni` (`nativeBlockingTable`, `nativeBlocking`, `nativeBlocked`), which turns the allowances' times left
-  into deadlines on the time since the phone started, and is carried to the engines to come with the chain. Four
-  counters are appended: lookups answered empty, connections refused, of them by address, and starts held. The log's
-  version 6 adds the outcome 4 and the row's SDK.
-- **Watch's Kotlin side** (`android/watch`, `blocking/`): `BlockingSettings` (the store, timed at each decision, a
-  clock set back pulled in, `wipe()` for W9), `Coverage` (covered UIDs; browsers by `https://example.invalid/` with
-  filters of no host; Watch, Play services, UIDs below 10000 and the tool left out), `Grades` and `TrackerCode` (the
-  code grade from the audit's scan cache, joined to εxodus by prefix; exceptions by package and current or past
-  certificate), `Handover` and `BlockingHandover` (the setting's text, handed at start, on each change, on an app's
-  install or removal, and when the pack or the scan changes), the debug builds' lab row (`src/debug`, an empty one in
-  `src/release`), and the screens (`ui/BlockingSection.kt`, `ui/BlockingLines.kt`, "Now"'s row, the history's rows).
-  The link to the log's switch opens Watch's screen above "Now" without clearing it, and Back returns to the same row
-  or history (`ui/LogSwitch.kt`).
+- **The engine** (`core/net`): the table's reader and the `Host` reader in `blocking.rs` (`Table::parse`, `find` on
+  label boundaries, `http_host`); the blocked answer in `answers.rs` (`blocked`) and the chain's names in `dns.rs`
+  (`chain`); the decision, the tallies, the ties of addresses and the gates in `engine/blocks.rs` (`Blocks::blocks`
+  the one rule; `Shared::lookup_blocked`, `answer_blocked`, `tie`, `address_verdict`, `blocked_flow`; `Gate::feed`,
+  `QuicGate`), called from every DNS way (`resolver::answer` before its cache, `lookups::answer`, `Loop::udp`'s open
+  and opening flows, `relayed` on the network's answers, the cache of direct answers, DNS over TCP by the app's UID,
+  `tunnels.rs` for a tunnelled app), from `tcp::upstream`'s ask-first path (`blocked_before`: a stand-in's name, a
+  tied address), from `tcp::relay` (the gate on the app's side, the row decided again on both sides), and from
+  `udp.rs` (`gated` on both ways a datagram leaves for a peer, the refusal as ICMP "port unreachable" in
+  `count_sent`). The setting comes whole through `network-jni` (`nativeBlockingTable`, `nativeBlocking`,
+  `nativeBlocked`), which turns the allowances' times left into deadlines on the time since the phone started, and is
+  carried to the engines to come with the chain. Four counters are appended: lookups answered empty, connections
+  refused, of them by address, and starts held. The log's version 6 adds the outcome 4 and the row's SDK.
+- **The network part's Kotlin side** (`android/network`, `blocking/`): `BlockingSettings` (the store, timed at each
+  decision, a clock set back pulled in, `wipe()` for W9), `Coverage` (covered UIDs; browsers by
+  `https://example.invalid/` with filters of no host; Datapavan itself, Play services, UIDs below 10000 and the tool
+  left out), `Grades` and `TrackerCode` (the code grade from the audit's scan cache, joined to εxodus by prefix;
+  exceptions by package and current or past certificate), `Handover` and `BlockingHandover` (the setting's text,
+  handed at start, on each change, on an app's install or removal, and when the pack or the scan changes), the debug
+  builds' lab row (`src/debug`, an empty one in `src/release`), and the screens (`ui/BlockingSection.kt`,
+  `ui/BlockingLines.kt`, "Now"'s row, the history's rows). The link to the log's switch opens the network screen above
+  "Now" without clearing it, and Back returns to the same row or history (`ui/LogSwitch.kt`).
 - **Choices made in the build**: the per-app allow lasts an hour (one constant), the global pause ten minutes; a per-row
   allow lasts until blocked again; "Block trackers again" ends the app's hour and leaves its per-row allows; a shared
   UID is covered only where every package that holds it was installed by the user; a `code` row is kept for an app
@@ -292,15 +294,15 @@ The words of the allow and the pause are checked with real users under ADR 0046'
   decision in every app and for the tool, allowances and the pause at a decision, two apps and one name, CNAME
   cloaking, the address tie outside clouds, the gate, a hello in two segments through the relay, a plain request, a
   protocol in which the server speaks first, a QUIC hello in two datagrams, a chained app's question and stand-in, the
-  log's version 6), and Watch's Kotlin tests by 35 (the store and its expiry, coverage, the browser filter, the code
-  grade and the exceptions, the setting's text, the words against ADR 0025's list, the log's reader, the link to the
-  switch). The fuzz target `blocking` checks the table's reader whole or nothing, the matcher against a plain search of
-  every row, and the `Host` reader: 4,293,071 runs in 121 s, nothing found. **Hand mutants** (2026-11-21), each a rule
-  undone in the engine with the tests run: 16 of 16 killed: covered apps only, the tool by DNS alone, an allowance's
-  expiry, the pause's end, the SOA's `MINIMUM` 0, every name of a CNAME chain, a time to live of 0 for answers that may
-  be blocked, the hold of an unfinished hello, the relay's refusal, the hold of an unfinished QUIC hello, never by
-  address in a cloud, label boundaries, a chained app's question, a stand-in's name before the tool, a block set again
-  at the next byte, and the log's outcome code.
+  log's version 6), and the network part's Kotlin tests by 35 (the store and its expiry, coverage, the browser filter,
+  the code grade and the exceptions, the setting's text, the words against ADR 0025's list, the log's reader, the link
+  to the switch). The fuzz target `blocking` checks the table's reader whole or nothing, the matcher against a plain
+  search of every row, and the `Host` reader: 4,293,071 runs in 121 s, nothing found. **Hand mutants** (2026-11-21),
+  each a rule undone in the engine with the tests run: 16 of 16 killed: covered apps only, the tool by DNS alone, an
+  allowance's expiry, the pause's end, the SOA's `MINIMUM` 0, every name of a CNAME chain, a time to live of 0 for
+  answers that may be blocked, the hold of an unfinished hello, the relay's refusal, the hold of an unfinished QUIC
+  hello, never by address in a cloud, label boundaries, a chained app's question, a stand-in's name before the tool, a
+  block set again at the next byte, and the log's outcome code.
 - **The emulator check** (`scripts/verify-blocking.sh`, the `blocking` shard), on the Android 15 emulator
   (`dp-api35-ci`), alone, 2026-11-21: passed. The blocked name got no address and the lab was never asked; one tap on
   B's row in "Now" let its lookup through within 1 s, and one tap blocked it again within 1 s; two apps, one name,
@@ -309,11 +311,11 @@ The words of the allow and the pause are checked with real users under ADR 0046'
   and got "port unreachable", while the allowed app's were echoed; the CNAME to the blocked name was blocked; the pause
   lifted every block and "Block again now" ended it; the fixture's browser, and Chrome, were told as browsers, left out,
   and blocked once included; no notification named an app or a name of the run. Its first run found the limit of
-  Android's cache at the moment blocking is turned on (Consequences), and the check no longer looks the blocked name up
+  Android's cache at the moment blocking is turned on (Consequences); the check does not look the blocked name up
   before. The `dns` shard (`scripts/verify-dns.sh`) passed on the same emulator, alone, with the latency budget
   (ODoH p50 5 ms, p95 70 ms in the lab).
-- **Size.** Watch's native library in Advanced's release APK (`scripts/check.sh android`, 2026-11-21): 1,828,008 bytes
-  on arm64-v8a, 1,351,480 on armeabi-v7a and 2,082,200 on x86_64, under the 2 MiB gate (2,097,152 bytes); against
-  `main` after part 2a's fix round (1,772,296, 1,312,792 and 2,017,976), blocking adds 55,712, 38,688 and 64,224 bytes.
-  **x86_64 has 14,952 bytes left**: the next unit that grows the engine needs a size pass first, or the maintainer's
-  word on the gate (ADR 0035, question 3).
+- **Size.** The network part's native library in Advanced's release APK (`scripts/check.sh android`, 2026-11-21):
+  1,828,008 bytes on arm64-v8a, 1,351,480 on armeabi-v7a and 2,082,200 on x86_64, under the 2 MiB gate (2,097,152
+  bytes); against `main` after part 2a's fix round (1,772,296, 1,312,792 and 2,017,976), blocking adds 55,712, 38,688
+  and 64,224 bytes. **x86_64 has 14,952 bytes left**: the next unit that grows the engine needs a size pass first, or
+  the maintainer's word on the gate (ADR 0035, question 3).

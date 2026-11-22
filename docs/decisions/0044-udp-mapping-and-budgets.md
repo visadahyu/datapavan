@@ -6,8 +6,8 @@
 ## Context
 
 The independent review of 2026-11-09 rated the engine's design and parsers above the field, and its forwarding
-path at the field's standard. Its findings 18 to 21 say why. The maintainer made them gates of Watch 0.2.0, with
-an ADR (D25).
+path at the field's standard. Its findings 18 to 21 say why. The maintainer made them gates of Datapavan 0.2.0,
+Advanced's first release, with an ADR (D25).
 - **18. No app has a budget.** A UDP flow costs:
   - a task;
   - a socket;
@@ -43,31 +43,30 @@ an ADR (D25).
      that came in.
    - **Logging:** each destination stays its own flow in the log, with its own name, organisation, bytes and
      QUIC reading.
-   - **Lifetime:** a mapping ends after 120 seconds with no datagram either way (REQ-5 and REQ-6; today 60
-     seconds, refreshed only by answers), when its app's owner changes, or when the network or the chain
-     changes.
+   - **Lifetime:** a mapping ends after 120 seconds with no datagram either way (REQ-5 and REQ-6), when its
+     app's owner changes, or when the network or the chain changes.
    - **What stays as it is:** lookups to the tunnel's DNS address keep one connected socket per flow.
    - **ICMP errors are kept.** A connected socket learns of an ICMP error such as "port unreachable" by itself;
      an unconnected one only with `IP_RECVERR` (and `IPV6_RECVERR`), which queues each error with the datagram's
      destination. The mapped sockets turn it on. The engine reads each error from the socket's error queue and
-     tells the app, from that destination, as it does today. Most userspace NATs lose these errors, and apps then
+     tells the app: from the router or host the kernel names as its sender, else from that destination (unit
+     11b, below). Most userspace NATs lose these errors, and apps then
      wait for their own timeouts.
    - **Through a safe library only (ADR 0006).** rustix 1.1.4, already in the lockfile, offers neither the option
      nor the extended error. nix (MIT) offers both, `sockopt::Ipv4RecvErr` and `Ipv6RecvErr` and the
-     `Ipv4RecvErr` and `Ipv6RecvErr` control messages, behind safe functions. It comes in with this unit, if its
-     review for size, licence and advisories passes. If it does not, the errors are lost for mapped sockets, and
-     this ADR says so in its amendment.
+     `Ipv4RecvErr` and `Ipv6RecvErr` control messages, behind safe functions. It is used, its review for size,
+     licence and advisories having passed (under "Consequences").
 2. **Chained UDP: one UDP ASSOCIATE per mapping,** not per destination.
-   - Each answer is matched to its destination by its SOCKS5 header. Today that header is thrown away, so anything
-     the relay sends on an association reaches the app as if from the flow's destination.
+   - Each answer is matched to its destination by its SOCKS5 header, so that nothing the relay sends on an
+     association reaches the app as if from the flow's destination.
    - A stand-in name is bound to the first answer from the port the app asked.
-   - Chained apps get the same address-dependent filtering. W6's done-when, "nothing comes in that a local app did
-     not start", becomes "nothing comes in from an address a local app did not send to".
-   - Whether the tool itself keeps one upstream socket per association is the tool's own choice. Watch cannot
+   - Chained apps get the same address-dependent filtering. W6's done-when reads "nothing comes in from an
+     address a local app did not send to".
+   - Whether the tool itself keeps one upstream socket per association is the tool's own choice. Advanced cannot
      change it.
 3. **A budget for the engine and for each app.**
-   - **The caps:** they come from the process's descriptor limit N, read from `/proc/self/limits`, less a
-     reserve of max(128, N/16) for Watch itself (B). UDP mappings are capped at B/4. Waiting TCP connections are
+   - **The caps:** they come from the process's descriptor limit N, read from `/proc/self/limits`, less a reserve of
+     max(128, N/16) for the network part's own use (B). UDP mappings are capped at B/4. Waiting TCP connections are
      capped at min(B/8, 4,096).
    - **The share:** each app may use a quarter of each cap, with at least 64 mappings and 32 waiting connections.
      Flows whose app Android cannot name share one share. So four apps must misbehave before any other is
@@ -82,59 +81,56 @@ an ADR (D25).
      A mapping with traffic in the last 5 seconds is never evicted, so a call is never cut; an answered lookup,
      which carries nothing more, ends however recent its answer (as unit 10 builds it, below). If nothing
      qualifies, the datagram is dropped.
-   - **What each part costs:** one 64 KiB receive buffer per engine thread replaces one per flow. A lookup to the
+   - **What each part costs:** one 64 KiB receive buffer per engine thread, not one per flow. A lookup to the
      tunnel's DNS address ends with its answer.
    - **Counters:** each refusal and eviction is counted. None of them names a destination.
 4. **Two names.**
    - The name the connection itself sent (TLS or QUIC) names the flow. The DNS name is kept beside it when the two
      differ.
-   - An ECH public name keeps today's rule: it never names a flow.
-   - The log's record format moves to version 2, with a flag where the names differ, a flag for a flow that came
-     in, and the DNS name. Watch's Kotlin side reads versions 1 and 2, so sealed records stay readable.
-   - ADR 0037 is amended to match. Counters measure how often the names differ before the format changes.
-   - (Built 2026-11-18, in W5's first part: the DNS name is written only where the names differ, so its presence
-     is that flag, and no bit of its own says it twice; a flow that came in is bit 1 of the record's flags. The
-     order of names is written once, in the engine's `NamedBy`.)
-   - (Decided in its first fix round, 2026-11-18, after review 1 of W5's first part.
+   - An ECH public name never names a flow.
+   - The log's record format is version 2. The DNS name is written only where the names differ, so its presence
+     is the flag that they differ, and no bit of its own says it twice; a flow that came in is bit 1 of the
+     record's flags. The order of names is written once, in the engine's `NamedBy`. The network part's Kotlin
+     side reads versions 1 and 2, so sealed records stay readable.
+   - ADR 0037 states the record's format to match. Counters measure how often the names differ.
+   - The names' finer rules (W5's first part and its fix rounds, 2026-11-18, after review 1 of that part):
      - ECH public names in the answers of an app's own plain resolver are kept as its addresses are, for that app's
-       flows only, so a public name names no flow wherever Watch saw its configuration, and no app hides another's
-       names (names, finding 1). Since the second fix round, each scope has a table of its own, Android's
-       resolver's of 8,192 addresses and 256 public names, so an app's own resolver pushes out only that app's
-       names (review 2: in one table it could push Android's out). Since the third, each app's holds 512
-       addresses and 64 public names, at most 32 apps keep tables of their own (one more takes the place of the
-       app whose own resolver answered last the longest ago), and the engine's sweep, every minute with
-       traffic, drops an app's tables once every name in them has expired (review 3, nit 3). The names are the
-       app's to choose, up to 253 bytes each, and the bound is given with them at their longest: by what the
-       tables ask of the allocator, an app's full tables take up to about 270 KB, so 32 apps about 8.5 MB, beside
-       Android's about 3.7 MB, or about half that with names of 15 bytes (115 KB, 3.6 MB and 1.7 MB; review 4,
-       nit 4). An app that sends no plain DNS of its own past Watch's takes nothing.
-     - A DNS name stands beside the connection's own only while it is current: a name from an answer is kept, to
-       name flows, on the monotonic clock, and through a night it would show W5's users a difference that is only
-       its age, so it stands beside another only while the answer that named the flow when it started is held in
-       time since the phone started, with the same hold (at least an hour, at most a day). The flow carries that
-       hold from its start, so a later answer for the address, as another app's lookup of a name on the same CDN
-       address, does not end it (second fix round). The answer's own time to live would hide a real difference
-       after a minute, since apps keep addresses longer than DNS says (engine, finding 7). A failed reading of
-       the time since start holds a name for no time.
+       flows only, so a public name names no flow wherever the engine saw its configuration, and no app hides
+       another's names (names, finding 1). Each scope has a table of its own, Android's resolver's of 8,192 addresses
+       and 256 public names, so an app's own resolver pushes out only that app's names (review 2: in one table it
+       could push Android's out). Each app's holds 512 addresses and 64 public names, at most 32 apps keep tables of
+       their own (one more takes the place of the app whose own resolver answered last the longest ago), and the
+       engine's sweep, every minute with traffic, drops an app's tables once every name in them has expired (review 3,
+       nit 3). The names are the app's to choose, up to 253 bytes each, and the bound is given with them at their
+       longest: by what the tables ask of the allocator, an app's full tables take up to about 270 KB, so 32 apps
+       about 8.5 MB, beside Android's about 3.7 MB, or about half that with names of 15 bytes (115 KB, 3.6 MB and 1.7
+       MB; review 4, nit 4). An app that sends no plain DNS of its own, past the tunnel's resolver, takes nothing.
+     - A DNS name stands beside the connection's own only while it is current: a name from an answer is kept, to name
+       flows, on the monotonic clock, and through a night it would show W5's users a difference that is only its age,
+       so it stands beside another only while the answer that named the flow when it started is held in time since the
+       phone started, with the same hold (at least an hour, at most a day). The flow carries that hold from its start,
+       so a later answer for the address, as another app's lookup of a name on the same CDN address, does not end it.
+       The answer's own time to live would hide a real difference after a minute, since apps keep addresses longer
+       than DNS says (engine, finding 7). A failed reading of the time since start holds a name for no time.
      - A stand-in's name is the name the tool was asked to reach, tied to that address alone, so it is current while
        the stand-in lives and stands beside the hello's name; the hello's name names the flow, one rule for every
        flow, since the hello says which server the app spoke to at the address the tool reached, and both names are
        kept (names, finding 9).
      - The mark of an app's own encrypted DNS follows the name that names the flow: a hello that renames a flow
        marks it again from its port, its address and the hello's name, so a mark that only its DNS name gave goes
-       with that name, and the counter of such flows takes it back (names, finding 10).)
+       with that name, and the counter of such flows takes it back (names, finding 10).
 5. **The smaller gaps:**
    - **Resets:** an upstream that ends in an error ends the other side with a reset (linger zero), both ways.
    - **ICMP echo:** carried through unprivileged ICMP sockets, protected, at most 32. Its owner cannot be asked of
-     Android, so pings are refused while a chain is on. Where Android refuses such sockets, echo is dropped as
-     today, and counted.
-   - **Fragments:** counted apart. They are reassembled only if the count shows a need. (Amended on 2026-11-15,
-     below: they are reassembled.)
-   - **Too large:** a datagram larger than the network beneath can carry is answered with ICMP "fragmentation
-     needed" or "packet too big", with the network's MTU, which Kotlin passes from `LinkProperties`. The app's
-     "do not fragment" bit is not copied onto the engine's sockets. (Amended on 2026-11-15, below: the tunnel's
-     MTU follows the network beneath, and the engine passes on only what routers answer.)
-   - **The lock:** Watch's native side never holds the engine's lock while joining its thread.
+     Android, so pings are refused while a chain is on. Where Android refuses such sockets, echo is dropped and
+     counted.
+   - **Fragments:** an app's fragments are reassembled, within bounds, and those dropped are counted apart (below,
+     fragments and the MTU).
+   - **Too large:** the tunnel's MTU follows the network beneath, so that the app's own kernel fragments or
+     refuses a datagram larger than it, as without the VPN; the engine answers no "too large" itself and passes
+     on only what routers answer (below, fragments and the MTU). The app's "do not fragment" bit is not copied
+     onto the engine's sockets.
+   - **The lock:** the native side (`core/network-jni`) never holds the engine's lock while joining its thread.
 6. **Tests that drive time.**
    - The engine takes its limits and timings from its `Config`, so tests can use seconds.
    - On Linux, a harness runs it in an unprivileged user and network namespace with a real tun device. Kernel
@@ -143,36 +139,35 @@ an ADR (D25).
    - Where namespaces are not available, those tests say plainly that they did not run. They never pass silently.
    - CI allows the namespaces.
 
-**Amendment of decision 5, fragments and the MTU (2026-11-15, unit 12; proposed, revised after review).**
+**Decision 5, fragments and the MTU (2026-11-15, unit 12; proposed).**
 - **Why.** Two things were measured in Linux namespaces on 2026-11-15:
   - **Apps' kernels fragment.** A default UDP socket, IPv4 or IPv6, whose path MTU is smaller than its datagram
     sends it as fragments. Only a socket set to "do not fragment" gets `EMSGSIZE`. An engine that drops fragments
     cuts such an app off as soon as its path is narrower than its datagrams.
-  - **"Too large" from the engine is not what the app meets without Watch.** A first version of this unit
-    answered datagrams larger than the network beneath, as a router would. The second review showed what that
-    does to apps whose own link would have handled them:
+  - **"Too large" from the engine is not what the app meets without the VPN.** An engine that answers datagrams
+    larger than the network beneath, as a router would, harms apps whose own link would have handled them, as
+    unit 12's second review showed:
     - a connected default socket fails its next call with `EMSGSIZE`, and that datagram is lost;
     - an IPv6 socket set to `IPV6_PMTUDISC_OMIT` ignores the answer, so every datagram is lost;
     - `PROBE` and `INTERFACE` sockets lose datagrams silently.
 
-    Without Watch, the app's own kernel fragments those datagrams, or refuses them at once.
+    Without the VPN, the app's own kernel fragments those datagrams, or refuses them at once.
 - **The tunnel's MTU follows the network beneath.**
-  - Watch sets the tunnel's MTU to its first hop's, as the kernel reports it. A UDP socket of each IP version,
+  - Advanced sets the tunnel's MTU to its first hop's, as the kernel reports it. A UDP socket of each IP version,
     bound to the network beneath, is connected toward an address only the default route covers, and `IP_MTU` is
     read from it. On Linux `IP_MTU` answers for an IPv6 socket too, and the IPv6 value includes what router
     advertisements set.
   - The tunnel takes the smaller of the two values, never below 1280 or above 1500. It takes 1500 when neither
     socket answers.
-  - When a network change brings another value, the tunnel is set up again, as for an address clash (ADR 0041),
-    and make-before-break: the new tunnel is established while the engine still runs, so that nothing leaves outside
-    the tunnel meanwhile. Where its addresses stay and Android keeps the same VPN network (the apps Watch hands its
+  - When a network change brings another value, the tunnel is set up again, as for an address clash (ADR 0041), and
+    make-before-break: the new tunnel is established while the engine still runs, so that nothing leaves outside the
+    tunnel meanwhile. Where its addresses stay and Android keeps the same VPN network (the apps the service hands its
     `Builder` are the same, in the same order), the running engine goes on with the new tunnel and keeps its flows,
-    chain and all (unit 12b); a setup with other addresses or on a new VPN network starts a new engine, which goes
-    on with the one before's chain from its first packet.
-    Within one network a lower value is taken at once and a higher one only 10 minutes after the last setup, so
-    that a flapping route cannot set the tunnel up again and again.
+    chain and all (unit 12b); a setup with other addresses or on a new VPN network starts a new engine, which goes on
+    with the one before's chain from its first packet. Within one network a lower value is taken at once and a higher
+    one only 10 minutes after the last setup, so that a flapping route cannot set the tunnel up again and again.
   - Android's `Builder` takes one MTU for both IP versions, so the wider version meets the narrower one's MTU.
-  - The app's own kernel then meets the first hop as it would without Watch: it fragments the datagram or refuses
+  - The app's own kernel then meets the first hop as it would without the VPN: it fragments the datagram or refuses
     it, by its socket's own setting. `LinkProperties.getMtu()` is 0 on most networks, so it is not used.
 - **Fragments are reassembled.**
   - An app's IPv4 and IPv6 fragments are put together, and the whole datagram is handled as any other.
@@ -181,7 +176,7 @@ an ADR (D25).
   - Overlapping fragments drop the whole datagram, and its later fragments until its wait ends (RFC 5722). A first
     fragment without the whole transport header drops it too (RFC 1858, RFC 7112).
 - **Beyond the first hop.** The "fragmentation needed" and "packet too big" that routers send to the engine's
-  sockets (read through `IP_RECVERR`) are passed on to the app with their MTU, as they would reach it without Watch.
+  sockets (read through `IP_RECVERR`) are passed on to the app with their MTU, as they would reach it without the VPN.
   The engine answers nothing on its own. A datagram larger than the path is sent: the engine's kernel fragments it,
   or a router answers.
 - **What stays as it is.** A datagram the engine's kernel refuses as too large is dropped and counted, never
@@ -189,8 +184,8 @@ an ADR (D25).
 
 ## Consequences
 
-- **Calls and peer-to-peer apps keep their direct paths,** as without Watch. Port scanning by one app no longer
-  costs other apps their connections.
+- **Calls and peer-to-peer apps keep their direct paths,** as without the VPN. Port scanning by one app does not
+  cost other apps their connections.
 - **The maintainer's questions on the bar (2026-11-12):** budgets for each app, two names and the namespace
   harness are above the open tools; endpoint-independent mapping by default, also through the chain, is at the
   top of the field; resets, echo and the MTU are the field's standard; keeping ICMP errors with unconnected
@@ -199,44 +194,42 @@ an ADR (D25).
   - each tool's relay;
   - how often names differ.
 
-  An outside review of the engine (WATCH-07) is still needed before 0.2.0 is called stable.
+  An outside review of the engine (D28) is still needed before 0.2.0 is called stable.
 - **nix's review (2026-11-12):** nix 0.31.3 (MIT), with the features `net` and `uio`, passed `cargo deny` and
   builds for the three Android targets. It brings memoffset, cfg_aliases, bitflags and autocfg (build only). With
   the new UDP code, the arm64 library grew from 775,976 to 812,312 bytes, about 2.8 KB of it nix's own.
-- **aes-gcm's review (2026-11-17, unit 9b, fix round 1):** the maintainer's rule, vetted libraries over cryptography of
-  our own, replaced unit 9b's GHASH written out by hand with RustCrypto's `aes-gcm` 0.11.1 (Apache-2.0 OR MIT,
-  published by the RustCrypto developers, repository RustCrypto/AEADs), without its default features (no allocator,
-  no random numbers), on the `aes` 0.9.4 and `cipher` 0.5.2 already in both lockfiles. It brings seven more crates,
-  all RustCrypto's and under the same licences: `aead` 0.6.1, `ctr` 0.10.1, `ghash` 0.6.0, `polyval` 0.7.3,
-  `universal-hash` 0.6.1, `ctutils` 0.4.8 and `cmov` 0.5.4; `cargo deny` passes, both lockfiles hold them, and
-  the three Android targets build. **Audit:** the crate's README cites one review by NCC Group, read here in the
-  report itself ("RustCrypto AES/GCM and ChaCha20+Poly1305 Implementation Review", version 1.0 of 2020-02-13, by
-  Gérald Doussot and Thomas Pornin, for MobileCoin, five person-days): it covered `aes-gcm`, `aes`, `ghash`,
-  `polyval`, `aead` and `universal-hash` at their commits of December 2019 and found no vulnerability; in its words,
-  "a few cosmetic remarks, mostly related to potential performance improvements", and one on GCM's size limits:
-  `aes-gcm`'s checks of the largest plaintext, ciphertext and associated data were slightly off GCM's own (2^36
-  bytes against 2^36 - 32, the tag left out of the ciphertext's, and associated data held to 2^36 bytes where GCM
-  allows 2^61 - 1), which the report found no risk in, the checks being failsafes and 2^36 bytes about 69 GB; this
-  engine's packets are at most 64 KB. The code reviewed is that of nearly seven years ago, not 0.11's, whose ARMv8
-  backends, those a phone uses, came later and have no audit (corrected in fix round 2: "six years", and "only
-  remarks on speed"). **Advisories:** RUSTSEC-2023-0096 (a failed tag left the decrypted text in the caller's buffer,
-  0.10.0 to 0.10.2, patched in 0.10.3); 0.11.1 checks the tag before it decrypts, and the engine never reads a
-  buffer whose tag failed. Two more in RustSec's database for crates it brings, read in fix round 2:
+- **aes-gcm's review (2026-11-17, unit 9b, fix round 1):** the maintainer's rule, vetted libraries over cryptography
+  of our own, replaced unit 9b's GHASH written out by hand with RustCrypto's `aes-gcm` 0.11.1 (Apache-2.0 OR MIT,
+  published by the RustCrypto developers, repository RustCrypto/AEADs), without its default features (no allocator, no
+  random numbers), on the `aes` 0.9.4 and `cipher` 0.5.2 already in both lockfiles. It brings seven more crates, all
+  RustCrypto's and under the same licences: `aead` 0.6.1, `ctr` 0.10.1, `ghash` 0.6.0, `polyval` 0.7.3,
+  `universal-hash` 0.6.1, `ctutils` 0.4.8 and `cmov` 0.5.4; `cargo deny` passes, both lockfiles hold them, and the
+  three Android targets build. **Audit:** the crate's README cites one review by NCC Group, read here in the report
+  itself ("RustCrypto AES/GCM and ChaCha20+Poly1305 Implementation Review", version 1.0 of 2020-02-13, by Gérald
+  Doussot and Thomas Pornin, for MobileCoin, five person-days): it covered `aes-gcm`, `aes`, `ghash`, `polyval`,
+  `aead` and `universal-hash` at their commits of December 2019 and found no vulnerability; in its words, "a few
+  cosmetic remarks, mostly related to potential performance improvements", and one on GCM's size limits: `aes-gcm`'s
+  checks of the largest plaintext, ciphertext and associated data were slightly off GCM's own (2^36 bytes against
+  2^36 - 32, the tag left out of the ciphertext's, and associated data held to 2^36 bytes where GCM allows 2^61 - 1),
+  which the report found no risk in, the checks being failsafes and 2^36 bytes about 69 GB; this engine's packets are at
+  most 64 KB. The code reviewed is that of nearly seven years ago, not 0.11's, whose ARMv8 backends, those a phone
+  uses, came later and have no audit. **Advisories:** RUSTSEC-2023-0096 (a failed tag left the decrypted text in the
+  caller's buffer, 0.10.0 to 0.10.2, patched in 0.10.3); 0.11.1 checks the tag before it decrypts, and the engine
+  never reads a buffer whose tag failed. Two more in RustSec's database for crates it brings, read in fix round 2:
   RUSTSEC-2026-0003 (`cmov` before 0.4.4 made code on 32-bit ARM that branched on the values it was to move in
   constant time) and RUSTSEC-2026-0385 (`ctutils` before 0.4.4, masks built with a branch, and `u128` comparisons
   branching on 32-bit targets); the lockfiles hold `cmov` 0.5.4 and `ctutils` 0.4.8, both after the fixes, which
   matters since 32-bit ARM (`armv7-linux-androideabi`) is one of the engine's targets. The arm64 library grew from
-  1,040,152 to
-  1,050,160 bytes. The hello's reader, which removed an Initial's protection without its tag, now checks it too:
-  with the library it costs one GHASH for each of a flow's first few datagrams, and a packet damaged on its way,
-  or bytes that only look like an Initial, then name no flow rather than one by frames that happened to parse.
+  1,040,152 to 1,050,160 bytes. The hello's reader, which removed an Initial's protection without its tag, now checks
+  it too: with the library it costs one GHASH for each of a flow's first few datagrams, and a packet damaged on its
+  way, or bytes that only look like an Initial, then name no flow rather than one by frames that happened to parse.
 - **hkdf's review (2026-11-17, unit 9b, fix round 2):** the same rule replaced the HMAC-SHA-256 and TLS 1.3's
   `HKDF-Expand-Label` written in `quic.rs` since W3 with RustCrypto's `hkdf` 0.13.0 (MIT OR Apache-2.0, published by
   the RustCrypto developers, repository RustCrypto/KDFs), which brings `hmac` 0.13.0 (the same, repository
   RustCrypto/MACs); both are built on `digest` 0.11, as the `sha2` 0.11.1 already in both lockfiles is, both
   forbid unsafe code, neither is used with a default feature (`hkdf`'s `kdf`, off by default, is not taken), and
   `digest` gains its `mac` feature. No newer release of either exists than these, `hmac` 0.13.0 of 2026-03-29 and
-  `hkdf` 0.13.0 of 2026-03-30 (so corrected in fix round 3), the first stable ones on `digest` 0.11; RustSec's
+  `hkdf` 0.13.0 of 2026-03-30, the first stable ones on `digest` 0.11; RustSec's
   database (read 2026-11-17) has no advisory for either. Neither is
   covered by NCC's review above, nor by any audit their repositories cite: HKDF and HMAC are a few dozen lines over
   SHA-256, checked here against RFC 5869 A.1 (the PRK, and all 42 bytes of the expand step) and RFC 9001 A.1 (each
@@ -245,9 +238,10 @@ an ADR (D25).
   no secret, so a fault in either would misread packets, not leak anything.
 - **Two filters differ by design:** address-dependent for answers, endpoint-independent for mappings. These are
   the defaults RFC 4787 recommends, and what most home routers do.
-- **ADR 0012's "one socket per flow" for UDP is superseded** by decision 1. W6's done-when changes its wording,
-  not its meaning: an answer still needs a datagram the app sent first.
-- **The log format changes once,** before W5 reads it.
+- **For UDP, decision 1 takes the place of ADR 0012's "one socket per flow".** W6's done-when keeps its meaning
+  in decision 2's words: an answer still needs a datagram the app sent first.
+- **The log's format has one change,** to version 2 (decision 4), made before W5 read the log.
+
 - **This is a set of units:** each lands on its own, with its tests. The harness comes first, so the later units
   are tested by it.
 
@@ -279,11 +273,11 @@ an ADR (D25).
   answers whoever reaches it, as a DHT node or a QUIC listener does, would otherwise lift the cap.
 - **Stand-ins.** The relay answers from the address the tool reached, which the app never saw:
   - A stand-in still waiting for its first answer is bound to the first answer from its port, from an address the
-    app never saw, when no other stand-in of the mapping could take it (since unit 9b, below, one whose datagrams
-    carried an identifier only by an answer that carries it). Later answers from that address reach the
+    app never saw, when no other stand-in of the mapping could take it (one whose datagrams carried an identifier
+    only by an answer that carries it: unit 9b, below). Later answers from that address reach the
     app from the stand-in. Only a stand-in the app sent to waits: a flow that came in, as another port of a name
     a relay gave back, never does, since the app asked it nothing.
-  - **A bounded cut** (since unit 9b, only for a second name whose datagrams carry no identifier; one that carries
+  - **A bounded cut** (only for a second name whose datagrams carry no identifier, unit 9b; one that carries
     one takes from the bound address only the answers that carry it, and the rest go to the bound name at once). A
     second name asked on a bound name's port contests the bound address's answers for
     `Limits::udp_contest`, 5 s after the app first asked it, and they are dropped meanwhile: one unanswered
@@ -293,23 +287,24 @@ an ADR (D25).
     reach the app under the first name, and the log counts them there. The second name still waits, as long as
     it lives, for a first answer from an address no other stand-in was bound to.
   - On port 53, that answer must also be a DNS response to a query the app sent that stand-in, by its ID and its
-    question. A sender that guesses neither cannot take the stand-in, nor feed Watch the names it learns.
-  - **The risk left until unit 9b:** on other ports, whoever reaches the tool's relay first, from the port the app
-    asked and an address the app never saw, takes a waiting stand-in, and the real answer is then dropped. Such a
-    sender must know where the tool's relay sends from, and when; the tool's own filtering, if it has any, comes
-    first. A destination the app sent to, or a stand-in already bound, never takes another stand-in this way.
-    **What unit 9b changed:** a stand-in whose datagrams carried a STUN transaction ID, a QUIC connection ID, a DNS
-    query's ID and question or an NTP request's timestamp is bound only by an answer that carries it, also when it
-    waits alone: such a sender can take it only with what the app sent it. For a protocol that carries none the
-    risk stays as written here; no relay read for 9b filters its answers by their source, so an association of a
-    stand-in's own does not narrow it. A destination's or a bound stand-in's address now binds a waiting stand-in,
-    beside the peer that holds it, by an answer that carries that stand-in's identifier, and only so.
-  - When several wait on one port, the answer could be any of their names'. It is dropped rather than handed to
-    one, for as long as more than one waits. An app that asks several names on one port at once, as some ask
-    several STUN servers, gets no answer from them through the tool. **What unit 9b changed:** such an answer goes
-    to the one stand-in whose identifier it carries, and is dropped, as carrying none, when it carries none of
-    theirs; a stand-in without identifiers is never left beside another on one association, but leaves by one of
-    its own, and only beyond the caps on those, or with no place in the budget, does this floor still apply.
+    question. A sender that guesses neither cannot take the stand-in, nor feed the engine the names it learns.
+  - **The risk where no identifier tells:** a stand-in whose datagrams carried a STUN transaction ID, a QUIC
+    connection ID, a DNS query's ID and question or an NTP request's timestamp is bound only by an answer that
+    carries it, also when it waits alone (unit 9b, below): a sender can take it only with what the app sent it.
+    For a protocol that carries none, on other ports, whoever reaches the tool's relay first, from the port the
+    app asked and an address the app never saw, takes a waiting stand-in, and the real answer is then dropped.
+    Such a sender must know where the tool's relay sends from, and when; the tool's own filtering, if it has any,
+    comes first. No relay read for unit 9b filters its answers by their source, so an association of a
+    stand-in's own does not narrow it. A destination the app sent to, or a stand-in already bound, never takes
+    another stand-in this way; its address binds a waiting stand-in, beside the peer that holds it, by an answer
+    that carries that stand-in's identifier, and only so.
+  - When several wait on one port, an answer from an address the app never saw goes to the one stand-in whose
+    identifier it carries, and is dropped, as carrying none, when it carries none of theirs (unit 9b). A stand-in
+    without identifiers is never left beside another on one association, but leaves by one of its own. Only beyond
+    the caps on those, or with no place in the budget, does the floor apply: there the answer could be any of
+    their names', and it is dropped rather than handed to one, for as long as more than one waits, so that an app
+    that asks several names on one port at once, as some ask several STUN servers, gets no answer from them
+    through the tool.
   - **The maintainer's decision (2026-11-13):** dropping is the safe floor, since handing an answer to the wrong
     name would make the log wrong without a word. It is not the best the field allows, so unit 9b, before
     Advanced's first release, removes the loss without guessing: an answer is told apart by the protocol's own
@@ -438,14 +433,14 @@ an ADR (D25).
   even when Android named that socket's app before: the old app is never taken for it. While a chain is on, it goes
   nowhere. A socket Android fails to name for a moment so gets a new mapping, and so another port.
 - **Flows of lookups** to the tunnel's DNS address end once each lookup they carried has its answer: a direct one
-  when the network's resolver answers, a chained app's when Watch has answered it, within a few seconds. Each
+  when the network's resolver answers, a chained app's when the engine has answered it, within a few seconds. Each
   lookup is kept by its ID and question, and an answer settles only the lookup it answers, so a repeated answer
   does not end the flow before a later lookup has its own; at most 256 wait on one flow. One that gives way to a
   new flow, when Android is asked again or the chain changes, still hands the app every answer it owes.
 - **Counters, appended:**
   - `udp_unmatched`, the 27th: answers that no one destination could be told for, such as one on a port several
     stand-ins wait on, a malformed header or a fragment. It measures how often the rule above costs an answer
-    (what it counts since unit 9b is in that unit's note);
+    (what it counts is listed in unit 9b's note);
   - `udp_came_in_capped`, the 28th: what the cap of 64 dropped;
   - `udp_relay_elsewhere`, the 29th: relays a tool offered elsewhere than on the phone or at its proxy's own
     address. Such a relay would take the app's datagrams, each naming its destination, across the network
@@ -460,7 +455,7 @@ an ADR (D25).
     before their way opened, or no answer near them to be had. Both count what is dropped as a way fails too.
 - **The chain changes:** a mapping ends at its next datagram either way when the chain is set again and sends its
   app another way: another tool, proxy address, user name or password, UDP turned off, or the chain off. The same
-  tool set again keeps it. This holds for the direct path's mappings too, which until now kept their way. A chained
+  tool set again keeps it. This holds for the direct path's mappings too. A chained
   mapping also ends when the tool closes its relay. When the chain changes while a destination's way opens, the
   destination is routed again before anything that waited leaves. Lookups to the tunnel's DNS address follow
   too: a flow of lookups that the chain sends another way gives way at the app's next lookup, and lookups that
@@ -509,15 +504,14 @@ an ADR (D25).
   association. The test tool and the lab's proxy name the real sender; v2rayNG and NekoBox are not yet checked.
 
 **Unit 10, the budget for the engine and for each app (2026-11-14, decision 3).**
-- **What came before.** Unit 7 capped the TCP connections waiting for their servers for every app together
+- **What earlier units built.** Unit 7 capped the TCP connections waiting for their servers for every app together
   (`Limits::tcp_waiting`): a SYN beyond the cap is dropped, its fake port freed at once (`Nat::release`), and
   counted (`tcp_refused`, the 24th counter). Unit 8 brought one receive buffer for each engine thread, lookups that
   end with their answer, and the two-minute timer refreshed both ways. This unit builds the rest of decision 3.
-  Unit 9's two leftovers for it, a reused app port reaching a destination its mapping knew with no question to
-  Android, and an app Android could not name taken for the mapping's old app, were settled within unit 9 ("Android
-  is asked again", "No guess").
+  A reused app port reaching a destination its mapping knew, and an app Android cannot name, are unit 9's
+  ("Android is asked again", "No guess").
 - **The caps and the shares,** in `Limits::for_descriptors`, from the soft limit on open files N in
-  `/proc/self/limits` (1,024 where it cannot be read), less Watch's reserve of max(128, N/16), B: waiting TCP
+  `/proc/self/limits` (1,024 where it cannot be read), less the process's own reserve of max(128, N/16), B: waiting TCP
   connections min(B/8, 4,096) (`tcp_waiting`), UDP ways B/4 (`udp_mappings`); each app a quarter of each cap, at
   least 32 connections (`tcp_share`) and 64 ways (`udp_share`), never more than the cap. At N = 1,024, the
   defaults: 112 and 32, 224 and 64; at 32,768: 3,840 and 960, 7,680 and 1,920. The apps Android cannot name are one
@@ -537,22 +531,22 @@ an ADR (D25).
   taken before anything leaves the phone: an app that holds its whole share then has the SYN dropped, as at the
   cap, its port freed at once, nothing sent to the server, no flow logged, and `tcp_refused` counting it. While at
   most a share's worth wait in all, no app can hold its whole share yet, so the server is asked at once beside
-  Android, as before the shares, which spares each connection the time a question takes, about 3 ms. Such a
+  Android, which spares each connection the time a question takes, about 3 ms. Such a
   connection takes its place when Android answers, beyond the share if the app's later connections took places
   first, and is never dropped: whatever leaves the phone is logged under its app (independent review of unit 10,
-  major: such a connection was dropped once its SYN had left, and never logged). Only connections begun so lift an
+  major: dropped once its SYN had left, such a connection would never be logged). Only connections begun so lift an
   app above its share, never past twice it, by one share at most for every app together, since each began while at
   most a share's worth waited in all, and only while they wait, for at most `connect_timeout`; one whose server
   answered before Android takes no place. So a question asked first costs its 3 ms only under pressure: past 32
   waiting connections at 1,024 files, 960 at 32,768.
 - **What takes a UDP place:** every UDP way that holds a socket of its own. A mapping, on the direct path or
   through the tool, holds its place until it ends; a flow of lookups to the tunnel's DNS address on the direct
-  path, until each lookup it carried has its answer, or 10 s pass with none. A chained app's lookups, which Watch
-  answers itself, hold none. The place is taken before the socket is made, and before the destination becomes the
+  path, until each lookup it carried has its answer, or 10 s pass with none. A chained app's lookups, which the
+  engine answers itself, hold none. The place is taken before the socket is made, and before the destination becomes the
   one its socket's other destinations wait for, so that none of them waits on a way refused.
 - **At the cap or the share, a mapping ends to make room,** the first there is of:
   1. an answered lookup: a mapping of one destination on port 53 to which the app sent DNS queries only, each with
-     its answer by its ID. Since unit 8 a lookup to the tunnel's DNS address ends with its answer, so what this
+     its answer by its ID. A lookup to the tunnel's DNS address ends with its answer (unit 8), so what this
      finds is an app's own resolver, which sends each query from a socket of its own and leaves a mapping behind
      each answer. It carries nothing more, so it ends however recent its answer: the five seconds below guard what
      may still carry traffic. One the app sent anything else, or more than 64 queries waiting at once, is no
@@ -619,13 +613,13 @@ an ADR (D25).
 
 **Unit 11, ping (2026-11-15, decision 5).**
 - **What is carried.** An app's echo request (ICMP type 8, ICMPv6 type 128) leaves through an unprivileged ping
-  socket of Watch's own (a datagram socket of the ICMP protocol, which Android lets every app make), one for each
+  socket of the engine's own (a datagram socket of the ICMP protocol, which Android lets every app make), one for each
   app address, echo id and destination, protected before its first send. At most 32 exist (`Limits::echo_sockets`,
   sockets still being made included), and up to 8 requests wait while one is made. A socket ends after 10 s with no
-  request (`Limits::echo_idle`), when the network moves, or when a chain comes on (since unit 11b's second round,
-  also at the cap, to make room for a new one, below). A reply is taken only from the address pinged and is rebuilt
-  with the app's own id, its sequence and data, and a hop limit of 64 (since unit 11b, the one it arrived with); the
-  kernel's id on Watch's socket never reaches the app. A ping to the tunnel's DNS address goes to the network's resolver,
+  request (`Limits::echo_idle`), when the network moves, when a chain comes on, or at the cap, to make room for a
+  new one (unit 11b, below). A reply is taken only from the address pinged and is rebuilt with the app's own id,
+  its sequence and data, and the hop limit it arrived with (unit 11b); the kernel's id on the engine's socket never
+  reaches the app. A ping to the tunnel's DNS address goes to the network's resolver,
   as lookups do, and is dropped when that resolver is of the other IP version. Echo writes no record to the log.
 - **While a chain is on,** every echo is refused, since Android cannot say whose a ping is: a unicast destination
   is answered at once with "administratively prohibited" (ICMP type 3 code 13, ICMPv6 type 1 code 1), a multicast,
@@ -634,40 +628,36 @@ an ADR (D25).
   chain checked and the waiting requests sent, with no await between. What is left is a chain set from Android's
   side between a check and its send, which can let out the requests already decided, as for UDP.
 - **Where Android refuses ping sockets,** a probe at start finds it for each IP version, and echo is dropped and
-  counted, as before this unit.
+  counted.
 - **Counters 34 to 38:** echo requests carried, replies, refused, unsupported, dropped.
 - **Tests:** unit tests of the packets (checksums, the ICMPv6 pseudo-header, padding, the rebuilt reply, the
   refusal and when none is sent), the cap and the idle end; in netlab, 12 of the engine's 32 tests: ping in IPv4
   and IPv6 with its own id, several ids at once, the cap and the idle end, a forged reply, the probe, the refusal
   with sockets already open (the namespace's kernel received no request, `InEchos`), a reply after a chain came on,
   a request waiting for its socket when a chain comes on, the network moving, and the IPv6 refusal. Each was shown
-  to fail without its part of the code. `verify-watch.sh` pings through the tunnel: on the Android 15 emulator,
-  Watch's own ping socket carried it and the replies came back (2026-11-15).
+  to fail without its part of the code. `verify-network.sh` pings through the tunnel: on the Android 15 emulator,
+  the engine's own ping socket carried it and the replies came back (2026-11-15).
 - **Reviews.** An independent review found no fault in safety and two majors: requests that waited for a new socket
   could leave after a chain came on, since a first send on a new socket awaited, and the safety claims that matter
   most had no test. Both were fixed, with the minors (the resolver's IP version, no error for multicast or
   broadcast, tests that waited a fixed time, the fuzz target's checksums); a narrow review of the fixes found no
   critical or major fault left.
 - **Not done, stated:**
-  - errors from the network beneath (unreachable, time exceeded) and the arriving hop limit are not passed on:
-    the app sees a timeout, and a traceroute through Watch shows the destination at every hop. A later change that
-    sets `IP_RECVERR` on the ping sockets must read their error queue, as `errors::queued` does, so that a pending
-    error does not end the socket (closed by unit 11b, below, which does so);
-  - echo's bytes are not in the engine's byte counters, while Android counts them to Watch (closed by unit 11b);
+  - errors from the network beneath (unreachable, time exceeded), the arriving hop limit and echo's bytes are
+    unit 11b's (below): it sets `IP_RECVERR` on the ping sockets and reads their error queue, as `errors::queued`
+    does, so that a pending error does not end the socket;
   - with no owner there is no share for each app: one app can take all 32 sockets for as long as it pings.
     Accepted: a ping is small and brief, and no other traffic waits on these sockets;
-  - phones of other makers, whose SELinux rules for ICMP sockets may differ, are not measured yet (the Galaxy A40
-    next).
+  - phones of other makers, whose SELinux rules for ICMP sockets may differ, are not measured yet (the Galaxy
+    A40's run is in unit 11b).
 
-**Unit 12, fragments and the MTU (2026-11-15, decision 5 as amended and revised).**
-- **The first version answered "too large" itself, and was taken back.** Built from the amendment as first written, it
-  read the first hop's MTU in the engine and answered a datagram larger than it, as a router would. The second review
-  showed what that did to apps whose own link would have carried the datagram: a connected default socket failed its
-  next call with `EMSGSIZE` and lost that datagram, an IPv6 socket set to `IPV6_PMTUDISC_OMIT` lost every one, and
-  `PROBE` and `INTERFACE` sockets lost them silently. The amendment was revised, and the engine's answer, its probe,
-  its table of learned MTUs and their limits went (the `engine/mtu.rs` module, `Config::mtu_probe`, `MtuProbe`,
-  `Engine::first_hop_mtus`, `Limits::mtu_learned` and `mtu_expires`).
-- **The tunnel's MTU follows the network beneath** (Kotlin, `TunnelMtu`, `WatchVpnService`).
+**Unit 12, fragments and the MTU (2026-11-15, decision 5).**
+- **The engine answers no "too large" itself.** Answered by the engine, as a router would, a datagram larger than
+  the first hop's MTU harms apps whose own link would have carried it, as the second review showed: a connected
+  default socket fails its next call with `EMSGSIZE` and loses that datagram, an IPv6 socket set to
+  `IPV6_PMTUDISC_OMIT` loses every one, and `PROBE` and `INTERFACE` sockets lose them silently. The engine keeps no
+  probe of the first hop and no table of learned MTUs.
+- **The tunnel's MTU follows the network beneath** (Kotlin, `TunnelMtu`, `NetworkVpnService`).
   - A UDP socket of each IP version is bound to the network beneath (`Network.bindSocket`, or `protect` where that is
     refused or before any network is followed), connected toward an address only a default route covers, port 9
     (connecting sends nothing), and its `IP_MTU` read. The address is drawn anew at each measure, from 192.0.2.2 to
@@ -680,7 +670,7 @@ an ADR (D25).
   - `TunnelMtu.choose` takes the smaller value, within 1,280 and 1,500, and 1,500 when neither socket answers.
     Android's `Builder.setMtu` takes one MTU for both IP versions, so on a network whose IPv4 and IPv6 first hops
     differ, the wider version meets the narrower MTU in the tunnel, not its own hop's: its datagrams between the two
-    are fragmented or refused by the app's kernel where without Watch they would pass whole (re-review, minor 2).
+    are fragmented or refused by the app's kernel where without the VPN they would pass whole (re-review, minor 2).
   - The tunnel starts with it, measured off the main thread first, since StrictMode counts a UDP connect as network
     access; a stop that comes while a start waits for its measure wins, and so does the service's end (minor 5). Each
     change of the followed network's properties measures again. Within one network the MTU goes down at once, and up
@@ -691,29 +681,31 @@ an ADR (D25).
     measure posted for then on the main handler, which `close()` drops, so that a network whose properties do not
     change still gets it (fourth check, minor 2). A new network takes its own value. A new value sets the tunnel up
     again.
-  - Watch's dump prints `mtu <chosen> first-hop <IPv4> <IPv6>`. Kotlin no longer reports the network's MTU to the
-    engine, which has no use for it.
-- **The tunnel is set up again make-before-break** (re-review, major 1). Until then, a new MTU, an address clash (ADR
-  0041) and a change of the apps left out each closed the engine and the tunnel before `establish()`: Android tore
-  the VPN network down, and the apps, chained ones included, went out directly until the new one was up, against
-  W6's "nothing of a chained app goes out directly", or lost their traffic under "block connections without VPN".
-  Now each of them, and the debug `addresses-force`, calls `setUpAgain`:
+  - The service's dump prints `mtu <chosen> first-hop <IPv4> <IPv6>`. Kotlin does not report the network's MTU to
+    the engine, which has no use for it.
+- **The tunnel is set up again make-before-break** (re-review, major 1). Were the engine and the tunnel closed
+  before `establish()`, Android would tear the VPN network down, and the apps, chained ones included, would go out
+  directly until the new one was up, against W6's "nothing of a chained app goes out directly", or lose their
+  traffic under "block connections without VPN". A new MTU, an address clash (ADR 0041), a change of the apps left
+  out and the debug `addresses-force` each call `setUpAgain`:
   - the new tunnel is built and established while the old engine still runs on the old one;
   - only then does `nativeStart` stop the old engine, which closes the old tunnel, and start one on the new tunnel;
     the network callbacks stay registered, and the Builder names the followed network as the tunnel's underlying
     one, as the callback did after a start;
   - the old engine hands the new one, before the new one reads a packet, what it goes on with (`Engine::hand_over`,
-    `Engine::start_with`, narrow check of the second round, major 1): the chain as Watch last set it, the network's
-    resolver, whether answers go uncached, the stand-ins chained apps were given, the names DNS answers gave, and the
-    counters, which go on rather than drop (its minor 3). Until then the new engine started with no chain and read
-    the new tunnel at once, while Kotlin's `applyChain` came after: a chained app's packets in between went
-    directly, and a connection opened then stayed direct for its life. Kotlin sets nothing again after the swap, so
-    that no chain read from settings older than the one just applied replaces it (its minor 6). A chain Watch sets
-    while no engine runs, as during the swap, is not lost: Watch's native side keeps the chain last set, with whether
+    `Engine::start_with`, narrow check of the second round, major 1): the chain as the service last set it, the
+    network's resolver, whether answers go uncached, the stand-ins chained apps were given, the names DNS answers
+    gave, and the counters, which go on rather than drop (its minor 3). A new engine that started with no chain and
+    read the new tunnel at once, before Kotlin's `applyChain`, would send a chained app's packets in between
+    directly, and a connection opened then would stay direct for its life. Kotlin sets nothing again after the
+    swap, so that no chain read from settings older than the one just applied replaces it (its minor 6). A chain
+    the service sets while no engine runs, as during the swap, is not lost: the native side keeps the chain last
+    set, with whether
     answers go uncached, whatever runs, holds it from reading it until the new engine is in place, and the new engine
     takes it over the one handed over (`ChainSetting`, fourth check, minor 1); stopping the tunnel forgets it;
-  - the engine's flows begin anew, as before; unit 12b will hand the new tunnel to the running engine, keeping them;
-  - the debug list of apps the end-to-end test sends through the tunnel now holds for every setup of a run.
+  - with other addresses or on a new VPN network the engine's flows begin anew; otherwise unit 12b hands the new
+    tunnel to the running engine, which keeps them;
+  - the debug list of apps the end-to-end test sends through the tunnel holds for every setup of a run.
   - **Why no window is left, and what that rests on.** Read in AOSP's `Vpn.java` (main, 2026-11-15): `establish()`
     called while a VPN interface is up keeps the VPN network and updates its link properties in place when
     `allowBypass` and the allowed and disallowed apps are unchanged, as for a new MTU or new addresses
@@ -726,12 +718,12 @@ an ADR (D25).
     none harmful here: Android 10's `makeLinkProperties` sets no MTU, while the new tun still takes it from
     `jniCreate(config.mtu)`; on 10 and 11 the Builder's underlying networks are applied at the next update of the
     network's capabilities, not at once; and Android 10's failed `establish()` reports the old network disconnected
-    in every case, where Watch stops at any failure anyway. Not measured on a device; the emulator's `verify-watch.sh`
-    runs the clash both ways. If `establish()` fails, as when the user withdrew Watch's consent, the tunnel stops, as
-    at any start.
+    in every case, where the service stops at any failure anyway. Not measured on a device; the emulator's
+    `verify-network.sh` runs the clash both ways. If `establish()` fails, as when the user withdrew the VPN
+    consent, the tunnel stops, as at any start.
 - **Fragments are put together** (`core/net/src/fragments.rs`, pure): the apps' IPv4 fragments (the "more
   fragments" flag or an offset) and IPv6 ones (a fragment header with an offset or M), by source, destination and
-  identification, and IPv4's protocol. An IPv6 atomic fragment is read whole, as before (RFC 6946).
+  identification, and IPv4's protocol. An IPv6 atomic fragment is read whole (RFC 6946).
   - **What drops a whole datagram,** with no ICMP error (RFC 8200 4.5): a fragment not a multiple of 8 but the last,
     or an empty one; a datagram past 65,535 bytes; a first fragment without the whole upper-layer header (UDP's 8
     bytes, TCP's to its data offset, ICMP's 8) or, in IPv6, without every extension header before it (RFC 1858,
@@ -753,17 +745,17 @@ an ADR (D25).
     do not each move it, and never passes 64 KiB. When a fragment would pass a bound, the incomplete datagram or
     marker that took a fragment longest ago gives way, then the next, until there is room (re-review, minor 3): an
     honest datagram's fragments come one after another, so one that stopped taking them is the likeliest never to be
-    whole, and a long one still arriving is not given up for the many that came after its first fragment, as it was
-    when the one whose first fragment came first gave way. Each datagram keeps its place in the order of fragments
+    whole, and a long one still arriving is not given up for the many that came after its first fragment. Each
+    datagram keeps its place in the order of fragments
     taken, a count rather than a time, so that fragments of one instant still have an order; a marker's is its
     marking. A fragment no room could take, larger than the bound with its own datagram, is dropped with it, and
     nothing gives way for it. Expired datagrams go at the next fragment and in the engine's sweep.
   - **Shared by every app.** Every app sends from the tunnel's one address, so the bounds are not kept for each app:
-    one app that keeps them full makes the others' datagrams give way, as every fragment was dropped before. Accepted,
-    since the bounds cap what fragments cost, for at most the wait.
-- **Beyond the first hop.** `errors::told` passes on "fragmentation needed" (type 3 code 4) and "packet too big"
-  (type 2) with the MTU the kernel gives in `ee_info`, to the app at once, as if from the destination (since unit
-  11b, from the router that sent it, below), as an unreachable port is passed on; an MTU of 0, from a router older than RFC 1191, is left out. The engine keeps
+    one app that keeps them full makes the others' datagrams give way, which costs them no more than dropping every
+    fragment would. Accepted, since the bounds cap what fragments cost, for at most the wait.
+- **Beyond the first hop.** `errors::told` passes on "fragmentation needed" (type 3 code 4) and "packet too big" (type
+  2) with the MTU the kernel gives in `ee_info`, to the app at once, from the router that sent it (unit 11b, below),
+  as an unreachable port is passed on; an MTU of 0, from a router older than RFC 1191, is left out. The engine keeps
   nothing of them: its own kernel keeps the path's MTU for its sockets. What a mapping read as the network beneath
   moved is not passed on after the move, nor counted, and the mapping ends (second review, minor 4b), whichever way
   its read ended, the mapping gone or its socket failing among them (re-review, minor 6).
@@ -771,7 +763,7 @@ an ADR (D25).
   answered "host unreachable". A datagram larger than the path leaves: the engine's kernel fragments it, or a router
   answers. The chain, lookups to the tunnel's DNS address and TCP are unchanged; writes to the tunnel larger than its
   MTU, the answers the engine's kernel put together, are taken by Linux in the network lab (phones in unit 11b).
-- **Counters:** `fragments`, the 20th, now counts the fragments dropped, those of a datagram given up included.
+- **Counters:** `fragments`, the 20th, counts the fragments dropped, those of a datagram given up included.
   Appended: `reassembled`, the 39th, datagrams put together; `too_big`, the 40th, datagrams the engine's kernel
   refused as too long, dropped; `path_mtu`, the 41st, routers' "fragmentation needed" and "packet too big" passed on.
   `COUNTERS` is 41.
@@ -780,38 +772,39 @@ an ADR (D25).
     veth pair whose other end, `near`, is in the same namespace, its own MTU and its routes' 1,280. What the namespace
     itself sends there takes `near`, by a rule for packets made locally, while the apps' packets still go into the
     tunnel first. An app of the namespace's own addresses so meets the narrow network as an app meets its link without
-    Watch.
+    the VPN.
   - An app of every path MTU discovery mode (`scripts/netlab-app.py`): `dont`, `want`, `do`, `probe`, `interface` and
     `omit`, unconnected and connected, and IPv6's `IPV6_DONTFRAG`. nix sets none of them on Linux and the workspace
     forbids unsafe code; Python's socket module takes the option numbers.
 - **Tests.**
   - In the engine: 14 of the reassembler (in and out of order, both versions, IPv4 options and IPv6 headers before the
-    fragment header, overlap and its marker, exact duplicate, a first fragment without its header, what is malformed or
-    too long, a datagram giving way at each bound with the costs counted, the one heard from longest ago giving way
+    fragment header, overlap and its marker, exact duplicate, a first fragment without its header, what is malformed
+    or too long, a datagram giving way at each bound with the costs counted, the one heard from longest ago giving way
     rather than the one that began first, and the re-review's race, a 10-fragment datagram whole among 32 new
     datagrams after each of its fragments, or 8 far ones of 64 KiB; the wait to the nanosecond, the rebuilt headers
     byte for byte); one of what routers say (`errors::told`); three of the mappings (an error read as the network
     moves is not passed on, and one read before passes on with its MTU; a move since a mapping opened, not one before,
-    and the engine stopping, as its watch shows them; `EMSGSIZE` dropped and counted); one of `route_mtu`. The fuzz
-    target feeds the reassembler a sequence of fragments and holds it to its bounds.
+    and the engine stopping, as its `watch` channel shows them; `EMSGSIZE` dropped and counted); one of `route_mtu`.
+    The fuzz target feeds the reassembler a sequence of fragments and holds it to its bounds.
   - In the network lab, 5: across a swap, as `nativeStart` makes it, a chained app's first datagram and first TCP
     connection go through the tool and nothing of them reaches the server directly, a direct app's lookup reaches the
     resolver handed over and comes back uncached, a flow is named by a name learned before, and the counters go on;
     a 3,000-byte datagram both ways in IPv4 and IPv6; at the tunnel's 1,500 with the network
-    at 1,280, as in the moment before Watch sets the tunnel up again, every mode's datagram reaches the server whole,
-    with no error on a connected default socket and nothing lost by `omit` (the second review's R1 and R3, now
-    passing); with tun0 at 1,280, as Watch sets it, each mode fragments or is refused with `EMSGSIZE` exactly as the
-    same app does on the narrow network without Watch, and the 24 datagrams fragmented are put together; a router's
-    "fragmentation needed" and "packet too big" reach the app with their MTU, and a connected default socket then
-    sees `EMSGSIZE` once, as without Watch. In `chain.rs`, a stand-in given before a swap names its name after, and a
-    chain set during the swap wins over the one handed over; in watch-jni, a chain set while no engine runs, between
+    at 1,280, as in the moment before the service sets the tunnel up again, every mode's datagram reaches the server
+    whole, with no error on a connected default socket and nothing lost by `omit` (the second review's R1 and R3);
+    with tun0 at 1,280, as the service sets it, each mode fragments or is refused with `EMSGSIZE` exactly as the
+    same app does on the narrow network without the VPN, and the 24 datagrams fragmented are put together; a
+    router's "fragmentation needed" and "packet too big" reach the app with their MTU, and a connected default
+    socket then sees `EMSGSIZE` once, as without the VPN. In `chain.rs`, a stand-in given before a swap names its
+    name after, and a chain set during the swap wins over the one handed over; in network-jni, a chain set while no
+    engine runs, between
     the hand-over and the next start as `nativeStart` has them, is the next engine's, and a stop forgets it.
   - In Kotlin, JVM tests of `TunnelMtu`: the choice, the MTU's rise within a network only ten minutes after a setup,
-    to the millisecond, how long a rise held back waits to be measured again, and the probe's
-    addresses drawn from their ranges, never where checks send. `scripts/verify-watch.sh` checks that the tunnel's
-    interface carries the MTU Watch chose (1,500 on the emulator), where the shell can read it, and pings with 2,000
-    bytes, which must be put together on an emulator, its reply reported, not required. On the Android 15 emulator
-    both passed (the maintainer's session, before the tunnel was set up make-before-break).
+    to the millisecond, how long a rise held back waits to be measured again, and the probe's addresses drawn from
+    their ranges, never where checks send. `scripts/verify-network.sh` checks that the tunnel's interface carries the
+    MTU the service chose (1,500 on the emulator), where the shell can read it, and pings with 2,000 bytes, which must
+    be put together on an emulator, its reply reported, not required. On the Android 15 emulator both passed (the
+    maintainer's session, before the tunnel was set up make-before-break).
   - Each was made to fail by a mutation of the code it guards: 71 mutations of the code as it stands, each caught.
     No test reaches the service's lifecycle, which is Android's: setting the tunnel up again, a start or a stop while
     a measure runs, and the measure posted for a rise; nor `nativeStart`'s own hand-over, two lines that call what the
@@ -819,43 +812,41 @@ an ADR (D25).
     the logger's last batch after one it was handing over (fourth check, a nit, fixed), both races; nor an
     early end of a mapping's read after it built errors, which needs the mapping to end
     between two reads; nor the order in which echo counts a reply and writes it, which is a race with the reader
-    (re-review, minor 7: it counts first now).
+    (re-review, minor 7: it counts first).
 - **Not done, stated:**
   - phones, what `IP_MTU` says on Wi-Fi and mobile networks and whether their kernels take writes to the tunnel
-    larger than its MTU, are measured in unit 11b; the make-before-break setup has not run on an emulator yet;
-  - setting the tunnel up again ends the engine's flows, as before: connections through the tunnel start anew. Within
-    a network that happens only when its MTU goes down; unit 12b keeps the flows;
+    larger than its MTU, are measured in unit 11b; the make-before-break setup ran on the emulator in unit 12b;
+  - setting the tunnel up again with other addresses or on a new VPN network ends the engine's flows: connections
+    through the tunnel start anew. Otherwise unit 12b keeps the flows;
   - a network whose IPv4 and IPv6 first hops differ gives the wider version the narrower MTU (above);
-  - the ping sockets still set no `IP_RECVERR` (unit 11), so a router's "fragmentation needed" for an echo request is
-    not passed on, and a request whose send fails with `EMSGSIZE` is counted as dropped echo (closed by unit 11b: both
-    are passed on, and a send that takes a pending error is sent again);
-  - the errors passed on are not rate-limited (RFC 4443 2.4 (f)): they reach only the phone's own apps (since unit
-    11b, at most one for each datagram or request the app sent);
+  - a router's "fragmentation needed" for an echo request, and a request whose send takes a pending error, are
+    unit 11b's: it passes the first on and sends the second again;
+  - the errors passed on are not rate-limited (RFC 4443 2.4 (f)): they reach only the phone's own apps, at most one
+    for each datagram or request the app sent (unit 11b);
+
   - an app's TCP fragments are put together too and handled as any segment; Android's stack sizes its segments to
     the tunnel, so they are rare.
 
 **Unit 12b, the engine keeps its flows when the tunnel is set up again (2026-11-16).**
 - **A tunnel set up again with the same addresses, on the VPN network Android kept, goes to the running engine,** as
-  for a new MTU. Until then every setup stopped the engine and started another, and every TCP connection and UDP
-  mapping of every app ended with the old one; now the engine goes on with the new tunnel and keeps everything: its
-  NAT, TCP connections and listeners, UDP mappings, ping sockets, the reassembler, chain, names, stand-ins, counters
-  and log.
+  for a new MTU. The engine goes on with the new tunnel, and no TCP connection or UDP mapping of any app ends with the
+  setup: it keeps everything, its NAT, TCP connections and listeners, UDP mappings, ping sockets, the reassembler,
+  chain, names, stand-ins, counters and log.
   - `Tun` holds its descriptor behind a lock, and each read and each write takes the one in place, so that a new one
     replaces the old for the event loop's reads and for every task that writes to the apps, the relays, mappings and
     ping sockets that began before among them (`Tun::replace`). A write waiting for the old one to take a packet
     when it is replaced is woken, goes to the new one and lets go of the old one: the old interface is down by then,
     and refuses writes.
-  - **Writes in the gap** (third round). Android resets the old interface inside `establish()`, before Watch can hand
-    the engine the new tunnel, and a tun device whose interface is down refuses writes (`EIO`). A write the tunnel
-    refuses now waits up to `Limits::tunnel_wait`, 200 ms, for the new one, and goes there; with none by then it is
-    dropped, as before (`Tun::send`). A task's write waits where it is; the event loop's own writes, a reset or a
+  - **Writes in the gap** (third round). Android resets the old interface inside `establish()`, before the service
+    can hand the engine the new tunnel, and a tun device whose interface is down refuses writes (`EIO`). A write the
+    tunnel refuses waits up to `Limits::tunnel_wait`, 200 ms, for the new one, and goes there; with none by then it
+    is dropped (`Tun::send`). A task's write waits where it is; the event loop's own writes, a reset or a
     rewritten segment, hand a refused packet to a task of their own (`Loop::send`), so that the loop reads on. Only
     the refusals a new tunnel cures wait (`tun::cured_by_another`): `EIO`, from a tun device whose interface is
-    down, and `EBADFD`, from one whose file is no longer attached to a device. The first version waited on any error
-    (the third round's check): on a Linux tun the others are in practice `ENOMEM` or `ENOBUFS` under memory
-    pressure, where each mapping's task would wait 200 ms an answer and the loop would start a task for each packet
-    it read; they are dropped at once again. Watch's Kotlin side hands the new tunnel over as soon as `establish()`
-    returns, within milliseconds.
+    down, and `EBADFD`, from one whose file is no longer attached to a device. The others are dropped at once (the
+    third round's check): on a Linux tun they are in practice `ENOMEM` or `ENOBUFS` under memory pressure, where
+    each mapping's task would wait 200 ms an answer and the loop would start a task for each packet it read. The
+    network part's Kotlin side hands the new tunnel over as soon as `establish()` returns, within milliseconds.
   - **The order across the swap.** `replace` wakes the writes refused in the gap, and the engine's thread runs them
     when its loop next yields, at the latest once the drain is done: they reach the new tunnel among or after what
     the drained packets' handling writes itself, and before what those packets' own tasks, started later, write. The
@@ -870,52 +861,52 @@ an ADR (D25).
     refuses is answered so, and the old tunnel stays.
   - The read buffer is the first tunnel's, `mtu.max(1500) + 64` bytes: the tunnel's MTU never goes above 1,500 (unit
     12), so it holds the new tunnel's packets too.
-  - watch-jni has a new export, `Engine.nativeSwapTunnel(fd): Boolean`, which takes ownership of `fd` as
+  - network-jni exports `Engine.nativeSwapTunnel(fd): Boolean`, which takes ownership of `fd` as
     `nativeStart` does, and returns false, with `fd` closed, when no engine runs or the engine could not take it. It
     holds the native side's engine lock while the engine's thread takes the tunnel, so that a chain set meanwhile
     reaches the engine after. The rule that makes this safe: that thread never takes the lock, and the Kotlin code it
     reaches, `ownerUid`, `protectSocket` and `logRecords`, from tokio's blocking threads or, for `logRecords`, from
-    the engine's own thread as its loop ends, never calls a native method of `Engine` (second review, minor 4: the
-    first version said the thread reached Kotlin only from the blocking threads). No existing signature changed.
+    the engine's own thread as its loop ends, never calls a native method of `Engine` (second review, minor 4). No
+    existing signature changed.
   - Kotlin's `setUpAgain` hands the engine a duplicate of the new tunnel's descriptor only when Android kept the VPN
     network and the addresses are the same (below), keeps its own for `nativeStart` should the swap fail, and closes
     its own once the engine took it.
-- **Only on the VPN network Android kept** (second review, major 1, and the emulator's `verify-chain.sh`). The first
-  version swapped whenever the addresses stayed, also when the apps left out changed. Android then brings up a new
-  network: it keeps the network and updates it in place only when `allowBypass` and the allowed and disallowed apps
+- **Only on the VPN network Android kept** (second review, major 1, and the emulator's `verify-chain.sh`). When the
+  apps left out change, Android brings up a new network, though the addresses stay: it keeps the network and
+  updates it in place only when `allowBypass` and the allowed and disallowed apps
   are unchanged, the apps compared as ordered lists (AOSP's `updateLinkPropertiesInPlaceIfPossible`); otherwise a
   new network agent, with a new netId, connects before the old one goes. netd marks each packet that comes in on a
   VPN interface with its network's netId (`RouteController::modifyIncomingPacketMark`), and Android sets
   `tcp_fwmark_accept`, so the connections the engine's listener accepted carry the old netId, and once the old
-  network goes their packets route nowhere: kept connections hung for minutes, where with a new engine they reset at
-  once and the apps opened new ones. The review modelled it in the network lab with iptables marks,
+  network goes their packets route nowhere: kept connections would hang for minutes, where with a new engine they
+  reset at once and the apps open new ones. The review modelled it in the network lab with iptables marks,
   `tcp_fwmark_accept` and a rule for each netId: the same netId with a swap carried 3 of 3, a new netId with a swap
   gave no answer within 5 s in 3 of 3, and a new netId with a new engine was reset at once; on the emulator, after an
-  app was left out and taken back, its new connection failed too. It also found that the list could differ when the
-  apps had not: Watch handed the Builder the apps left out in the order of `getStringSet`'s `HashSet`, so a list in
-  another order brought a new network even for a new MTU. (The first version of this note said that a removed app
-  was skipped too. The narrow check of the second round found otherwise: AOSP's `Builder.verifyApp`, in
-  `android10-release` and `main`, ignores a package that is not installed, so its name stays in Android's list; only
-  a maker's `Builder` might refuse it, and `TunnelSetup` records what the `Builder` took either way.) The narrow
+  app was left out and taken back, its new connection failed too. It also found that the list can differ when the
+  apps have not: handed to the Builder in the order of `getStringSet`'s `HashSet`, a list in another order brings a
+  new network even for a new MTU. AOSP's `Builder.verifyApp`, in `android10-release` and `main`, ignores a package
+  that is not installed, so its name stays in Android's list; only a maker's `Builder` might refuse it, and
+  `TunnelSetup` records what the `Builder` took either way (the narrow check of the second round). The narrow
   check also read `updateLinkPropertiesInPlaceIfPossible` in `android10-release`, `android11-release` and `main`:
-  each compares only `allowBypass` and the two ordered lists, so Watch's condition, which compares the addresses
-  too, is the same or stricter.
-  - Watch now hands the Builder its apps in sorted order and keeps the list it took, with the addresses, as the
-    tunnel's setup (`TunnelSetup`); Watch never calls `allowBypass`. `TunnelSetup.canSwap` decides: a setup whose
+  each compares only `allowBypass` and the two ordered lists, so the service's condition, which compares the
+  addresses too, is the same or stricter.
+  - The service hands the Builder its apps in sorted order and keeps the list it took, with the addresses, as the
+    tunnel's setup (`TunnelSetup`); it never calls `allowBypass`. `TunnelSetup.canSwap` decides: a setup whose
     lists and addresses are the same as the last one's goes to the running engine; any other, and the first, starts
     a new engine, unit 12's path, with what the old one hands over: when the apps left out change, the apps'
-    connections through Watch begin anew, as before this unit. The decision was a comparison inside `setUpAgain`
-    until the third round's check found that narrowing it back to the addresses failed no test but the emulator's.
+    connections through the tunnel begin anew. The decision is a function of its own, tested on the JVM, since the
+    third round's check found that narrowing it back to the addresses inside `setUpAgain` failed no test but the
+    emulator's.
 - **Other addresses still start a new engine.** For ADR 0041's clash and the debug `addresses-force`, the apps'
   connections are bound to the old addresses, as are the engine's listeners and its rewriting, and cannot go on:
   `nativeStart` stops the old engine, which hands the new one what unit 12 hands over, and the flows begin anew, as
   they do when a swap fails.
 - **The first start sets the chain before the tunnel and the engine.** `start()` calls `applyChain()` before
-  `establish()` and `startEngine()`. With no engine running, Watch's native side keeps the chain (unit 12) and the
-  first engine starts with it, so a chained app's first packet goes through the tool; before, the engine read the
-  tunnel from `nativeStart` on and its first packets could leave directly. The first version called it between
-  `establish()` and `startEngine()`, where the apps' packets waited in the tunnel, or were dropped once it held 500,
-  while the main thread read the tool table and perhaps the Keystore (second review, minor 3); it needs no tunnel.
+  `establish()` and `startEngine()`. With no engine running, the native side keeps the chain (unit 12) and the
+  first engine starts with it, so a chained app's first packet goes through the tool, where an engine that read the
+  tunnel before its chain was set could let its first packets leave directly. Called between `establish()` and
+  `startEngine()`, it would keep the apps' packets waiting in the tunnel, or dropped once it held 500, while the
+  main thread read the tool table and perhaps the Keystore (second review, minor 3); it needs no tunnel.
   `nativeChain` says false while no engine runs, which `applyChain` does not read; the screen shows the chain's
   settings and whether the tunnel runs, neither of which this changes; and a start that fails, at `establish()` or
   after, stops, which forgets the chain.
@@ -954,7 +945,7 @@ an ADR (D25).
     error (`EPIPE`, a socket pair's), both are dropped at once though a new tunnel comes within the wait. A unit test
     cannot make a tun device, so the old tunnel there is told to refuse with `EIO` (`Tun::refuse_writes`, built for
     tests only); the network lab's test below shows a real tun device's `EIO`.
-  - In watch-jni: `nativeSwapTunnel`'s function with no engine running returns false and closes the descriptor; with
+  - In network-jni: `nativeSwapTunnel`'s function with no engine running returns false and closes the descriptor; with
     one running, one the engine cannot take returns false and the old tunnel stays, and one it can take is kept open
     and the old one closed. The test of unit 12's `SET` now also starts a first engine with a chain set before it, as
     `start()` does. The tests that use the process's engine and chain take a lock, so that they do not run at once.
@@ -972,21 +963,20 @@ an ADR (D25).
     through it too, and the server accepted only the tool's connections (two `CONNECT`s, one `UDP ASSOCIATE`). Through
     IPv6, an app's TCP connection goes on across the swap, the server accepting no other. A datagram a peer sends the
     app's mapping once tun0 is down, before the swap, is refused with `EIO` and reaches the app through tun2 when it
-    comes 200 ms later. And with Android's marks:
-    on the same network, a kept connection goes on across the swap; on a new network, a swap leaves it hanging (no
-    answer in 3 s) while a new connection passes, which is why Watch starts a new engine there; and a new engine on
-    the new network resets it at once, so that the app opens another.
+    comes 200 ms later. And with Android's marks: on the same network, a kept connection goes on across the swap; on a
+    new network, a swap leaves it hanging (no answer in 3 s) while a new connection passes, which is why the service
+    starts a new engine there; and a new engine on the new network resets it at once, so that the app opens another.
   - The brief asked the lab to show a packet queued on the old tunnel at the swap handled too. On a real tun device the
     engine reads each packet as it comes, on a thread of its own, so a test cannot make one wait there at the swap
     but by a race; the engine's own test above makes it so on one thread, deterministically.
-  - `scripts/verify-watch.sh` keeps a connection to the test server open through Watch, one nc sending a request,
+  - `scripts/verify-network.sh` keeps a connection to the test server open through the tunnel, one nc sending a request,
     then a second only once a marker file is there (Android 15's shell may not make a FIFO in `/data/local/tmp`),
     sets the tunnel up again with `setup-again`, waits until the old interface is gone, checks that the connection
-    still has one answer, and requires the second request answered on the same connection and the MTU Watch chose
+    still has one answer, and requires the second request answered on the same connection and the MTU the service chose
     unchanged. `scripts/verify-chain.sh`'s step that leaves an app out and takes it back counts only flows new since
     before, by protocol, the app's end and the destination, whichever way the setup went. On a fresh Android 15
-    emulator, in the maintainer's session, the whole watch shard passed with the second round: the swap kept the
-    connection, an app left out reached the server unseen, and taken back it passed through Watch again.
+    emulator, in the maintainer's session, the whole network shard passed with the second round: the swap kept the
+    connection, an app left out reached the server unseen, and taken back it passed through the tunnel again.
   - Each was made to fail by a mutation of the code it guards: the old tunnel's queue left unread, the old tunnel
     never closed, a refused descriptor answered as taken, `swap_tunnel` not waiting for the answer or taking
     nothing, a waiting write not woken by the replacement, writes kept on the first descriptor, a descriptor kept
@@ -1004,18 +994,18 @@ an ADR (D25).
     models after netd's code and the emulator showed; and what Android does on a phone.
 - **Not done, stated:**
   - the swap has not run on a phone: the Galaxy A40 run is the maintainer's, next; other phones in unit 11b;
-  - a setup with other addresses, on a new VPN network, or a swap that fails, still ends the engine's flows, as
-    before: for other addresses it must, and on a new network a new engine resets the connections at once, which
+  - a setup with other addresses, on a new VPN network, or a swap that fails, ends the engine's flows: for other
+    addresses it must, and on a new network a new engine resets the connections at once, which
     the swap could not keep;
   - a setup with the same addresses on the same network can still lose the TCP connections, when Android's netd
-    destroys the sockets on the tunnel's address; the engine's listener, which it destroys with them, now recovers
+    destroys the sockets on the tunnel's address; the engine's listener, which it destroys with them, recovers
     (the next note).
 
 **Unit 12b, when netd destroys the sockets on the tunnel's address: the listener recovers (2026-11-16).**
 - **What the emulator showed.** On a one-core Android 15 emulator, the tunnel set up again with the same addresses,
   over and over: after the 7th swap, the connection kept open got no answer, and every later TCP connection through
-  Watch was refused. Android's log at that swap: `Netd: Destroyed 5 sockets on 10.1.10.1` right after
-  `Vpn: Established ... on tun1`; `/proc/net/tcp` then held no listening socket of Watch's on 10.1.10.1. CI's run
+  the tunnel was refused. Android's log at that swap: `Netd: Destroyed 5 sockets on 10.1.10.1` right after
+  `Vpn: Established ... on tun1`; `/proc/net/tcp` then held no listening socket of the engine's on 10.1.10.1. CI's run
   43876121769 failed the same way at the kept connection (`docs/ci-flakes.md`).
 - **What netd does.** netd destroys every TCP socket on an address it believes was removed (`SOCK_DESTROY`),
   listening ones among them. Here it believed so although tun1 held the address: Android's in-place update gives the
@@ -1025,26 +1015,25 @@ an ADR (D25).
   own sockets, which netd destroys with the rest and which fail at once in the apps (`ECONNABORTED`), and the engine's
   ends of them. No VPN can keep those; the swap keeps what netd leaves, and UDP mappings and pings, whose sockets are
   not on the tunnel's address, are not touched.
-- **The listener recovers.** The accept loop was `while let Ok(..) = listener.accept().await`: the first error ended it
-  and dropped the listener, and Android's stack answered every SYN the engine rewrote to it after with a reset, for the
-  rest of the run. Any accept error did so, `EMFILE` among them. Now the loop never ends while the engine runs
-  (`tcp::accept`):
+- **The listener recovers.** An accept loop that ends at its first error (`while let Ok(..) =
+  listener.accept().await`) drops the listener, and Android's stack then answers every SYN the engine rewrites to it
+  with a reset, for the rest of the run, whatever the error, `EMFILE` among them. The loop never ends while the
+  engine runs (`tcp::accept`):
   - a listener that no longer listens, as `accept`'s `EINVAL` or `SO_ACCEPTCONN` at 0 says after `SOCK_DESTROY`, is
     closed and another bound on the tunnel's address (`tcp::bind_anew`), on a port the kernel picks, never on its old
-    one, which another app may hold by then (the second and third rounds, below; the first round bound the old port
-    if it could).
-    The listener the engine rewrites to is now `Shared::listener4` and `listener6` (`tcp::Listening`), read where
-    packets are rewritten, where it was a plain `u16` of the event loop's: its port, 0 while none listens, and its
+    one, which another app may hold by then (the second and third rounds, below).
+    The listener the engine rewrites to is `Shared::listener4` and `listener6` (`tcp::Listening`), read where
+    packets are rewritten: its port, 0 while none listens, and its
     generation, which grows each time a listener stops listening. The old listener is closed first. An attempt that fails, as without descriptors or with the address gone, is made again after a pause, from 10 ms
     doubling up to 64 s, or after 10 ms when an app's SYN finds no listener, and a listener bound anew that stops
     listening before it accepted anything is bound anew again only after a pause, so that nothing turns in a tight
     loop. A first bind that fails at the engine's start leaves the accept loop binding one the same way (the second
-    round, nit 2); before, no accept loop ran then;
+    round, nit 2);
   - a listener that still listens accepts again: at once after an error of one connection, which took that connection
     off its queue (`ECONNABORTED`, `EPROTO`, `ENETDOWN`, `EHOSTUNREACH` and the like), and after a pause after a lack
     of descriptors or memory (`EMFILE`, `ENFILE`, `ENOBUFS`, `ENOMEM`), the connections in its queue waiting there
-    meanwhile. That pause is 10 ms, doubling up to a second, and 10 ms again once a connection is accepted. (The first
-    round paused after any error; the second round's nit 1.);
+    meanwhile. That pause is 10 ms, doubling up to a second, and 10 ms again once a connection is accepted (the
+    second round's nit 1);
   - `listener_recoveries`, the 47th counter, counts each accept error recovered from, either way; `COUNTERS` is 47.
 - **Only a relayed connection keeps a listener that stopped.** Each NAT entry keeps the listener its SYN was rewritten
   to, port and generation (`nat::Entry::listener`). A connection the relay holds goes on through its port, both ways,
@@ -1053,23 +1042,24 @@ an ADR (D25).
   telling a listener bound anew on the same port from the one before: once another app may hold the port, a segment
   from it is that app's as likely as Android's (the second round, below). A segment from the tunnel's address to a
   fake port is taken for Android's answer only from the entry's port (`Nat::answered`); one from the listener now to
-  a connection the engine forgot is dropped, as before.
+  a connection the engine forgot is dropped.
 - **Nothing is left holding a connection that ended.** A relayed connection whose engine end netd destroyed ends as any
   connection that fails: Android's stack resets it as it destroys it, the reset reaches the app through the rewriting,
   the relay reads the error and resets the server's end, and the rewriting goes after `close_linger`. A connection the
-  listener never handed over, in its queue when it was destroyed or whose SYN came while no listener was there, was
-  reset by Android's stack too, but its upstream connection waited for the handover until the sweep, ten minutes on.
-  Android's reset of a connection not yet relayed now resets the upstream connection, forgets the rewriting and ends
+  listener never handed over, in its queue when it was destroyed or whose SYN came while no listener was there, is
+  reset by Android's stack too, and its upstream connection would wait for the handover until the sweep, ten minutes
+  on; so Android's reset of a connection not yet relayed resets the upstream connection, forgets the rewriting and ends
   the flow in the log (`Loop::reset_before_the_relay`); one the accept loop has taken already is the relay's to end.
-- **`verify-watch.sh`.** When the kept connection carries no second answer, a new connection through Watch must pass
-  right after, and Android's log since the setup (`adb logcat -d -T`) tells a destroy by netd on the tunnel's address,
-  which is reported, as a warning on a CI run, and passes, from a stall, which fails. A destroy passes only if the
-  running engine took the tunnel at that setup, Watch's dump's `setups kept N` one more and `anew M` the same, so that
-  the fallback to a new engine, which ends the connections itself, cannot hide behind a destroy (the second round).
+- **`verify-network.sh`.** When the kept connection carries no second answer, a new connection through the tunnel must
+  pass right after, and Android's log since the setup (`adb logcat -d -T`) tells a destroy by netd on the tunnel's
+  address, which is reported, as a warning on a CI run, and passes, from a stall, which fails. A destroy passes only
+  if the running engine took the tunnel at that setup, the service's dump's `setups kept N` one more and `anew M` the
+  same, so that the fallback to a new engine, which ends the connections itself, cannot hide behind a destroy (the
+  second round).
 - **Tests.**
   - In the network lab, 6, with iproute2's `ss -K` run in the namespace, where `SOCK_DESTROY` works for an unprivileged
     user: the listener destroyed alone (`state listening src` the tunnel's address), IPv4 and IPv6: it is bound anew
-    (on its port in the first round, on another since the third), a new connection passes, and one kept open goes on; every TCP socket on the tunnel's address destroyed, as
+    (on another port), a new connection passes, and one kept open goes on; every TCP socket on the tunnel's address destroyed, as
     netd does (`state all src` the address), IPv4 and IPv6: the app's connection ends at once with an error, the
     server's end with a reset, no connection to the server is left open, the listener is bound anew, and a new
     connection passes; only the engine's end destroyed (`src` the address `dst` the fake peer): the app reads a
@@ -1083,10 +1073,8 @@ an ADR (D25).
     has iproute2, and CI now loads `inet_diag` and `tcp_diag` with the lab's other modules; that Ubuntu's kernels set
     `CONFIG_INET_DIAG_DESTROY` is what a Red Hat bug report (2230213) says, not checked on the runner.
   - In the engine, 4: a listener made to stop listening with `shutdown(SHUT_RD)`, which stops a listening socket as
-    `SOCK_DESTROY` does, without its privilege, is bound anew (on its port in the first round; the third round merged
-    this test with the next, on a new port), and the next rewritten connection gets its upstream connection; with its
-    port taken meanwhile, on another, which `Shared` then holds, and the next connection
-    passes there; after that, a connection the old listener took goes on through the old port both ways, and a segment
+    `SOCK_DESTROY` does, without its privilege, is bound anew on a new port, its old port taken meanwhile, which
+    `Shared` then holds, and the next rewritten connection gets its upstream connection there; after that, a connection the old listener took goes on through the old port both ways, and a segment
     from the new port to its fake port is dropped; and Android's reset of a connection not yet relayed reaches the app
     and resets the server's end, with nothing of it left in the pending connections, the NAT or the live flows, while a
     relayed connection's reset leaves its rewriting to the relay. `nat`'s test checks `answered` too.
@@ -1124,7 +1112,7 @@ an ADR (D25).
     - while no listener is bound, the port the engine rewrites to is 0: an app's SYN is refused at once, its fake port
       freed and a listener wanted, and a held SYN whose server accepted meanwhile is refused, its upstream connection
       reset, rather than rewritten to a port another app may hold.
-  - **`verify-watch.sh` could hide a fallback behind a destroy (minor).** It now requires the swap, above.
+  - **`verify-network.sh` could hide a fallback behind a destroy (minor).** It now requires the swap, above.
   - **Nits.** Only a lack of descriptors or memory pauses the accept loop, above; and a first bind that fails at the
     engine's start no longer leaves the version without a listener for the whole run, above.
   - **Tests, and their mutations.** In the network lab, 1 more: an app's connection is rewritten to the listener and
@@ -1152,7 +1140,7 @@ an ADR (D25).
     a SYN with no listener shows only as the want; an interloper on the IPv6 listener's port, which takes the same
     code; and Android's own apps, which the lab plays with one socket.
 - **On the emulator, with the second round (2026-11-16).** The review showed its interloper test failing on the first
-  round's engine and passing on the second's, 12 of 12, and the Android 15 emulator's whole Watch shard passed.
+  round's engine and passing on the second's, 12 of 12, and the Android 15 emulator's whole network shard passed.
 - **The third round (2026-11-16).** A narrow check found no critical, major or minor fault; its three nits, and what
   was done for each:
   - **A listener bound anew on its old port, and SYNs to the fake peer (nit 1).** With generations, a listener bound
@@ -1168,7 +1156,8 @@ an ADR (D25).
     ended in the log as opened with no bytes, though the app saw "refused" or a reset. The held SYN is now recorded
     as refused, the outcome the app saw; the other ends, in its last segment, the counters and the flows kept,
     refused when the engine refused its SYN sent again, else failed, the log's outcome for a connection that ended in
-    an error (`Shared::finish_as`). The record format is unchanged: version 1, whose outcomes these are. A connection
+    an error (`Shared::finish_as`). The record format needed no change: these outcomes are in it since version 1.
+ A connection
     not yet relayed that Android's stack resets still ends as opened, as a relayed connection a peer resets does.
   - **What a dropped segment marked (nit 3).** `Nat::answered` marked a connection as just seen for every segment from
     its listener's port, also for those the caller then dropped, so that segments from an old listener's port kept a
@@ -1188,10 +1177,10 @@ an ADR (D25).
 - **Not done, stated:** the second round had not run on a phone, and the third has run neither on the emulator nor on
   a phone; the Galaxy A40 run is the maintainer's, as above.
 
-**Unit 11b, traceroute through Watch: hop limits, errors from the path, echo's bytes (2026-11-16, decision 5).**
-- **Watch is not a hop.** An app's echo request, and its UDP datagram on the direct path, leave with the time to live
-  (IPv4) or hop limit (IPv6) the app sent them with, copied, not lowered; before, they left with the engine's own 64,
-  and a traceroute through Watch showed the destination at every hop.
+**Unit 11b, traceroute through the tunnel: hop limits, errors from the path, echo's bytes (2026-11-16, decision 5).**
+- **The tunnel is not a hop.** An app's echo request, and its UDP datagram on the direct path, leave with the time to
+  live (IPv4) or hop limit (IPv6) the app sent them with, copied, not lowered: with the engine's own 64, a
+  traceroute through the tunnel would show the destination at every hop.
   - The parser reads the value into `Packet::hops` and `Echo::hops`.
   - A mapping's datagram carries it in its `sendmsg`'s ancillary data, `IP_TTL` or `IPV6_HOPLIMIT`
     (`engine/hops.rs`, through nix's safe `ControlMessage::Ipv4Ttl` and `Ipv6HopLimit`), so that one socket's
@@ -1221,15 +1210,15 @@ an ADR (D25).
     unreachable";
   - "fragmentation needed" and "packet too big" with their MTU, as unit 12 does for mappings, now for echo too.
   "Parameter problem", a fragment's reassembly that timed out (11/1, 3/1), and errors of local origin, as the
-  engine's kernel's own "message too long", are left out, as before.
+  engine's kernel's own "message too long", are left out.
   - **From whom.** Each comes from the router or host the kernel names as its sender (`SO_EE_OFFENDER`), as it would
-    without Watch; from the destination, as before, where the kernel names none, where the sender is the very address
+    without the VPN; from the destination where the kernel names none, where the sender is the very address
     the engine sent to, which the app may know by another (a ping to the tunnel's DNS address reaches the network's
     resolver), where it is no address an error may come from, or where it is one of the phone's own (`errors::sender`).
     The engine's own kernel sends an error from the phone's address on the network beneath when it answers itself, as
     "host unreachable" when a neighbour does not answer. In IPv4, from that address, the app's kernel would drop it on
     the tunnel as a martian source (Linux's `fib_validate_source`, under Android's rules), and the app wait for its
-    timeout, where before this unit it was told at once. Linux's IPv6 input drops only loopback, multicast and
+    timeout. Linux's IPv6 input drops only loopback, multicast and
     IPv4-mapped sources (`ip6_rcv_core`), so there the substitution is a harmless choice, kept for one rule in both
     versions (second review, minor 2). Whether an address is the phone's is asked as for the tool's relay
     (`on_the_phone`): a UDP socket connected to it, which sends nothing, sends from it only if the phone holds it.
@@ -1244,21 +1233,21 @@ an ADR (D25).
     a peer's, for a sequence number never sent, or a second for one request or datagram, is dropped and counted: the
     engine's kernel queues an error for an unconnected socket whatever destination it quotes, so a forged one would
     otherwise reach the app. A sender that forges errors for a peer the app sends to without pause passes on at most
-    one for each of the app's last 64 datagrams there; the app's own kernel, without Watch, takes as many.
+    one for each of the app's last 64 datagrams there; the app's own kernel, without the VPN, takes as many.
   - **A network that moved.** What a ping socket read as the network beneath moved is not passed on, and the socket
     ends with the move, as unit 12 has it for mappings (`udp::network_moved`).
 - **Echo's bytes are counted** in `bytes_up` and `bytes_down`: what the ping socket sends and reads, the ICMP message,
-  header and data, as UDP's counters hold what its sockets carry, without IP headers. Android counts them to Watch.
+  header and data, as UDP's counters hold what its sockets carry, without IP headers. Android counts them to Advanced.
   Echo still writes no record to the connection log.
 - **Counters, appended:** `time_exceeded`, the 42nd, and `path_unreachable`, the 43rd, passed on for datagrams and
   echo both, as `path_mtu`, the 41st, now counts echo's "too big" too; `echo_errors`, the 44th, how many of those three
   kinds answered echo requests, counted apart so that a phone's dump says how much of what the path answered was a
-  ping's or a traceroute's; and `errors_dropped` (`errors_unasked` until the second round), the 45th, the errors
+  ping's or a traceroute's; and `errors_dropped`, the 45th, the errors
   dropped as answering nothing the app sent that left, or once more, or as no error to the app could be built for
   them. `COUNTERS` is 45; the second round appends a 46th, below.
-- **Not changed:** TCP, which the engine's kernel terminates: a traceroute over TCP sees its probes answered by Watch's
-  listener, and is out of scope. The chain: echo is still refused while a chain is on, and chained UDP keeps the
-  relay's hop limit. Lookups to the tunnel's DNS address. ADR 0044's other decisions.
+- **Not changed:** TCP, which the engine's kernel terminates: a traceroute over TCP sees its probes answered by the
+  engine's listener, and is out of scope. The chain: echo is still refused while a chain is on, and chained UDP keeps
+  the relay's hop limit. Lookups to the tunnel's DNS address. ADR 0044's other decisions.
 - **Tests.**
   - In the network lab, 5, each in IPv4 and IPv6: an app sending with 3, by UDP and by ping, reaches the server's
     socket (`IP_RECVTTL`, `IPV6_RECVHOPLIMIT`) and a raw socket of the namespace with 3, while its lookup to the
@@ -1285,7 +1274,7 @@ an ADR (D25).
     unreachable, no rule of one for each datagram or for each request, an error for any destination of a mapping or
     of a ping socket, any sequence number, ping sockets keeping no errors, the request quoted with the engine's
     identifier, an error from the phone's own address passed on from it; and either byte count taken away.
-  - `scripts/verify-watch.sh`, after the ping checks, pings 1.1.1.1 from the shell with a time to live of 1: where
+  - `scripts/verify-network.sh`, after the ping checks, pings 1.1.1.1 from the shell with a time to live of 1: where
     the network beneath answers "time to live exceeded", the shell must see it from an address other than 1.1.1.1;
     where it answers none, as an emulator's NAT may not, it is reported, with the 42nd counter (made stricter in the
     second round, below).
@@ -1302,13 +1291,13 @@ an ADR (D25).
   - "parameter problem" and a fragment's reassembly that timed out are not passed on;
   - an error passed on for a datagram quotes only its headers, not its payload: a tool that reads its own probe back
     from the error finds none of it there;
-  - a traceroute over TCP sees Watch's listener at every hop.
-- **On devices (the maintainer's run, 2026-11-16).** The Android 15 emulator's Watch shard passed; its NAT answers a
+  - a traceroute over TCP sees the engine's listener at every hop.
+- **On devices (the maintainer's run, 2026-11-16).** The Android 15 emulator's network shard passed; its NAT answers a
   ping with a time to live of 1 itself (ttl=255 from 1.1.1.1), so the check reported "not seen". The Galaxy A40
   (Android 11, home Wi-Fi) passed every check, the time-to-live one with "told its time ran out by the first router,
   192.168.1.1, as without Watch (counted: 0, then 1)". The independent review built a lab with a real forwarding
   router and a server behind it: `ping -t 1` and `-t 2`, and Linux traceroute in its UDP, `-U` and `-I` modes, IPv4
-  and IPv6, matched what they show without Watch.
+  and IPv6, matched what they show without the VPN.
 - **The second round (2026-11-16).** The independent review found no critical or security fault; its findings, and
   what was done for each:
   - **One-shot pings used up the cap (major 1).** Android's traceroute apps run `/system/bin/ping -c 1 -t N` once for
@@ -1323,7 +1312,7 @@ an ADR (D25).
   - **The check passed when the feature was broken (major 2).** A reply to the time-to-live-1 ping, what the engine
     before this unit gave, printed "not seen". On a phone, a reply now fails the check, since no path reaches 1.1.1.1
     in one hop, and a "time to live exceeded" must also have grown the 42nd counter; the emulator, whose NAT answers
-    ICMP itself, still reports. No baseline with the VPN stopped: stopping Watch in the middle of the check would mean
+    ICMP itself, still reports. No baseline with the VPN stopped: stopping the VPN in the middle of the check would mean
     setting its tunnel up again for the steps after.
   - **A full send buffer spun the event loop (outside the diff, on its send path).** A datagram to a known peer waited
     in the event loop for room in its mapping's socket, every app's packets behind it, and once an ICMP error had come
@@ -1336,40 +1325,40 @@ an ADR (D25).
     router's error for a ping to the tunnel's DNS address, whose socket's target is the network's resolver, reaches the
     app from the router about the address it pinged, and the resolver's own error comes from that address; unit tests
     bound `echo::ASKED` and `udp::OWED_ERRORS` from both sides.
-  - **The ADR's older notes (minor 2)** are marked where this unit changed them, and the martian-source reason is said
-    to hold for IPv4 only (above).
-  - **The quote (minor 3).** An error passed on quoted Watch's own IPv4 header (identification 0, "do not fragment",
-    time to live 64), where a router quotes the app's, which Paris traceroute and mtr read. `packet::Sent` keeps what a
-    router would quote of an app's packet, the first eight bytes of its IP header, its hop limit and the first eight of
-    its transport header, and `packet::quoted` builds the quote from it: the app's own fields, the hop limit the router
-    found (1 for "time exceeded", else the one the app sent with, which a router further on finds lower, unknown to
-    Watch), and the transport header as sent, an echo request's checksum among it, then what the router quoted after
-    it. A ping socket keeps it with each request, a mapping's peer with the app's last datagram to it, which an error
-    for an earlier datagram to that peer quotes too: Paris traceroute and mtr, which match an error to its probe by the
-    IP identification or the checksum, may then miss it where they send several probes to one port, while Linux
-    traceroute and tracepath use a socket or a port for each probe. IPv4 options and IPv6 extension headers are not
-    quoted.
+  - **The ADR's older notes (minor 2)** state what this unit changed, and the martian-source reason is said to hold
+    for IPv4 only (above).
+  - **The quote (minor 3).** An error passed on quoted the engine's own IPv4 header (identification 0, "do not
+    fragment", time to live 64), where a router quotes the app's, which Paris traceroute and mtr read. `packet::Sent`
+    keeps what a router would quote of an app's packet, the first eight bytes of its IP header, its hop limit and the
+    first eight of its transport header, and `packet::quoted` builds the quote from it: the app's own fields, the hop
+    limit the router found (1 for "time exceeded", else the one the app sent with, which a router further on finds
+    lower, unknown to the engine), and the transport header as sent, an echo request's checksum among it, then what
+    the router quoted after it. A ping socket keeps it with each request, a mapping's peer with the app's last
+    datagram to it, which an error for an earlier datagram to that peer quotes too: Paris traceroute and mtr, which
+    match an error to its probe by the IP identification or the checksum, may then miss it where they send several
+    probes to one port, while Linux traceroute and tracepath use a socket or a port for each probe. IPv4 options and
+    IPv6 extension headers are not quoted.
   - **Accounting (minor 4).** A request or datagram is noted as one an error may answer only once it left: a mapping's
     datagram to a known peer is sent under the table's lock, which the send that no longer waits allows. An error used
     up for which no error to the app can be built, as for a multicast destination that named no sender, is counted
     among the dropped, and the counter is renamed `errors_dropped`.
   - **Tests, and their mutations.** In the lab, 4 more: 40 one-shot pings each get their reply, 8 sockets ended and
     the engine holding 32; two sockets waiting on an address that never answers hold the cap until both are quiet for
-    `echo_quiet`; a full send buffer, after an ICMP error, drops and holds no one up (tc's token bucket on the way to an
-    address that never answers, `sch_tbf`, which CI now loads); and the errors for a ping to the tunnel's DNS address,
-    IPv4 and IPv6. The cap's test of unit 11 now pings that silent address, whose sockets wait on their replies. In the
-    engine, 3 more, and 3 changed: the order of what makes room, the two caps, and the quote's fields. They failed with
-    no room made, without the answered rule or the quiet rule, the ended socket not woken (40 sockets held), replies not
-    noted; the send that waits (no answer in 2 s, the thread spinning); the error's destination compared to the address
-    pinged rather than the target, the resolver's error shown from the resolver; `ASKED` 1 or unbounded,
-    `OWED_ERRORS` unbounded or 1; an unbuilt error not counted; the quote with Watch's own fields, and with an expiry
-    quoted at the hop limit sent. `verify-watch.sh` was checked against a stand-in for adb, seven outputs. The fuzz
-    target builds quotes of what it reads.
+    `echo_quiet`; a full send buffer, after an ICMP error, drops and holds no one up (tc's token bucket on the way to
+    an address that never answers, `sch_tbf`, which CI now loads); and the errors for a ping to the tunnel's DNS
+    address, IPv4 and IPv6. The cap's test of unit 11 now pings that silent address, whose sockets wait on their
+    replies. In the engine, 3 more, and 3 changed: the order of what makes room, the two caps, and the quote's fields.
+    They failed with no room made, without the answered rule or the quiet rule, the ended socket not woken (40 sockets
+    held), replies not noted; the send that waits (no answer in 2 s, the thread spinning); the error's destination
+    compared to the address pinged rather than the target, the resolver's error shown from the resolver; `ASKED` 1 or
+    unbounded, `OWED_ERRORS` unbounded or 1; an unbuilt error not counted; the quote with the engine's own fields, and
+    with an expiry quoted at the hop limit sent. `verify-network.sh` was checked against a stand-in for adb, seven
+    outputs. The fuzz target builds quotes of what it reads.
   - **What no test reaches, beside the above:** a request or datagram whose send fails, which is not noted: the lab
     cannot make a ping socket's send fail at will, and a full mapping's peer owes at most 64 errors either way, so the
     table's own test shows it; a lookup to the tunnel's DNS address that finds its socket's buffer full, dropped as a
     mapping's datagram is.
-- **On devices, with the second round (the maintainer's run, 2026-11-16).** The Android 15 emulator's Watch shard
+- **On devices, with the second round (the maintainer's run, 2026-11-16).** The Android 15 emulator's network shard
   passed, the time-to-live check reporting the emulator's NAT, as designed. In the review's real-router lab, the 40
   one-shot pings that failed in the first round all got their "time exceeded".
 - **The third round (2026-11-16).** A narrow check found no critical or major fault, and two minors:
@@ -1397,7 +1386,7 @@ an ADR (D25).
     the app as "host unreachable"; an app socket that asks for its errors too then failed its next send with
     `EHOSTUNREACH`. `ENOBUFS` is now what a full socket buffer is: the datagram is dropped and counted as skipped.
   - **Noted, unchanged:** a UDP error quotes the peer's last datagram (above); and the stricter time-to-live check of
-    `verify-watch.sh` fails on a phone whose network's gateway answers ICMP itself, as a captive portal may, which its
+    `verify-network.sh` fails on a phone whose network's gateway answers ICMP itself, as a captive portal may, which its
     message names.
   - **Tests.** In the engine, the review's scenario as above, and the order of what makes room; they failed with the
     second round's order, without the exemption of a key that came back or of a second request, and with the wait
@@ -1417,7 +1406,7 @@ an ADR (D25).
   app's datagrams to a stand-in by a parse that a datagram of another protocol passes only by a vanishing chance,
   since a stand-in found to have one takes only an answer that carries it:
   - **STUN** (RFC 8489, RFC 5389): a request, its top two bits zero, the magic cookie, a length that is the
-    message's own and a multiple of 4, and attributes that fit to its end (since fix round 5, walked over its first
+    message's own and a multiple of 4, and attributes that fit to its end (walked over its first
     1,500 bytes, those past taken to fit: see the accepted limits below): its method and 96-bit transaction ID. A
     success or error response with that method and ID carries it. An indication is read as STUN but gives none: no
     one answers it (RFC 8489 6.3), so a stand-in that waited for an answer carrying its ID would wait for ever.
@@ -1428,29 +1417,28 @@ an ADR (D25).
     with the client's keys, a tag that checks and frames that parse to the end gives the destination and source
     connection IDs of each of its long-header packets. An answer carries them when it is a Version Negotiation
     packet whose source ID is the app's destination ID and whose destination ID is the app's source ID, the
-    versions after them whole, the app's own not among them (since fix round 2, RFC 9000 6.2); a Retry with a token
+    versions after them whole, the app's own not among them (RFC 9000 6.2); a Retry with a token
     whose integrity tag checks with the app's destination ID, the only trace of
     that ID a Retry holds (RFC 9001 5.8); an Initial to the app's source ID that the server's keys of the app's
     destination ID open, its tag checked and its frames parsed to the end; or any packet whose destination ID is
     the app's source ID, where that has 4 bytes or more. A shorter one would be matched by a stranger's packet by
     a chance up to one in 256, and is not used alone. A client that sends no source ID, as Chromium's, so Cronet's,
-    does, is told only by its Initial keys: by the server's first answer. Since fix round 1 the Initial may be of
-    either version, keyed by its own (RFC 9368's compatible negotiation, below); the Retry only of the app's (fix
-    round 2: RFC 9369 4.1 has the client ignore one in another version, which fix round 1 took).
-  - **The AEAD tag is checked** for both, since fix round 1 by RustCrypto's `aes-gcm` (its review is under
-    "Consequences"; until then by GHASH written out in `quic.rs`): checked against GCM's test cases 1 to 4 and RFC
-    9001's and RFC 9369's sample packets A.2 to A.4, which the tests' sealer reproduces byte for byte (the Retry's
-    four unused bits set as the samples set them since fix round 2; before, the A.4 Retries were only read). It protects
+    does, is told only by its Initial keys: by the server's first answer. The Initial may be of either version,
+    keyed by its own (RFC 9368's compatible negotiation, below); the Retry only of the app's (RFC 9369 4.1 has the
+    client ignore one in another version).
+  - **The AEAD tag is checked** for both, by RustCrypto's `aes-gcm` (its review is under "Consequences"): checked
+    against GCM's test cases 1 to 4 and RFC 9001's and RFC 9369's sample packets A.2 to A.4, which the tests' sealer
+    reproduces byte for byte (the Retry's four unused bits set as the samples set them). It protects
     nothing against a sender who saw the app's packet, who can compute the keys and the tag as well, as the tool and
     anyone on its path can. On that path, keys and tag, a chance match is 2^-128, where frames alone would be
     matched by random bytes at about 2^-24 (a CRYPTO frame whose length runs exactly to the end), by this unit's
     estimate; a packet matched by the app's source ID alone is matched at the chance that ID's length gives, 2^-32 for
     4 bytes; and a Version Negotiation packet, which has no tag, by the two IDs it echoes. The hello's reader checks
-    the tag too since fix round 1.
+    the tag too.
   - **DNS:** port 53 as before, unit 9's queries by their ID and question, read as loosely as then. On another port,
     a datagram that reads strictly as one standard query, one question, no answer or authority records, and
     nothing after but one OPT record, gives its ID and question; a response with both carries them. Such answers
-    teach Watch no names: only port 53's do. Since fix round 1, only where the answer repeats the question: LLMNR on
+    teach the engine no names: only port 53's do. Only where the answer repeats the question: LLMNR on
     5355 does (RFC 4795 2.1.1), and a Multicast DNS responder to a query from another port than 5353 (RFC 6762
     6.7); the NetBIOS name service on 137 does not (RFC 1002 4.2.13), nor Multicast DNS between two queriers on
     5353 (RFC 6762 6, 18.1), and those ask nothing.
@@ -1460,43 +1448,41 @@ an ADR (D25).
     than those few lines: kept.
 - **What is kept.** Each stand-in keeps them as unit 9 keeps port 53's queries: the last 64 (`ASKED`), each once, as a
   STUN or QUIC client sends one again, only while it waits for its first answer or is bound beside another peer
-  (below), and none once it is bound alone or answered by name. Since fix round 1 each takes 64 bytes in place, a
+  (below), and none once it is bound alone or answered by name. Each takes 64 bytes in place, a
   DNS question's name at most 253 more, and each of at most 8 QUIC ones (`QUIC_ASKED`) the server's keys in two
   versions once an answer needed them, 864 bytes each on x86-64: at most 64 x 64 + 56 x 253 + 8 x 2 x 864 =
-  32,088 bytes, and the vector's 24 (19,264 and 24 before). That is for each stand-in peer, an address and a port
+  32,088 bytes, and the vector's 24. That is for each stand-in peer, an address and a port
   the app sent to: an app that asks one name on many ports makes one for each, and pays for its own; a stranger
   makes none.
 - **A stand-in with identifiers is bound only by an answer that carries one of them,** also when it waits alone on
   its port: a sender that reaches the tool's relay first, from its port, takes it only with what the app sent it.
   Port 53 had this since unit 9. One without identifiers is bound by the first answer from its port when it alone
-  waits there, as unit 9 has it (since fix round 5, not by one that names in the clear what the app sent another
-  peer, which it cannot have asked).
+  waits there, as unit 9 has it (but not by one that names in the clear what the app sent another peer, which it
+  cannot have asked).
   - **Which stand-ins have them.** One whose app's datagrams carried one. A stand-in that had one keeps that, also
     when a later datagram carries none: the answer to the one it sent carries it still, as clients send their
     request or Initial again until it is answered; an answer to the later one that comes first is dropped and
     counted. One that had none takes them on from its first datagram that carries one, and from then on is bound
     only by an answer that carries one: an answer to its first datagrams that comes after that is dropped and
-    counted too. It stays on the association it was given (made so in fix round 1: before, its datagrams left by
-    the mapping's association once Android was asked again).
+    counted too. It stays on the association it was given, also once Android was asked again.
 - **Several stand-ins on one port.** An answer from an address the app never saw goes to the one stand-in whose
   identifiers it carries; one that carries none of theirs is dropped and counted (`udp_unidentified`); one that
   carries several stand-ins' at once is dropped as unmatched. For STUN that needs two of the app's requests with one
   96-bit random ID (2^-96), for QUIC one random destination ID of 8 bytes or more sent to two names (2^-64, and an
   Initial that two IDs' keys open with their tags, 2^-128 more): negligible. For DNS it is not: a client that sends
   one query with one ID to several servers at once, as some stub resolvers do, makes every answer carry both; so
-  does an NTP client that sends one timestamp to two servers, as a clock of a millisecond's resolution may. Since
-  fix round 1 such a stand-in gets an association of its own as it is placed, on port 53 too, so that the
-  association tells their answers apart; only identifiers that come to be another's later, once both are placed,
-  still make an answer several stand-ins', dropped and counted as unmatched, which a test now holds. Fix round 1
-  looked only at the other stand-ins waiting or bound beside one; since fix round 2 an identifier the app sent any
-  peer of the association on the port counts, a server known by its address and a bound stand-in among them
-  (below, "Identifiers the app sent two peers").
+  does an NTP client that sends one timestamp to two servers, as a clock of a millisecond's resolution may. Such a
+  stand-in gets an association of its own as it is placed, on port 53 too, so that the association tells their
+  answers apart; only identifiers that come to be another's later, once both are placed, still make an answer
+  several stand-ins', dropped and counted as unmatched, which a test holds. An identifier the app sent any peer of
+  the association on the port counts, a server known by its address and a bound stand-in among them (below, fix
+  round 2's "Identifiers the app sent two peers").
 - **The contest.** An answer from a bound stand-in's address, or a destination's own, that carries the identifier
   of a stand-in waiting on that port goes to the waiting one, which is bound by it beside the peer that held the
   address first; one that carries none of the waiting ones' goes to that peer, with no cut. `udp_contest`'s cut
   stays only where the waiting stand-in has no identifiers (`an_unanswered_name_cuts_a_bound_one_only_for_a_while`
   still holds it). Another port of an address a stand-in was bound to, on a port where a stand-in whose name the
-  tool resolved to that address waits, binds it by its identifier, where before it came in as the address's.
+  tool resolved to that address waits, binds it by its identifier.
 - **Once both are bound.** The tool resolved both names to one address and port: the address alone cannot tell them. A
   stand-in bound beside another peer keeps the identifiers of what the app sends it, as a waiting one does, and what
   comes from that address goes to the one bound beside whose identifiers it carries, and otherwise to the peer that
@@ -1514,17 +1500,16 @@ an ADR (D25).
   `UDP ASSOCIATE` of its own, opened as `associate()` opens a mapping's, with the same request: Xray drops
   everything on an association whose request names another port, and zeros make it use the client's address. Only
   that stand-in leaves by it, and only it and the flows that come in through it take what comes back on it: each
-  association has its own record of where answers come from (`Scope`). (Fix round 1 made the first half true: a
-  peer's association is the peer's, also after Android was asked again, and for the app's replies to a flow that
-  came in through one.) Port 53 needs one only for identifiers another stand-in there has too (fix round 1).
+  association has its own record of where answers come from (`Scope`). A peer's association is the peer's, also
+  after Android was asked again, and for the app's replies to a flow that came in through one (fix round 1). Port
+  53 needs one only for identifiers another stand-in there has too (fix round 1).
   - **What it costs, and the caps.** Each holds a TCP connection to the tool and a socket, two descriptors, as a
     mapping through the tool does, and takes one place in its app's share of the budget (decision 3), made room for as
-    a mapping is, never by ending its own mapping (since fix round 3 not even as an answered lookup, which review E
-    found it could). At most 8 for each mapping (`OWN_RELAYS`), more names than an app asks at once on one port
-    without identifiers, and 32 for the engine (`Limits::udp_own_relays`): the pattern is rare, and a tool's
-    connections are not to be spent on it without bound. (Since fix round 5 each app, and the apps Android cannot name
-    together, may hold a quarter of the engine's, `Limits::udp_own_share`, 8, as decision 3 shares its caps; since fix
-    round 6 the cap for each mapping is gone, the share reaching it first.)
+    a mapping is, never by ending its own mapping, not even as an answered lookup (review E). At most 32 for the
+    engine (`Limits::udp_own_relays`), and each app, and the apps Android cannot name together, a quarter of that
+    (`Limits::udp_own_share`, 8, more names than an app asks at once on one port without identifiers), as decision
+    3 shares its caps: the pattern is rare, and a tool's connections are not to be spent on it without bound (fix
+    rounds 5 and 6).
   - **Beyond the caps, or with no place in the budget,** the stand-in waits beside the other on the mapping's
     association, under unit 9's floor: an answer from an address the app never saw on that port that carries no
     waiting stand-in's identifier is dropped and counted as unmatched, for as long as more than one waits; one
@@ -1534,8 +1519,8 @@ an ADR (D25).
     not answer within `connect_timeout`, or offers a relay elsewhere, refused and counted as for a mapping) fails
     that stand-in's datagrams as a mapping's failing association fails a destination's: its flow is recorded, the app
     told it cannot be reached, and nothing leaves directly. Its next datagram tries again.
-  - **How it ends:** with its stand-in's flow, silent for `udp_idle`, which ends the flows that came in through it
-    too (since fix round 2: with the last flow that leaves by it, its stand-in's or one that came in through it); with
+  - **How it ends:** with the last flow that leaves by it, its stand-in's or one that came in through it, silent for
+    `udp_idle` (fix round 2); with
     its mapping, whatever ends that: the chain set again another way, the network moving, an answer of
     Android's naming another app, the budget; and when the tool closes it, which ends its stand-in's flow, so that the
     app's next datagram to the stand-in is decided anew. Its place goes back with it.
@@ -1552,27 +1537,26 @@ an ADR (D25).
     resolved to: a stand-in alone on its own association is that first destination, and its answers then come by
     name, which matches them as before.
 - **Counters, appended:** `udp_identified`, the 48th: answers a stand-in took by its identifier where the address
-  alone could not tell, several stand-ins waiting on the port, or the address being another peer's (since fix round 4,
-  also an answer under a relay's name that a peer other than the label's holder took by an identifier the app sent it,
-  a settled peer among them); `udp_unidentified`, the 49th: answers that only stand-ins with identifiers could have
-  taken, and that carried none of theirs, a stranger's on port 53 among them, which unit 9 counted as filtered, or as
-  unmatched from another port of a bound address; `udp_own_relays`, the 50th: associations of a stand-in's own opened;
-  `udp_own_refused`, the 51st: those refused at a cap or for want of a place. `COUNTERS` is 51. `udp_unmatched`, the
-  27th, now counts what still could not be told: a header that is not well formed, a fragment, an answer that carries
-  several stand-ins' identifiers, an answer on a port where a stand-in without identifiers waits beside another
-  (beyond the caps only), the cut of `udp_contest` for a stand-in without identifiers, an answer under a name for a
-  stand-in, or one of its ports, that leaves by another association, and an answer from another port of an address the
-  app knows already by that very address and port; since fix rounds 3 and 4, an answer under a name that names in the
-  clear what several peers were sent, the label's holder not among them, and one under a label held by the stand-in
-  bound beside it while a stand-in without identifiers contests the port; since fix round 5, the same under a label
-  the name's own stand-in holds, and an answer from an address the app never saw that names in the clear what a peer
-  was sent, where a lone stand-in without identifiers waits on the port.
-- **Not changed:** the direct path; a relay that gives back the name, matched by it (since fix round 1, unless the
-  answer carries another stand-in's identifier); chained TCP; lookups to the tunnel's DNS address; `whose.rs`, the
+  alone could not tell, several stand-ins waiting on the port, or the address being another peer's, and an answer
+  under a relay's name that a peer other than the label's holder took by an identifier the app sent it, a settled peer
+  among them; `udp_unidentified`, the 49th: answers that only stand-ins with identifiers could have taken, and that
+  carried none of theirs, a stranger's on port 53 among them; `udp_own_relays`, the 50th: associations of a stand-in's
+  own opened; `udp_own_refused`, the 51st: those refused at a cap or for want of a place. `COUNTERS` is 51.
+  `udp_unmatched`, the 27th, counts what still could not be told: a header that is not well formed, a fragment, an
+  answer that carries several stand-ins' identifiers, an answer on a port where a stand-in without identifiers waits
+  beside another (beyond the caps only), the cut of `udp_contest` for a stand-in without identifiers, an answer under
+  a name for a stand-in, or one of its ports, that leaves by another association, and an answer from another port of
+  an address the app knows already by that very address and port; an answer under a name that names in the clear what
+  several peers were sent, the label's holder not among them, and one under a label held by the stand-in bound beside
+  it while a stand-in without identifiers contests the port; the same under a label the name's own stand-in holds, and
+  an answer from an address the app never saw that names in the clear what a peer was sent, where a lone stand-in
+  without identifiers waits on the port.
+- **Not changed:** the direct path; a relay that gives back the name, matched by it (unless the answer carries
+  another stand-in's identifier); chained TCP; lookups to the tunnel's DNS address; `whose.rs`, the
   one rule of whose a datagram is; the budget's other places.
 - **Found on the way.** A socket of a stand-in's own association, like the mapping's, must first be known to tokio
-  as writable before the datagrams that waited for it leave without waiting: the first version sent them at once,
-  and tokio dropped them as "would block". Which of two stand-ins asked at once on one port leaves by the mapping's
+  as writable before the datagrams that waited for it leave without waiting: sent at once, they are dropped by
+  tokio as "would block". Which of two stand-ins asked at once on one port leaves by the mapping's
   association, and which by its own, is whichever's datagrams leave first once the mapping opens: both wait for
   it, so either may.
 - **Tests.**
@@ -1580,24 +1564,23 @@ an ADR (D25).
     byte for byte and told by its destination ID only; both RFCs' Retry samples told by their tag; what an app's
     Initial asks, once however often it is sent, and nothing from a tag or frames that fail; a Version Negotiation
     with the IDs crossed, and a packet to a source ID of 4 bytes or more. In `core/net/src/identifiers.rs`, 5: STUN,
-    DNS on another port, NTP and QUIC, each asked and answered, and what each refuses; and the 48 bytes an identifier
-    took then (64 since fix round 1). The fuzz target `identifiers` holds that nothing panics and that a request never
+    DNS on another port, NTP and QUIC, each asked and answered, and what each refuses; and the 64 bytes an
+    identifier takes. The fuzz target `identifiers` holds that nothing panics and that a request never
     carries what it asked itself (12.9 million runs in 60 s of `cargo fuzz run identifiers` with no seeds, no fault).
     Random bytes reach its QUIC answers only up to their tags: fix round 1 adds seeds that start past them, and a
     target, `quic_answers`, that builds the answers.
   - In `core/net/tests/chain.rs`, 11 new and 4 of unit 9's changed, most through the scripted relay so that each
-    answer comes from the address and in the order the test chooses, in IPv4 and in IPv6 (Watch's stand-ins are IPv4;
-    the address the tool reached is either): two STUN stand-ins on one port answered in crossed order, each its own; a
-    STUN response with another ID before the real one, taking no stand-in waiting alone or beside another; two QUIC
-    stand-ins whose clients send no source ID, told by their Initial keys (the keys alone since fix round 1, both now
-    of version 1), with a datagram of no QUIC dropped and counted; a Version Negotiation and a Retry, each to its own
-    stand-in (the Retry told by its tag alone since fix round 1, neither client sending a source ID); DNS on port 5353
-    and NTP, crossed; the contest settled by an identifier, then each STUN transaction's response from the shared
-    address reaching the stand-in that sent it; a stand-in without identifiers beside a waiting one: a second `UDP
-    ASSOCIATE` at the test proxy, each stand-in answered, and the second association closed once its stand-in was
-    silent for `udp_idle` while the first went on; a stand-in with identifiers beside one without gets its own, two
-    with identifiers share; the caps of 8 for a mapping and of `udp_own_relays` for the engine (since fix round 6 the
-    app's share and the engine's cap), beyond which the floor drops and counts; no place in the budget, the same, the
+    answer comes from the address and in the order the test chooses, in IPv4 and in IPv6 (the engine's stand-ins are
+    IPv4; the address the tool reached is either): two STUN stand-ins on one port answered in crossed order, each its
+    own; a STUN response with another ID before the real one, taking no stand-in waiting alone or beside another; two
+    QUIC stand-ins whose clients send no source ID, told by their Initial keys alone, both of version 1, with a
+    datagram of no QUIC dropped and counted; a Version Negotiation and a Retry, each to its own stand-in (the Retry
+    told by its tag alone, neither client sending a source ID); DNS on port 5353 and NTP, crossed; the contest settled
+    by an identifier, then each STUN transaction's response from the shared address reaching the stand-in that sent
+    it; a stand-in without identifiers beside a waiting one: a second `UDP ASSOCIATE` at the test proxy, each stand-in
+    answered, and the second association closed once its stand-in was silent for `udp_idle` while the first went on; a
+    stand-in with identifiers beside one without gets its own, two with identifiers share; the app's share and the
+    engine's cap (`udp_own_relays`), beyond which the floor drops and counts; no place in the budget, the same, the
     mapping never ended to make room though quiet for `udp_quiet`; an association of its own whose relay names the
     name; and its end with its mapping when the chain is set again. Unit 9's two tests that held the floor now hold
     the answers each stand-in gets (the first of them is the second association's test above), and its two tests of
@@ -1625,7 +1608,7 @@ an ADR (D25).
   which the identifiers' own tests and the STUN path's logic cover; a client Initial whose datagram also coalesces
   0-RTT or Handshake packets, whose IDs are read the same way; real tools' relays, which the coordinator's static
   reading covers and the lab's gate 4 (table B10) will measure.
-- **Accepted limits, gathered** (fix round 6, review L: they stood in six notes under three names). Each is a limit
+- **Accepted limits, gathered** (fix round 6, review L). Each is a limit
   this unit and its fix rounds accept, with its reason and the round that set it; the notes below point here.
   - **Classic STUN** (RFC 3489), without the magic cookie, is not read (unit 9b): without the cookie its parse would
     pass datagrams of other protocols far more often. Its clients work as stand-ins without identifiers.
@@ -1635,7 +1618,7 @@ an ADR (D25).
   - **Past an app's share or the engine's cap** of associations of a stand-in's own, or with no place in the budget,
     a stand-in without identifiers waits beside the other on the mapping's association under unit 9's floor: an
     answer from an address the app never saw on that port that carries no waiting stand-in's identifier is dropped,
-    as either's, while more than one waits (unit 9b; the share since fix round 5): a tool's connections are not to
+    as either's, while more than one waits (unit 9b; the share, fix round 5): a tool's connections are not to
     be spent without bound, and the alternative is a guess.
   - **Once two stand-ins are bound to one address,** what carries no identifier goes to the first (unit 9b): a QUIC
     client that sends no source ID has its server's packets from there reach the app under the first name, and its
@@ -1647,14 +1630,14 @@ an ADR (D25).
     port; a name no peer has binds no stand-in without identifiers, as a name nobody asked for is dropped (unit 9's
     M21) and one whose peers ended cannot be told from it; and a flow of the name that came in on a port before a
     stand-in was bound beside under it there holds the label, as a peer holds its own address. Each is the rule of an
-    address, whose address here Watch does not know.
+    address, whose address here the engine does not know.
   - **The contest** (fix rounds 5 and 6): a QUIC answer to a holder whose client's source ID is shorter than 4
     bytes, empty in Chromium and Cronet, is cut for `udp_contest` while a stand-in without identifiers asked
     meanwhile waits on the port: once settled, the holder keeps no keys, and nothing else in the answer tells it is
     the holder's. The cut lasts 5 s from the other stand-in's first datagram, within which QUIC sends again.
   - **QUIC's sizes** (fix rounds 1 and 4): a server's Initial or Retry larger than 1,500 bytes binds nothing, and an
     app's datagram larger than that, which came in IP fragments from a stack that cannot set "don't fragment", asks
-    nothing and names no flow: through Watch's tunnel no QUIC path carries more. A stand-in with more distinct
+    nothing and names no flow: through the tunnel no QUIC path carries more. A stand-in with more distinct
     destination IDs than the 16 packets an answer may open has its oldest tried last: a client outside what the
     RFCs' connections do.
   - **A STUN message larger than 1,500 bytes** (fix rounds 5 and 6) is read with its attributes walked over its
@@ -1665,11 +1648,11 @@ an ADR (D25).
   - **What is remembered** (fix rounds 2 and 3): an identifier the app sent a peer more than 64 identifiers earlier
     is forgotten for it, so that sent again to a new name at that distance it is no retry of the same request; and
     peers are not capped, so that the engine's memory grows with the destinations an app reaches within `udp_idle`,
-    as before this unit, at most by 83.4 bytes for each identifier it sends them (5,339 for one peer): a cap would
+    at most by 83.4 bytes for each identifier it sends them (5,339 for one peer): a cap would
     refuse a peer-to-peer app's destinations, which no NAT's mapping refuses.
   - **Port 53** (fix round 3): a stand-in there is bound by a response's ID and question alone, so that one whose
     answer section is cut or malformed binds it; the app's own resolver reads and refuses that section, as it would
-    without Watch, and Watch learns names only from a response it reads whole.
+    without the VPN, and the engine learns names only from a response it reads whole.
 - **Not done, stated:** what no test reaches (above). The emulator step is the coordinator's; it passed after fix
   rounds 2 to 5 (above).
 
@@ -1711,8 +1694,8 @@ limit with its reason here.
   identifiers first (fix round 2 found the stand-ins taken in the order they began waiting, so that one could be left
   none; they now take turns), none when it is larger than 1,500 bytes (`quic::LARGEST_ANSWER`: QUIC never lets IP
   fragment its datagrams, RFC 9000 14, and a sender makes an Initial's datagram larger than 1,200 bytes only where it
-  believes the path and its peer carry it, 14.1; the path an answer takes to the app ends in Watch's tunnel, whose MTU
-  is 1,500 bytes at most, decision 5 as amended, and the app's own Initials fit it, so a larger answer is outside what
+  believes the path and its peer carry it, 14.1; the path an answer takes to the app ends in the tunnel, whose MTU
+  is 1,500 bytes at most, decision 5, and the app's own Initials fit it, so a larger answer is outside what
   that path carries; a Retry's token must fit the client's next Initial on the same path. Corrected in fix round 2,
   where this said the internet's paths carry no more than 1,500 bytes, which RFC 9000 does not). The server's keys of
   each destination ID are derived once and kept with the identifier, of which a stand-in keeps 8 at most. An app's
@@ -1736,7 +1719,7 @@ limit with its reason here.
   where nothing else could tell them apart. Identifiers that come to be another's later still make an answer
   unmatched.
 - **The tool closing the mapping's association** (review A): sing-box closes an association idle for `udp_timeout`
-  (5 minutes), Xray for `connIdle` (300 s), and Watch then ended the whole mapping, and with it a flow live on a
+  (5 minutes), Xray for `connIdle` (300 s), and the engine then ended the whole mapping, and with it a flow live on a
   stand-in's own association, a TURN allocation say. Closing one association now ends only what leaves by it.
   When the tool closes the mapping's own association while one of a stand-in's own is open, the flows that left by
   the mapping's end and its record of where answers come from is forgotten; the mapping lives on, and ends once the
@@ -1777,8 +1760,8 @@ limit with its reason here.
   `scripts/fuzz.sh 480` stopped there; fixed in its own commit, and all twelve targets built.
 
 **Unit 9b, fix round 2 (2026-11-17).** Two fresh reviews of fix round 1, C of the engine and D of QUIC's reading,
-the fuzzing, the tests and the emulator step, after the coordinator's own commit `d99da80`: `verify-watch.sh` seals
-its QUIC Initials with a real GCM tag now that the hello's reader checks it, and with it the emulator's Watch shard
+the fuzzing, the tests and the emulator step, after the coordinator's own commit `d99da80`: `verify-network.sh` seals
+its QUIC Initials with a real GCM tag now that the hello's reader checks it, and with it the emulator's network shard
 passed on Android 15 and the STUN step's 48th counter rose from 0 to 1. The maintainer's rule again: every finding
 gets the best-in-class fix, or an accepted limit with its reason here.
 - **Identifiers the app sent two peers** (review C, major 1; a regression of unit 9b's, where unit 9 gave the answer
@@ -1849,7 +1832,7 @@ gets the best-in-class fix, or an accepted limit with its reason here.
   reserved bits are set, or that holds no frame, is a connection error, not one to discard, and either way no answer):
   a packet whose reserved bits are set once its protection is removed (RFC 9000 17.2; read before the tag, since
   Initial keys are no secret, and RFC 9001 9.5's concern, timing that confirms a guess of a packet number, its length
-  or the Key Phase, is an endpoint's, which Watch is not: so worded in fix round 4), one with no frame (12.4), a
+  or the Key Phase, is an endpoint's, which the engine is not: so worded in fix round 4), one with no frame (12.4), a
   server's Initial with a token (17.2.2), a Retry without one (17.2.5.2), a Version Negotiation that lists the
   client's own version (6.2, RFC 9368 2.1). A packet matched by the app's source ID alone, of 4 bytes or more, is held
   to the token and version rules too, but not opened: its reserved bits and frames go unread, as before, and only a
@@ -1878,10 +1861,10 @@ gets the best-in-class fix, or an accepted limit with its reason here.
   since the app's first ping: none in 256 of each.
 - **The emulator step** (review D): the workload app sends each STUN request again, with its transaction ID, as RFC
   8489 6.2.1 has a client do over UDP (500 ms, doubled each time, 7 requests, 39.5 s in all); the test tool's lines
-  that its STUN server listens are read as it starts, before logcat's ring can turn past them; and the 48th counter
-  is read with when the engine's counters began (`counters-since` in Watch's dump), so that an engine started afresh
-  between the two reads runs the step once more, and fails the run as that the second time, never as a pass or as
-  unit 9b's failure. Not run here.
+  that its STUN server listens are read as it starts, before logcat's ring can turn past them; and the 48th counter is
+  read with when the engine's counters began (`counters-since` in the service's dump), so that an engine started
+  afresh between the two reads runs the step once more, and fails the run as that the second time, never as a pass or
+  as unit 9b's failure. Not run here.
 - **Corrected above,** each where it stands: the opens counted across every stand-in, the Retry's version and the
   1,500-byte cap's wording (fix round 1); fix round 1's collision check, which missed settled peers; the Retry samples
   of A.4, which the sealer now reproduces byte for byte where before they were only read; the 48 bytes an identifier
@@ -1931,7 +1914,7 @@ gets the best-in-class fix, or an accepted limit with its reason here.
 the fuzzing and the tests, after the coordinator's commit `021a7b8`: fix round 2 had put the check that the test
 tool's STUN server listens after the tool's first start, which does not run that server (of the script's two
 starts, the round's builder placed it after the wrong one), so the emulator's chain check failed on every run; it
-now follows the start that passes `--ei stun`, and counts the lines from before it. With it the Watch shard passed
+now follows the start that passes `--ei stun`, and counts the lines from before it. With it the network shard passed
 on Android 15, the 48th counter rising from 0 to 1; review F found the same fault. The maintainer's rule again:
 every finding gets the best-in-class fix, or an accepted limit with its reason here.
 - **A relay's name is a hint, resolved among the peers that live** (review E, major 1, a regression of fix round 2;
@@ -1966,7 +1949,7 @@ every finding gets the best-in-class fix, or an accepted limit with its reason h
   now keep the order each was last sent: one sent again moves to the latest place, a QUIC identifier with the keys it
   kept.
 - **What reading every datagram costs** (review E, minor 4). A datagram larger than 1,500 bytes is read as QUIC by
-  nothing now (`quic::LARGEST_DATAGRAM`, the bound fix round 1 set on answers, `LARGEST_ANSWER` until now): Watch's
+  nothing now (`quic::LARGEST_DATAGRAM`, the bound fix round 1 set on answers, `LARGEST_ANSWER` until now): the
   tunnel's MTU is 1,500 at most, so a larger datagram of an app's came in IP fragments (RFC 9000 14; fix round 4
   states the limit this leaves, under "QUIC's size bound"). A settled peer's identifiers are read from the datagram's
   headers (`identifiers::named`), a QUIC Initial unopened: a datagram that only looks like one costs a false memory,
@@ -1999,7 +1982,7 @@ every finding gets the best-in-class fix, or an accepted limit with its reason h
   reserved bits are set, or that holds no frame, is a connection error (17.2, 12.4), the rest the client discards;
   either way no answer. The reserved bits are read before the tag: RFC 9001 9.5, to which 17.2 points, asks an
   endpoint to remove header and packet protection together, so that their timing confirms no guess of a packet
-  number, its length or the Key Phase (corrected in fix round 4, where this said its keys); Watch is no endpoint of
+  number, its length or the Key Phase (corrected in fix round 4, where this said its keys); the engine is no endpoint of
   these packets, sends nothing on what it reads, and Initial keys are anyone's.
 - **The ping table** (review F, minor 8): fix round 2's rule still took the other version's older sockets that the
   new socket's chain lists after it; the network lab now leaves out every socket the other version's table lists
@@ -2047,7 +2030,7 @@ every finding gets the best-in-class fix, or an accepted limit with its reason h
   not told to be another peer's; peers are not capped (above).
 
 **Unit 9b, fix round 4 (2026-11-17).** Two fresh reviews of fix round 3, G of the engine and H of the parsers, the
-cryptography, the tests, the fuzzing and the docs. Since fix round 3 the Watch shard passed on Android 15, the STUN
+cryptography, the tests, the fuzzing and the docs. Since fix round 3 the network shard passed on Android 15, the STUN
 step's 48th counter rising from 0 to 1 at its first sending. The maintainer's rule again: every finding gets the
 best-in-class fix, or an accepted limit with its reason here.
 - **A relay's name is read as a source** (review G, majors G1 and G5, and minors G2 and G4; the coordinator's
@@ -2055,8 +2038,9 @@ best-in-class fix, or an accepted limit with its reason here.
   found. This round answers the class instead. The relays that give back a name (Xray and sing-box, as read for this
   unit: "What it does not do" above) put it on an answer to say that it came from the address the association's first
   destination, that name, resolved to, at the answer's own port: a label (name, port) is a source, as an address and
-  port are, whose address Watch does not know. It is now read by the rules an answer from an address has been read by
-  since unit 9, which every review since has gone through, with the label in place of the address (`Scope::by_name`):
+  port are, whose address the engine does not know. It is now read by the rules an answer from an address has been
+  read by since unit 9, which every review since has gone through, with the label in place of the address
+  (`Scope::by_name`):
   - its holder is the name's own peer on that port, as a destination holds its own address; with several stand-in
     addresses for the name (one from before it gave way in the stand-in map, one since), the newest's (G2: the name's
     record kept its first address after that address's peer ended);
@@ -2105,7 +2089,7 @@ best-in-class fix, or an accepted limit with its reason here.
   Initials alternating versions to one destination ID derived keys for every packet, 23.6 us where fix round 3 gave
   10.4 us at most; now 7.4 us, as `asked` keeps them (`named` on the same, 0.41 us). (Fix round 5: kept in place,
   the two sets made every peer's reader 1,904 bytes, QUIC or not; see there.)
-- **QUIC's size bound** (review H, doc point 13): `LARGEST_DATAGRAM` is the tunnel's largest MTU, Watch's
+- **QUIC's size bound** (review H, doc point 13): `LARGEST_DATAGRAM` is the tunnel's largest MTU, Kotlin's
   `TunnelMtu.MOST`, which a test now holds it to. An app's larger datagram came in IP fragments, as a QUIC stack that
   cannot set "don't fragment", configured above the MTU, sends them and the engine puts together: **accepted limit**
   (in unit 9b's list, above), its Initial asks nothing, so its stand-in is bound as unit 9 binds one without
@@ -2114,7 +2098,7 @@ best-in-class fix, or an accepted limit with its reason here.
 - **Port 53 since fix round 3** (review H, doc point 16): a stand-in on port 53 is bound by a response's ID and
   question read alone (`dns::answered`), so a response whose answer section is cut or malformed binds it, where
   `dns::response` refused it before. That is right: the question is what the app asked, and the answer section is the
-  app's own resolver's to read and refuse, as it would without Watch; Watch learns names only from a response
+  app's own resolver's to read and refuse, as it would without the VPN; the engine learns names only from a response
   `dns::response` reads whole.
 - **Tests that review H found missing** (minors 2 and 3): `dns::answered`'s checks, each (its mutants D2, D3, D4 and
   D6 survived); under a label held by the one beside, another peer's identifier (U2, at its place in the new rules); a
@@ -2145,7 +2129,7 @@ best-in-class fix, or an accepted limit with its reason here.
   accepted limits, gathered in unit 9b's note since fix round 6.
 
 **Unit 9b, fix round 5 (2026-11-17).** Two fresh reviews of fix round 4, I of the engine and J of the tests, the
-parsers and the docs, after the Watch shard passed on Android 15 with `0a6a123`, the STUN step's 48th counter rising
+parsers and the docs, after the network shard passed on Android 15 with `0a6a123`, the STUN step's 48th counter rising
 from 0 to 1 at its first sending. Neither found a major fault: the label read as a source held, case by case, against
 the rules of an address. The maintainer's rule again: every finding gets the best-in-class fix, or an accepted limit
 with its reason here.
@@ -2267,7 +2251,7 @@ with its reason here.
   accepted limits, gathered in unit 9b's note since fix round 6.
 
 **Unit 9b, fix round 6 (2026-11-17), the last before the push.** Two final reviews of fix round 5, K of the engine and
-L of the parsers, the tests and the docs, after the Watch shard passed on Android 15 with `b263416`, the STUN step's
+L of the parsers, the tests and the docs, after the network shard passed on Android 15 with `b263416`, the STUN step's
 48th counter rising from 0 to 1. Neither found a major fault; review K ran a randomized model check of fix round 5's
 fingerprint index, 40 runs of 3,000 steps, which held exactly after every step. The maintainer's rule again: every
 finding gets the best-in-class fix, or an accepted limit with its reason, now in unit 9b's list.
@@ -2344,11 +2328,11 @@ finding gets the best-in-class fix, or an accepted limit with its reason, now in
 - **Not done, stated:** nothing beyond unit 9b's list of accepted limits.
 
 **W5, part 1: the engine's clocks (2026-11-18, finding 4 of the review of 2026-11-09).** The review found that the
-log's quarter hours followed a timer that stands still while the phone sleeps (ADR 0037's decision 1, amended the
-same day), and asked beyond the repair for one table: every reading of time in the engine, what a sleep of hours and
-a jump of the wall clock do to each, and whether the user can see a wrong result from it. It is here, not in ADR
-0037, because this ADR holds the engine's own gaps and its tests that drive time (decision 6), and all but one row
-are its mechanisms; ADR 0037 holds the log's row.
+log's quarter hours followed a timer that stands still while the phone sleeps (ADR 0037, decision 1), and asked beyond
+the repair for one table: every reading of time in the engine, what a sleep of hours and a jump of the wall clock do
+to each, and whether the user can see a wrong result from it. It is here, not in ADR 0037, because this ADR holds the
+engine's own gaps and its tests that drive time (decision 6), and all but one row are its mechanisms; ADR 0037 holds
+the log's row.
 
 - **Three clocks.** The wall clock runs on in a sleep and can be set back or forward by the user or the network.
   The monotonic clock, which tokio's timers and `std::time::Instant` read on Android and Linux, stands still in a
@@ -2362,7 +2346,7 @@ are its mechanisms; ADR 0037 holds the log's row.
 
 | What reads the time | Where | Clock | A sleep of hours | A jump of the wall clock | What the user could see | Now |
 |---|---|---|---|---|---|---|
-| The log's times and quarter hours: each count of a flow's bytes, each lookup and answer counted, a flow's start and end, the flush, the logger's wake | `logbook.rs` (`Shared::log_now`), from `tcp.rs` and `udp.rs` | Wall, handed in | Before: the timer woke late, and a night's bytes went into one segment from the evening, filed under its day, through the timer or a flow's end | Before: a segment ending before it began, its end set to its start | A flow's bytes in another quarter hour, and another day | Fixed: each count cuts first, at the quarter hours passed either way (ADR 0037, decision 1 as amended) |
+| The log's times and quarter hours: each count of a flow's bytes, each lookup and answer counted, a flow's start and end, the flush, the logger's wake | `logbook.rs` (`Shared::log_now`), from `tcp.rs` and `udp.rs` | Wall, handed in | Before: the timer woke late, and a night's bytes went into one segment from the evening, filed under its day, through the timer or a flow's end | Before: a segment ending before it began, its end set to its start | A flow's bytes in another quarter hour, and another day | Fixed: each count cuts first, at the quarter hours passed either way (ADR 0037, decision 1) |
 | The logger's waits: 30 s gathering, the sleep to the next quarter hour | `logbook.rs` (`logger`) | Monotonic (tokio) | It wakes late; records already cut wait in memory until it does, and are lost if the process dies first, as any record waiting is | None | Nothing now: no segment depends on it | Accepted |
 | DNS answers kept for apps that go directly while a chain is on, and for chained apps' questions through the tool (ADR 0038) | `dnscache.rs`, `udp.rs` (`cached_answer`), `lookups.rs` | Was monotonic; now `CLOCK_BOOTTIME` | Before: an answer of five minutes kept before a night was served in the morning, for as long again as the phone had been awake; Android's own resolver, which this cache stands in for, would have dropped it | None | An app given an address past its time to live | Fixed. A reading that fails keeps nothing (fix round 1, engine, finding 4) |
 | Names from DNS answers, and ECH public names (at least an hour, at most a day) | `names.rs`, `naming.rs` | Monotonic; and `CLOCK_BOOTTIME` to stand beside a connection's own name | A name is kept longer in real time | None | A DNS name kept through a night can name a flow that sends no name of its own; beside its own name it would show its age as a difference | Accepted for naming: apps reconnect after a night to addresses they got before it (a browser's own cache, a pool of connections), and the name they asked for names those flows; a newer answer for the address replaces it; and the connection's own name now names a flow that sends one (finding 20). Fixed beside: a name stands beside a connection's own only while held in time since the phone started (fix round 1, engine, finding 7) |
@@ -2379,27 +2363,27 @@ are its mechanisms; ADR 0037 holds the log's row.
   round 1, a mutant review 1 left alive).
 - **Cost** (fix round 1, engine, finding 5; second fix round). Each count of the log reads the wall clock once. A
   count of a flow's bytes takes no lock within a quarter hour; a count of an app's lookups locks its count, and a
-  TCP packet on the tunnel the map of its flow's bytes, as before W5. `CLOCK_BOOTTIME` is read for each DNS answer
-  a cache keeps or looks up, for each DNS answer whose names Watch learns, and for each hello that would set a
+  TCP packet on the tunnel the map of its flow's bytes. `CLOCK_BOOTTIME` is read for each DNS answer
+  a cache keeps or looks up, for each DNS answer whose names the engine learns, and for each hello that would set a
   differing DNS name beside a flow's own: never for each packet. Measured on the development machine (x86-64,
   vDSO, release build, 2026-11-18): `SystemTime::now` 22.8 ns, `CLOCK_REALTIME_COARSE` 7.9 ns, `CLOCK_BOOTTIME`
   20.4 ns, an `Arc` cloned and dropped 2.8 ns, an atomic addition 1.4 ns. So the log reads the coarse wall
   clock, as the fresh review 2 offered: its steps here are 4 ms (the kernel's tick at 250 Hz), and it lags the
   wall clock by less than two ticks, since the kernel's timekeeping adds whole ticks and is updated at each:
   under 8 ms at 250 Hz, the default, under 20 ms at 100 Hz, the lowest Linux offers (3.3 to 7.3 ms measured
-  here; review 3, nit 2, corrected "one tick, at most 10 ms", which no record grounded for Android's kernels).
+  here; review 3, nit 2: no record grounds a bound of one tick for Android's kernels).
   It follows the wall clock when it is set, and is read in the vDSO also on phones whose kernels read the fine
   clock through a system call. A byte counted within that lag after a quarter hour then falls in the quarter
   hour before, which ADR 0037's note accepts: the bounds there are seconds. A count of no bytes of the
   app's own, as a tunnel packet's, adds nothing to them. ADR 0037's note says how many reads a packet costs.
-  (W5's second part, 2026-11-18, ADR 0046's decision 1: each count now also compares the second it read with
-  its flow's last, a division, an addition, a few comparisons and one atomic load, and takes no lock; the first count of a
-  second notes a mark under the lock of the flow's own marks, and a clock set back by a second or more, found by
-  the same reading, places what waits. Measured the same way: a count costs 12.5 to 13.2 ns with the apps'
-  states told and without, no difference within the measurement, and one that notes a mark 45 to 96 ns, the
-  readings of the states every minute included. The test `what_a_count_costs` measures it. Its fix round, the same
-  day: the seconds and segments that wait for their states are shared out per app as this ADR shares its other
-  bounds, a quarter of each to one app, the heaviest giving way past the bound itself; `told_late`, the 52nd
-  counter, counts the seconds, and segments with no count, placed as told too late. `COUNTERS` is 52. A mark now
-  also takes the lock of the waiting seconds' count, which it took as an atomic before, once a second per flow: a
-  count that notes a mark costs 106 to 116 ns, measured the same way.)
+- **For ADR 0046, decision 1** (W5's second part and its fix round, 2026-11-18), each count also compares the
+  second it read with its flow's last, a division, an addition, a few comparisons and one atomic load, and takes
+  no lock; the first count of a second notes a mark under the lock of the flow's own marks, and the lock of the
+  waiting seconds' count, once a second per flow; and a clock set back by a second or more, found by the same
+  reading, places what waits. Measured the same way: a count costs 12.5 to 13.2 ns with the apps' states told and
+  without, no difference within the measurement; one that notes a mark, 106 to 116 ns (45 to 96 ns, the readings
+  of the states every minute included, with the waiting seconds' count an atomic). The test `what_a_count_costs`
+  measures it. The seconds and segments that wait for their states are shared out per app as this ADR shares its
+  other bounds, a quarter of each to one app, the heaviest giving way past the bound itself; `told_late`, the 52nd
+  counter, counts the seconds, and segments with no count, placed as told too late. `COUNTERS` is 52.
+

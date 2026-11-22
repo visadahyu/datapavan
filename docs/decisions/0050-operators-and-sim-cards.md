@@ -231,7 +231,7 @@ permissions Android gave it.
      which Android versions and makers' builds.
   5. **Type 0:** whether a type-0 message reaches Android or stops at the modem, and that nothing is shown.
   6. **Advanced and the SIM:** with Advanced running, the SIM Toolkit's own menu items, and whether any of their
-     traffic appears in Watch and under which app.
+     traffic appears in Advanced's connection log and under which app.
   7. **What is closed:** `hasCarrierPrivileges` and OMAPI's answers from a test app, with each lab SIM, recorded to
      show what an app cannot reach.
 - **Stop rules.** Never send an over-the-air, binary or type-0 message to a SIM the lab does not own; never send a

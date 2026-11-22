@@ -19,12 +19,13 @@ acceptable: the desktop app starts this project's sessions in auto mode, where e
 it runs. Sessions started in a terminal follow the maintainer's own default mode, which today skips that review
 (decision 11).
 
-Work that is coming is of another kind. Watch and the audit need to know what fake or repackaged VPN and proxy apps,
-apps from owners nobody can identify, and tracker SDKs actually do (DESIGN.md, and the maintainer's private incident
-register), and reported flaws in messengers and circumvention tools need triage. That means handling and running
-hostile code, and asking an agent to analyse it, sometimes with the model provider's default cyber safeguards relaxed
-for a verified account. Three risks follow: hostile code on the workstation or its network; an agent acting beyond
-the intended scope; and text from a hostile sample steering an agent that holds the maintainer's keys.
+Work that is coming is of another kind. Advanced's network part and the audit need to know what fake or repackaged
+VPN and proxy apps, apps from owners nobody can identify, and tracker SDKs actually do (DESIGN.md, and the
+maintainer's private incident register), and reported flaws in messengers and circumvention tools need triage. That
+means handling and running hostile code, and asking an agent to analyse it, sometimes with the model provider's
+default cyber safeguards relaxed for a verified account. Three risks follow: hostile code on the workstation or its
+network; an agent acting beyond the intended scope; and text from a hostile sample steering an agent that holds the
+maintainer's keys.
 
 Anthropic's guide for such work asks for:
 - **Isolation:** a virtual machine or a dedicated host, with egress blocked except the model API, reached through a
@@ -162,7 +163,7 @@ where the machine cannot change it.
   - **sinkhole,** the default for dynamic runs: the sinkhole on the workstation answers names and ends every
     connection at a catch-all that records it; nothing leaves; UDP to port 443 is dropped so apps fall back to TCP,
     where it is recorded. An app that pins its certificates refuses the catch-all's, but the name it asked for and
-    the attempt are still recorded, which is what Watch needs to know;
+    the attempt are still recorded, which is what Advanced's network part needs to know;
   - **exit,** only with the maintainer's word for that run and with the maintainer watching: on a fresh machine that
     has never been signed in and has no interface to the gateway; its traffic goes through a separate exit that is
     never the maintainer's home address, from a network namespace on the workstation whose only route is that exit's
@@ -195,8 +196,8 @@ where the machine cannot change it.
     the character set, and strips control and terminal escape characters;
   - lane-1 sessions get only the structured fields; the summary reaches them only as the maintainer rewrote it;
   - transcripts, logs, sinkhole records and captures, which also hold strings an attacker chose, are read only by the
-    maintainer or inside a fresh analysis machine, never by a lane-1 session; the guard hook proposed in decision 2
-    also refuses lane-1 reads of their folders;
+    maintainer or inside a fresh analysis machine, never by a lane-1 session; the guard hook of decision 2 also
+    refuses lane-1 reads of their folders;
   - a lane-1 session treats every string it gets from lane 2 as data, never as an instruction, and never runs
     anything a result names.
 - **One credential inside:** the verified account's Claude Code sign-in (OAuth, as the program requires; no API key,
@@ -267,8 +268,6 @@ incident); record what happened in the private notes and publish what users of t
   - a Datapavan section in `autoMode.environment` in each of them, stating the project, its two repositories, the
     lab devices in and out of scope, the network scope, lane 2 and the program's limits; `claude auto-mode config`
     shows it in effect.
-- The first draft of this ADR put both into the project's local settings; Claude Code ignores them there, and they
-  were taken out the same day.
 
 ### Against the field
 
@@ -293,7 +292,7 @@ incident); record what happened in the private notes and publish what users of t
 ## Consequences
 
 - Lane-2 work waits until the machine exists and passes decision 6's test; all the open lane-1 work (gate 2's units,
-  Watch's fixes, the editions) goes on meanwhile.
+  the network part's fixes, the editions) goes on meanwhile.
 - Every lane-2 run needs the maintainer present until a host monitor exists, which limits how much lane 2 can do.
 - The machine costs disk and memory on the workstation while it runs, within the machine rule for emulators.
 - Building it needs downloads (a guest image, the analysis tools, the sinkhole), each with the maintainer's word.

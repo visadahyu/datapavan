@@ -5,15 +5,15 @@
 - Date: 2026-11-22
 - Decided by: the direction by the maintainer, 2026-11-21 («همه تایید شد», to the coordinator's six
   recommendations). This record was drafted by the coordinator with AI help, and revised the same day after the
-  server was read (the relay is Caddy's configuration, not a program) and after one security review round
-  (strategy repository, `research/2026-11-w8/review-odoh-relay.md`).
+  server was read and after one security review round (strategy repository,
+  `research/2026-11-w8/review-odoh-relay.md`).
 - Builds on:
   - [0016](0016-no-user-data.md), whose decision 5 requires a new ADR before any change to it;
   - [0042](0042-dns-of-apps-that-go-directly.md), the pairs and the ladder;
   - [0051](0051-two-lanes-and-an-analysis-machine.md).
 
 ## Context
-- **What Advanced's network monitoring uses today.** By default, it sends the names that direct apps look up
+- **What Advanced's network part uses today.** By default, it sends the names that direct apps look up
   through Oblivious DoH. A relay sees the phone's address but not the question, and a target sees the question but
   not the address (ADR 0042).
 - **Who runs the relays.** The default pairs use relays run by volunteers: Numa's, and crypto.sx's on Fastly.
@@ -37,7 +37,7 @@
   - **What follows:** Caddy can be the relay with configuration alone.
 - **Why ADR 0016 must change.** Today no part of Datapavan contacts a server of the project's own by itself:
   - **Basic** has no INTERNET permission;
-  - **Advanced's network monitoring** connects only to what the user's apps and tools reach, to the resolvers the
+  - **Advanced's network part** connects only to what the user's apps and tools reach, to the resolvers the
     user or the data names, and to the ODoH relays and targets of other operators.
 
   A relay of the project's own would be the first server of the project that phones contact by themselves, and it
@@ -71,7 +71,7 @@
      connection, with its address, carries many requests, and Caddy keeps it open while idle for up to five
      minutes.
    - **The TLS session:** its resumption tickets could let the relay link one phone's connections across
-     addresses. Advanced's network monitoring keeps one TLS session cache per network beneath (ADR 0042), so it
+     addresses. Advanced's network part keeps one TLS session cache per network beneath (ADR 0042), so it
      does not resume across a change of network. Other clients may. Turning Caddy's session tickets off, for the
      website too, is left to a later decision.
    - **No count per address,** not even for abuse. Caddy's core has none, and none is better than one kept for ten
@@ -127,9 +127,8 @@
 
      The maintainer's install script (strategy repository, `server/odoh-relay.sh`) carries copies of these
      files, and the relay's test checks that the copies match.
-   - **Why not a program of the project's own:** the first draft of this record chose a small relay in Rust,
-     because an existing server would bring its own logging and features to remove. Reading the server showed the
-     other way is better:
+   - **Why Caddy and not a program of the project's own,** such as a small relay in Rust, though an
+     existing server brings its own logging and features to remove:
      - **The attack surface:** the program that faces the internet stays the one already there, already exposed
        and already sandboxed. A relay program would add a second listener and a second parser behind it.
      - **Already hardened:** Caddy runs as its own user under a systemd sandbox, behind a firewall that limits
@@ -195,7 +194,7 @@
      this.
    - **Offered on debuggable builds alone,** until point 8's gates pass:
      - `relays.tsv` has a `status` column, and the relay's row says `debug`.
-     - A release build of Advanced's network monitoring keeps a row only when its status is `-`, and leaves every
+     - A release build of Advanced's network part keeps a row only when its status is `-`, and leaves every
        other row out of its tables before the engine or the screen reads them (`DnsSettings.forBuild`, by
        Android's debuggable flag). It fails closed: a misspelling, a new value, a moved column or a missing one
        keeps the row out.
@@ -212,12 +211,12 @@
        `datapavan.org` in the TLS handshake and cannot tell the relay's path from a visit to the site by name.
      - **What it can still read:** the pattern is not a visit's. There are small POSTs at the rate of the
        phone's lookups, over hours. Contact with datapavan.org already marks a phone as near Datapavan, and the
-       pattern marks it as running Advanced's network monitoring more strongly than a volunteer's relay, which
+       pattern marks it as running Advanced's network part more strongly than a volunteer's relay, which
        others' clients use too.
      - **Mitigations within this decision:**
        - lookups go through the user's tool while it is on, as ADR 0042 already does for some fetches;
-       - the volunteers' pairs stay, so a user can leave the project's pair out. Advanced's network monitoring's
-         DNS screen must offer that.
+       - the volunteers' pairs stay, so a user can leave the project's pair out. Advanced's DNS screen
+         must offer that.
      - **ECH is not available:** Caddy 2.6.2 cannot serve ECH, and Android offers it to apps only from Android 17.
        It would hide the name, not the address.
      - **Fronting the relay with a large CDN** would hide it among other sites but add a party that sees addresses.

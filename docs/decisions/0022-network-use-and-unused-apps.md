@@ -6,8 +6,8 @@
 
 ## Context
 M4 adds two facts for the remediation plan: how much data each app sends and receives, and which apps
-have not been opened for a long time. ADR 0014 already allows usage access (`PACKAGE_USAGE_STATS`) for
-this; the manifest does not request it yet.
+have not been opened for a long time. ADR 0014 allows usage access (`PACKAGE_USAGE_STATS`) for
+this.
 
 Both facts come from records that Android keeps anyway. The API documentation of SDK 37 and a reading
 of the Android 17 emulator and the A40 (Android 11) show:
@@ -19,10 +19,9 @@ of the Android 17 emulator and the A40 (Android 11) show:
   together, because an ordinary app cannot read the subscriber ID; Settings shows each SIM separately.
 - **When the numbers are written.** The system writes its counters about every 30 minutes, whenever
   about 2 MB more has been used, and when an app opens a query, unless any app other than the system
-  opened one in the previous 15 seconds (`POLL_RATE_LIMIT_MS` in AOSP, one timer for all apps). (A
-  first reading said that queries did not trigger a write; those were the system's own queries.
-  Datapavan's and Settings' do, as the build showed on 2026-10-31; the 15-second limit was found in
-  the source the same day.)
+  opened one in the previous 15 seconds (`POLL_RATE_LIMIT_MS` in AOSP, one timer for all apps).
+  Datapavan's and Settings' queries trigger a write, as the build showed on 2026-10-31; the 15-second
+  limit was found in the source the same day.
 - **Who is counted.** Several packages can share one UID; Android has a single count for all of them.
   Traffic that apps send through a local proxy app counts under the proxy app, because the proxy opens
   the connections. AOSP moves traffic through a VPN service back to the apps that made it, and leaves
@@ -48,31 +47,31 @@ of the Android 17 emulator and the A40 (Android 11) show:
    reads and that nothing is kept. Then it opens the system's usage access page. Without the access, the
    network and "not opened" sections say what is missing, and everything else works. Datapavan lists
    itself among the holders of usage access, like any other app.
-2. **Only totals are read, and nothing is kept.** Datapavan reads summaries for a period
+2. **The audit reads only totals, and keeps nothing.** Datapavan reads summaries for a period
    (`querySummary` for mobile and Wi-Fi, `queryAndAggregateUsageStats`). It never reads the event
    stream, keeps no history of its own and writes none of these numbers to storage. They exist in
    memory while the audit is on screen (ADR 0016), and the app has no network access to send them
    anywhere.
 
-   *Amended 2026-11-18, for Datapavan Advanced only, by [ADR 0046](0046-live-activity.md), decision 1:*
-   Advanced's Watch also reads the event stream (`queryEvents`), in its own process, with the same
-   usage access, to tell for each connection whether its app was in use, ran with its notification, or
-   neither. It reads which app was on screen and when, which apps ran a foreground service, and when the
-   screen turned on or off and the lock screen showed, back to the phone's start (at most 30 days) after a
-   start of Watch. It holds the events in memory for seconds, keeps the states it derives in memory for "Now",
-   over the last hour and since the screen last came on, until it next comes on, and, if the user keeps a
-   connection log, as the state of each record, for the days the user chose; and Advanced has
-   network access, for its apps' traffic. Basic, which has no Watch, reads only totals as above, and its
-   screens keep this decision's words; Advanced's screens and the privacy policy say what Advanced reads.
+   In Datapavan Advanced only, the network part also reads the event stream (`queryEvents`), in its own
+   process (`:network`), with the same usage access ([ADR 0046](0046-live-activity.md), decision 1), to
+   tell for each connection whether its app was in use, ran with its notification, or neither. It reads
+   which app was on screen and when, which apps ran a foreground service, and when the screen turned on
+   or off and the lock screen showed, back to the phone's start (at most 30 days) after a start of the
+   network part. It holds the events in memory for seconds, keeps the states it derives in memory for
+   "Now", over the last hour and since the screen last came on, until it next comes on, and, if the user
+   keeps a connection log, as the state of each record, for the days the user chose; and Advanced has
+   network access, for its apps' traffic. Basic, which has no network part, reads only totals as above,
+   and its screens keep this decision's words; Advanced's screens and the privacy policy say what
+   Advanced reads.
 3. **Periods are fixed and named.** The default is the last 30 days, and the last 7 days can be
    chosen. Each screen shows the dates. Datapavan cannot read the billing cycle that the user set in
    Settings, so it never claims to match it; mobile use is for all SIMs together.
 4. **What an app page shows:**
    - received and sent bytes, for mobile and for Wi-Fi;
    - how much of it Android counted as background;
-   - that the numbers come from Android's own count. (This line first said the time of the
-     system's last count; the build showed on 2026-10-31 that a query brings the count up to date,
-     so there is no lag to show.)
+   - that the numbers come from Android's own count. (A query brings the count up to date, as the
+     build showed on 2026-10-31, so there is no time of the system's last count to show.)
 
    Notes:
    - where several packages share the UID, the page says so, names them and shows the shared total.

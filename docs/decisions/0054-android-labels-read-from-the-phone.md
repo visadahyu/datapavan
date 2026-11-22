@@ -42,7 +42,7 @@ to 17 (2026-11-22):
 2. **In the phone's language, with Datapavan's beside it.** Settings follows the phone's language, so the label is
    read in the phone's languages, region included, which from Android 13 come from `LocaleManager.getSystemLocales()`,
    since an app's own language also changes what `Resources.getSystem()` reports in its process (`PhoneLocales`; W8
-   part 3b's guide now asks the same way). The region matters: the Galaxy A40's American English says "Optimize
+   part 3b's guide asks the same way). The region matters: the Galaxy A40's American English says "Optimize
    battery usage" where its bare English, Samsung's British default, says "Optimise". Where Datapavan's language
    differs, language and script both (Traditional Chinese is not Simplified), the label is read in Datapavan's
    language too, in the phone's region for it where the phone has one, and set beside the phone's by a translatable
@@ -108,10 +108,10 @@ to 17 (2026-11-22):
    a preinstalled app (Disable). The two steps around restricted settings already took the label as a placeholder.
    The usage access card gains a line with the phone's names for the page and its switch, and "Now" one with the page's
    (point 10). The journal's undo of USB and wireless debugging names the switch as
-   Android does. In the network monitoring's module, Private DNS's heading is the label alone, and eight sentences are
-   reshaped: Android's refusal (always-on VPN), strict Private DNS on the screen, in the chain section and in the
-   names' section (Private DNS, Automatic, Off), where to find Private DNS, the limits of strict (always-on VPN), a
-   configuration's server by name (Private DNS), and a phone with no screen lock (Screen lock).
+   Android does. In the network part's module (`:network`), Private DNS's heading is the label alone, and eight
+   sentences are reshaped: Android's refusal (always-on VPN), strict Private DNS on the screen, in the chain section
+   and in the names' section (Private DNS, Automatic, Off), where to find Private DNS, the limits of strict (always-on
+   VPN), a configuration's server by name (Private DNS), and a phone with no screen lock (Screen lock).
 10. **Kind (b), with the borderline cases and why.** The plan's button to the switch for unused apps names its page
     ("Unused app setting"), as a button with the switch's words would read as if it paused the app; the card quotes
     the switch. "Device admin" in a list of one app's access stays Datapavan's, as Android's label names the page of
@@ -192,8 +192,8 @@ to 17 (2026-11-22):
     android-15.0.0_r1's Chinese accessibility and notification access and Persian developer options, which later
     tags of 15 revised. A phone on an early build reads its own text; only its fallback would be the later one.
   - Only the emulators' builds and one Samsung build are checked; other makers wait for a device.
-  - Reading costs Settings' resource table, about 2.7 MB of PSS in the network monitoring's process with its screen
-    open on the Android 15 emulator, within its memory budget of 48 MB. The network monitoring reads the data pack's
+  - Reading costs Settings' resource table, about 2.7 MB of PSS in the network part's process (`:network`) with its
+    screen open on the Android 15 emulator, within its memory budget of 48 MB. The network part reads the data pack's
     rows on a thread of its own, and shows Datapavan's copies until they are read, with no note meanwhile.
 - **Reading costs little.** Settings' resource table is opened once per screen, when the first label is asked for,
   and its strings are read by name.

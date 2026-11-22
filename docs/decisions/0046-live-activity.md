@@ -4,18 +4,18 @@
 - Date: 2026-11-14
 - Amends: [ADR 0025](0025-guided-check-and-traffic-facts.md) decision 1, for Advanced's live
   surfaces only; [ADR 0034](0034-network-permissions.md), by one exported component (the widget), and its line on
-  `PACKAGE_USAGE_STATS`; [ADR 0022](0022-network-use-and-unused-apps.md) decision 2, for Advanced only, which now
-  reads the event stream (noted 2026-11-18); DESIGN.md's W5 row; the roadmap's line on the widget.
-- Amended by [ADR 0053](0053-tracker-blocking.md) (proposed, 2026-11-21): decision 4's "Trackers are named only from the
-  εxodus network signatures" becomes: εxodus names the tracker, and its hosts come from εxodus's signature or from
-  Datapavan's graded table with a primary source; decision 2 (d)'s same-company rule governs the εxodus marks, never a
-  row of that table.
+  `PACKAGE_USAGE_STATS`; [ADR 0022](0022-network-use-and-unused-apps.md) decision 2, for Advanced only, which also
+  reads the event stream; DESIGN.md's W5 row; the roadmap's line on the widget.
+- See also: [ADR 0053](0053-tracker-blocking.md), decision 1 (e), Proposed, not accepted: it would change decision 4's
+  "Trackers are named only from the εxodus network signatures" so that εxodus names the tracker, and its hosts come
+  from εxodus's signature or from Datapavan's graded table with a primary source; decision 2 (d)'s same-company rule
+  would govern the εxodus marks, never a row of that table.
 
 ## Context
 
 Android shows when an app uses the camera, the microphone or location. It shows nothing when an app sends data.
-Yet taking data off a phone needs sending it, and sending crosses the network, where Watch, the local VPN of
-Datapavan Advanced ([ADR 0045](0045-three-editions-of-one-app.md)), already sees each flow:
+Yet taking data off a phone needs sending it, and sending crosses the network, where the local VPN of
+Datapavan Advanced ([ADR 0045](0045-three-editions-of-one-app.md)), its network part, already sees each flow:
 - its app, by UID ([VPN.md](../VPN.md), "Which app?");
 - its name and where the name came from (W3);
 - its destination address and organisation ([ADR 0036](0036-ip-to-organisation-dataset.md));
@@ -23,13 +23,11 @@ Datapavan Advanced ([ADR 0045](0045-three-editions-of-one-app.md)), already sees
 - its start and end time.
 
 Advanced is one package, so it holds Basic's usage access as well (ADR 0014; the user grants it in Settings). With
-it, Watch can tell which app is on screen. A flow from an app that is neither on screen nor recently used is "in
-the background": the mark that W5 and the roadmap's log ("foreground or background") already planned.
+it, the network part can tell which app is on screen. A flow from an app that is neither on screen nor recently used
+is "in the background": the mark that W5 and the roadmap's log ("foreground or background") already planned.
 
-Today no screen on `main` shows an app's connections, while Watch's tagline says "See where each app on your phone
-connects." (`watch_tagline`). W5, the per-app view, is a gate of 0.2.0. ADR 0045 dropped W5's interface between two
-apps ("Advanced reads its own log") but did not say what Advanced shows. This ADR says it, and so says how the W5
-gate is met.
+The network part's tagline says "See where each app on your phone connects." (`network_tagline`). W5, the per-app
+view, is a gate of 0.2.0. This ADR says what Advanced shows, and so how the W5 gate is met.
 
 What earlier decisions require of it:
 
@@ -42,10 +40,10 @@ What earlier decisions require of it:
   then. Chained apps' destinations are not recorded unless the user turns that on ([VPN.md](../VPN.md)). No
   notification names a VPN or a tool.
 - **The log opens only on an unlocked phone** (ADR 0037), and every screen blocks screenshots (ADR 0040).
-- **No foreground service** ([ADR 0034](0034-network-permissions.md), "Watch does not request"). Android binds the
-  VpnService itself, and Watch calls no `startForeground`. So Android does not require any notification of Watch:
-  a live summary would be a notification that Watch chooses to post, under `POST_NOTIFICATIONS`, which ADR 0034
-  already lists for "Watch's few notices".
+- **No foreground service** ([ADR 0034](0034-network-permissions.md), what it does not request). Android binds the
+  VpnService itself, and the network part calls no `startForeground`. So Android does not require any notification
+  of it: a live summary would be a notification that Advanced chooses to post, under `POST_NOTIFICATIONS`, which
+  ADR 0034 already lists for the network part's few notices.
 - **The roadmap's widget** "shows only its state and the date of the last check, never a count of problems", and
   v0.1 kept a widget out because it "would tell anyone who looks at the phone more than the icon does".
 
@@ -54,7 +52,7 @@ Tags, as in ADR 0034: **[doc]** Android's documentation; **[code]** AOSP source,
 
 ## Decision
 
-### 1. The data: what Watch already sees, and the app on screen
+### 1. The data: what the network part already sees, and the app on screen
 
 **Flows, as today.** The engine counts bytes each way per flow as they pass. It adds one thing: for each app, the
 bytes each way in one-second slots over the last minute. When the app's state for a moment is known, those slots
@@ -75,44 +73,43 @@ the package for the audit):
 | `KEYGUARD_SHOWN`, `KEYGUARD_HIDDEN` | 28 | The lock screen showed or was dismissed [doc] |
 | `DEVICE_SHUTDOWN`, `DEVICE_STARTUP` | 29 | Open intervals across a restart are to be ignored [doc] |
 
-Every event has a time stamp, so a flow is placed by the events' times, not by when Watch read them. Each flow's
-app is then in one of three states:
+Every event has a time stamp, so a flow is placed by the events' times, not by when the network part read them. Each
+flow's app is then in one of three states:
 
 - **in use:** an activity of the app (or of any package sharing its UID) was resumed or visible, or the user
   interacted with it, at that moment or within a grace period before it. The grace covers an upload that finishes
   after the user leaves the app. It starts at 30 seconds, and the lab run of decision 4 sets it;
 - **with its notification:** the app ran a foreground service, which Android shows the user (music, navigation,
-  an upload it announced). *Corrected 2026-11-18, fix round 3 of W5's second part:* only where Android shows that
-  notification. From Android 12 it may wait 10 seconds before it shows one [doc: Android 12 behavior changes, "UX
-  delay for foreground service notifications"], and from Android 13 it shows none in the drawer for an app whose
-  notifications are off, the default for an app until the user allows them [doc: "Notification runtime
-  permission"]. So a service counts from 10 seconds after its start on Android 12 and later, and only for an app
-  that holds `POST_NOTIFICATIONS` on Android 13 and later, read at each reading; otherwise its app is in the
-  background;
+  an upload it announced), and only where Android shows that notification. From Android 12 it may wait 10 seconds
+  before it shows one [doc: Android 12 behavior changes, "UX delay for foreground service notifications"], and from
+  Android 13 it shows none in the drawer for an app whose notifications are off, the default for an app until the
+  user allows them [doc: "Notification runtime permission"]. So a service counts from 10 seconds after its start on
+  Android 12 and later, and only for an app that holds `POST_NOTIFICATIONS` on Android 13 and later, read at each
+  reading; otherwise its app is in the background;
 - **in the background:** neither. Push syncs, jobs, widgets' updates and anything else the user did not start.
 
 Datapavan's minimum is Android 10 (API 29, ADR 0003), so every event above exists on every supported version.
 
-**How often.** Watch reads events incrementally, only from its last reading: when a flow starts and the last
+**How often.** The network part reads events incrementally, only from its last reading: when a flow starts and the last
 reading is more than five seconds old, while the screen is on; at most once a minute while the screen is off, and
 only when traffic runs. There is no timer that wakes the phone. The screen's state comes from the events and from
 `ACTION_SCREEN_ON`/`OFF` broadcasts registered at run time, which need no permission.
 
-**What breaks, and how Watch says so:**
+**What breaks, and how Advanced says so:**
 
 - **Before the first unlock after a restart, `queryEvents` gives an app an empty record** (Android 11 and later).
   Its documentation speaks of null, but `UsageStatsManager` turns the service's null into an empty result, for
   a user not unlocked yet, for a caller without access and for a range not valid alike [code: `UsageStatsManager`,
-  `android-11.0.0_r1` and `main`; `UsageStatsService`]. So Watch asks `UserManager.isUserUnlocked` first, and flows
-  of that time get no state, "no events" (corrected 2026-11-18, after the second review of W5's second part). With
-  always-on, Android starts Watch only after the unlock anyway (ADR 0034).
-- **Without usage access**, flows have no state. Access taken away between Watch's check and its query gives an
-  empty record too, so Watch asks again after a query that found nothing, and tells such a reading as no access. The
-  view then shows each app's traffic without the mark, and offers the grant. The summary of decision 2 stays off,
-  since it would count nothing. Android 17 locks usage access for apps installed from a file until the user allows
-  restricted settings (roadmap, M4 checks); onboarding says so.
+  `android-11.0.0_r1` and `main`; `UsageStatsService`]. So the network part asks `UserManager.isUserUnlocked` first,
+  and flows of that time get no state, "no events". With always-on, Android starts the network part only after the
+  unlock anyway (ADR 0034).
+- **Without usage access**, flows have no state. Access taken away between the network part's check and its query
+  gives an empty record too, so it asks again after a query that found nothing, and tells such a reading as no
+  access. The view then shows each app's traffic without the mark, and offers the grant. The summary of decision 2
+  stays off, since it would count nothing. Android 17 locks usage access for apps installed from a file until the
+  user allows restricted settings (roadmap, M4 checks); onboarding says so.
 - **Events only reach a few days back** ("Events are only kept by the system for a few days" [doc]). The live view
-  needs seconds; the history needs only what Watch recorded at the time.
+  needs seconds; the history needs only what the network part recorded at the time.
 - **Vendors.** Split screen, floating windows (Samsung's pop-up view), picture in picture and vendors' own launchers
   report resumed activities in ways that may differ by vendor [unverified]. Several apps can be in use at once; each
   is. The device tests cover Samsung (A40, A56) and the emulators; other vendors when the lab has them (DESIGN §4).
@@ -136,12 +133,12 @@ only when traffic runs. There is no timer that wakes the phone. The screen's sta
     signature, privileged or role [code: `UsageStatsManager`, `core/res/AndroidManifest.xml`].
 
   Usage events are the public route. The audit itself reads only totals (`queryAndAggregateUsageStats` and
-  `NetworkStatsManager`, ADR 0022, decision 2), never the event stream: Advanced is the first of Datapavan to read
-  it, and ADR 0022 carries a note for it (corrected 2026-11-18; this sentence said the audit already used it).
+  `NetworkStatsManager`, ADR 0022, decision 2), never the event stream: only Advanced's network part reads it, as
+  ADR 0022, decision 2 says.
 
 ### 2. Where it shows
 
-**(a) A summary in a notification, chosen at onboarding.** Watch posts it while the tunnel runs, on a
+**(a) A summary in a notification, chosen at onboarding.** Advanced posts it while the tunnel runs, on a
 channel of its own: low importance, silent, no badge, updated without alerting again. Examples of its text:
 - "In the last 10 minutes, 3 apps you were not using sent 2.1 MB."
 - "While the screen was off (2 h 10 min), 4 apps you were not using sent 6.3 MB." This form shows for a few
@@ -149,46 +146,48 @@ channel of its own: low importance, silent, no badge, updated without alerting a
 - "In the last 10 minutes, no app you were not using sent data."
 
 Its window starts at 10 minutes, and the lab run of decision 4 sets it. It counts the apps "in the background" that
-sent more than a floor set by the lab run (a messenger's keep-alive is not news). A tap opens the "Now" view, behind Watch's own lock when the user set one (ADR 0040). It is not a
-foreground service, so ADR 0034's choice stands. If ADR 0034's fallback (a `systemExempted` foreground service) is
-ever taken, the summary moves into that notification. The user can dismiss it (Android 14 lets users dismiss even
-ongoing notifications, except while the phone is locked [doc]); it comes back only when Watch starts again.
-Onboarding (W9) asks about it together with the question of the inspection profile (decision 3), with what it
-shows and who can see it. It is on for users who do not choose that profile and off for those who do. It is not
-shown before onboarding has asked.
+sent more than a floor set by the lab run (a messenger's keep-alive is not news). A tap opens the "Now" view, behind
+Advanced's own lock when the user set one (ADR 0040). It is not a foreground service, so ADR 0034's choice stands. If
+ADR 0034's fallback (a `systemExempted` foreground service) is ever taken, the summary moves into that notification.
+The user can dismiss it (Android 14 lets users dismiss even ongoing notifications, except while the phone is locked
+[doc]); it comes back only when the network part starts again. Onboarding (W9) asks about it together with the
+question of the inspection profile (decision 3), with what it shows and who can see it. It is on for users who do not
+choose that profile and off for those who do. It is not shown before onboarding has asked.
 
-**(b) An optional home-screen widget, in 0.2.1,** after the lab run, with the same counts and sizes, and Watch's
-state. No colour, no badge, no
+**(b) An optional home-screen widget, in 0.2.1,** after the lab run, with the same counts and sizes, and the network
+part's state. No colour, no badge, no
 app name. It is drawn with `RemoteViews`, so no new library (Compose's Glance would be one). It is declared for the
 home screen only, never for the lock screen. Its receiver is exported, as widget receivers are, accepts nothing from
-the intent and only redraws Watch's own numbers; ADR 0034's list of exported components and the build's allowlist
+the intent and only redraws Advanced's own numbers; ADR 0034's list of exported components and the build's allowlist
 grow by it. Whether a non-exported receiver works with every launcher is a device test.
 
-**(c) The Quick Settings tile (W9)** turns Watch on and off, and its subtitle states Watch's state. It shows the
+**(c) The Quick Settings tile (W9)** turns the network part on and off, and its subtitle states its state. It shows the
 counts only while the phone is unlocked (the tile reads `isLocked()` when the panel opens), since Quick Settings can
 be pulled down on a locked phone.
 
 **(d) "Now", inside the app**, reached from the summary, the tile, the network page and each app's page:
 - one row per app that used the network in the window (10 minutes, 1 hour, or since the screen came on), with its
-  state, bytes up and down, and its destinations as W3 names them, each with where the name came from;
-  (2026-11-18: each destination shows the name the connection itself sent and, where it differs, the DNS name
-  beside it, in "Now" and in the history alike: ADR 0044, decision 4, built in W5's first part.)
-- apps "in the background" first, then "with its notification", then "in use"; within each, by bytes sent;
-  (*Settled 2026-11-19, the maintainer:* an app's group is decided by the bytes it **sent** in each state, above a
-  floor the lab run sets, 0 until then; bytes received decide no group, and apps that sent nothing above the
-  floor come after the three groups, by bytes received. "How it is built", part 3, gives the rule and its reason.)
+  state, bytes up and down, and its destinations as W3 names them, each with where the name came from; each
+  destination shows the name the connection itself sent and, where it differs, the DNS name beside it, in "Now"
+  and in the history alike (ADR 0044, decision 4);
+- apps "in the background" first, then "with its notification", then "in use"; an app's group is decided by the
+  bytes it **sent** in each state, above a floor the lab run sets, 0 until then; bytes received decide no group,
+  and apps that sent nothing above the floor come after the three groups, by bytes received; within each group,
+  by bytes sent (settled by the maintainer on 2026-11-19; "How it is built", part 3, gives the rule and its
+  reason);
 - tracker destinations marked from the εxodus network signatures already in `data/exodus/trackers.tsv`, and nothing
-  else (W5's plan); (*Settled 2026-11-19, the maintainer:* no tracker mark where the tracker belongs to the app's
-  own company group, ADR 0020's entities held whole or by majority as the audit decides it: the destination is
-  told as the same company as the app instead; and where several trackers of one company share one broad
-  signature, one mark names the company. "How it is built", part 3, gives how a tracker's company is found.)
+  else (W5's plan); no tracker mark where the tracker belongs to the app's own company group, ADR 0020's entities
+  held whole or by majority as the audit decides it: the destination is told as the same company as the app
+  instead; and where several trackers of one company share one broad signature, one mark names the company
+  (settled by the maintainer on 2026-11-19; "How it is built", part 3, gives how a tracker's company is found);
 - the flags of decision 4 beside the app they concern;
 - a tap on an app opens its history: W5's "who did this app talk to?" as a timeline from the log, with the state of
   each segment, for the days the user chose to keep.
 
 "Now" reads the engine's live counters in memory, so it works with retention "none" too: what it shows is then gone
-when Watch stops. The history reads the log, which opens only on an unlocked phone (ADR 0037). Both are screens of
-Watch's process (`:watch`), opened by a non-exported intent as Watch's screen is today (`ui/WatchEntry.kt`); only a
+when the network part stops. The history reads the log, which opens only on an unlocked phone (ADR 0037). Both are
+screens of the network part's process (`:network`), opened by a non-exported intent as the network screen is
+(`ui/NetworkEntry.kt`); only a
 package name crosses from the audit's app page. Rows keep their order while the view is open, and re-sort only when
 the user asks, so nothing moves under a finger or a screen reader's focus.
 
@@ -203,14 +202,14 @@ the user asks, so nothing moves under a finger or a screen reader's focus.
 | Tile | when the panel opens | when the panel opens (state only) |
 | "Now" | every second while open | not open |
 
-*Noted 2026-11-18, W5's second part:* the screen coming on, a clock set, and Watch's start and stop each read at
-once, so such a reading can come within 5 seconds of the one before; the screen turning off reads once more, past
-the readings' margin, at the screen-on rate; and an ask that comes too soon is made in its turn, not dropped.
+The screen coming on, a clock set, and the network part's start and stop each read at once, so such a reading can
+come within 5 seconds of the one before; the screen turning off reads once more, past the readings' margin, at the
+screen-on rate; and an ask that comes too soon is made in its turn, not dropped.
 
-Nothing here wakes the phone: work happens while traffic already runs or the screen is on. The budget is Watch's
-own, not an addition: Watch with the summary on still meets W9's bar of at most 3 % of a day's battery (DESIGN §7).
-A paired measurement on the A40, the same workload with the summary off and on, must show the difference below a
-tenth of Watch's own share. The widget is measured the same way before 0.2.1.
+Nothing here wakes the phone: work happens while traffic already runs or the screen is on. The budget is the network
+part's own, not an addition: the network part with the summary on still meets W9's bar of at most 3 % of a day's
+battery (DESIGN §7). A paired measurement on the A40, the same workload with the summary off and on, must show the
+difference below a tenth of the network part's own share. The widget is measured the same way before 0.2.1.
 
 ### 3. What may show where
 
@@ -218,39 +217,38 @@ Anything on the home screen, the lock screen or in a notification can be seen by
 by:
 - apps with notification access, which read every notification's text;
 - Android's notification history;
-- a paired watch, unless the notification is marked local only;
+- a paired smartwatch, unless the notification is marked local only;
 - the launcher, which draws a widget's content in its own process;
 - accessibility services, and screen recordings: `FLAG_SECURE` covers only the app's own windows.
 
 | Surface | Who can see it | What it may show |
 |---|---|---|
-| Summary notification | Anyone who unlocks the phone, notification listeners, the notification history | Counts and sizes only. Hidden on the lock screen (`VISIBILITY_SECRET`), local only (not sent to a watch) |
-| Widget | Anyone at the home screen, the launcher | Counts, sizes and Watch's state |
+| Summary notification | Anyone who unlocks the phone, notification listeners, the notification history | Counts and sizes only. Hidden on the lock screen (`VISIBILITY_SECRET`), local only (not sent to a smartwatch) |
+| Widget | Anyone at the home screen, the launcher | Counts, sizes and the network part's state |
 | Flag notice (opt-in) | As the summary | A count of new flags only. Hidden on the lock screen, local only |
-| Tile | Anyone who pulls down Quick Settings, locked or not | Watch's state; counts only while unlocked |
-| "Now" and the history | Whoever unlocks the phone and passes Watch's own lock, if set | Apps, destinations, sizes, times and flags; blocked from screenshots |
+| Tile | Anyone who pulls down Quick Settings, locked or not | The network part's state; counts only while unlocked |
+| "Now" and the history | Whoever unlocks the phone and passes Advanced's own lock, if set | Apps, destinations, sizes, times and flags; blocked from screenshots |
 
 **The rule: outside the app, counts and sizes only, never an app's name and never a destination.** An app's name
 outside the app would say which apps the user has, and with a destination, what they do. Inside, the details stay
-behind the screen lock and Watch's own lock, as the log's records do (ADR 0037, ADR 0040).
+behind the screen lock and Advanced's own lock, as the log's records do (ADR 0037, ADR 0040).
 
 **Chained apps.** Their destinations are not shown in "Now" either unless the user turned on "Log where these apps
 connect" (`chain_log_destinations`). Without it, their rows say only that they went through the user's tool, with
 their bytes and state. What the screen shows, a search of an unlocked phone shows too.
 
-**The tool's own row** (*settled 2026-11-19, the maintainer*) follows the same switch: the tool's server
+**The tool's own row** (settled by the maintainer on 2026-11-19) follows the same switch: the tool's server
 addresses show, in "Now" and in the history alike, only while "Log where these apps connect" is on. Without it
 the row still shows the tool's bytes and that it carries the chained apps' traffic, and says that where it
 connects is not shown and why. The servers are where every chained app's traffic goes, so they tell as much
 as the chained apps' destinations would; one switch covers both. The engine keeps them out of the log too while
-the switch is off, which changes what W6 logged: until 2026-11-19 the tool's own connections were logged as
-any app's.
+the switch is off.
 
 **A profile for people whose phones may be searched.** [ADR 0047](0047-profile-for-phones-that-may-be-searched.md)
 defines this inspection profile, which the user chooses with one switch, "Keep nothing on this phone": off for
 users who do not face searches, on for those who do, decided by the user's own answer and never by country. This
 ADR's surfaces must follow it. Under that profile the summary, the flag notice and the widget are off, the tile
-shows only Watch's state, and nothing is kept: retention is none and the minimal baseline of decision 4 is not
+shows only the network part's state, and nothing is kept: retention is none and the minimal baseline of decision 4 is not
 kept, so "Now" holds only memory and the flags do not run.
 
 ### 4. How it is framed, and what is flagged
@@ -261,10 +259,10 @@ follow ADR 0025's list in every language: absolute numbers first, no word that j
 
 **Two flags, stated as facts, whose words show only inside the app:**
 
-1. **An app's first background send:** "First time in the 30 days Watch keeps: [app] sent [X] while you were not
+1. **An app's first background send:** "First time in the 30 days Datapavan keeps: [app] sent [X] while you were not
    using it."
-2. **A volume far above the app's own usual:** "[App] sent [X] while you were not using it. On the other days Watch
-   keeps, it sent at most [Y] in a day."
+2. **A volume far above the app's own usual:** "[App] sent [X] while you were not using it. On the other days
+   Datapavan keeps, it sent at most [Y] in a day."
 
 Both compare the app only with itself. They need at least seven days of history, and the lab run may set more. The
 history comes from one of two places:
@@ -276,7 +274,7 @@ history comes from one of two places:
   is when the user turned it on, for the seven days of learning. Today's total stays in memory and replaces the
   number at midnight if larger. With it, flag 2 reads "Before today, the most it sent in one day while you were
   not using it was [Y]", and an app with no number yet, after the learning days, gives flag 1. It is kept apart
-  from the log, in Watch's private storage, sealed with a Keystore key that works only while the phone is unlocked
+  from the log, in Advanced's private storage, sealed with a Keystore key that works only while the phone is unlocked
   (as ADR 0037's private key does); what a locked period adds waits in memory and is written at the next unlock.
   An app's number is deleted when the app is removed. The baseline is wiped with the log ("Delete the log now",
   the panic wipe of ADR 0040), its key with it, is never kept under the inspection profile, and is deleted when the
@@ -306,7 +304,7 @@ it or to remove what they need.
 **A flag notice, only if the user turns it on.** A separate setting, off by default, lets a new flag raise a silent
 notification on a channel of its own: a count only, with no app and no destination named, for example "1 event to
 look at. Tap to see it." It follows the summary's rules (hidden on the lock screen, local only, no colour, no
-badge), opens "Now" behind Watch's own lock, and never exists under the inspection profile. The words avoid
+badge), opens "Now" behind Advanced's own lock, and never exists under the inspection profile. The words avoid
 "unusual", which ADR 0025's list rules out.
 
 **What this changes in ADR 0025.** Decision 1 is amended for Advanced's live surfaces, and only so far as this:
@@ -342,31 +340,27 @@ A short section "What this view cannot see" sits at the end of "Now", in plain w
   (ADR 0041), for apps in a work profile, a private space or another user, which have VPNs of their own, before
   the first unlock after a restart, or when traffic goes around the VPN (DESIGN §7). Traffic between apps over
   loopback never enters the tunnel.
-- **Sizes** are what the apps sent and received through Watch. Android's data-usage screen also counts headers and
-  resent packets, so it shows a little more.
-- **"With its notification" is what Android allows, not what the user saw** (noted 2026-11-18, fix round 3 of W5's
-  second part). A channel the user turned off, a vendor that hides some notifications, and below Android 13 an app
-  whose notifications the user turned off, which another app cannot see, still count "with its notification". A
-  media notification shows without the permission, so a player not allowed notifications counts in the background
-  while its notification shows. On Android 12 and later a service shorter than 10 seconds is in the background,
-  though Android shows some notifications at once.
-- **"In use" is what Android records of activities** (noted 2026-11-18, after the second review of W5's second part).
-  Two things real apps meet follow from it. **On some phones the feed left of the home screen may count as in the
-  background.** Launcher3 draws it as the Google app's window over the launcher, not as an activity of the
-  Google app [source: Launcher3's `LauncherOverlayManager`], and where a launcher does so, the feed's traffic
-  while the user scrolls it counts in the background. (*Scoped 2026-11-19, the maintainer, after W5's third part
-  measured one launcher:* on the Android 17 Google Play emulator image, with the Pixel Launcher and the Google
-  app 17.76.14, the feed is an activity of the Google app, `MinusOneActivity`, which holds the focus while it
-  shows, and its traffic counted in use: 82 KB sent and 1.3 MB received in a minute of scrolling, all in use
-  ([spike](../spikes/2026-11-feed-left-of-home.md), with its script and log). On the Galaxy A40 (One UI 3.1,
-  Android 11) the panel left of the home screen is Samsung Free, an activity of its own that Android records as
-  resumed while it shows, so its traffic counts in use too; that One UI Home offers no Google Discover. Launchers
-  that draw the Google app's feed over themselves are still not measured, so "Now" keeps the line, scoped to some
-  phones.) And an
-  app that Android lets start activities from the background, such as one with an
-  accessibility service the system binds or with "display over other apps", can resume an activity, even an
-  invisible one, just before it sends, so that its sending counts as in use for the grace after; such access is
-  what stalkerware holds, and the audit flags it.
+- **Sizes** are what the apps sent and received through the network part. Android's data-usage screen also counts
+  headers and resent packets, so it shows a little more.
+- **"With its notification" is what Android allows, not what the user saw.** A channel the user turned off, a vendor
+  that hides some notifications, and below Android 13 an app whose notifications the user turned off, which another
+  app cannot see, still count "with its notification". A media notification shows without the permission, so a player
+  not allowed notifications counts in the background while its notification shows. On Android 12 and later a service
+  shorter than 10 seconds is in the background, though Android shows some notifications at once.
+- **"In use" is what Android records of activities.** Two things real apps meet follow from it. **On some phones the
+  feed left of the home screen may count as in the background.** Launcher3 draws it as the Google app's window over
+  the launcher, not as an activity of the Google app [source: Launcher3's `LauncherOverlayManager`], and where a
+  launcher does so, the feed's traffic while the user scrolls it counts in the background. On the Android 17 Google
+  Play emulator image, with the Pixel Launcher and the Google app 17.76.14, the feed is an activity of the Google
+  app, `MinusOneActivity`, which holds the focus while it shows, and its traffic counted in use: 82 KB sent and 1.3
+  MB received in a minute of scrolling, all in use ([spike](../spikes/2026-11-feed-left-of-home.md), with its script
+  and log). On the Galaxy A40 (One UI 3.1, Android 11) the panel left of the home screen is Samsung Free, an activity
+  of its own that Android records as resumed while it shows, so its traffic counts in use too; that One UI Home
+  offers no Google Discover. Launchers that draw the Google app's feed over themselves are not measured, so "Now"
+  keeps the line, scoped to some phones (the maintainer, 2026-11-19). And an app that Android lets start activities
+  from the background, such as one with an accessibility service the system binds or with "display over other apps",
+  can resume an activity, even an invisible one, just before it sends, so that its sending counts as in use for the
+  grace after; such access is what stalkerware holds, and the audit flags it.
 
 ### 6. Tests, and when it is done
 
@@ -450,11 +444,11 @@ decryption (Lumen) or the operating system (stage 3), and both are out of scope 
 
 ## Consequences
 
-- **The W5 gate is met in Advanced,** without the interface ADR 0045 dropped. DESIGN.md's W5 row links here.
+- **The W5 gate is met in Advanced.** DESIGN.md's W5 row links here.
 - **ADR 0025 changes for Advanced's live surfaces only,** as decision 4 sets out: a count across apps in the
   summary and the widget, and a count of new flags in the opt-in flag notice, never an app's name. The roadmap's
   widget line ("only its state and the date of the last check") changes to "its state and counts across apps, never
-  an app's name or a count of flags", in 0.2.1, once accepted.
+  an app's name or a count of flags", in 0.2.1.
 - **ADR 0034 grows by one exported component in 0.2.1,** the widget's receiver, and `POST_NOTIFICATIONS` gains a use
   it did not list. No permission is added.
 - **More strings,** in eight languages, held to ADR 0025's words, and a comprehension test with real users before
@@ -491,16 +485,14 @@ All read on 2026-11-14.
 - **The summary's default:** asked at onboarding together with ADR 0047's profile question; on for users who do not
   choose the profile, off for those who do; not shown before onboarding asks (decision 2).
 - **The windows:** the summary's starts at 10 minutes and the "in use" grace at 30 seconds; the lab run sets both.
-
 - **A flag notice:** yes, opt-in and off by default, a silent count with nothing named, never under the inspection
   profile (decision 4). The maintainer's example said "1 unusual event"; the string avoids "unusual" because ADR
   0025's list rules it out.
 - **The widget:** not in 0.2.0; it follows in 0.2.1, after the lab run.
 - **Added at the maintainer's request:** the comprehension test with real users (decision 6, item 11) and the
   minimal baseline, so that flags work without a kept log (decision 4).
-- **Checked since the first draft:** the public routes to another app's state (decision 1) and iOS's App Privacy
-  Report (decision 7), against the sources below. Both held; `getRunningTasks` may also return the home screen's
-  task, which the text now says.
+- **Checked against the sources below:** the public routes to another app's state (decision 1) and iOS's App
+  Privacy Report (decision 7). Both held; `getRunningTasks` may also return the home screen's task (decision 1).
 
 ## How it is built
 
@@ -511,8 +503,8 @@ this ADR left room, and why. Part 3 builds the screens on it.
   second of the wall clock notes a mark: the second, and the flow's counts before it; a second's bytes are the
   counts from its mark to the next. An app's slots are its flows' marks, so an app with no traffic holds none.
   Slots kept per app alone could not cut a flow's segment at the second its app's state changed, which needs that
-  flow's own bytes on each side. The mark is taken after the log's cut at the quarter hours (ADR 0037, decision 1
-  as amended), so a mark never spans two segments; an app's lookups to Watch's own DNS address are marked the
+  flow's own bytes on each side. The mark is taken after the log's cut at the quarter hours (ADR 0037, decision 1),
+  so a mark never spans two segments; an app's lookups to the network part's own DNS address are marked the
   same way, under the lock they already take.
 - **The cost on the hot path.** Within a second a count adds a division, an addition, a few comparisons and one
   atomic load, and takes no lock; the first count of a second takes the lock of the flow's own marks. Measured on the
@@ -525,68 +517,65 @@ this ADR left room, and why. Part 3 builds the screens on it.
   with its notification if it was so at any moment, else in the background, so that a second is in the
   background only when the app was in the background throughout. Where a reading knew nothing, the second has no
   state and its reason: no usage access, no events (as before the first unlock), told too late, no app (a flow
-  Android named no app for), or not told (before Watch's first reading, in a gap a clock set back left, or when
-  Watch stopped before a reading came). One byte carries the state and the reason, in the log's records and in
-  the snapshot (`states.rs`, `Placed::code`).
+  Android named no app for), or not told (before the tracker's first reading, in a gap a clock set back left, or
+  when the network part stopped before a reading came). One byte carries the state and the reason, in the log's
+  records and in the snapshot (`states.rs`, `Placed::code`).
 - **A segment is cut where its app's state changes,** as far back as its marks reach, where the timeline's state
   changed: the engine walks back over the seconds of the new state, at most 120 of them and never before the
   second after the last it placed in that segment (which a later, overlapping reading may tell otherwise), so that
-  a quiet stretch after a change belongs to the new part (fix round 1, engine nit 2; it was cut at the first
-  second with bytes in the new state). The timeline keeps the 120 seconds before the end of what was told, for
-  that walk. A segment cut at a quarter hour or at its flow's end before its seconds are placed waits, held, and
-  is written once they are, before the live flows' parts of the same reading, so that a flow's records reach the
-  log in time order (nit 1); a segment with no count, as a refused connection's, takes the state of its last
-  moment, and so does the end of one that goes quiet after its app's state changed: where the state of its last
-  moment is known and differs from its last bytes', it is cut where that state began, walking back as above, and
-  ends with a part of no bytes in it (fix round 2, the fresh review's m4: such a segment took its last bytes'
-  state to its end). Held records are handed to the next engine when the tunnel is set up again, and an engine
-  that cannot start writes them as not told at once; when Watch stops, its tracker reads once more first, and
-  what is still not told is written as "not told". Lookups' records are cut the same way and carry their app's
-  state.
+  a quiet stretch after a change belongs to the new part (fix round 1, engine nit 2). The timeline keeps the 120
+  seconds before the end of what was told, for that walk. A segment cut at a quarter hour or at its flow's end before
+  its seconds are placed waits, held, and is written once they are, before the live flows' parts of the same reading,
+  so that a flow's records reach the log in time order (nit 1); a segment with no count, as a refused connection's,
+  takes the state of its last moment, and so does the end of one that goes quiet after its app's state changed: where
+  the state of its last moment is known and differs from its last bytes', it is cut where that state began, walking
+  back as above, and ends with a part of no bytes in it (fix round 2, the fresh review's m4). Held records are handed
+  to the next engine when the tunnel is set up again, and an engine that cannot start writes them as not told at
+  once; when the network part stops, its tracker reads once more first, and what is still not told is written as "not
+  told". Lookups' records are cut the same way and carry their app's state.
 - **The window and each app's share.** Each flow, and each app's lookups, holds at most 120 seconds with counts
   not placed yet, all of them together at most 65,536, and at most 4,096 cut segments wait. Each app may hold a
   quarter of the two bounds, 16,384 seconds and 1,024 segments, so that one app's flood never pushes another's
   states out, as ADR 0044 already shares the engine's other bounds (fix round 1, engine finding 2). Past its share
   of seconds an app gives up its own oldest, only as many as bring it 256 below it (the seconds before its n-th
   oldest, found over its flows, lookups and held segments); past the bound of all, the app that holds the most
-  does the same; past its share of segments, its oldest segment is written. Fix round 2 (the second reviews' N1
-  and m1) made the seconds' part so: past its share an app had all of its waiting seconds told too late at once,
-  so that one app with about 273 busy flows and the screen off, read once a minute, lost 90 to 97 % of its
-  states. Now 280 such flows lose 7.8 %, 300 lose 14.5 %, near what the share itself allows, and 250 none. What
+  does the same; past its share of segments, its oldest segment is written (fix round 2, the second reviews' N1
+  and m1). With the screen off and a reading a minute, one app with 250 busy flows loses none of its states, 280
+  lose 7.8 % and 300 lose 14.5 %, near what the share itself allows. What
   an app can still do to itself: past about 273 flows each counting every second with the screen off, or 17
   short flows ending each second, part of its own traffic has no state, "told too late"; never another app's. With
   the screen off and a reading a minute, 400 busy flows lose 38 % of their states, 1,000 lose 78 % and 2,000 lose
   92 % (measured in a release build, fix round 3, R10): a torrent client's peers on one mapping reach such counts.
   A compact mark per flow, a map of its 120 seconds with the counts at the cuts, would let the bound hold far more;
   it is left for the lab run to show the need.
-  What is told too late is counted, in the engine's last counter, for all apps together: "Now" shows such bytes
-  in no state without saying why (open for part 3, below). The engine asks Watch's Kotlin side for a reading when
-  a flow opens, at each new second counted and when a segment is held for its states (at most every 5 seconds;
-  fix round 2, the fresh review's m2: a lone burst shorter than 5 seconds asked for nothing), and after a reading
-  that left seconds or segments waiting; Watch reads at most every 5 seconds with the screen on and once a minute
-  with it off, and makes an ask that comes sooner in its turn. With no reading at all for 120 seconds, as with no
-  tracker, each new second past a flow's window costs one settle of all that waits for each app at the window: a
-  pass over the flows, once a second per app (engine nit 4 of the first review, accepted: it needs the tracker
+  What is told too late is counted, in the engine's last counter, for all apps together, and by app and window
+  as part 3 sets out (below). The engine asks the network part's Kotlin side for a
+  reading when a flow opens, at each new second counted and when a segment is held for its states (at most every
+  5 seconds, so that a lone burst shorter than 5 seconds asks too; fix round 2, the fresh review's m2), and after
+  a reading that left seconds or segments waiting; the tracker reads at most every 5 seconds with the screen on and
+  once a minute with it off, and makes an ask that comes sooner in its turn. With no reading at all for 120 seconds,
+  as with no tracker, each new second past a flow's window costs one settle of all that waits for each app at the
+  window: a pass over the flows, once a second per app (engine nit 4 of the first review, accepted: it needs the tracker
   gone). A wall clock set back by a second or more places every second held at once, and the engine forgets
   the readings of the old clock, whose spans could cover the new clock's next seconds: those wait for readings of
   their own, so that the seconds of two clocks never meet one reading.
-- **How long a record waits, and what is lost.** While Watch runs and the phone is awake, a second waits at most one
-  reading's period after it, 5 seconds with the screen on and a minute with it off, plus 3 seconds: the 2 a reading
-  leaves for events not reported yet, and the second itself, since a reading made at once after the second's ask may
-  end before it and the next comes a period later. The window of 120 holds twice that, and the screen turning off
-  reads once more, so that what was sent while it was on is placed then. A record then waits the log's usual 30
-  seconds of gathering. A flow open but idle is cut at each quarter hour, and its segment asks for its state: the
-  reading made at once ends 2 seconds before the cut, so a second follows a reading's period later, two readings
-  each quarter hour while such a flow stays open and the phone is awake (fix round 3, the fresh review's n2). A UDP
-  flow ended by its timer, 120 seconds after its last datagram, waits the same way for the state of its end, and
-  asks (fix round 3, R7). Both go beyond decision 1's "only when traffic runs" (accepted: no alarm, and at most a
-  reading a minute with the screen off). In deep sleep nothing runs, since no alarm
-  is set, so what waits is placed when the phone wakes. If Watch's process dies meanwhile, what waits is lost with
-  it: the held segments and the live flows' open segments, as any record not yet handed to the log is (ADR 0044's
-  table).
-- **The tracker lives in `:watch`** (`android/watch/.../activity/`), in Watch's process beside the engine it
-  feeds: `:watch` cannot depend on `:app`, and needs of the audit only the rule of usage access, which moved to
-  `android/shared` for both. A pure core (`UsageStates`) places the events and is tested on the JVM, one test
+- **How long a record waits, and what is lost.** While the network part runs and the phone is awake, a second waits
+  at most one reading's period after it, 5 seconds with the screen on and a minute with it off, plus 3 seconds: the 2
+  a reading leaves for events not reported yet, and the second itself, since a reading made at once after the
+  second's ask may end before it and the next comes a period later. The window of 120 holds twice that, and the
+  screen turning off reads once more, so that what was sent while it was on is placed then. A record then waits the
+  log's usual 30 seconds of gathering. A flow open but idle is cut at each quarter hour, and its segment asks for its
+  state: the reading made at once ends 2 seconds before the cut, so a second follows a reading's period later, two
+  readings each quarter hour while such a flow stays open and the phone is awake (fix round 3, the fresh review's
+  n2). A UDP flow ended by its timer, 120 seconds after its last datagram, waits the same way for the state of its
+  end, and asks (fix round 3, R7). Both go beyond decision 1's "only when traffic runs" (accepted: no alarm, and at
+  most a reading a minute with the screen off). In deep sleep nothing runs, since no alarm
+  is set, so what waits is placed when the phone wakes. If the network part's process dies meanwhile, what waits is
+  lost with it: the held segments and the live flows' open segments, as any record not yet handed to the log is (ADR
+  0044's table).
+- **The tracker lives in `:network`** (`android/network/.../activity/`), in the network part's process beside the
+  engine it feeds: `:network` cannot depend on `:app`, and needs of the audit only the rule of usage access, which
+  is in `android/shared` for both. A pure core (`UsageStates`) places the events and is tested on the JVM, one test
   for each rule; `StateTracker` reads them. The rules as built:
   - an activity is visible from its `ACTIVITY_RESUMED` to its `ACTIVITY_STOPPED` (paused but not stopped, as in
     split screen, it still is), while the screen is interactive, and while the lock screen is not over it unless
@@ -598,14 +587,14 @@ this ADR left room, and why. Part 3 builds the screens on it.
     and then stops the first [doc: "Coordinating activities"], once the new one is idle or at its idle timeout,
     10 seconds on a phone, counted after the resume and before the stop's own round trip, so a stop the timeout
     drives always comes after 10 seconds [code: `ActivityTaskSupervisor`, `completeResumeLocked`]: the 30 cover a
-    timeout multiplied by two and the round trip (fix round 3, R1; it was 10). That stop ended the app's use
-    before (fix round 1, Kotlin finding 1). An activity kept so ends when another activity is resumed within 2
+    timeout multiplied by two and the round trip (fix round 1, Kotlin finding 1; fix round 3, R1). An activity
+    kept so ends when another activity is resumed within 2
     seconds of that stop while it was not paused, as Android resumes the next screen at once when a process dies,
     and when the screen turns off, which stops every screen shown and resumes it after: an app whose process dies
     after a pause and resume of its own screen (a permission dialog, a share sheet), or that kills itself so on
     purpose, stays in use for its grace only, not until the phone restarts (fix round 2, N2). A later resume
-    beside it, in another window of a split screen, ends nothing (fix round 3, R1: it ended a screen still shown). Events within one millisecond keep the
-    order Android gave them, and an event read again in the overlap is matched once by its fields, so that a
+    beside it, in another window of a split screen, ends nothing (fix round 3, R1). Events within one millisecond
+    keep the order Android gave them, and an event read again in the overlap is matched once by its fields, so that a
     resume read twice does not undo the pause before it;
   - the default keyboard is in use while the screen is interactive and in the background while it is not, as
     decision 5 says, with no grace;
@@ -614,27 +603,26 @@ this ADR left room, and why. Part 3 builds the screens on it.
     seconds of the one before: an event late or out of order within them corrects the intervals told, which the
     engine uses for seconds it has not placed yet, for its cuts and for the state now, but not for seconds it
     placed already. For bytes, an event counts only if it was in Android's record 2 seconds after its moment
-    (corrected in fix round 3, the fresh review's m1: this said the overlap placed such moments again). AOSP
+    (fix round 3, the fresh review's m1). AOSP
     reports usage events to its service as they happen [code: `ActivityTaskManagerService`,
     `UsageStatsService.reportEvent`], and the emulator's check counts those that came later than the margin
     (`activity-late` in the debug dump). Waiting 10 seconds more before placing each second would cost "Now" and
     the log as much, for a case the emulator does not show; the lab run measures it on phones. Past 256 intervals
-    of one app in the timeline, the one that ended first gives way (fix round 3, n3: the first a reading listed
-    did, which may be its newest). The
+    of one app in the timeline, the one that ended first gives way (fix round 3, n3). The
     first reading, and the first after one without access or one the engine did not take, reads back to the
-    phone's start, at most 30 days, so that a foreground service started before Watch, as a messenger's or the
-    user's own tool's, is found (fix round 2, the fresh review's M1: it read back a day), and after a clock set back
+    phone's start, at most 30 days, so that a foreground service started before the network part, as a messenger's
+    or the user's own tool's, is found (fix round 2, the fresh review's M1), and after a clock set back
     from what the set back carried (fix round 3, R3), while a reading that finds no events keeps what is open. One
     that finds no change of the screen in Android's record takes the screen as the broadcasts last told it, not as
     on (fix round 3, n4);
   - a wall clock set back is found against the time since the phone started, and by `ACTION_TIME_CHANGED`;
     readings begin anew from the moment it was found, carrying what is open with its times moved back by how far
     the clock went, so that the grace of an app just left runs on and the lock screen keeps its order (fix round
-    2, m3: the grace was dropped);
+    2, m3);
   - it reads when the engine asks, within decision 1's rates, an ask that comes sooner made in its turn; once when
-    the screen turns off; and at once when Watch starts, when the screen comes on (the view may open), when the
-    clock is set, and when Watch stops (`ReadingRules` and `Turns`, tested at their edges, with the rule for a clock
-    set back and what a reading knows; the two lines that hand them the broadcasts have no JVM test).
+    the screen turns off; and at once when the network part starts, when the screen comes on (the view may open),
+    when the clock is set, and when it stops (`ReadingRules` and `Turns`, tested at their edges, with the rule for a
+    clock set back and what a reading knows; the two lines that hand them the broadcasts have no JVM test).
     `ACTION_SCREEN_ON`, `ACTION_SCREEN_OFF` and `ACTION_TIME_CHANGED` are received while the tunnel runs. The
     engine's asking adds to decision 1's "when a flow starts" the case of a long connection with no new flow, and of
     seconds a reading left waiting: the same rates. No alarm wakes the phone;
@@ -651,8 +639,8 @@ this ADR left room, and why. Part 3 builds the screens on it.
   flow's name, where it came from, the DNS name beside it and the app's own DNS (by address where it has no name),
   with ECH, the known resolver, came-in, and the organisation behind its network from the offline table, looked
   up out of the engine's locks, at most 64 addresses for one snapshot, and kept for at most 4,096 addresses (fix
-  round 1, engine finding 7: the first snapshot after a busy hour looked them all up under the activity lock,
-  108 ms for 2,048 destinations with the real table on the review's machine). A chained app's flow whose
+  round 1, engine finding 7: looking them all up under the activity lock took 108 ms for 2,048 destinations with
+  the real table on the review's machine). A chained app's flow whose
   destination stays out of the log adds to its app's bytes only, marked as through the tool; the tool's own app
   is marked; turning "Log where these apps connect" off, or a chain that leaves an app out, drops its destinations
   at once, from the counts, from its flows and segments still waiting and from the organisations looked up
@@ -667,7 +655,7 @@ this ADR left room, and why. Part 3 builds the screens on it.
   which a set back never moves, would keep them, with wall-clock minutes for the labels only). The window "since
   the screen came on" lasts until the screen next comes on, so an app and its destinations stay in memory from
   one screen-on to the next, the night after the phone was put down included. Memory only, kept with retention
-  "none", handed to the next engine, gone when Watch stops.
+  "none", handed to the next engine, gone when the network part stops.
 - **Bounds.** At most 512 apps, each with at most 60 minutes of counts (about 4.4 KB); at most 2,048
   destinations, 128 for one app, each with its flow (names at their longest, 253 bytes, about 1 KB) and 60
   minutes (1.4 KB): together about 7 MB at the very worst, and some hundreds of kilobytes on a busy phone. Marks:
@@ -685,41 +673,41 @@ this ADR left room, and why. Part 3 builds the screens on it.
   set back, the asking, the counts by window, destinations and their organisations, the chain's switch, the
   snapshot's layout, the log's version 3, and an engine handing what it holds to the next, or failing to start with
   it; the readings' reader is fuzzed (`core/fuzz/fuzz_targets/states.rs`, with seeds): its first run found that it
-  read a time the screen came on for a screen not on, which wrote back otherwise, and it now refuses one. A model
+  read a time the screen came on for a screen not on, which wrote back otherwise, and it refuses one. A model
   test (`core/net/src/engine/model.rs`, in `cargo test`) drives 240 random runs of two apps' flows and flows of no
   app, with counts, ends, readings told from a true timeline of states in tenths of a second, two quarter hours, and
   in one run in six a reading without usage access, and 100 more with clocks set back; it checks against the truth
   each byte's state, where each cut falls, each segment's last state, each flow's records end to end and in time
-  order, and "Now"'s hour. In Watch's Kotlin side, 47: one for each rule of the tracker's core, what a reading knows
-  and when it is made, the reading rules at their edges, its readings' layout, the snapshot's and the log's readers.
-  Hand mutants in cargo-mutants' manner, rerun after fix round 2 on the code as it is: of 114 in the engine (this
-  part's 80, the four the second review found surviving, and 30 on the fix rounds' code), all are killed but one,
-  argued equivalent (the timeline forgets from the oldest or the newest second held, less 120 seconds: every held
-  second lies past what was told, so both are its end). Of 48 in the Kotlin core (this part's, the reviews' and the
+  order, and "Now"'s hour. In the network part's Kotlin side, 47: one for each rule of the tracker's core, what a
+  reading knows and when it is made, the reading rules at their edges, its readings' layout, the snapshot's and the
+  log's readers. Hand mutants in cargo-mutants' manner, rerun after fix round 2 on the code as it is: of 114 in the
+  engine (this part's 80, the four the second review found surviving, and 30 on the fix rounds' code), all are killed
+  but one, argued equivalent (the timeline forgets from the oldest or the newest second held, less 120 seconds: every
+  held second lies past what was told, so both are its end). Of 48 in the Kotlin core (this part's, the reviews' and the
   fix rounds'), 43 are killed, one does not build, and four are equivalent: an event at the start of the overlap, or
   at a reading's end, taken once more into the events read, where the overlap's matching keeps one of each and the
   reading's end leaves it for the next; the overlap's start read once more, likewise; and the lock screen kept at a
-  restart that clears every activity. (Fix round 1's "each event's effect is idempotent" was not true: a resume read
-  twice undid the pause before it, which the matching, now tested, prevents.) Each fix of fix round 3, reverted
+  restart that clears every activity. (A resume read twice would undo the pause before it; the overlap's matching
+  prevents it, and a test holds it.) Each fix of fix round 3, reverted
   alone, fails a test (18 reverts: 7 in the engine, 11 in the tracker's core); the hand mutants were not rerun in
-  full for it. The emulator's watch shard runs `scripts/verify-activity.sh` (decision 6, items 1 and 6) and checks
+  full for it. The emulator's network shard runs `scripts/verify-activity.sh` (decision 6, items 1 and 6) and checks
   item 5 in `verify-chain.sh`. On the Android 15 emulator, 2026-11-18, every count matched what the workload apps
   logged, to the byte: 75,000 bytes sent in the background, from a job, on a connection opened on screen and on a
   timer; the 3,046 before them in use; 8,000 from a foreground service with its notification; 24,000 from the app on
   screen in use; and without usage access, a flow's bytes in no state. After each fix round the same shard passed
   again on the Android 15 emulator, every count again to the byte (the second at `a094f50`; `b926b94` after it only
-  drops a rule of the set back's carry that could no longer matter, held by the JVM tests) After fix round 3 it
+  drops a rule of the set back's carry that could no longer matter, held by the JVM tests). After fix round 3 it
   passed again, and two checks were added: the same foreground service, its app's notifications refused, put its
   8,000 bytes in the background and none with its notification; and of the usage events the run read, none came into
   Android's record later than a reading's 2 seconds (`activity-late 0`). The emulators of Android 10, 11 and 17 that
-  decision 6 names, and the A40, are still to run it.
+  decision 6 names ran it in part 3 (below); the A40 is still to run it.
 - **Accepted limits.** An activity whose `ACTIVITY_STOPPED` never comes stays visible while the screen is on, as
   one whose process died while it was resumed with no pause before. A screen kept by the rule for a second
   instance whose process then dies with no screen resumed within 2 seconds, as in split screen, stays in use until
   the screen turns off. A stop of another instance later than 30 seconds after the resume, as with an idle timeout
-  multiplied more than twice, ends the app's use after its grace, as before fix round 1. No emulator check holds
+  multiplied more than twice, ends the app's use after its grace. No emulator check holds
   the self-kill: the workload app would need a second process to send after its own died; the JVM tests hold the
-  sequences. Watch's stop waits up to 2 seconds on its main thread for the tracker's last reading, so that the
+  sequences. The network part's stop waits up to 2 seconds on its main thread for the tracker's last reading, so that the
   engine has it before its last flush: once, at stop, below Android's limits for a service. An event that comes
   into Android's record more than 2 seconds late does not move bytes already placed, and one more than 10 seconds
   late is not read at all. A second that holds a moment in use is in use whole. A quiet stretch of more than 120
@@ -730,30 +718,30 @@ this ADR left room, and why. Part 3 builds the screens on it.
   the background while it runs: the record is all an app may read, and the lab run checks whether Android hands an
   app the day-rollover event of a running service (fix round 3, R3). The log's records wait in memory for their
   states, as above, and are lost if the process dies meanwhile.
-- **Open for part 3 and W9** (each marked as part 3 left it, 2026-11-19).
-  - *Done in part 3: the clear call (below).* [ADR 0047](0047-profile-for-phones-that-may-be-searched.md), decision 3: under the profile for phones that may
-    be searched, this run's flows in memory are cleared also when the screen turns off. The live counters keep the
-    windows of 10 minutes and an hour, with destinations, across a screen-off, and no call clears them yet: the
-    profile needs one, or "Now" shows only "since the screen came on" and the memory is still cleared (the second
-    review of W5's second part, Kotlin, nit 11). Not built in part 2; part 3 and W9 settle it.
-  - *Done in part 3: the clear call takes it, and the window while the screen was off.* ADR 0047's clearing must take the window "since the screen came on" too, which keeps apps and destinations
-    until the screen next comes on, not for an hour at most (fix round 2, the fresh review's m5).
-  - *Measured in part 3 on one launcher: on the Android 17 Google Play image with the Pixel Launcher the feed counts
-    in use (decision 5, scoped; the spike's note). Other launchers, the A40's among them, and the day-rollover
-    event are left for the lab run.* The feed left of the home screen on Google's launchers (decision 5) is checked on a Google Play emulator
-    image in the lab run; so is whether Android hands an app its day-rollover event for a running foreground
-    service, which would find one older than its record of events.
-  - *Done in part 3: the window while the screen was off; W9's summary reads it.* Decision 2 (a)'s summary "While the screen was off (2 h 10 min), N apps you were not using sent X" needs the
+- **What part 2 left open, and where each stands.**
+  - [ADR 0047](0047-profile-for-phones-that-may-be-searched.md), decision 3: under the profile for phones that may
+    be searched, this run's flows in memory are cleared also when the screen turns off, and the live counters'
+    windows of 10 minutes and an hour, with destinations, need a call that clears them too (the second review of
+    W5's second part, Kotlin, nit 11). Built in part 3: the clear call (below), which W9 wires to the profile's
+    switch.
+  - ADR 0047's clearing takes the window "since the screen came on" too, which keeps apps and destinations until
+    the screen next comes on, not for an hour at most, and the window while the screen was off (fix round 2, the
+    fresh review's m5). Built in part 3, in the clear call.
+  - Decision 2 (a)'s summary "While the screen was off (2 h 10 min), N apps you were not using sent X" needs the
     bytes from the screen turning off to its coming on, by app and state, kept from that screen-on until the next
-    screen-off: a window of its own, opened at `SCREEN_NON_INTERACTIVE` and closed at the next screen-on, which
-    the counters do not keep yet (they reset "since the screen came on" at that moment, and their minutes reach
-    back an hour). Part 3 adds it with the summary (fix round 2, the fresh review's m6).
-  - *Done in part 3: bytes in no state by why, for each app and window.* "Now" shows the bytes told too late in no state, without saying so; part 3 needs the reason by app, which
-    the counters keep for all apps together only (N1).
-  - *Left for the lab run, with W9: it needs the phones, not the emulators.* The lab run measures, on the A40 (Android 11) and the A56: how late usage events come into Android's record
-    (the dump's `activity-late`), which decides whether a second should wait for the overlap before it is placed
-    (fix round 3, the fresh review's m1); and what the first reading costs below Android 15, which reads every
-    kind of event back to the phone's start (R12).
+    screen-off: a window of its own, opened at `SCREEN_NON_INTERACTIVE` and closed at the next screen-on (fix round
+    2, the fresh review's m6). Built in part 3 (below); W9's summary reads it.
+  - "Now" needs the reason why bytes have no state by app, which the engine's last counter keeps for all apps
+    together only (N1). Built in part 3: bytes in no state by why, for each app and window.
+  - The feed left of the home screen on Google's launchers (decision 5), and whether Android hands an app its
+    day-rollover event for a running foreground service, which would find one older than its record of events.
+    Measured in part 3 on one launcher: on the Android 17 Google Play image with the Pixel Launcher the feed counts
+    in use (decision 5; the spike's note). Other launchers, the A40's among them, and the day-rollover event are
+    left for the lab run.
+  - Left for the lab run, with W9, since it needs the phones, not the emulators: on the A40 (Android 11) and the
+    A56, how late usage events come into Android's record (the dump's `activity-late`), which decides whether a
+    second should wait for the overlap before it is placed (fix round 3, the fresh review's m1); and what the first
+    reading costs below Android 15, which reads every kind of event back to the phone's start (R12).
 
 **W5, part 3: "Now", each app's history, and the engine's last pieces (2026-11-19, decisions 2 (d), 3 and 5).**
 What was chosen where this ADR left room, and why.
@@ -772,7 +760,7 @@ What was chosen where this ADR left room, and why.
   apps sent more than `NowRows.SENT_FLOOR` in the background while it was, and how much; the floor is 0 until
   the lab run sets it with the summary's (decision 2 (a)). The user's tool is not counted in the line, since its
   bytes hold the chained apps' (fix round). The window begins no earlier than the engine began counting, so it
-  never claims hours Watch did not see (fix round).
+  never claims hours the engine did not see (fix round).
 - **Why bytes have no state, by app.** Bytes by why, not the reasons seen: one window often holds two reasons
   (no events before the first unlock, then not told), and only bytes say how much each explains. Each app keeps,
   beside its minutes by state, minutes of bytes by why (no usage access, no events, told too late, no app, not
@@ -798,23 +786,23 @@ What was chosen where this ADR left room, and why.
   yet, then the five whys). Both sides ship in one build, so the Kotlin reader refuses version 1; it also refuses
   whys that do not add up to the column of no state, and a window that ends before it began. The fixture, the
   readings' fuzz target and seeds follow; a snapshot has no reader in Rust, so the Kotlin reader is tested
-  against every byte of the fixture changed and every length cut, as before.
-- **Trackers, from the pack the audit verifies.** Both: what both modules need of the data pack moves to
+  against every byte of the fixture changed and every length cut.
+- **Trackers, from the pack the audit verifies.** Both: what both modules need of the data pack is in
   `android/shared` (`DataPack`, `DataPackStore`, `DataPackRules`, `PackReader`, rules unchanged), and the
   matching is the engine's library's (`core/net/src/trackers.rs`), handed the table's text. The Rust reader that
-  checks a pack's signature is injected (`PackNative`): the audit's library in the audit's process, and Watch's
-  own in Watch's, which reads packs with the same `core/engine` code (`datapack::read_signed`, `read_payload`),
-  so Watch reads the current pack, imported or the APK's, with the same checks, not a copy shipped in `:watch`;
-  it reads the pack anew when "Now" opens and keeps no copy. Watch's library grows by the pack reader and
-  ed25519, which `datapavan-engine` already used. The signatures are Python regular expressions that ETIP applies
-  with `re.search`, so a signature marks a name it matches anywhere in; the table uses literal labels, `\.`,
-  `\-`, `.`, `.*`, `[0-9]*`, `|`, and one alternative with a port and a path, which is matched by the
-  destination's address and port, since Watch never sees a path (an accepted limit: it marks every flow to that
-  address and port). Everything else is refused and counted: in the table of 2026-10-29 that is one alternative
-  of 631, `data.\altbeacon\.org`, whose `\a` Python reads as the bell character, so it never matched a name
-  anyway. Names compare without regard to ASCII case (RFC 4343). A destination is marked when its name, its
-  DNS name or its address matches; the history marks its segments the same way. A bar escaped as `\|` is part
-  of a literal, as Python reads it, not a split between alternatives (fix round).
+  checks a pack's signature is injected (`PackNative`): the audit's library in the audit's process, and the
+  network part's own (`libdatapavan_network.so`) in its process, which reads packs with the same `core/engine`
+  code (`datapack::read_signed`, `read_payload`), so the network part reads the current pack, imported or the
+  APK's, with the same checks, not a copy shipped in `:network`; it reads the pack anew when "Now" opens and keeps
+  no copy. The network part's library holds the pack reader and ed25519, as `datapavan-engine` does. The signatures
+  are Python regular expressions that ETIP applies with `re.search`, so a signature marks a name it matches anywhere
+  in; the table uses literal labels, `\.`, `\-`, `.`, `.*`, `[0-9]*`, `|`, and one alternative with a port and a
+  path, which is matched by the destination's address and port, since the network part never sees a path (an accepted
+  limit: it marks every flow to that address and port). Everything else is refused and counted: in the table of
+  2026-10-29 that is one alternative of 631, `data.\altbeacon\.org`, whose `\a` Python reads as the bell character,
+  so it never matched a name anyway. Names compare without regard to ASCII case (RFC 4343). A destination is marked
+  when its name, its DNS name or its address matches; the history marks its segments the same way. A bar escaped as
+  `\|` is part of a literal, as Python reads it, not a split between alternatives (fix round).
 - **Tracker marks and the app's own company** (`activity/TrackerMarks.kt`, decision 2 (d) as the maintainer
   settled it on 2026-11-19). The engine tells, for each match, the tracker's id, name and website and the
   alternative that matched (`Engine.nativeTrackersOf`). A tracker's company is the entity of ADR 0020 whose own
@@ -824,17 +812,17 @@ What was chosen where this ADR left room, and why.
   company is its publisher by package and signing certificate (`owners/publishers.tsv`), as the audit finds
   it; where packages share a UID, those the table records must lead to one group, or the app has none. Both go up to their company group by `Owners.group` on
   the day the view opens, whole or majority control, as the audit's `OwnerNotes.group` decides it; `Owners`
-  moved to `android/shared` for it, rules unchanged. The three tables come from the same verified pack as the
+  is in `android/shared` for it, rules unchanged. The three tables come from the same verified pack as the
   trackers, read in the same pass. Where every tracker a destination matches is of the app's own group, the
   destination says "Same company as the app" with the group's name, and no tracker; where two or more trackers
   of one company match by the same alternative, one mark names the company ("Trackers of Meta Platforms, Inc.
   in the εxodus list" for `\.facebook\.com`, which names seven); every other match is marked by its tracker's
-  name, as before. **An app whose publisher the table does not know is never told as the same company as
+  name. **An app whose publisher the table does not know is never told as the same company as
   anything**, and a tracker whose company it does not know is marked by its name: nothing is guessed, and the
   error left is a mark too many, never one missing. In the table of 2026-10-29, 14 of the 260 trackers with a
   network signature have a company this way (Meta 7, Google 6, Amazon 1); Google's DoubleClick, whose website
   is on a domain of its own, shares signatures with AdMob and keeps both names. `\.google\.com` (Google Ads)
-  marks every host under google.com, as `re.search` does; for Google's own apps that is now "same company".
+  marks every host under google.com, as `re.search` does; for Google's own apps that is "same company".
 - **"Now"** (`NowActivity`, `ui/NowScreen.kt`, the rules in `activity/NowRows.kt`). Its windows are 10 minutes,
   an hour and since the screen came on. **The order** (the maintainer, 2026-11-19): an app's group is decided by
   the bytes it **sent**, above `NowRows.SENT_FLOOR`, one constant that the lab run of decision 4 sets with the
@@ -862,34 +850,35 @@ What was chosen where this ADR left room, and why.
   organisation, and the tracker's or the company's mark. A chained app whose destinations are not logged says
   only that its traffic went through the user's tool; the tool's row says it carries the chained apps' traffic,
   and shows its own servers only while "Log where these apps connect" is on (decision 3). Without usage access
-  the view says so and offers the grant by the audit's route (`openUsageAccess`, now in `android/shared`); before
+  the view says so and offers the grant by the audit's route (`openUsageAccess`, in `android/shared`); before
   the first unlock it says states come after it. "What this view cannot see" closes the view, every bullet of
   decision 5, in plain words.
 - **Each app's history** (`ui/HistoryScreen.kt`, `activity/History.kt`): a tap on an app's row opens its timeline
   from the log, a day at a time, today first, read on the view's thread: each segment's time, both names, bytes,
   state and why it has none, newest first, at the phone's own 12- or 24-hour time; the names the app looked up
-  through Watch, as a count. A segment of a chained app or of the tool whose destination was not logged says so
-  and why, not "0.0.0.0" (fix round). Its way back says "Back to Now". The log's
-  states are said as Watch's screen says them: no key yet, open only while the phone is unlocked, open at any
+  through the network part, as a count. A segment of a chained app or of the tool whose destination was not logged
+  says so and why, not "0.0.0.0" (fix round). Its way back says "Back to Now". The log's
+  states are said as the network screen says them: no key yet, open only while the phone is unlocked, open at any
   time on a phone with no screen lock or that refused the key, and a day that cannot be opened now. With
-  retention "none" it says Watch keeps no record and how to keep one. Records older than the first install of
+  retention "none" it says Datapavan keeps no record and how to keep one. Records older than the first install of
   the packages now holding the UID are an app's since removed: counted apart, never shown as this app's.
-- **Ways in:** a button on Watch's screen; in Advanced, the audit's page of an app (`AppDetail`'s network
+- **Ways in:** a button on the network screen; in Advanced, the audit's page of an app (`AppDetail`'s network
   section), which opens "Now" for that app by a non-exported intent carrying only its package name, by class
-  name as `WatchEntry` opens Watch. W9's summary and tile take the same entry: `NowActivity`
-  (`org.visadahyu.datapavan.watch.NowActivity`), with the extra `package` or none. Every screen is protected as
-  `MainActivity` is, the debug builds' screenshot switch included. **Watch's own lock (ADR 0040) does not exist
+  name as `NetworkEntry` opens the network screen. W9's summary and tile take the same entry: `NowActivity`
+  (`org.visadahyu.datapavan.network.NowActivity`), with the extra `package` or none. Every screen is protected as
+  `MainActivity` is, the debug builds' screenshot switch included. **Advanced's own lock (ADR 0040) does not exist
   yet: "Now" and the history go behind it in W9**, as decision 3's table says.
-- **Strings, English only** in this part, in `strings_untranslated.xml` of `:watch` and of `:app` (one, the
-  audit's button), held to the plain-language gate (`scripts/check.sh`) and to ADR 0025's words; destinations,
-  package names and sizes are isolated as left-to-right or first-strong tokens (`ui/Bidi.kt`, now in
-  `android/shared`). Two gates need translations first: `scripts/check-translations.py` (the data gate) and
-  lint's `MissingTranslation` (the Android gate). The separate file keeps both green without a machine
+- **Strings** of `:network`, and one of `:app` (the audit's button), held to the plain-language gate
+  (`scripts/check.sh`) and to ADR 0025's words; destinations, package names and sizes are isolated as
+  left-to-right or first-strong tokens (`ui/Bidi.kt`, in `android/shared`). They are written in English in
+  `strings_untranslated.xml` first, since two gates need translations: `scripts/check-translations.py` (the data
+  gate) and lint's `MissingTranslation` (the Android gate). The separate file keeps both green without a machine
   translation: the first reads `strings.xml` alone, and the second is lifted for that file alone. The seven
-  languages come by ADR 0030's process after the review, and the strings then move into `strings.xml`; a release
-  needs no such file left (RELEASE.md, step 2), and `scripts/prepare-signing.sh` refuses an edition while a
-  module it carries has one with entries. No build gate holds it: lint lets the file pass on purpose, and CI
-  builds the release before the translations land, so a gate in the build would fail CI until then (fix round).
+  languages come by ADR 0030's process after the review, and the strings then move into `strings.xml` (below,
+  "The translations"); a release needs no such file left (RELEASE.md, step 2), and `scripts/prepare-signing.sh`
+  refuses an edition while a module it carries has one with entries. No build gate holds it: lint lets the file pass
+  on purpose, and CI builds the release before the translations land, so a gate in the build would fail CI until then
+  (fix round).
 - **The debug dump** prints the window while the screen was off (`activity-off`), the fourth window `off=` and
   the five whys after each window's columns; nothing new reaches logcat, and no destination ever does.
 - **Accepted limits of part 3.** The alternative with a port and a path marks every flow to its address and
@@ -899,17 +888,16 @@ What was chosen where this ADR left room, and why.
   other windows still. Rows that leave the window keep their place, with no bytes, until the user sorts again.
   "Now" names a UID by the packages holding it now: within the hour it shows, an app removed and another
   installed under its UID would show under the new one's name (UIDs are not reused so soon on AOSP); the history
-  splits records by the first install time. A day of the history is read whole, as the log keeps it. Until the
-  translations come, the new screens are in English in every language.
+  splits records by the first install time. A day of the history is read whole, as the log keeps it.
 - **Tests of part 3.** In the engine, 12 new tests (`core/net`'s unit tests are 383): the window while the screen
   was off at its edges, across one reading, bounded and with the clock set back; the bytes in no state by why in
   each window; the clear call and what it keeps out; every alternative of the table against a name it should and
-  one it should not match, the subset's rules and what lies outside it. The model test now checks the why of
+  one it should not match, the subset's rules and what lies outside it. The model test checks the why of
   every byte against its true timeline too. The readings' fuzz target asserts the screen-off time's rules, with
   two new seeds (a minute, 29 million runs, clean); a new differential target (`network_signatures`, two seeds)
   compares the matcher with a plain backtracking search of the same subset (seven minutes, 320,000 runs, clean;
-  slow for a fuzz target, since its seed holds a part of the real table). In Watch's
-  Kotlin side, 12 new tests: the order of rows and their keeping, the whys, a destination's names, the history's
+  slow for a fuzz target, since its seed holds a part of the real table). In the network
+  part's Kotlin side, 12 new tests: the order of rows and their keeping, the whys, a destination's names, the history's
   day and days, the names of a UID, the snapshot's version 2 and its refusals, the readings' screen-off time and
   its move at a clock set back. Hand mutants in cargo-mutants' manner on this part's code: of 50 in the engine's
   counters, readings and snapshot, eight lived until tests of the window's edges and of the whys' forgetting were
@@ -920,8 +908,8 @@ What was chosen where this ADR left room, and why.
 - **Emulator runs of part 3** (2026-11-19, `scripts/verify-activity.sh` as part 3 left it, each on its own
   emulator). On Android 15 (`dp-api35-ci`), 17 (`dp-api37-16k`, Google Play, 16 KB pages), 11 (`dp-api30`) and
   10 (`dp-api29`, an AVD made for this from the installed Google APIs image of Android 10, nothing downloaded;
-  Android 10's `dumpsys connectivity` names no VPN's owner, so the check takes a VPN connected and Watch's own
-  account that its tunnel runs there, where the other emulator scripts still need Android 11):
+  Android 10's `dumpsys connectivity` names no VPN's owner, so the check takes a VPN connected and the network
+  part's own account that its tunnel runs there, where the other emulator scripts still need Android 11):
   the dump and "Now" read from the screen named the app in the background with the 75,000 bytes it sent there,
   the 3,046 before them in use, the app on screen in use with its 24,000, the service with its notification with
   its 8,000, every count to the byte, and on Android 15 and 17 the service in the background once its app's
@@ -930,14 +918,14 @@ What was chosen where this ADR left room, and why.
   the run's segments of its connection, in use and in the background, with the destination; the audit's page of
   the app opened "Now" for that app; without usage access, the shell's row had no state and said why; no
   notification of Advanced named an app or a destination of the run; the table of trackers read from the data
-  pack in Watch's process held 630 alternatives of 260 trackers, one refused, and named a test's name's two
+  pack in the network part's process held 630 alternatives of 260 trackers, one refused, and named a test's name's two
   trackers; and no usage event came into Android's record later than a reading's 2 seconds (`activity-late 0`).
-  On the Android 17 image the feed left of the home screen was checked too (decision 5, as corrected). The watch
-  shard passed whole on the Android 15 emulator (`scripts/emulator-shards.sh --alone watch`): the smoke test, the
+  On the Android 17 image the feed left of the home screen was checked too (decision 5). The network shard passed
+  whole on the Android 15 emulator (`scripts/emulator-shards.sh --alone watch`, as run): the smoke test, the
   engine, the chain, whose "Now" read from the screen showed the picked app as sent through the tool and no place
   it reached while "Log where these apps connect" was off (item 5), the live view's counters as above, the log,
-  and Advanced's release build, whose process used 26 MB with Watch's screen open and 29 MB with the service
-  alone, within the budget of 48 (its library now holds the pack reader too). `scripts/screenshots.sh --now` took "Now",
+  and Advanced's release build, whose process used 26 MB with the network screen open and 29 MB with the service
+  alone, within the budget of 48 (its library holds the pack reader too). `scripts/screenshots.sh --now` took "Now",
   its row of adb's shell and that row's history through the accessibility check (labels, 48 dp targets) in
   English, both pseudo-locales and dark mode, with the destination and the package name isolated as
   left-to-right tokens in the right-to-left pseudo-locale; the eight languages follow the translations (decision
@@ -946,29 +934,29 @@ What was chosen where this ADR left room, and why.
 **W5, part 3, fix round (2026-11-19, after review c1 of the engine and of the screens, and the maintainer's two
 decisions and two approvals of that day).** Each fix has a test or a check that fails when it is reverted.
 
-- **The engine.** After a clear, a clock set back no longer blanks "Now" and the window while the screen was off:
+- **The engine.** After a clear, a clock set back does not blank "Now" and the window while the screen was off:
   a set back brings the clear's moments down to the new clock (finding 1, major). A window a set back forgot
-  stays forgotten when Watch tells its moments again (2); a minute's whys leave with the minute, so they never
-  exceed its column of no state after a set back, which made the reader refuse the whole snapshot (3); an
-  escaped bar no longer splits a signature, and the fuzz target's oracle splits the same way (4, nit 3); the
+  stays forgotten when the tracker tells its moments again (2); a minute's whys leave with the minute, so they never
+  exceed its column of no state after a set back, which would make the reader refuse the whole snapshot (3);
+  an escaped bar does not split a signature, and the fuzz target's oracle splits the same way (4, nit 3); the
   window begins no earlier than counting (6); the readings refuse an off time for a screen on since a moment not
   known (nit 6); the pack reader both bridges share has a test (nit 2); `clear_activity` says that it must not
-  run between a snapshot and its organisations' lookup (nit 5). Watch's process reads the data pack without
-  ever deleting a file, which is the audit's process's to do (5). The model test now turns the screen off and
+  run between a snapshot and its organisations' lookup (nit 5). The network part's process reads the data pack
+  without ever deleting a file, which is the audit's process's to do (5). The model test turns the screen off and
   on at random, clears, and runs past the hour in one run in ten of the set-back variant, and checks that the
   window while the screen was off holds every byte after a clear, and the whys in every window (8). Finding 7
   is written above and in ADR 0047: W9 clears at the screen-on too.
-- **The screens.** `scripts/now-screen.py` no longer ends a row at a destination with a dot in its name, so item
-  5's check reads the chained app's places again; its `--self-test`, in the data gate, fails on a dump that
-  shows the destination with the old reader (M1). It also finds a row by its whole package name, since the
-  one-app check added in this round found `…workload` in the row of `…workload.b`. "Now" keeps its window, order, scroll and an opened history
+- **The screens.** `scripts/now-screen.py` does not end a row at a destination with a dot in its name, so item
+  5's check reads the chained app's places; its `--self-test`, in the data gate, holds it on a dump with such a
+  destination (M1). It finds a row by its whole package name, since a part of one, `…workload`, matched the row
+  of `…workload.b` in the one-app check. "Now" keeps its window, order, scroll and an opened history
   across the history and a rotation, checked by a JVM test and on the emulator (M2). A chained app's or the
   tool's segment with no logged destination says so, not "0.0.0.0" (M3). The screenshot setting acts on the
   window on screen once "Now" closed (m1); the line of the window while the screen was off leaves out the tool
-  (m2); "What this view cannot see" holds every part of decision 5 again, in plain words (m3); the feed's line
-  is scoped and its measurement kept (m4, the spike's note); tests now fail on the rules they hold (m5); the
+  (m2); "What this view cannot see" holds every part of decision 5, in plain words (m3); the feed's line
+  is scoped and its measurement kept (m4, the spike's note); tests fail on the rules they hold (m5); the
   one-app view is checked to show no other app, and the off line to equal the dump's apps and bytes (m6);
-  RELEASE.md's references follow its new step, and the signing script holds it (m7); DESIGN.md has the
+  RELEASE.md's references follow its step on strings, and the signing script holds it (m7); DESIGN.md has the
   paragraph once (m8); "Now" drops its copies when it stops (m9). Nits: the unused `outOfOrder` is gone (1);
   "Show all apps" sorts anew (2); the snapshot is not read while the history shows (3); the texts say why
   destinations are not shown exactly (4) and "Back to Now" (5); times follow the phone's 24-hour setting (6);
@@ -978,9 +966,9 @@ decisions and two approvals of that day).** Each fix has a test or a check that 
 - **Built after the maintainer's approval:** the tracker marks of the app's own company and the one mark for a
   broad signature (decision 2 (d), above), and the tool's servers behind "Log where these apps connect" (decision
   3). The engine says when it leaves the tool's servers out, in a third bit of each app's flags in the snapshot
-  (still version 2: the reader ignored the bit before, and both sides ship in one build), so that the row says
+  (version 2: a reader may ignore the bit, and both sides ship in one build), so that the row says
   why from the engine's word, never from an empty list, which a full table of destinations could also leave.
-  The chain's emulator check now also asks that the tool's row name none of its servers while the switch is off,
+  The chain's emulator check also asks that the tool's row name none of its servers while the switch is off,
   and say why.
 - **Accepted limits and what is left.** Flows of no app near a screen change are left out of the model test's
   check of the window while the screen was off: their seconds are placed when they pass, with no reading to
@@ -992,20 +980,20 @@ decisions and two approvals of that day).** Each fix has a test or a check that 
   for the lab run that defines them, and the network page as a way into "Now" for W9 (nit 12). The company of a
   tracker is known only where the owners' table holds the company's own domain: 14 of 260 trackers today.
 - **Runs of the fix round** (2026-11-19, each emulator alone). The gates passed: `scripts/check.sh` rust (the
-  engine's unit tests are 390), android, data (with the screen reader's self-test) and lab. The watch shard
+  engine's unit tests are 390), android, data (with the screen reader's self-test) and lab. The network shard
   passed whole on Android 15 (`dp-api35-ci`): the chain, whose "Now" read from the screen showed the picked app
   through the tool and the tool's own row as the tool's, saying why its servers are not shown, with neither
   the run's names nor addresses in any text; the live view's counters with the new checks; the log; and the
   release build, at 25 MB with the screen open and 28 MB with the service alone. `verify-activity.sh` passed on
   Android 11 (`dp-api30`) and 17 (`dp-api37-16k`) too: on all three, "The last hour" stayed chosen across an
-  app's history and a rotation over it, Watch's screen allowed screenshots on its own window after "Now"
+  app's history and a rotation over it, the network screen allowed screenshots on its own window after "Now"
   closed, the off line equalled the dump's apps and bytes, the one-app view showed no other workload app, and
-  "Now" offered usage access without it. The first watch shard of the round failed there, on the reader's
+  "Now" offered usage access without it. The first run of the network shard in the round failed there, on the reader's
   match by a part of a package name, fixed and run again. `scripts/screenshots.sh --now` passed the
   accessibility check in English, both pseudo-locales and dark mode, with the shell's history showing its
-  record and the days' buttons. Not run on the A40; its panel left of the home screen was then read by hand (decision 5, as corrected).
-- **The translations (2026-11-19, after part 3's merge, on `w5-strings`).** The 85 strings of `:watch` and the one
-  of `:app` moved into `strings.xml`, and the untranslated files are gone. ADR 0030's process, once: an Opus
+  record and the days' buttons. Not run on the A40; its panel left of the home screen was then read by hand (decision 5).
+- **The translations (2026-11-19, after part 3's merge, on `w5-strings`).** The 85 strings of `:network` and the one
+  of `:app` moved into `strings.xml`, and that part's untranslated files were removed. ADR 0030's process, once: an Opus
   translator per language; Sonnet and Haiku each alone on three chunks of about 30 strings per language (42
   reviews); an Opus settler per language, who accepted or rejected each finding against the English and the code
   (records in the maintainer's notes). One English string was corrected on a reviewer's finding:
@@ -1013,7 +1001,7 @@ decisions and two approvals of that day).** Each fix has a test or a check that 
   "Now" stays the screen's name in Latin letters in every language, as the app's strings already called it. The
   German names of a notification channel and the private space are Android's own, read from the Android 15
   emulator's Settings app ("Benachrichtigungskategorie", "Vertrauliches Profil"). `scripts/screenshots.sh --now`
-  now runs in every UI language, both pseudo-locales, and dark mode in English and Persian, and passed the
+  runs in every UI language, both pseudo-locales, and dark mode in English and Persian, and passed the
   accessibility check in all of them (decision 6, item 9). Left as they are: the English of "What this view cannot
   see" does not say that the summary leaves the tool out (the summary comes with W9), nor that a work profile, a
   private space and another user have VPNs of their own.

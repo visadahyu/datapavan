@@ -12,7 +12,7 @@ For the second, nothing needs to change.
 [ADR 0040](0040-own-safety-in-an-untrusted-environment.md) already gives every user:
 - FLAG_SECURE on every screen, which also blanks the apps' cards in Recents;
 - no connection log until the user chooses a retention;
-- Watch's own lock, and an answer to PanicKit triggers;
+- Advanced's own lock, and an answer to PanicKit triggers;
 - nothing in backups.
 
 What it does not give is one choice that turns all of it to the safe side, and the rest of what the apps keep.
@@ -30,10 +30,10 @@ Basic's items; it does not list Advanced's yet, since Advanced is not released.
 | Advanced | All of Basic's, plus the connection log ([ADR 0037](0037-connection-log-storage.md)): the database, each day's wrapped keys and the Keystore key pair | App-private database and preferences | Which app spoke to whom, for as long as the retention keeps it |
 | Advanced | The chain's settings: on or off, all apps or a list of apps, whether chained destinations are logged, the tool, its host and port, UDP, and the generated proxy password under a Keystore key | `chain` preferences | The user's circumvention tool, even after it was uninstalled before the search, and which apps the user sends through it |
 | Advanced | The apps left out of the tunnel ([ADR 0041](0041-visibility-and-coexistence.md)) | `left_out` preferences | Little: apps that do not work with a VPN |
-| Advanced | The WireGuard configurations ([ADR 0035](0035-wireguard-upstream.md), W7): each one's text, with its private key and its server, and its name, wrapped with AES-256-GCM under key B (`watch-tunnels-unlocked`, which needs an unlocked phone) while the profile is on, under key A (`watch-tunnels`, which opens at any time) otherwise; and what decides the routes, under key A always: which apps go through each, how many there are, the order and the default, "Local network directly", and whether the profile is on | `noBackupFilesDir/tunnels` (no backup, no device transfer), and the two non-exportable Keystore keys | Nothing without the phone's Keystore. With it, by code run as Datapavan or above: under key A, which apps the user sends through a VPN provider's configuration, at any time after the first unlock; the provider, its server and the account's key under key A without the profile, and under key B with it only while the phone is unlocked (from Android 12), not from a locked phone after its first unlock; and from a dump of the running `:watch` process's memory, the configurations the engine set, which no app can prevent |
-| Advanced | The flows of this run, in memory, for Watch's screen | Memory | What apps did since Watch started, to anyone who opens Watch |
+| Advanced | The WireGuard configurations ([ADR 0035](0035-wireguard-upstream.md), W7): each one's text, with its private key and its server, and its name, wrapped with AES-256-GCM under key B (`network-tunnels-unlocked`, which needs an unlocked phone) while the profile is on, under key A (`network-tunnels`, which opens at any time) otherwise; and what decides the routes, under key A always: which apps go through each, how many there are, the order and the default, "Local network directly", and whether the profile is on | `noBackupFilesDir/tunnels` (no backup, no device transfer), and the two non-exportable Keystore keys | Nothing without the phone's Keystore. With it, by code run as Datapavan or above: under key A, which apps the user sends through a VPN provider's configuration, at any time after the first unlock; the provider, its server and the account's key under key A without the profile, and under key B with it only while the phone is unlocked (from Android 12), not from a locked phone after its first unlock; and from a dump of the running `:network` process's memory, the configurations the engine set, which no app can prevent |
+| Advanced | The flows of this run, in memory, for the network screen | Memory | What apps did since the network part started, to anyone who opens the network screen |
 
-ADR 0046, drafted beside this one, adds a live view of what apps the user did not open sent: an ongoing
+ADR 0046 adds a live view of what apps the user did not open sent: an ongoing
 notification's summary, an optional widget on the home screen, a Quick Settings tile and an in-app "Now" view.
 Each shows activity to anyone who looks at the phone, some of them on the lock screen.
 
@@ -91,20 +91,20 @@ asks the question and keeps its own switch; each says that the other edition has
 | Item | Ordinary users (unchanged) | With the profile |
 |---|---|---|
 | The connection log (Advanced) | Retention chosen at W9: none, 1, 7 or 30 days (ADR 0040) | Retention none: nothing is written (ADR 0037, decision 3) |
-| Chained flows' destinations (Advanced) | Not recorded unless the user turns that on | Never recorded, and never shown: Watch's screens show a chained flow's app and bytes, and "through your tool". Proxy-like behaviour is still counted in memory (VPN.md) |
-| This run's flows in memory (Advanced) | Shown until Watch stops | Cleared also when the screen turns off, so a phone handed over after it was locked shows nothing earlier |
-| The tool, its host and port (Advanced) | Kept, to start faster | Not kept: Watch finds the tool again at each start, as it already can (RESTRICTED-REGIONS.md). An uninstalled tool leaves no trace in Watch |
-| The chosen apps, the UDP choice and the proxy password (Advanced) | Kept | Kept, since the chain cannot work without them. Behind Watch's lock, and wiped by a wipe. "All apps through the tool" keeps no list |
+| Chained flows' destinations (Advanced) | Not recorded unless the user turns that on | Never recorded, and never shown: Advanced's screens show a chained flow's app and bytes, and "through your tool". Proxy-like behaviour is still counted in memory (VPN.md) |
+| This run's flows in memory (Advanced) | Shown until the network part stops | Cleared also when the screen turns off, so a phone handed over after it was locked shows nothing earlier |
+| The tool, its host and port (Advanced) | Kept, to start faster | Not kept: Advanced finds the tool again at each start, as it already can (RESTRICTED-REGIONS.md). An uninstalled tool leaves no trace in Advanced |
+| The chosen apps, the UDP choice and the proxy password (Advanced) | Kept | Kept, since the chain cannot work without them. Behind Advanced's lock, and wiped by a wipe. "All apps through the tool" keeps no list |
 | The apps left out of the tunnel (Advanced) | Kept | Kept, and wiped by a wipe |
-| Tracker blocking's settings and allowances (Advanced, ADR 0053) | Kept | Kept, behind Watch's lock, and wiped by a wipe (`BlockingSettings.wipe`); nothing of blocking is recorded: its counts are in memory, cleared with the live view's |
-| The WireGuard configurations (Advanced) | Kept, wrapped under key A, which opens at any time | Kept, since the apps sent through them cannot work without them, and wrapped again under key B, which needs an unlocked phone (the maintainer, 2026-11-20; ADR 0035): Watch started again while the phone is locked holds their apps until the unlock and says so in one notification that names no provider or configuration. What decides the routes stays under key A, so the apps are held, never sent directly. A wipe deletes all of `noBackupFilesDir/tunnels` and both Keystore keys, which leaves any copy of the wraps unreadable; the user adds the configurations again afterwards. W9 wires the switch to the store's call (`TunnelStore.setProfile`) |
+| Tracker blocking's settings and allowances (Advanced, ADR 0053) | Kept | Kept, behind Advanced's lock, and wiped by a wipe (`BlockingSettings.wipe`); nothing of blocking is recorded: its counts are in memory, cleared with the live view's |
+| The WireGuard configurations (Advanced) | Kept, wrapped under key A, which opens at any time | Kept, since the apps sent through them cannot work without them, and wrapped again under key B, which needs an unlocked phone (the maintainer, 2026-11-20; ADR 0035): the network part started again while the phone is locked holds their apps until the unlock and says so in one notification that names no provider or configuration. What decides the routes stays under key A, so the apps are held, never sent directly. A wipe deletes all of `noBackupFilesDir/tunnels` and both Keystore keys, which leaves any copy of the wraps unreadable; the user adds the configurations again afterwards. W9 wires the switch to the store's call (`TunnelStore.setProfile`) |
 | ADR 0046's widget | Offered | Its provider is disabled, so it cannot be added. One already placed shows only the app's mark, and the switch's screen asks the user to remove it, since no app can remove a widget from a launcher |
-| ADR 0046's summary notification | Asked at onboarding, with this profile's question | Off. If Watch still posts an ongoing notification, its text is a neutral "On": no count, no app, no tool and no word for VPN; hidden on the lock screen (`VISIBILITY_SECRET`); silent |
+| ADR 0046's summary notification | Asked at onboarding, with this profile's question | Off. If Advanced still posts an ongoing notification, its text is a neutral "On": no count, no app, no tool and no word for VPN; hidden on the lock screen (`VISIBILITY_SECRET`); silent |
 | ADR 0046's Quick Settings tile | Its state and summary | On and off only, no count. Opening the "Now" view from it asks for the phone's unlock first (`unlockAndRun`) |
-| ADR 0046's "Now" view | As ADR 0046 decides | Shows only this screen-on session, behind Watch's lock |
+| ADR 0046's "Now" view | As ADR 0046 decides | Shows only this screen-on session, behind Advanced's lock |
 | ADR 0046's opt-in flag notice | Kept, if the user opted in | Never kept |
 | ADR 0046's optional baseline for each app: one number per app, the most it sent in the background in a day | Kept, if the user turned it on | Never kept, so flags that need it are not raised |
-| Watch's own lock (ADR 0040) | Offered, off | On, with a code of its own, so that a forced unlock of the phone does not open it; it locks as soon as Watch leaves the screen or the screen turns off |
+| Advanced's own lock (ADR 0040) | Offered, off | On, with a code of its own, so that a forced unlock of the phone does not open it; it locks as soon as Advanced leaves the screen or the screen turns off |
 | The plan's journal (Basic, and the audit in Advanced) | Kept on disk | Held in memory only, and cleared when the screen turns off or the app's process ends. Leaving the app to make a change in Settings keeps it, so the plan still works within a session |
 | The strict sensor review | Kept on disk | In memory only, cleared in the same way |
 | The tracker scan's results | Kept on disk | In memory only: each audit scans every app again |
@@ -158,14 +158,14 @@ ADR 0046's views exist to show activity at a glance, which is what a searcher lo
 show nothing of use (decision 3). ADR 0046 decides their shape; this ADR decides only what the profile turns off
 in them, and the profile's tests check them (decision 11).
 
-*Noted 2026-11-19, W5's third part:* the engine has the call the profile's switch needs at each screen-off,
-`Engine::clear_activity` (`Engine.nativeClearActivity`), built and tested but wired to no switch until W9. It
+The engine has the call the profile's switch needs at each screen-off, `Engine::clear_activity`
+(`Engine.nativeClearActivity`), built and tested; W9 wires it to the switch. It
 forgets every app's bytes in every window of "Now", their destinations, the window while the screen was off and
 the organisations looked up, keeps only the moment the screen came on, and keeps out of the view every second
 before it that is placed later. It cannot clear the flows still open, which the engine needs to carry them, nor
 what waits for the log, which retention "none" under the profile already keeps from being written. W9 calls it at
-each screen-off **and at each screen-on**, before the view can open (*made a must 2026-11-19, review c1 of W5's
-third part, engine, finding 7*): a clear at the screen-off alone leaves the window while the screen was off,
+each screen-off **and at each screen-on**, before the view can open (review c1 of W5's third part, engine,
+finding 7): a clear at the screen-off alone leaves the window while the screen was off,
 which opens after it and fills while the phone lies locked, to show its line at the next screen-on, and this
 decision promises that a phone handed over after it was locked shows nothing earlier. "Now" keeps no copy of its
 own that the call cannot reach: it drops its snapshot, its trackers and an opened day of the history when it stops
@@ -173,18 +173,18 @@ own that the call cannot reach: it drops its snapshot, its trackers and an opene
 
 ### 7. Wiping: a panic trigger and a button
 
-- **In the app.** With the profile on, "Delete everything now" is in each app's main menu and on Watch's lock
+- **In the app.** With the profile on, "Delete everything now" is in each app's main menu and on Advanced's lock
   screen, one tap and one confirmation. It deletes everything the app keeps but the profile's switch, the
   appearance, the language and the data packs, with the public list of keys in them. Keys the user pinned or
   confirmed are wiped. In Advanced it covers the WireGuard configurations (W7): the folder
   `noBackupFilesDir/tunnels`, the configurations' wraps and the routes' alike, and both Keystore keys,
-  `watch-tunnels` and `watch-tunnels-unlocked`, deleted with it so that no copy of a wrap made before can be opened (*added 2026-11-20, W7's part 2 fix round, the security review's
-  m6*).
+  `network-tunnels` and `network-tunnels-unlocked`, deleted with it so that no copy of a wrap made before can be
+  opened (the security review of W7's part 2, m6).
 - **PanicKit.** Both editions answer [PanicKit](https://guardianproject.info/code/panickit/) triggers, as ADR
-  0040 decided for Watch. PanicKit's rules hold: a trigger app may make an app destroy data only once the user
+  0040 decided for Advanced. PanicKit's rules hold: a trigger app may make an app destroy data only once the user
   has connected the two, and the connection is never made automatically. With the profile on:
   - from the connected trigger app, the answer is the wipe above;
-  - from any other app, the answer is only to lock Watch and clear the flows in memory, which loses nothing
+  - from any other app, the answer is only to lock Advanced and clear the flows in memory, which loses nothing
     kept. So an app that sends the trigger on its own cannot make Datapavan delete anything.
 
   The responder is a small exported activity with no screen. It is added to each edition's allowlist of exported
@@ -193,8 +193,8 @@ own that the call cannot reach: it drops its snapshot, its trackers and an opene
   its package and signing certificate when the user connects it. Onboarding names trigger apps with which the
   responder was tested (Ripple, and Wasted, which also offers a tile, a shortcut and a wipe after the phone stays
   locked too long) without installing anything.
-- **The tunnel after a wipe.** A wipe while Watch runs keeps the chain only in memory until the tunnel stops, so
-  the chosen apps never go out directly (VPN.md: "Watch must not become the leak"). The next start asks for the
+- **The tunnel after a wipe.** A wipe while Advanced's tunnel runs keeps the chain only in memory until the tunnel
+  stops, so the chosen apps never go out directly (VPN.md: "Advanced must not become the leak"). The next start asks for the
   apps again.
 
 ### 8. Honest limits, told when the user chooses
@@ -277,7 +277,7 @@ A duress code is a second unlock code that wipes; a decoy is a second code that 
 - **Android's limits.** Without root, no app sees the phone's unlock code. A duress code for the phone exists only
   in the operating system. Apps that try from outside watch the lock screen through an accessibility service,
   which is the access Datapavan's audit warns about; Datapavan never holds it.
-- **A duress code in Watch's own lock** would wipe only what the profile already does not keep: the chosen apps
+- **A duress code in Advanced's own lock** would wipe only what the profile already does not keep: the chosen apps
   and the password. The gain is close to none.
 - **A decoy adds deception, not protection.** With the profile on, the apps already show what a decoy would: an
   app with nothing in it, honestly. A decoy would need the real data kept somewhere to show it to the right code,
@@ -302,7 +302,7 @@ On the Android 10, 15 and 17 emulators and the Galaxy A40, with debug builds whe
   - app-private storage holds no journal, no sensor review, no scan results, no log database or write-ahead log,
     no wrapped day key, no log key pair in the Keystore, no tool, host or port, and no key the user pinned or
     confirmed;
-  - Watch's screen and the "Now" view show nothing from before the screen turned off;
+  - the network screen and the "Now" view show nothing from before the screen turned off;
   - ADR 0046's flag notice and baseline for each app left nothing in storage;
   - no chained destination appears on any screen or in logcat;
   - `dumpsys notification` shows no ongoing notification but the neutral one, hidden on the lock screen;
@@ -311,7 +311,7 @@ On the Android 10, 15 and 17 emulators and the Galaxy A40, with debug builds whe
   - the plan's round trip to Settings and back still works.
 - **Turning the profile on** deletes, at once, what it would not have kept; **turning it off** restores nothing.
 - **PanicKit:** a test trigger app connected to the responder makes it wipe everything decision 7 names; the same
-  trigger from an app that is not connected only locks Watch and clears memory, and deletes no file. Checked by
+  trigger from an app that is not connected only locks Advanced and clears memory, and deletes no file. Checked by
   hand once with Ripple and Wasted. The model-based test of ADR 0037 gains the profile and the wipe among its steps.
 - **Ordinary use keeps everything:** with the profile off, the journal survives a restart, the log keeps the chosen
   retention, the widget and the summary show, and the app's card stays in Recents, blank.
@@ -369,7 +369,7 @@ No frontier research is needed. One piece of lab work is: measuring what Android
 
 ## Settled by the maintainer on 2026-11-14
 
-The draft's three open questions were answered while the ADR stays proposed:
+The draft's three open questions were answered:
 1. "I'm not sure" turns the profile on, and the app says what that costs and how to turn it off (decision 1).
 2. The public list of keys stays, and keys the user pinned or confirmed are not kept and are wiped (decisions 3
    and 7).

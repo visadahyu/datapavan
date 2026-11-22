@@ -2,23 +2,20 @@
 
 - Status: Accepted (by the maintainer on 2026-11-15)
 - Date: 2026-11-14
-- Fulfils: the probe app of [ADR 0041](0041-visibility-and-coexistence.md), decision 2.
-  Amends its words "on every Android version in CI": the runs happen on the maintainer's machine, and CI only
-  builds and unit-tests the probe (decision 7).
-- Amended on 2026-11-14, by the maintainer's rule for the machine: up to three emulators at once instead of one
-  (decisions 2 and 7).
+- Fulfils: the probe app of [ADR 0041](0041-visibility-and-coexistence.md), decision 2. Its runs happen on the
+  maintainer's machine, and CI only builds and unit-tests the probe (decision 7).
 
 ## Context
 
-ADR 0041 promised a probe app of the project's own to measure what an app left out of Watch's tunnel still sees.
-[ADR 0046](0046-live-activity.md), decision 5, lists what Watch's view cannot see: traffic carried for an app by
+ADR 0041 promised a probe app of the project's own to measure what an app left out of Advanced's tunnel still sees.
+[ADR 0046](0046-live-activity.md), decision 5, lists what Advanced's live view cannot see: traffic carried for an app by
 another, use of data on the device, traffic between apps over loopback. Both rest on documents and on a few
 device tests, not on measurements on each Android version.
 
-These limits are not Watch's alone. Stock Android, without root, leaves every privacy tool blind to some things
+These limits are not Advanced's alone. Stock Android, without root, leaves every privacy tool blind to some things
 and exposed in others. They change between versions, and some change within a version, since the resolver and
 other parts of Android are updated as modules through Google Play system updates. A sentence that holds on
-Android 10 may be false on 17. Users at risk need to know what Watch cannot see, and the project's claims about it
+Android 10 may be false on 17. Users at risk need to know what Advanced cannot see, and the project's claims about it
 must be checkable by anyone.
 
 **The behaviours to measure.** Each is stated as its public source states it, where one exists. The probe checks it on each version.
@@ -35,10 +32,10 @@ must be checkable by anyone.
 | `webview` | A WebView's requests carry the app's UID, whichever origin in the page asked. "WebView's browser code runs in the app's process", its network service included | Chromium's WebView architecture document (it says nothing of UIDs, which follow from the process) |
 
 The table does not yet say what each Android version does; that is what the probe measures. Two of the rows are
-blind spots (`appops-closed`, `indicators`), one is an exposure of Watch (`vpn-seen`), and the rest are ways in
-which traffic reaches the network without Watch being able to name the app behind it.
+blind spots (`appops-closed`, `indicators`), one is an exposure of Advanced's VPN (`vpn-seen`), and the rest are ways in
+which traffic reaches the network without Advanced being able to name the app behind it.
 
-**Several are routes by which an app can hide traffic from Watch.** Publishing them needs a rule, and so does a
+**Several are routes by which an app can hide traffic from Advanced.** Publishing them needs a rule, and so does a
 finding that turns out to be new.
 
 **The lab's apps today** live under `scripts/` (`fixture-app`, `workload-app`, `test-tool`). They are built with
@@ -63,8 +60,8 @@ traffic; this probe measures the platform.
   `lab/`. It also fails if a release manifest names a lab package. Since R8 renames the classes it keeps, it also
   reads each release's `mapping.txt`, R8's record of the original names, and every dex's strings for those only
   the lab's code holds, and it looks inside archives nested in a release.
-- **The VPN under test** is Watch's debug build, with its exclusion list (ADR 0041, decision 2) and its debug
-  counters. The probe changes nothing in Watch.
+- **The VPN under test** is Advanced's debug build, with its exclusion list (ADR 0041, decision 2) and its debug
+  counters. The probe changes nothing in Advanced.
 - **It is ADR 0041's probe.** Decision 2 of that ADR is fulfilled when `vpn-seen` has a row for every version below.
 
 ### 2. What it publishes
@@ -84,11 +81,11 @@ traffic; this probe measures the platform.
     run many times, at least 100 trials, and its row gives the count and the rate with a 95 % interval (Wilson's),
     never one outcome;
   - **the public source,** with the date it was read;
-  - **what Watch does and tells the user** (decision 3);
-  - **one command** that reproduces it on a fresh emulator: `lab/run.sh <behaviour> <api> [--trials N]`. It creates an AVD from
-    the named image, boots it with `-no-snapshot -wipe-data -tcpdump`, installs the probe, the fixture and Watch's
-    debug build, runs the behaviour's steps, writes the raw output, then stops the emulator and deletes the AVD;
-  - **the date and the probe's commit;**
+  - **what Advanced does and tells the user** (decision 3);
+  - **one command** that reproduces it on a fresh emulator: `lab/run.sh <behaviour> <api> [--trials N]`. It creates an
+    AVD from the named image, boots it with `-no-snapshot -wipe-data -tcpdump`, installs the probe, the fixture and
+    Advanced's debug build, runs the behaviour's steps, writes the raw output, then stops the emulator and deletes the
+    AVD; - **the date and the probe's commit;**
   - **who replicated it:** "not yet", or the person or organisation outside the project who ran the same command
     and sent the raw output, the date and that output's SHA-256. A row is marked replicated only on raw output
     that matches.
@@ -100,7 +97,7 @@ traffic; this probe measures the platform.
   `results.csv` and of each raw output at that tag. A snapshot holds results and code, never a build of the lab
   apps. A permanent identifier (a DOI) would need an account, and so the maintainer's word.
 - **The capture is the ground truth where traffic matters.** The emulator's own capture (`-tcpdump`) sees every
-  packet that leaves the virtual phone, whoever sent it. A row that rests on what Watch logged or on what the probe
+  packet that leaves the virtual phone, whoever sent it. A row that rests on what Advanced logged or on what the probe
   saw is checked against it, and its SHA-256 is recorded with the run.
 - **What the probe does for each behaviour,** in short:
   - `vpn-seen`: reads the transport, the networks, the interfaces, the addresses, the routes and the DNS servers,
@@ -109,13 +106,13 @@ traffic; this probe measures the platform.
     the answer; on the emulator only, it records whether `GET_APP_OPS_STATS`, granted over USB with `pm grant`,
     opens the history, which is the route of DESIGN's advanced mode;
   - `proc-net`: tries to read `/proc/net/tcp`, `tcp6`, `udp`, `udp6`, `unix` and `route`, and records the error;
-  - `loopback`: the probe and the fixture, two UIDs, exchange a fixed payload over 127.0.0.1 and `::1` while Watch
-    runs; Watch's counters and the capture show whether anything entered the tunnel or left the phone;
+  - `loopback`: the probe and the fixture, two UIDs, exchange a fixed payload over 127.0.0.1 and `::1` while
+    Advanced runs; its counters and the capture show whether anything entered the tunnel or left the phone;
   - `indicators`: the fixture runs its reads and then the microphone (decision 5); the run records the status bar,
     the dashboard, the notifications and the toasts, with screenshots and `dumpsys`. What a version's dashboard
     lists beyond location, camera and microphone is recorded, not assumed;
   - `carried-by-system`, `short-lived`, `webview`: each sends to the lab's own server on the host (10.0.2.2) or
-    looks up names reserved for testing (RFC 2606), and records which UID Watch was given, against the capture.
+    looks up names reserved for testing (RFC 2606), and records which UID Advanced was given, against the capture.
 - **A result that differs from its source** is a finding, and goes by decision 4.
 - **Stock images first, then other makers' builds.** Phone makers change Android, and Datapavan is designed for
   every maker's phones, not one. The table says at its top which builds it covers.
@@ -129,26 +126,26 @@ traffic; this probe measures the platform.
 ### 3. It measures; it never packages evasion
 
 **Why publishing is right.**
-- **Kerckhoffs's principle.** Datapavan is fully open source. Watch's design has to hold with everything about it
+- **Kerckhoffs's principle.** Datapavan is fully open source. Advanced's design has to hold with everything about it
   known, its gaps included; a gap kept quiet protects no one who reads the source.
 - **The routes are already documented.** NetGuard's FAQ names the download manager and Google Play services as
   carriers of other apps' traffic; PCAPdroid's FAQ explains its "unknown" app for short-lived connections; the
   "Local Mess" disclosure described the localhost route in detail in June 2025.
-- **Users at risk must know what Watch cannot see.** A user who trusts Watch to show everything, and does not
+- **Users at risk must know what Advanced cannot see.** A user who trusts Advanced to show everything, and does not
   learn what it misses, is worse off than one told plainly.
 
-**Each route is paired with what Watch does and says.** The table carries both. Where Watch's answer is not built
+**Each route is paired with what Advanced does and says.** The table carries both. Where Advanced's answer is not built
 yet, the row says "not built" and links the gate; it never claims more than the build on `main` does.
 
-| Route or gap | What Watch does | What Watch tells the user |
+| Route or gap | What Advanced does | What Advanced tells the user |
 |---|---|---|
-| `carried-by-system`: the download service | The flow stays under the download service, marked as carried for another app. Watch never guesses which app asked | "Downloaded for an app by Android's download service. Android does not say which app." |
+| `carried-by-system`: the download service | The flow stays under the download service, marked as carried for another app. Advanced never guesses which app asked | "Downloaded for an app by Android's download service. Android does not say which app." |
 | `carried-by-system`: a Custom Tab | The flow stays under the browser | "Pages an app opens in a browser tab count under the browser." |
 | `carried-by-system`: push | The flow stays under Google Play services, marked as the push service | "Push messages for many apps come through Google Play services." |
 | `carried-by-system`: the resolver | A lookup is shown under the app when Android names it, and under "Android's resolver" when it does not | "Some lookups are made by Android for an app; they show under Android's resolver." |
 | `short-lived` | A flow whose owner is gone is shown as "app not known" and counted with the flows Android cannot name (ADR 0044); it is never given to a guessed app | The count of flows with no known app, on the view |
 | `webview` | The flow stays under the app, with its destination's name | "Web pages shown inside an app count under that app." |
-| `loopback` | Not seen | "Traffic between apps on the phone does not pass through Watch." (ADR 0046, decision 5) |
+| `loopback` | Not seen | "Traffic between apps on the phone does not pass through Datapavan." (ADR 0046, decision 5) |
 | `appops-closed`, `indicators` | Not seen. The audit app shows which apps hold each permission (ADR 0014) | "Whether an app read contacts, files or messages on the phone is not visible to any app without root." (ADR 0046, decision 5) |
 | `vpn-seen` | Common tunnel addresses (ADR 0041, decision 3) | That other apps can see that a VPN runs (ADR 0041, decision 1) |
 
@@ -216,10 +213,10 @@ time. A draft may be prepared with AI help; the maintainer files it.
   tests on the JVM: turning the probe's raw output into a row, and checking the table's format. It also runs
   decision 1's class check and decision 5's manifest check. No emulator runs the probe in CI: CI minutes are
   limited.
-- **Full runs on the maintainer's machine,** up to three emulators at once, on at most 12 of the machine's 24
-  threads and with at least 14 GB of memory left free, each stopped and its AVD deleted after its run. A row
-  whose result depends on timing runs alone, or with each emulator pinned to threads of its own and what ran
-  beside it recorded.
+- **Full runs on the maintainer's machine,** under the maintainer's rule for it: up to three emulators at once, on at
+  most 12 of the machine's 24 threads and with at least 14 GB of memory left free, each stopped and its AVD deleted
+  after its run. A row whose result depends on timing runs alone, or with each emulator pinned to threads of its own
+  and what ran beside it recorded.
 - **When rows are run again:** when a new image revision or Google Play system update month appears for a version
   in the table, and before a release of Datapavan Advanced whose texts cite the table (ADR 0039).
 
@@ -237,7 +234,7 @@ dated, signed snapshots. No frontier research is needed; it is lab work.
 
 - **Claims get numbers.** ADR 0041's promise and ADR 0046's "what this view cannot see" rest on measurements by
   version, which anyone can repeat.
-- **Users at risk are told precisely** what Watch cannot see, and the view's words follow the table.
+- **Users at risk are told precisely** what Advanced cannot see, and the view's words follow the table.
 - **Changes between versions are caught,** including those that a Google Play system update brings within a
   version.
 - **Google learns of new weaknesses first,** through coordinated reports.
@@ -265,7 +262,7 @@ Each of these needs the maintainer's word:
 
 Also outside this ADR:
 - runs on phones of other makers beyond the lab's own;
-- what Watch does about a route beyond decision 3's labels, which the ADR that builds it decides.
+- what Advanced does about a route beyond decision 3's labels, which the ADR that builds it decides.
 
 ## Sources
 

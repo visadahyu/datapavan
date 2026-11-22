@@ -3,7 +3,8 @@
 - Status: Accepted
 - Date: 2026-11-02
 - Decided by: mehdashti
-- Amended by [ADR 0046](0046-live-activity.md) on 2026-11-15: decision 1, for Advanced's live view.
+- See also: [ADR 0046](0046-live-activity.md), decision 4: the counts across apps that decision 1 allows on Advanced's
+  live surfaces.
 
 ## Context
 ADR 0022 shows how much each app received and sent. The maintainer asked for more: an expected
@@ -42,7 +43,11 @@ measured the method on the Android 17 emulator against packet captures and on th
 1. **Facts, never alerts.** Nothing about an app's traffic becomes a notification, a badge, a colour,
    a score or a rank. Facts and comparisons appear on the app's page, or as the result of a check
    the user starts. The remediation plan (M5) may list the facts of point 3 for review, never as a
-   warning.
+   warning. On Datapavan Advanced's live surfaces, and only so far
+   ([ADR 0046](0046-live-activity.md), decision 4): a count across all apps of those that sent while not
+   in use, with sizes and no app named, may appear in the summary notification and the widget; and a
+   count of new flags, with no app or destination named, may appear in the flag notice, once the user
+   turned it on.
 2. **The guided check.** On an app's page, the user can check one activity:
    - **Choose.** The user says what they will do in the app. Activities that only receive: watch
      videos, listen, scroll or read without posting, use a map, download a file. Others: send
@@ -51,16 +56,16 @@ measured the method on the Android 17 emulator against packet captures and on th
    - **Measure.** Datapavan reads the app's counts, opens the app, and reads again when the user
      returns. Both readings ask for the same period: from the two-hour boundary (a multiple of two
      hours since the Unix epoch) at least a day before the first reading, to a day after now. The
-     second reading comes at least 15 seconds after Datapavan's previous query, with a countdown,
-     and Datapavan makes no other query in between; the overview's refresh waits.
+     first reading waits 15 seconds after any earlier query. The second reading comes at least 15
+     seconds after Datapavan's previous query, with a countdown, and Datapavan makes no other query in
+     between; the overview's refresh waits.
    - **Check that the count is up to date.** Datapavan compares the difference summed over all UIDs
      with the difference of `TrafficStats`' live totals. If the sum falls short by more than 5 % and
      more than 64 KB, it says that Android's count is not up to date yet and reads again 15 seconds
      later, up to three times; then it shows the numbers and says that they may be incomplete. With
-     a VPN active the comparison is not made, because it was not tested, and the result says so.
-     (Amended while building it, 2026-11-02: the first reading also waits 15 seconds after any
-     earlier query, and a sum above the live totals by the same margin means that the first reading
-     was behind, so the result may include traffic from before the check, and says so.)
+     a VPN active the comparison is not made, because it was not tested, and the result says so. A
+     sum above the live totals by the same margin means that the first reading was behind, so the
+     result may include traffic from before the check, and says so.
    - **Show** the duration, and received and sent bytes for mobile data and Wi-Fi apart, per minute,
      with the share that Android counted as background. For activities that only receive, the sent
      bytes are also shown as a share of the received ones, next to one sentence: while an app only
@@ -105,10 +110,10 @@ measured the method on the Android 17 emulator against packet captures and on th
   need no permission; the rules of point 2 (period, freshness, the reasons for not comparing) are
   pure functions with unit tests, and `scripts/traffic-lab` checks the whole check on the emulator.
 - The kernel version comes from `os.version`. Before the check ships: whether a kernel older than
-  4.9 is the right test for `xt_qtaguid`, and how Android counts a keyboard while it is on screen.
-  (Amended 2026-11-03: a keyboard's traffic counts as foreground while it is shown and as background
-  after it is hidden, on Android 11, 15 and 17 emulators, so the fact about quiet roles does not
-  count what a keyboard sends while the user types; [spike](../spikes/2026-11-keyboard-counting.md).)
+  4.9 is the right test for `xt_qtaguid`. A keyboard's traffic counts as foreground while it is shown
+  and as background after it is hidden, on Android 11, 15 and 17 emulators, so the fact about quiet
+  roles does not count what a keyboard sends while the user types
+  ([spike](../spikes/2026-11-keyboard-counting.md)).
 - The privacy policy says that the check reads the phone's total traffic counters, in memory only.
 - The guided check and the facts of point 3 join M5, before the first release; ranges for kinds of
   app become a research item next to the v0.2 cross-checks. DESIGN.md says so.
