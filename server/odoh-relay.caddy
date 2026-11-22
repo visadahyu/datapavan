@@ -7,15 +7,21 @@
 # RFC 9230's URI template expands it (Datapavan's app writes it plain). A request whose whole query is exactly
 # targethost=HOST&targetpath=PATH, or the same with ENCODED, goes to https://HOST PATH with its body, the target's
 # Host, and Content-Type and Accept of ODoH, and no other header; the target's status and body come back without
-# its cookies or Server.
+# its cookies or any other header of the target's (ODoH's Content-Type is set by odoh_relay).
 (odoh_target) {
 	@odoh_{args.0} expression `{query} == "targethost={args.1}&targetpath={args.2}" || {query} == "targethost={args.1}&targetpath={args.3}"`
 	handle @odoh_{args.0} {
+		# The path is a literal, never a request's placeholder: a rewrite that ends in "?" re-expands what it holds
+		# (CVE-2026-77281, not fixed in Debian 13's Caddy).
 		rewrite * {args.2}?
 		# Every header of the client's goes. A field of "**" means every field in Caddy 2.6.2, where a lone "*"
 		# fails; it runs before the proxy's own headers, whose deletions would come after its settings.
+		# The trailers a client declares are not headers: their names reach the target, never their values.
 		request_header -**
 		reverse_proxy https://{args.1} {
+			# The whole body is read before the target is asked, so that a slow client holds no request open there;
+			# odoh_relay's length check and request_body bound it at 65,604 bytes.
+			buffer_requests
 			# The headers Caddy's proxy adds by itself go too; then the three that ODoH needs.
 			header_up -X-Forwarded-For
 			header_up -X-Forwarded-Proto
@@ -25,9 +31,9 @@
 			header_up Accept application/oblivious-dns-message
 			# Present but empty, so that Go's HTTP client sends no User-Agent of its own.
 			header_up User-Agent ""
-			header_down -Set-Cookie
-			header_down -Set-Cookie2
-			header_down -Server
+			# Every header of the target's goes (cookies, Server, CORS, Clear-Site-Data, reporting, Location...):
+			# nothing it writes is served under datapavan.org's origin but the status and the body.
+			header_down -**
 			transport http {
 				tls_server_name {args.1}
 				compression off
@@ -42,8 +48,12 @@
 # a 4xx before anything is contacted.
 (odoh_relay) {
 	handle /odoh/proxy {
-		# Caddy's own Server header too, whatever the site sets.
-		header -Server
+		# Caddy's own Server header too, whatever the site sets, and ODoH's type on what comes back: deferred, these
+		# run as the response is written, after the proxy's deletions.
+		header {
+			-Server
+			Content-Type application/oblivious-dns-message
+		}
 		@odoh_not_post not method POST
 		@odoh_not_type not header Content-Type application/oblivious-dns-message
 		# RFC 9230's largest message: 1 byte of type, a key id of at most 64 bytes (HKDF-SHA512's) and an encrypted
