@@ -695,8 +695,9 @@ pub(crate) mod tests {
         );
     }
 
-    /// ADR 0055: the project's own relay, in Germany and seated in Türkiye, pairs by the rule with Cloudflare's
-    /// target and crypto.sx's, and with none of dnscry.pt's, which are in Germany; no default pair names it.
+    /// ADR 0055: the project's own relay, in Germany (and Austria, its hosting's parent) and seated in Türkiye, pairs
+    /// by the rule with Cloudflare's target and crypto.sx's, and with none of dnscry.pt's, which are in Germany; no
+    /// default pair names it.
     #[test]
     fn the_projects_own_relay_pairs_only_where_the_rule_allows() {
         let c = shipped();
@@ -704,7 +705,7 @@ pub(crate) mod tests {
             unreachable!("in the tables")
         };
         assert_eq!(own.url.text(), "https://datapavan.org/odoh/proxy");
-        assert_eq!(own.behind.jurisdictions, ["DE", "TR"]);
+        assert_eq!(own.behind.jurisdictions, ["DE", "AT", "TR"]);
         let allowed: Vec<&str> = c
             .targets
             .iter()

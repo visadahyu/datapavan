@@ -206,3 +206,8 @@ datapavan	jurisdictions	DE	https://rdap.db.ripe.net/ip/152.53.127.102	2026-11-22
 datapavan	jurisdictions	DE	https://rdap.db.ripe.net/ip/2a0a:4cc0:c0:52d8:2892:9ff:fe91:b9c9	2026-11-22
 datapavan	jurisdictions	TR	https://github.com/visadahyu/datapavan/blob/main/docs/decisions/0055-an-odoh-relay-of-the-projects-own.md	2026-11-22
 datapavan	status	debug	https://github.com/visadahyu/datapavan/blob/main/docs/decisions/0055-an-odoh-relay-of-the-projects-own.md	2026-11-22
+datapavan	jurisdictions	AT	https://rdap.db.ripe.net/ip/152.53.0.0/16	2026-11-22
+datapavan	jurisdictions	AT	https://rest.db.ripe.net/ripe/organisation/ORG-AHG12-RIPE	2026-11-22
+datapavan	jurisdictions	AT	https://rdap.db.ripe.net/ip/2a0a:4cc0:c0:52d8:2892:9ff:fe91:b9c9	2026-11-22
+datapavan	jurisdictions	DE	https://stat.ripe.net/data/maxmind-geo-lite/data.json?resource=152.53.127.102	2026-11-22
+datapavan	jurisdictions	DE	https://stat.ripe.net/data/maxmind-geo-lite/data.json?resource=2a0a:4cc0:c0:52d8:2892:9ff:fe91:b9c9	2026-11-22

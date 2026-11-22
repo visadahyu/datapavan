@@ -3,7 +3,7 @@ retrieved: 2026-11-20
 relays: 3
 targets: 6
 pairs: 2
-evidence: 203
+evidence: 208
 list: github.com/DNSCrypt/dnscrypt-resolvers at commit be83948783d10ace1febef4180d640936acd40ea (2026-11-15):
   v3/odoh-relays.md, sha256 f4718be434cc838e929aa10d4f3cb18d645f8ae4bcfa09ba3f88c4906cd70652, 3 relays;
   v3/odoh-servers.md, sha256 e778bfe1a8f168815a1033a8e361b2cece97b0b8c88a0743b59f612d1328721b, 130 targets
@@ -66,7 +66,11 @@ caution: dnscry.pt is run and paid for by one person, who wrote on 2026-07-05 (d
 own-relay: on 2026-11-22, the project's own relay (ADR 0055, proposed), datapavan in relays.tsv: its URL from
   server/odoh-relay.caddy; its addresses those of datapavan.org, asked of the two resolvers above over DoH at 06:55
   UTC, which agreed; its hosting AS from RIPEstat network-info for each address (AS197540, 152.53.124.0/22 and
-  2a0a:4cc0:c0::/43) and the AS's holder and seat from RIPE's RDAP (netcup GmbH, Karlsruhe, DE); the blocks' own
-  RDAP records say DE. TR is the operator's seat, where the maintainer resides, as ADR 0055 records. Its status is
-  debug: debuggable builds alone offer it, and pairs.tsv does not name it, until ADR 0055's gates pass. By the rule
-  it pairs with cloudflare and crypto-sx, not with the dnscry.pt targets (DE).
+  2a0a:4cc0:c0::/43) and the AS's holder and seat from RIPE's RDAP (netcup GmbH, Karlsruhe, DE). Its jurisdictions
+  as the evidence gives them: DE, the hosting company's seat, the /22's country and where RIPEstat's GeoLite data
+  places both addresses (Nuremberg); AT, the seat of Anexia Holding GmbH (Klagenfurt), netcup's parent, which holds
+  the IPv4 /16 (AT-ANXHOLDING2-20210908, country AT) and maintains the /22, while RIPE names the IPv6 /40
+  DE-NETCUP-KVM-VIE (Vienna); TR, the operator's seat, where the maintainer resides, as ADR 0055 records. The data
+  centre itself is for the maintainer to read in netcup's control panel. Its status is debug: debuggable builds
+  alone offer it, and pairs.tsv does not name it, until ADR 0055's gates pass. By the rule it pairs with cloudflare
+  (US, CR) and crypto-sx (FR, US), not with the dnscry.pt targets (DE; vie01 also AT).

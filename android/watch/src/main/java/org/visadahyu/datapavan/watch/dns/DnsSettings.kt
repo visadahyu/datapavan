@@ -200,13 +200,15 @@ class DnsSettings private constructor(private val prefs: SharedPreferences) {
         }
 
         /**
-         * The relays' table as this build may use it (ADR 0055): a row whose status, the twelfth column, is `debug`
-         * stays only in a debuggable build. A release build's engine and screen never see it, whatever the pack holds
-         * elsewhere: the project's own relay, until ADR 0055's gates pass.
+         * The relays' table as this build may use it (ADR 0055): a release build keeps a row only when its status, the
+         * twelfth column, is `-`; any other value (`debug`, a misspelling, a value to come, a row whose columns moved)
+         * and a row without the column stay out of it (review m7: fail closed). A debuggable build keeps every row. A
+         * release build's engine and screen therefore never see the project's own relay until ADR 0055's gates pass.
+         * The bundled pack has the column, and a pack is never older than it.
          */
         fun forBuild(relays: String, debuggable: Boolean): String = if (debuggable) relays else {
-            relays.lineSequence().filterNot { line ->
-                !line.startsWith("#") && line.split('\t').getOrNull(11)?.trim() == "debug"
+            relays.lineSequence().filter { line ->
+                line.startsWith("#") || line.isBlank() || line.split('\t').getOrNull(11)?.trim() == "-"
             }.joinToString("\n")
         }
 

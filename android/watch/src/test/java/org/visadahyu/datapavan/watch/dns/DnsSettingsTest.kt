@@ -10,9 +10,12 @@ import org.junit.Test
 
 /** The user's DNS setting as kept and as the engine reads it, and the engine's catalogue and state as the screen reads them. */
 class DnsSettingsTest {
-    /** ADR 0055: the project's own relay, `debug` in its status column, reaches a debuggable build's tables alone. */
+    /**
+     * ADR 0055: the project's own relay, `debug` in its status column, reaches a debuggable build's tables alone, and a
+     * release build keeps only rows whose status is `-` (review m7: fail closed).
+     */
     @Test
-    fun aReleaseBuildLeavesTheDebugRelaysOut() {
+    fun aReleaseBuildKeepsOnlyTheRelaysForEveryBuild() {
         val relays = File("../../data/odoh/relays.tsv").readText()
         fun ids(table: String) = table.lines().filter { it.isNotBlank() && !it.startsWith("#") }.map { it.split('\t')[0] }
         assertEquals(listOf("numa", "crypto-sx-fastly", "datapavan"), ids(DnsSettings.forBuild(relays, debuggable = true)))
@@ -21,6 +24,20 @@ class DnsSettingsTest {
         assertFalse(release.contains("datapavan.org"))
         // Every other line, comments included, as it was.
         assertEquals(relays.lines().filterNot { it.startsWith("datapavan\t") }, release.lines())
+        // The shipped table holds no status but these two.
+        for (row in relays.lines().filter { it.isNotBlank() && !it.startsWith("#") }) {
+            assertTrue(row, row.split('\t').getOrNull(11) in setOf("-", "debug"))
+        }
+        // Any other status, or none, stays out of a release build.
+        val row = relays.lines().first { it.startsWith("numa\t") }
+        val fields = row.split('\t')
+        for (other in listOf("Debug", "beta", "", " debug")) {
+            val changed = (fields.take(11) + other).joinToString("\t")
+            assertEquals(other, listOf<String>(), ids(DnsSettings.forBuild(changed, debuggable = false)))
+        }
+        assertEquals("no status column", listOf<String>(), ids(DnsSettings.forBuild(fields.take(11).joinToString("\t"), debuggable = false)))
+        assertEquals("the column moved", listOf<String>(), ids(DnsSettings.forBuild((fields.take(10) + "-").joinToString("\t"), debuggable = false)))
+        assertEquals(listOf("numa"), ids(DnsSettings.forBuild(row, debuggable = false)))
     }
 
     @Test
