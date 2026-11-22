@@ -42,11 +42,11 @@
 
   A relay of the project's own would be the first server of the project that phones contact by themselves, and it
   would see their addresses. ADR 0016 decision 1 says the project collects no data from users. Its decision 5
-  requires a new ADR, a legal review and a published threat assessment before that changes.
-- **What this record does not follow of ADR 0016, said plainly.** ADR 0016's decision 5 asks for a new ADR that
-  supersedes it, after the legal review and the published threat assessment.
-  - **This record revisits it in part,** which that decision does not provide for. On acceptance, ADR 0016's
-    decision 5 is amended to allow it, or ADR 0016 is superseded: the maintainer's choice.
+  requires the maintainer's word, after a legal review and a published threat assessment, written into ADR 0016
+  itself, before that changes.
+- **What this record does not follow of ADR 0016, said plainly.** ADR 0016's decision 5 asks for the maintainer's
+  word after the legal review and the published threat assessment, with the change written into ADR 0016.
+  - **This record revisits it in part.** On acceptance, ADR 0016 is amended to allow it.
   - **The server goes first.** This record's gates (point 8) hold only the app's release. The relay on the
     server is live and public as soon as the maintainer runs the install script. It then serves any ODoH client,
     and its URL is in public data. That can come before the legal review, by the maintainer's word alone.

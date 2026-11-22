@@ -101,7 +101,7 @@ project's own channels.
 7. **Every bundled dataset has this structure.** It sits in `data/<name>/` with its `LICENSE`, a
    `SOURCE` file (URL, download date, SHA-256 of what was downloaded) and the script that converts it.
    The in-app "Data sources" screen lists it with its licence and attribution. A new dataset is added
-   to this record, or to one that supersedes it, before it ships.
+   to this record before it ships.
 8. **Licences are machine-readable.** Every file under `data/` carries an SPDX licence identifier, so
    that the repository can follow the REUSE specification and be checked with `reuse lint`. Each
    release's software bill of materials lists every dataset as a component, with its licence, snapshot

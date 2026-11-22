@@ -2,7 +2,7 @@
 
 - Status: Accepted
 - Date: 2026-10-30
-- Decided by: mehdashti
+- Decided by: mehdashti; decision 5 in its present form by the maintainer on 2026-11-22
 - Revisited in part by: [0055](0055-an-odoh-relay-of-the-projects-own.md) (proposed), a bounded exception for an ODoH
   relay of the project's own
 
@@ -36,10 +36,12 @@ A prior-art review (2026-10-30) found:
    "this preinstalled package broke this feature on this model", through the share sheet, to a
    channel they pick. Such a report names the vendor, model, build, package and outcome, never apps that
    the user installed, and the user reads it before sending. Datapavan never sends anything by itself.
-5. **Revisiting this needs a new ADR** that supersedes this one, after legal review and a published
-   threat assessment for users in restricted regions. The least risky form found so far is secure
-   aggregation with an independent second operator. It would be strictly opt-in, behind an anonymising
-   relay, measure only bounded values that never include app identities, and add noise to its outputs.
+5. **Changing this needs the maintainer's word,** after a legal review and a published threat assessment for
+   users in restricted regions, and the change is written into this ADR itself, not into a record that
+   supersedes it (the maintainer, 2026-11-22: «بله، با شکل تازه», "yes, in the new form"). The least risky
+   form found so far is secure aggregation with an independent second operator. It would be strictly opt-in,
+   behind an anonymising relay, measure only bounded values that never include app identities, and add noise
+   to its outputs.
 
 ## Consequences
 - The privacy policy can stay one sentence long: nothing leaves the phone unless the user sends it.
