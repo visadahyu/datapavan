@@ -5,7 +5,7 @@
 
 ## Context
 
-In W6 the user picks apps whose traffic Watch sends through the local SOCKS5 proxy of the user's
+In W6 the user picks apps whose traffic Advanced sends through the local SOCKS5 proxy of the user's
 circumvention tool ([DESIGN.md §13.2](../DESIGN.md#132-v020-datapavan-advanced-the-connection-log-next-to-circumvention-tools),
 [VPN.md](../VPN.md)). VPN.md already says that such apps never use the network's resolver: the network
 would see every name they look up, and in a filtered network it answers some names falsely. This record
@@ -13,11 +13,11 @@ decides how their lookups are answered instead.
 
 What is known:
 
-- **Android names the app behind each lookup.** Its resolver sends each app's query to Watch's DNS address
+- **Android names the app behind each lookup.** Its resolver sends each app's query to Advanced's DNS address
   on a socket owned by that app, on Android 11, 15 and 17
-  ([spike](../spikes/2026-11-shared-dns-cache.md)). So Watch can answer each app by its route.
+  ([spike](../spikes/2026-11-shared-dns-cache.md)). So Advanced can answer each app by its route.
 - **Android shares one cache among all the apps of the tunnel,** answers and negative answers alike, and
-  keeps no answer whose time to live is 0 (same spike). Whatever Watch answers one app, it can keep out of
+  keeps no answer whose time to live is 0 (same spike). Whatever Advanced answers one app, it can keep out of
   another app's reach.
 - **Every proxy tool of the table takes names.** Of the 20 rows of `data/tools/tools.tsv` with a proxy
   mode, 18 accept a host name in a SOCKS5 request (address type 3) by a primary source, and the other two
@@ -31,7 +31,7 @@ What is known:
   [Tor manual], and has a SOCKS command of its own, `RESOLVE` [Tor's SOCKS extensions], which no other
   tool offers.
 - **Browsers sort addresses into spaces.** Local Network Access, which Chrome ships, puts 198.18.0.0/15
-  in the *loopback* space, `fc00::/7` (unique local addresses, Watch's own prefix among them) in the
+  in the *loopback* space, `fc00::/7` (unique local addresses, the network part's own prefix among them) in the
   *local* space, and every address it does not list, 2001:2::/48 included, in the *public* space
   [WICG Local Network Access]. The space of a connection is taken from the address it was made to; a page
   whose address is more public than the address of a request it makes needs the user's permission for
@@ -42,17 +42,17 @@ What is known:
 
 Options:
 
-1. **Stand-in addresses, names to the tool.** For a chained app, Watch answers A questions itself, with
+1. **Stand-in addresses, names to the tool.** For a chained app, Advanced answers A questions itself, with
    an address from a reserved range that it maps to the name. When the app connects to that address,
-   Watch asks the tool for the name (`CONNECT` or a UDP datagram with address type 3); the tool resolves
+   Advanced asks the tool for the name (`CONNECT` or a UDP datagram with address type 3); the tool resolves
    it where its traffic leaves. A name reaches the tool only when the app connects to it.
-2. **Every query through the tool to a resolver.** Watch sends the app's query as DNS over TCP through
+2. **Every query through the tool to a resolver.** Advanced sends the app's query as DNS over TCP through
    `CONNECT`, or as a datagram where the tool carries UDP, to a public resolver. Real addresses, but the
    resolver learns every name, and the answer suits the resolver's location rather than the tool's exit.
 3. **Tor's `RESOLVE`** for Tor, and option 2 for the others: two paths to keep, for one tool family.
 4. **Stand-ins for every app,** chained or not, as sing-box does when it routes some apps directly inside
    its own tunnel. Android's shared cache would then do no harm, but direct apps would see stand-ins too
-   and depend on Watch's map for every connection: Watch would no longer only observe them (§5, v0.2).
+   and depend on Advanced's map for every connection: Advanced would no longer only observe them (§5, v0.2).
 5. **The network's resolver,** as for direct apps. Ruled out by VPN.md.
 
 ## Decision
@@ -68,28 +68,27 @@ Option 1, from W6 on, with these rules:
   its server over IPv6.
 - **The map.** Each name gets one stand-in, the same for as long as the name is used, so that connections
   in parallel agree. When the range is full, the stand-in used least recently goes to the new name.
-- **The map is not kept across a restart** of Watch, unlike sing-box's `store_fakeip`: it is a list of
+- **The map is not kept across a restart** of the network part, unlike sing-box's `store_fakeip`: it is a list of
   the names the user opened through the tool, which is evidence in a phone search (§8). It lives in
   memory only and is never logged. A connection to a stand-in the map does not hold gets a reset (TCP) or
   an ICMP error (UDP), so the app looks the name up again.
-- **Times to live.** While any app is chained, every answer of Watch's DNS address reaches the apps with
+- **Times to live.** While any app is chained, every answer of Advanced's DNS address reaches the apps with
   a time to live of 0, so that no stand-in reaches a direct app through Android's shared cache and no
-  answer of the network's resolver reaches a chained app. Watch keeps a cache of its own for each route,
+  answer of the network's resolver reaches a chained app. Advanced keeps a cache of its own for each route,
   which honours the real time to live, so that no resolver sees more queries than before.
 - **Connections.** A chained app's connection to a stand-in goes to the tool with the name; to any other
   address (a hard-coded one, or one from the app's own DNS) with that address. Both go through the tool or
   not at all (VPN.md).
-- **Other record types through the tool** (HTTPS and SVCB, TXT, MX, SRV and the rest), already in W6: Watch
-  sends the app's question as DNS over TCP (RFC 7766) through the tool's `CONNECT` to a public resolver,
-  Quad9's service without blocking (`quad9-unsecured` in `data/resolvers`) until the user chooses one,
-  and passes the answer on with a time to live of 0. From an HTTPS or SVCB answer it removes the address
-  hints, so that every connection goes to a stand-in in one space, and keeps the ECH keys, so that ECH
-  works through the tool as without it. Through the tool, the resolver sees the tool's exit, not the
-  user's address. W8 adds the user's own DoH or DoT resolver, reached through the tool the same way.
-  *Built in W8's part 1 (2026-11-20, [ADR 0042](0042-dns-of-apps-that-go-directly.md)): once Watch's encrypted
-  resolver is set, these questions go its encrypted ways through the tool (the user's own resolver, ODoH through
-  the pairs, the targets' operators' DoH, the presets), never to Quad9 in plain DNS; DNS over TCP to Watch's address
-  from a chained app goes the same way as its UDP lookups.*
+- **Other record types through the tool** (HTTPS and SVCB, TXT, MX, SRV and the rest), from W6 on: Advanced
+  sends the app's question through the tool's `CONNECT` to a resolver and passes the answer on with a time to
+  live of 0. Until the encrypted resolver of [ADR 0042](0042-dns-of-apps-that-go-directly.md) is set, the
+  resolver is Quad9's service without blocking (`quad9-unsecured` in `data/resolvers`), asked in DNS over TCP
+  (RFC 7766). Once it is set, these questions go its encrypted ways through the tool (the user's own DoH or DoT
+  resolver, ODoH through the pairs, the targets' operators' DoH, the presets), never to Quad9 in plain DNS; DNS
+  over TCP to Advanced's DNS address from a chained app goes the same way as its UDP lookups. From an HTTPS or
+  SVCB answer it removes the address hints, so that every connection goes to a stand-in in one space, and keeps
+  the ECH keys, so that ECH works through the tool as without it. Through the tool, the resolver sees the tool's
+  exit, not the user's address.
   If the resolver cannot be reached through the tool (a Tor exit that refuses port 53, for example),
   these questions get an empty answer, and the app falls back to A.
 - **Reverse lookups** of a stand-in are answered from the map, with the name.
@@ -108,39 +107,39 @@ Option 1, from W6 on, with these rules:
 - ECH keeps working for chained apps, so the tool's operator does not see the server names that ECH hides.
 - Chained apps see addresses in 198.18.0.0/15 and no IPv6 addresses. An app that checks the address it
   connects to (rare) may refuse it; W6's lab run looks for this among the ten apps of W3.
-- Answers with a time to live of 0 bring every lookup of every app to Watch while a chain is on; Watch's
-  caches answer them. Questions of other types wait for a round trip through the tool. W6's lab run
+- Answers with a time to live of 0 bring every lookup of every app to Advanced while a chain is on;
+  Advanced's caches answer them. Questions of other types wait for a round trip through the tool. W6's lab run
   measures the delay; W9's battery runs measure the cost.
-- **Strict Private DNS:** Android then sends lookups over TLS to the user's server, past Watch's DNS
-  address. Watch can neither answer nor route them, and whose they are is not known (ADR 0035, question 6).
+- **Strict Private DNS:** Android then sends lookups over TLS to the user's server, past Advanced's DNS
+  address. Advanced can neither answer nor route them, and whose they are is not known (ADR 0035, question 6).
   W6 tells the user that a chain needs Private DNS off or on "automatic", as onboarding does (W9).
 
 ## What the lab measures before W6 is done
 
 1. Chrome on the emulators and the A40, chained: an ordinary site with resources on other hosts loads with
-   no Local Network Access prompt and no blocked request; then the same with IPv6 stand-ins in Watch's
+   no Local Network Access prompt and no blocked request; then the same with IPv6 stand-ins in the network part's
    prefix and in 2001:2::/48, to confirm that one space is what matters. *Run on 2026-11-11 on the Android 17 emulator
    ([lab](../spikes/2026-11-chain-lab.md)): Wikipedia loaded whole through the tool with no prompt; the IPv6
-   comparison was not run, since Watch gives no IPv6 stand-ins.*
+   comparison was not run, since Advanced gives no IPv6 stand-ins.*
 2. ECH through the tool: a site that offers ECH (Cloudflare's test page) reports that ECH was used. *On 2026-11-11 Chrome offered no ECH on the emulator even without
    the chain; the HTTPS record a chained app gets was checked instead: ECH kept, hints gone, TTL 0.*
 3. The ten apps of W3, chained: which work, which refuse a stand-in.
 4. Strict Private DNS: whose socket carries Android's TLS lookups, and whether a chain should refuse to
    start in that mode rather than warn. *Measured on 2026-11-11 ([lab](../spikes/2026-11-chain-lab.md)): Android's
    resolver (UID 1051) asks the provider itself, so the lookups go directly, encrypted; the app's connections still
-   go through the tool by address. Watch warns and does not refuse; decided by the maintainer on 2026-11-11, with
+   go through the tool by address. Advanced warns and does not refuse; decided by the maintainer on 2026-11-11, with
    W6's acceptance. The warning names the provider and opens the network settings.*
 5. The delay of other record types through each tool of W6 (v2rayNG, NekoBox, Hiddify, Orbot), and
    whether Tor's exits carry DNS over TCP to the resolver. *Measured through the test tool on 2026-11-11 (same
-   notes): about half a second for each question, until Watch kept the tool route's answers as this record says;
-   now the first costs that and the next about 10 ms. With the kept connection, a new name costs about 60 to
+   notes): with the tool route's answers kept as this record says, about half a second for the first question and
+   about 10 ms for the next. With the kept connection, a new name costs about 60 to
    90 ms after the first question has opened it. Through Tor: not measured yet.*
 
 ## Open questions
 
 1. **The resolver for other record types in W6,** until the user chooses one in W8: proposed, Quad9 (a
    Swiss foundation that does not log addresses), its service without blocking (`quad9-unsecured` in
-   `data/resolvers`, 9.9.9.10 and 149.112.112.10), so that Watch filters nothing by default; the
+   `data/resolvers`, 9.9.9.10 and 149.112.112.10), so that Advanced filters nothing by default; the
    alternative was to ask the user when the chain is set up, with no answer for those types until then.
    *Decided by the maintainer on 2026-11-11: Quad9 without blocking.*
 2. **Ranges taken by the network.** 198.18.0.0/15 is not routed on the internet, but a lab or a carrier

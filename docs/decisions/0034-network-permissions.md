@@ -1,10 +1,11 @@
 # 0034. Permissions for Advanced's network part
 
-- Status: Accepted (by the maintainer on 2026-11-09); [ADR 0040](0040-own-safety-in-an-untrusted-environment.md)
-  adds `HIDE_OVERLAY_WINDOWS` (item 6)
+- Status: Accepted (by the maintainer on 2026-11-09)
 - Date: 2026-11-09
-- Amended by [ADR 0045](0045-three-editions-of-one-app.md) on 2026-11-13: the project ships as three editions of one app.
-- Amended by [ADR 0046](0046-live-activity.md) on 2026-11-15: one exported component, the widget.
+- See also: [ADR 0045](0045-three-editions-of-one-app.md), decisions 9 and 10: the network part is a library that only
+  Advanced includes, and each edition's merged manifest is checked against its own allowlist;
+  [ADR 0040](0040-own-safety-in-an-untrusted-environment.md) for `HIDE_OVERLAY_WINDOWS` (item 6);
+  [ADR 0046](0046-live-activity.md) for the widget's receiver, the summary notification and usage access.
 
 ## Context
 
@@ -12,21 +13,21 @@ Datapavan Advanced's network part
 ([ADR 0045](0045-three-editions-of-one-app.md)) is a local VPN that passes every app's traffic on to its
 real destination over protected sockets, logs flows by app UID, chains the apps the user picks
 through a circumvention tool's local SOCKS5 proxy, can carry a WireGuard configuration as its
-upstream, offers its log read-only to the audit app, and has a Quick Settings tile and onboarding
-for always-on VPN and battery managers ([DESIGN.md §13.2](../DESIGN.md), W1 to W9). It is signed with
-the audit app's key, has minSdk 29 (Android 10) and targetSdk 37 (Android 17), and ships on GitHub,
-the website and F-Droid, not on Google Play.
+upstream, keeps a connection log that Advanced's audit reads, and has a Quick Settings tile and onboarding
+for always-on VPN and battery managers ([DESIGN.md §13.2](../DESIGN.md), W1 to W9). It is a library that
+only Advanced includes (`:network`, ADR 0045, decision 10), so it carries Advanced's key, minSdk 29
+(Android 10) and targetSdk 37 (Android 17), and ships on GitHub, the website and F-Droid, not on Google Play.
 
-W1's build fails if Watch's merged manifest holds anything this ADR does not list. So every feature
-of 0.2.0 needs its permission settled now, for each Android version from 10 to 17. The audit app keeps
-exactly the permissions of [ADR 0014](0014-v0.1-permissions.md).
+The build fails if Advanced's merged manifest holds anything that Basic's allowlist and this ADR do not
+list (ADR 0045, decision 9). So every feature of 0.2.0 needs its permission settled now, for each Android
+version from 10 to 17. The audit keeps exactly the permissions of [ADR 0014](0014-v0.1-permissions.md).
 
 What the spikes already showed:
 
-- The system-stack engine works only with Watch inside its own tunnel, calling `protect()` on each
+- The system-stack engine works only with the VPN app inside its own tunnel, calling `protect()` on each
   upstream socket ([packet-engine spike](../spikes/2026-11-packet-engine.md), finding 6).
 - `getConnectionOwnerUid` names the UID behind a tool's loopback proxy port while the tool is inside
-  the tunnel, but `getPackagesForUid` then returned nothing. The spike's Watch declared no `<queries>`
+  the tunnel, but `getPackagesForUid` then returned nothing. The spike's app declared no `<queries>`
   at all ([its manifest](../../spikes/packet-engine/android/watch/src/main/AndroidManifest.xml)).
 - Android 17 gates private addresses for apps that target it, but not loopback (finding 7, and "Who
   owns a local proxy port").
@@ -45,36 +46,37 @@ not checked.
 
 ## Decision
 
-### Watch requests these permissions
+### The network part requests these permissions
 
-1. **`INTERNET`** (normal, granted at install, all versions). Every socket Watch opens needs it: the
+1. **`INTERNET`** (normal, granted at install, all versions). Every socket the network part opens needs it: the
    protected upstream connections, the engine's own listener that terminates rewritten connections
    ([ADR 0012](0012-packet-engine.md)), the upstream DNS, the SOCKS5 client on the tool's loopback
    port, and WireGuard's UDP. Without it no socket opens, loopback included [unverified: Android's
-   rule that sockets need the network group, not re-checked here]. It is the reason Watch exists
-   (ADR 0045).
+   rule that sockets need the network group, not re-checked here]. It is what sets Advanced apart from
+   Basic, which never holds it (ADR 0045, decision 1).
 
 2. **`ACCESS_NETWORK_STATE`** (normal, all versions). Network callbacks for the network under the
    tunnel (switches, metered state), its `LinkProperties` (the network's DNS servers and whether
    Private DNS is on, W3) and `NetworkCapabilities` (another app's VPN, validation) [doc]. Without it
-   these calls throw `SecurityException`: Watch could not find the network's resolver or notice a
-   switch. Two calls Watch makes need no permission: `getConnectionOwnerUid` only checks that the
+   these calls throw `SecurityException`: the network part could not find the network's resolver or notice a
+   switch. Two calls it makes need no permission: `getConnectionOwnerUid` only checks that the
    caller is the VPN that covers the UID [code], and `setUnderlyingNetworks` belongs to the VPN itself.
 
 3. **`CHANGE_NETWORK_STATE`, on Android 10 and 11 only** (`android:maxSdkVersion="30"`; normal).
-   Watch is inside its own tunnel, so `registerDefaultNetworkCallback` reports Watch's own VPN [doc].
+   The network part is inside its own tunnel, so `registerDefaultNetworkCallback` reports its own VPN [doc].
    From Android 12, `registerBestMatchingNetworkCallback` follows the network under the tunnel with
    `ACCESS_NETWORK_STATE` alone [code: `LISTEN_FOR_BEST`]. On 10 and 11, the way to learn which network
    Android itself would use is `requestNetwork`, which needs `CHANGE_NETWORK_STATE` [doc]; sing-box for
    Android does exactly this, for the same reason [source]. A request that the current network already
-   satisfies brings up no other network [doc]. Without it, Watch on 10 and 11 would have to guess the
+   satisfies brings up no other network [doc]. Without it, the network part on 10 and 11 would have to guess the
    default among all networks. From 12 on, the permission is not granted at all.
 
-4. **`POST_NOTIFICATIONS`** (runtime from Android 13; no such permission before). For Watch's few
-   notices: the tool stopped and chained apps are waiting (W6), the tunnel stopped, the WireGuard
-   upstream is down. It is asked in context, when the user first turns Watch or chaining on, not at
-   first start. Without it on 13 and later, Watch posts nothing: the same states show in Watch and in
-   the tile's subtitle, and Android's own VPN key icon still shows that a VPN is on. On 10 to 12,
+4. **`POST_NOTIFICATIONS`** (runtime from Android 13; no such permission before). For the network part's few notices:
+   the tool stopped and chained apps are waiting (W6), the tunnel stopped, the WireGuard upstream is down; and the
+   summary of what apps sent while the user was not using them, where the user chose it at onboarding
+   ([ADR 0046](0046-live-activity.md), decision 2 (a)). It is asked in context, when the user first turns the tunnel or
+   chaining on, not at first start. Without it on 13 and later, Advanced posts nothing: the same states show on the
+   network screen and in the tile's subtitle, and Android's own VPN key icon still shows that a VPN is on. On 10 to 12,
    notifications are on unless the user turns them off.
 
 5. **`ACCESS_LOCAL_NETWORK`** (Android 17, API 37; runtime, protection level "dangerous", in the
@@ -85,46 +87,45 @@ not checked.
    VPN interfaces, only the subnets of their own addresses, multicast and broadcast [doc, code]. Loopback is not gated [device].
    The network's DNS server at port 53 is exempt, and so is DNS sent by Android's own resolver [doc,
    code]. Without the grant, a TCP connect times out and UDP fails with `EPERM` [doc].
-   - **Why Watch needs it.** Every app's LAN traffic (printer, TV, NAS, the router's page) leaves the
-     phone from Watch's protected sockets, and Android checks the socket's UID, which is Watch's
-     [code]. Without the grant, every LAN destination fails for every app while Watch runs, except DNS
+   - **Why the network part needs it.** Every app's LAN traffic (printer, TV, NAS, the router's page) leaves the
+     phone from the network part's protected sockets, and Android checks the socket's UID, which is Advanced's
+     [code]. Without the grant, every LAN destination fails for every app while the tunnel runs, except DNS
      to the router at port 53.
-   - **Watch must not become a way around the check.** On the tunnel's interface only Watch's own
-     address subnets are local, so an app's packets to 192.168.1.10 enter the tunnel unchecked [code;
-     to test]. If Watch forwarded them under its own grant, any app could reach the LAN, which Android
-     17 closed. So, on Android 17, Watch forwards a flow to a local-network address only for an app that holds
-     `ACCESS_LOCAL_NETWORK` itself (apps that target 36 or lower hold it implicitly [doc]), and records
-     the refused attempt, so the audit app can show which apps tried to reach the local network.
-     This keeps the phone as it was without Watch, as W3 asks for DNS.
-   - **Watch's own path must not depend on it.** The system-stack engine passes each TCP connection
+   - **The network part must not become a way around the check.** On the tunnel's interface only the tunnel's own
+     address subnets are local, so an app's packets to 192.168.1.10 enter the tunnel unchecked [code; to test]. If the
+     network part forwarded them under its own grant, any app could reach the LAN, which Android 17 closed. So, on
+     Android 17, the network part forwards a flow to a local-network address only for an app that holds
+     `ACCESS_LOCAL_NETWORK` itself (apps that target 36 or lower hold it implicitly [doc]), and records the refused
+     attempt, so the audit can show which apps tried to reach the local network. This keeps the phone as it was without
+     Advanced, as W3 asks for DNS.
+   - **The network part's own path must not depend on it.** The system-stack engine passes each TCP connection
      through a listener on the tunnel's address, from a second, rewritten address. In the spike both
      sit in 10.111.0.0/24 and fd00:111::/64, which Android 17 counts as local on the tunnel's interface
      [code]. With the permission denied, every TCP flow could fail [unverified: the spike ran with it
      granted]. W2 therefore gives the tunnel a /32 and a /128 address and keeps the rewritten address
      and the in-tunnel DNS address outside them, so that a denial touches only real LAN destinations.
-   - **Upstream DNS.** Plain DNS to a resolver on the LAN at port 53 is exempt; DNS over TLS to it
-     (port 853, Private DNS on "automatic") is not. Watch sends its upstream queries for the network's
-     resolver through Android's resolver bound to the network under the tunnel (`DnsResolver`), which
-     is exempt and keeps Private DNS as the phone had it [code; to test]. *Amended by W8's part 1
-     (2026-11-20, [ADR 0042](0042-dns-of-apps-that-go-directly.md)): the network's resolver is only the fallback
-     outside the strict setting, and the answer for local names; both go through `DnsResolver.rawQuery` on the
-     network beneath (`dns/Exchanger.kt`), never through the tunnel, and keep nothing in Android's cache of that
-     network. The encrypted ways reach public servers, not the LAN, so the local-network rule does not touch them.*
+   - **Upstream DNS.** Plain DNS to a resolver on the LAN at port 53 is exempt; DNS over TLS to it (port 853, Private
+     DNS on "automatic") is not. The network's resolver is only the fallback outside the strict setting, and the
+     answer for local names ([ADR 0042](0042-dns-of-apps-that-go-directly.md)). The network part sends both through
+     Android's resolver bound to the network under the tunnel (`DnsResolver.rawQuery`, `dns/Exchanger.kt`), never
+     through the tunnel. That path is exempt, keeps Private DNS as the phone had it and keeps nothing in Android's
+     cache of that network [code; to test]. The encrypted ways reach public servers, not the LAN, so the local-network
+     rule does not touch them.
    - **Android 16** had an opt-in test mode, switched on over adb and gated by `NEARBY_WIFI_DEVICES`;
-     it is deprecated [doc]. Watch does not request that permission. On 10 to 16 the LAN stays open as
+     it is deprecated [doc]. The network part does not request that permission. On 10 to 16 the LAN stays open as
      before.
 
-6. **`HIDE_OVERLAY_WINDOWS`** (normal, granted at install, Android 12 and later; added by
-   [ADR 0040](0040-own-safety-in-an-untrusted-environment.md)). While Watch's window is shown, Android hides
-   other apps' overlays, so that no app drawn over Watch can dress its screen or read it. It allows no
-   connection and acts only on Watch's own windows. On Android 10 and 11 there is no such permission, and
+6. **`HIDE_OVERLAY_WINDOWS`** (normal, granted at install, Android 12 and later;
+   [ADR 0040](0040-own-safety-in-an-untrusted-environment.md)). While Advanced's windows are shown, Android hides
+   other apps' overlays, so that no app drawn over them can dress its screens or read them. It allows no
+   connection and acts only on Advanced's own windows. On Android 10 and 11 there is no such permission, and
    overlays stay possible.
 
 ### Package visibility: one `<queries>` entry, not `QUERY_ALL_PACKAGES`
 
-Watch's own screens name only the user's tool and the apps the user picks for the chain. The log
-keeps UIDs, and the audit app, which holds `QUERY_ALL_PACKAGES` (ADR 0014), names them. Watch declares
-exactly:
+The network part's own screens name only the user's tool and the apps the user picks for the chain. The log
+keeps UIDs, and Advanced's audit, which holds `QUERY_ALL_PACKAGES` (ADR 0014), names them. The network part's
+manifest declares exactly:
 
 ```xml
 <queries>
@@ -145,51 +146,29 @@ exactly:
   force-queryable) [code]. The chain picker therefore offers "all apps" as one choice, which the engine
   applies by UID without names, and lists the visible apps from `getInstalledApplications` rather than
   from a launcher query, so that tools with a hidden icon are listed too.
-- **The rules that apply** (Android 11 and later; on Android 10 every app is visible [doc]): Watch
-  itself; force-queryable system packages; the app that installed or updates Watch; apps named in
+- **The rules that apply** (Android 11 and later; on Android 10 every app is visible [doc]): the app
+  itself; force-queryable system packages; the app that installed or updates it; apps named in
   `<queries>` by package, by intent (exported components only) or by provider authority (exported
-  providers only); apps that interact with Watch, that is, start or bind its service, use its content
-  provider or call it with `startActivityForResult`, so the audit app becomes visible when it reads
-  the log; apps whose library Watch uses; and, in current AOSP, an app that defines a permission Watch
-  requests [doc, code]. Being the active VPN gives no visibility: `getConnectionOwnerUid` returns a
-  UID that Watch still cannot name without one of these rules [device].
+  providers only); apps that interact with it, that is, start or bind its service, use its content
+  provider or call it with `startActivityForResult`; apps whose library it uses; and, in current AOSP,
+  an app that defines a permission it requests [doc, code]. Being the active VPN gives no visibility:
+  `getConnectionOwnerUid` returns a UID that the app still cannot name without one of these rules [device].
 - **Not an intent for `android.net.VpnService`.** It would miss the apps whose VPN service is not
   exported (the M2 miss) and adds nothing the launcher entry lacks.
-- **Not `QUERY_ALL_PACKAGES`.** It adds only apps without a launcher activity, which Watch's screens do
-  not need to name, and the network part keeps to the VPN and its network access (ADR 0045, decision 3). The launcher entry
-  already lets Watch see almost every app the user can open, so the privacy policy says that plainly.
-  Watch writes no list of apps anywhere.
+- **Not `QUERY_ALL_PACKAGES`.** It adds only apps without a launcher activity, which the network part's screens
+  do not need to name, and the network part keeps to the VPN and its network access (ADR 0045, decision 3). The
+  launcher entry already lets the network part see almost every app the user can open, so the privacy policy says
+  that plainly. The network part writes no list of apps anywhere. In Advanced, the audit's own
+  `QUERY_ALL_PACKAGES` (ADR 0014) is in the same package; the network part does not add it.
 - **If the device test fails** (a tool of the table or a chained app stays nameless), the fallback, by
   amending this ADR, is first `<package>` entries generated at build time from `data/app-signers`, then
   `QUERY_ALL_PACKAGES`.
 
-### The log interface (W5): checked at run time, no custom permission
+### The connection log (W5): read inside Advanced, nothing exported for it
 
-Watch exports one read-only content provider (or a bound service; W5 chooses) with no
-`android:permission`. Every call checks its caller:
-
-- `Binder.getCallingUid()` must belong to exactly one package, `org.visadahyu.datapavan`;
-- that UID must be signed with Watch's own key: `PackageManager.checkSignatures(Process.myUid(), uid)`
-  returns `SIGNATURE_MATCH`, or `hasSigningCertificate` matches the published fingerprint (ADR 0024);
-- any other caller gets nothing; `getType` returns null; nothing is written and no URI is granted.
-
-The caller is visible to Watch because it uses Watch's provider [doc]. Before it reads, the audit app
-checks Watch's certificate with ADR 0024's check, so a fake Watch cannot feed it a false log.
-
-A custom permission with `protectionLevel="signature"` was the alternative. It is not chosen:
-
-- It adds a `<uses-permission>` to the audit app, whose list ADR 0014 fixes.
-- Install order: Watch, which would define it, usually comes after the audit app, which would use
-  it. Current AOSP re-checks every app's grants when a package that defines permissions is installed
-  [code, AOSP main], but older releases needed the using app to be reinstalled [unverified for 10 to
-  12].
-- Squatting: an app with another key that defines the same name first makes Watch's install fail,
-  and if Watch is removed, another app can define the name again at a weaker level [doc].
-  CVE-2019-2200, permissions that outlived an uninstall, is fixed from Android 10 [doc].
-- Android's own guidance prefers a signature check at run time between apps of one developer [doc].
-
-Datapavan Lite (ADR 0031) is signed by Google's key and so gets nothing from Watch, which fits ADR
-0031: Lite stays without the VPN.
+Advanced's audit reads the connection log in its own package (ADR 0045, decision 10). No provider or service is
+exported for the log, and no custom permission is defined for it. Basic on Google Play (ADR 0031) has no network
+part, and so no connection log, which fits ADR 0031: it stays without the VPN.
 
 ### Components guarded by system permissions (nothing requested)
 
@@ -200,33 +179,32 @@ Datapavan Lite (ADR 0031) is signed by Google's key and so gets nothing from Wat
   `exported="true"`, marked toggleable [doc]. `StatusBarManager.requestAddTileService` (Android 13) needs
   no permission; on 10 to 12 the user adds the tile by hand. From 14, the tile starts activities with
   the `PendingIntent` form of `startActivityAndCollapse` [doc].
-- AndroidX's `ProfileInstallReceiver`, guarded by `DUMP`, as in the audit app.
+- AndroidX's `ProfileInstallReceiver`, guarded by `DUMP`, as in Basic.
 
-### Watch does not request
+### The network part does not request
 
 - **`QUERY_ALL_PACKAGES`**: see above.
-- **`FOREGROUND_SERVICE`, `FOREGROUND_SERVICE_SYSTEM_EXEMPTED`, `FOREGROUND_SERVICE_SPECIAL_USE`.** Watch
+- **`FOREGROUND_SERVICE`, `FOREGROUND_SERVICE_SYSTEM_EXEMPTED`, `FOREGROUND_SERVICE_SPECIAL_USE`.** The network part
   does not call `startForeground`. Once the tunnel is established, Android binds the VpnService with
-  `BIND_FOREGROUND_SERVICE` [code]. That puts Watch's process in the "bound foreground service" state,
-  which keeps network access in Doze and battery saver [code] and should keep the started service
-  from being stopped in the background [unverified]. WireGuard's app works this way, with neither the
-  permission nor a `startForeground` call [source], and the spike's Watch ran a 12 h 43 min night on the
-  A40 without one [device]. The VpnService reference still says a VPN app "must promote itself to the
-  foreground" after a background start [doc]. Watch meets the intent of that by calling `establish()`
-  at once in `onStartCommand`, inside the 60 s that Android allows an always-on start [code], even
-  before its upstream is ready. If the device tests show Android or a vendor stopping Watch, the
-  fallback is a foreground service of type `systemExempted`, with `FOREGROUND_SERVICE` and
-  `FOREGROUND_SERVICE_SYSTEM_EXEMPTED` (both normal); that type names VPN apps among the apps allowed
-  to use it, and throws for others [doc]. Not `specialUse`, which is for cases no other type covers and
-  is reviewed by hand on Play [doc]. Without a foreground service Watch is not in Android 13's Task
-  Manager, so no one stops the firewall there by mistake.
-- **`RECEIVE_BOOT_COMPLETED`.** With always-on VPN, Android starts Watch's VpnService itself when the
-  user unlocks the phone and again after Watch is updated [code]. Onboarding recommends always-on with
-  "Block connections without VPN" ([VPN.md](../VPN.md)). Without always-on, Watch stays off after a
-  restart until the user turns it on, and the tile and Watch's screen say so.
+  `BIND_FOREGROUND_SERVICE` [code]. That puts the network part's process (`:network`) in the "bound foreground service"
+  state, which keeps network access in Doze and battery saver [code] and should keep the started service from being
+  stopped in the background [unverified]. WireGuard's app works this way, with neither the permission nor a
+  `startForeground` call [source], and the spike's app ran a 12 h 43 min night on the A40 without one [device]. The
+  VpnService reference still says a VPN app "must promote itself to the foreground" after a background start [doc]. The
+  network part meets the intent of that by calling `establish()` at once in `onStartCommand`, inside the 60 s that
+  Android allows an always-on start [code], even before its upstream is ready. If the device tests show Android or a
+  vendor stopping the network part, the fallback is a foreground service of type `systemExempted`, with
+  `FOREGROUND_SERVICE` and `FOREGROUND_SERVICE_SYSTEM_EXEMPTED` (both normal); that type names VPN apps among the apps
+  allowed to use it, and throws for others [doc]. Not `specialUse`, which is for cases no other type covers and is
+  reviewed by hand on Play [doc]. Without a foreground service Advanced is not in Android 13's Task Manager, so no one
+  stops the firewall there by mistake.
+- **`RECEIVE_BOOT_COMPLETED`.** With always-on VPN, Android starts Advanced's VpnService itself when the
+  user unlocks the phone and again after Advanced is updated [code]. Onboarding recommends always-on with
+  "Block connections without VPN" ([VPN.md](../VPN.md)). Without always-on, the tunnel stays off after a
+  restart until the user turns it on, and the tile and the network screen say so.
 - **`REQUEST_IGNORE_BATTERY_OPTIMIZATIONS`.** It only allows a one-tap system dialog [doc]. Onboarding
-  opens the system's list (`ACTION_IGNORE_BATTERY_OPTIMIZATION_SETTINGS`) or Watch's app page, and the
-  health check reads `isIgnoringBatteryOptimizations`; neither needs a permission. Watch's network in
+  opens the system's list (`ACTION_IGNORE_BATTERY_OPTIMIZATION_SETTINGS`) or Advanced's app page, and the
+  health check reads `isIgnoringBatteryOptimizations`; neither needs a permission. The network part's network access in
   Doze does not depend on the exemption (above). None of WireGuard, NetGuard, PCAPdroid, RethinkDNS,
   Mullvad and Proton VPN declares it; sing-box for Android does [source]. Samsung's sleeping-apps
   lists are separate and belong to the vendor guides (W9).
@@ -236,19 +214,18 @@ Datapavan Lite (ADR 0031) is signed by Google's key and so gets nothing from Wat
   manifest entries of its own (ZXing's core library, for example, rather than ML Kit, which relies on
   Google Play services) [unverified]. A camera permission in the app that holds `INTERNET` would
   undercut the trust story and, later, the sensor log of 0.2.1. The cost: a QR code shown on another
-  screen must first be photographed with the camera app, and Watch then says that the photo holds the
+  screen must first be photographed with the camera app, and Advanced then says that the photo holds the
   private key and should be deleted. A configuration can also come from a file or be pasted.
 - **`WAKE_LOCK`.** The engine is event-driven (VPN.md), and the spike's night ran without a wake lock
-  [device]. WorkManager would add it, so Watch does not use WorkManager.
+  [device]. WorkManager would add it, so the network part does not use WorkManager.
 - **`ACCESS_WIFI_STATE`, location, `READ_PHONE_STATE`.** Rules per Wi-Fi network or for roaming belong
   to v0.3 and would need an amendment (Wi-Fi names need location access).
 - **`NEARBY_WIFI_DEVICES`.** Only Android 16's deprecated test mode used it.
-- **`PACKAGE_USAGE_STATS`.** Not declared by Watch. Foreground or background per flow was to be worked
-  out in the audit app; since [ADR 0046](0046-live-activity.md) (amended 2026-11-18), Watch works it out
-  itself in Datapavan Advanced, from the usage access the audit's manifest already declares for the
-  package, which the user grants or not.
+- **`PACKAGE_USAGE_STATS`.** Not declared by the network part. The network part works out foreground or
+  background per flow itself ([ADR 0046](0046-live-activity.md)), from the usage access the audit's manifest
+  already declares for the package (ADR 0022), which the user grants or not.
 - **`INTERACT_ACROSS_USERS`, `SYSTEM_ALERT_WINDOW`, `REQUEST_INSTALL_PACKAGES`.** A work profile or
-  Private Space has its own VPN; Watch draws no overlays and does not update itself (F-Droid and
+  Private Space has its own VPN; Advanced draws no overlays and does not update itself (F-Droid and
   Obtainium do).
 - **A custom permission for the log**: see above.
 
@@ -265,10 +242,10 @@ Source manifests at the commits in Sources (merged manifests can hold more):
 | Mullvad | `systemExempted` | `QUERY_ALL_PACKAGES` | yes | yes | no | no |
 | Proton VPN | `systemExempted` | `QUERY_ALL_PACKAGES` | yes | yes | no | no |
 | sing-box for Android | `systemExempted` | `QUERY_ALL_PACKAGES` | yes | yes | yes | no |
-| **Watch** | none | `<queries>` MAIN/LAUNCHER | no | yes | yes | no |
+| **Advanced's network part** | none | `<queries>` MAIN/LAUNCHER | no | yes | yes | no |
 
-Watch requests fewer permissions than any of them. WireGuard is closest, and holds camera, boot and
-self-update permissions that Watch does not. The rule that Watch forwards LAN
+The network part requests fewer permissions than any of them. WireGuard is closest, and holds camera, boot and
+self-update permissions that the network part does not. The rule that the network part forwards LAN
 traffic only for apps holding their own grant goes beyond what these apps were seen to do
 [unverified: their code was not read for it].
 
@@ -282,25 +259,25 @@ traffic only for apps holding their own grant goes beyond what these apps were s
 | `ACCESS_NETWORK_STATE` | install | install | install | install | install | install | install | install |
 | `CHANGE_NETWORK_STATE` (max 30) | install: `requestNetwork` | install: `requestNetwork` | not granted: best-matching callback | not granted | not granted | not granted | not granted | not granted |
 | `POST_NOTIFICATIONS` | no such permission; notifications on | same | same | runtime, asked in context | runtime | runtime | runtime | runtime |
-| `ACCESS_LOCAL_NETWORK` | unknown, ignored; LAN open | same | same | same | same | same | ignored; LAN open (adb test mode only) | runtime; without it LAN through Watch fails, DNS at port 53 works |
-| `HIDE_OVERLAY_WINDOWS` | no such permission; overlays stay | same | install: overlays hidden over Watch | same | same | same | same | same |
+| `ACCESS_LOCAL_NETWORK` | unknown, ignored; LAN open | same | same | same | same | same | ignored; LAN open (adb test mode only) | runtime; without it LAN through the tunnel fails, DNS at port 53 works |
+| `HIDE_OVERLAY_WINDOWS` | no such permission; overlays stay | same | install: overlays hidden over Advanced | same | same | same | same | same |
 | `<queries>` MAIN/LAUNCHER | no effect: every app visible | launchable apps visible | same | same | same | same | same | same |
 | Not requested: `QUERY_ALL_PACKAGES` | would change nothing | would add apps without a launcher | same | same | same | same | same | same |
-| Not requested: foreground service | system binding keeps Watch | same | same | same (and not in Task Manager) | fallback would be `systemExempted` | same | same | same |
-| Not requested: `RECEIVE_BOOT_COMPLETED` | always-on starts Watch at unlock and after updates | same | same | same | same | same | same | same |
+| Not requested: foreground service | system binding keeps the network part | same | same | same (and not in Task Manager) | fallback would be `systemExempted` | same | same | same |
+| Not requested: `RECEIVE_BOOT_COMPLETED` | always-on starts the VpnService at unlock and after updates | same | same | same | same | same | same | same |
 | Not requested: `REQUEST_IGNORE_BATTERY_OPTIMIZATIONS` | settings screen instead | same | same | same | same | same | same | same |
 | Not requested: `CAMERA` | QR from a file (documents screen) | photo picker if updated, else documents | same | same | same | same | same | same |
 | Guard: `BIND_VPN_SERVICE` | yes | yes | yes | yes | yes | yes | yes | yes |
 | Guard: `BIND_QUICK_SETTINGS_TILE` | user adds the tile | same | same | `requestAddTileService` | and `PendingIntent` starts | same | same | same |
-| Library: `…watch.DYNAMIC_RECEIVER_NOT_EXPORTED_PERMISSION` | guards Watch's runtime receivers | same | same | declared; platform flag used instead [unverified] | same | same | same | same |
+| Library: `…advanced.DYNAMIC_RECEIVER_NOT_EXPORTED_PERMISSION` | guards the app's runtime receivers | same | same | declared; platform flag used instead [unverified] | same | same | same | same |
 
 ## Allowlist for the build check (W1)
 
-The check runs on the merged manifest of every variant of `:watch`, wired like the audit app's
-`ForbiddenPermissionsCheck` in `android/app/build.gradle.kts`, but as an allowlist. It fails on
-anything not listed here.
+The check runs on Advanced's merged manifest, every variant, as `ManifestAllowlistCheck` in
+`android/app/build.gradle.kts`, with one allowlist per edition (ADR 0045, decision 9). It fails on
+anything not listed in Basic's allowlist or here.
 
-`<uses-permission>`, exactly these:
+`<uses-permission>`: Basic's allowlist, and exactly these:
 
 ```
 android.permission.INTERNET
@@ -308,28 +285,29 @@ android.permission.ACCESS_NETWORK_STATE
 android.permission.CHANGE_NETWORK_STATE        (android:maxSdkVersion="30" required)
 android.permission.POST_NOTIFICATIONS
 android.permission.ACCESS_LOCAL_NETWORK
-org.visadahyu.datapavan.watch.DYNAMIC_RECEIVER_NOT_EXPORTED_PERMISSION
+org.visadahyu.datapavan.advanced.DYNAMIC_RECEIVER_NOT_EXPORTED_PERMISSION
 ```
 
 `<permission>` definitions, only this one, with `protectionLevel="signature"`:
 
 ```
-org.visadahyu.datapavan.watch.DYNAMIC_RECEIVER_NOT_EXPORTED_PERMISSION
+org.visadahyu.datapavan.advanced.DYNAMIC_RECEIVER_NOT_EXPORTED_PERMISSION
 ```
 
 `<queries>`: exactly the one MAIN/LAUNCHER intent above. Libraries can add `<queries>` too, so they are
 checked like permissions.
 
-Exported components: the launcher activity; the tile service, guarded by `BIND_QUICK_SETTINGS_TILE`;
-the log provider (or service), with no permission attribute and the run-time check; and
-`androidx.profileinstaller.ProfileInstallReceiver`, guarded by `DUMP`. The VpnService is not exported
-and is guarded by `BIND_VPN_SERVICE`.
+Exported components: the launcher activity, which is the audit's (Advanced has one launcher entry); the tile service,
+guarded by `BIND_QUICK_SETTINGS_TILE`; from 0.2.1, the home-screen widget's receiver, which accepts nothing from the
+intent and only redraws the network part's own numbers ([ADR 0046](0046-live-activity.md), decision 2 (b)); and
+`androidx.profileinstaller.ProfileInstallReceiver`, guarded by `DUMP`. The VpnService is not exported and is guarded by
+`BIND_VPN_SERVICE`.
 
 Added by libraries: the `DYNAMIC_RECEIVER_NOT_EXPORTED_PERMISSION` pair comes from androidx.core (the
 1.17.0 AAR declares `${applicationId}.DYNAMIC_RECEIVER_NOT_EXPORTED_PERMISSION` as a signature
 permission and requests it); androidx.core uses it for receivers registered as not exported below
 Android 13 [unverified]. If a debug build ever gets an application ID suffix, the name follows it.
-The audit app's packaged release manifest (built 2026-11-08) shows only this pair and the
+Basic's packaged release manifest (built 2026-11-08) shows only this pair and the
 `ProfileInstallReceiver`; androidx.window adds two optional `<uses-library>` entries, which are not
 permissions. WorkManager 2.10.0 would add `WAKE_LOCK`, `ACCESS_NETWORK_STATE`, `RECEIVE_BOOT_COMPLETED`
 and `FOREGROUND_SERVICE`. Any such addition fails the build and is either removed with
@@ -340,26 +318,25 @@ amendment.
 
 - **The build check** of W1 is an allowlist over permissions, permission definitions, `<queries>` and
   exported components, not only a deny list.
-- **What users read.** The privacy policy, the store texts and F-Droid's listing name Watch's five
+- **What users read.** The privacy policy, the store texts and F-Droid's listing name the network part's five
   permissions (one only on Android 10 and 11, one only on 17) plus AndroidX's internal one, and say
-  that Watch can see the apps that
+  that the network part can see the apps that
   have an icon, to name the user's tool and the apps the user picks, and keeps no list of them beyond
   the chain's own settings: the tool it last went through and the apps the user picked. ADR
   0045's sentence (decision 4) stays true as written.
 - **Requirements this ADR puts on the engine (W2, W3):** call `establish()` at once; give the tunnel a
   /32 and a /128 address with the rewritten address and the in-tunnel DNS address outside them; send
-  upstream queries for the network's resolver through `DnsResolver` on the network under the tunnel;
-  forward local-network flows only for apps that hold their own grant, and record refusals.
-  *Note of 2026-11-12:* the last two are not built yet. Watch sends upstream queries as plain UDP from
-  a protected socket, as DESIGN.md's W3 says, and forwards local-network flows for every app. Both
-  remain open.
+  the queries for the network's resolver (the fallback and local names, ADR 0042) through `DnsResolver` on
+  the network under the tunnel; forward local-network flows only for apps that hold their own grant, and
+  record refusals. The last is a release gate of 0.2.0 ([ADR 0041](0041-visibility-and-coexistence.md),
+  decision 4); until it is built, the network part forwards local-network flows for every app.
 - **Onboarding (W9)** asks for the local-network permission on Android 17 and says that each app still
   needs its own; asks for notifications in context; recommends always-on with "Block connections
   without VPN"; opens the battery settings and the vendor guides.
-- **The threat model** (DESIGN §8) gets a line for Watch's exported components: the launcher, the
-  tile, the log interface with its run-time check, and `ProfileInstallReceiver`.
-- **Lite** cannot read Watch's log, as ADR 0031 intends.
-- **Without always-on,** Watch is off after a restart and perhaps after an update (open question 5).
+- **The threat model** (DESIGN §8) gets a line for Advanced's exported components: the launcher, the
+  tile, the widget's receiver, and `ProfileInstallReceiver`.
+- **Basic on Google Play** has no connection log, as ADR 0031 intends.
+- **Without always-on,** the tunnel is off after a restart and perhaps after an update (open question 5).
 - **A tool in a work profile or Private Space** cannot be chained: each profile has its own VPN, and
   Android 17 blocks loopback traffic across profiles [doc].
 - **Planned amendments if the tests fail:** `<package>` entries, then `QUERY_ALL_PACKAGES` (question
@@ -371,32 +348,31 @@ amendment.
 
 1. **Names.** With only the MAIN/LAUNCHER entry, on the A40 (Android 11) and emulators 11 to 17: does
    `getPackagesForUid` name v2rayNG, NekoBox, Hiddify, Orbot, WireGuard, MahsaNG and Oblivion; a tool
-   whose launcher alias is disabled; and what share of the UIDs in W3's ten-app session Watch cannot
-   name.
-2. **No foreground service.** Watch stays up and every app's traffic flows: started by always-on at
+   whose launcher alias is disabled; and what share of the UIDs in W3's ten-app session the network part
+   cannot name.
+2. **No foreground service.** The network part stays up and every app's traffic flows: started by always-on at
    unlock on 10 to 17; over a 24-hour idle on the A40; through the A56 battery windows of W9; in Doze
    forced with `adb shell dumpsys deviceidle force-idle`; with its task swiped away; on Samsung after
-   days without opening Watch (sleeping apps).
-3. **Local network on Android 17** (emulator, and a phone when one is available), with Watch's grant
+   days without opening Advanced (sleeping apps).
+3. **Local network on Android 17** (emulator, and a phone when one is available), with Advanced's grant
    denied: does TCP through the engine work once the tunnel has /32 and /128 addresses, and fail with
-   the spike's /24; does Watch's upstream to a LAN host fail while DNS to the router at port 53 works,
+   the spike's /24; does the network part's upstream to a LAN host fail while DNS to the router at port 53 works,
    DNS over TLS to it fails, and `DnsResolver` works. For an app that targets 37 without the grant: do
-   its packets to a LAN address enter the tunnel. How Watch reads another app's grant by UID, the
-   implicit grant of apps targeting 36 or lower included. mDNS, SSDP and broadcast with Watch's routes.
-4. **The tile** turns Watch on without a foreground service on 10 to 17, and opens Watch when consent is
-   missing.
-5. **After an update without always-on:** does Watch come back, and could a `MY_PACKAGE_REPLACED`
+   its packets to a LAN address enter the tunnel. How the network part reads another app's grant by UID, the
+   implicit grant of apps targeting 36 or lower included. mDNS, SSDP and broadcast with the tunnel's routes.
+4. **The tile** turns the tunnel on without a foreground service on 10 to 17, and opens the network screen when
+   consent is missing.
+5. **After an update without always-on:** does the tunnel come back, and could a `MY_PACKAGE_REPLACED`
    receiver (no permission needed) restart it without a foreground service.
 6. **Unused-app hibernation** (Android 11 and later): does a running VPN count as use, or are
-   `POST_NOTIFICATIONS` and `ACCESS_LOCAL_NETWORK` revoked after months without opening Watch
+   `POST_NOTIFICATIONS` and `ACCESS_LOCAL_NETWORK` revoked after months without opening Advanced
    [unverified]. If so, onboarding opens the "pause app activity if unused" switch, which needs no
    permission.
-7. **Android 10 and 11:** `requestNetwork` reports the network under the tunnel, not Watch's VPN, and
+7. **Android 10 and 11:** `requestNetwork` reports the network under the tunnel, not the network part's own VPN, and
    brings up no second network, on the A40 and an Android 10 emulator.
-8. **The battery exemption** on Samsung: does it change anything for Watch; if it does, request
+8. **The battery exemption** on Samsung: does it change anything for the network part; if it does, request
    `REQUEST_IGNORE_BATTERY_OPTIMIZATIONS` by amendment.
-9. **W5:** an app signed with another key, and an app with a shared UID, get nothing; the order in
-   which the two apps are installed makes no difference.
+9. (Removed.)
 10. **Other vendors** (a Pixel, a Xiaomi) for questions 1 to 4, the gap DESIGN §13.2 already names.
 
 ## Sources
@@ -456,5 +432,5 @@ This repository: [ADR 0012](0012-packet-engine.md), [ADR 0014](0014-v0.1-permiss
 [ADR 0024](0024-fake-copies-of-datapavan.md), [ADR 0045](0045-three-editions-of-one-app.md),
 [ADR 0031](0031-datapavan-basic-on-google-play.md), [DESIGN.md §13.2](../DESIGN.md),
 [VPN.md](../VPN.md), the [M2 spike](../spikes/2026-10-m2-access.md), the
-[packet-engine spike](../spikes/2026-11-packet-engine.md), and the audit app's packaged release
+[packet-engine spike](../spikes/2026-11-packet-engine.md), and Basic's packaged release
 manifest under `android/app/build/intermediates/packaged_manifests/`.
