@@ -34,12 +34,13 @@ PDI=$'⁩'
 # language, the API level, the text it shows, and why. Translations are revised within a release: Android 15's Google
 # APIs image (revision 9, build AE3A.240806.043 of August 2024, the local dp-api35-ci's) shows android-15.0.0_r1's
 # text for these three, which r10 and r20 revised (read from android.googlesource.com on 2026-11-22). An image with
-# the last tag's text passes too. The phone's own text is what Datapavan reads either way; the fallback stays the last
-# tag's.
+# the last tag's text passes too. Android 11's (dp-api30, RSR1.240422.006) shows 11.0.0_r20's Arabic accessibility. The
+# phone's own text is what Datapavan reads either way; the fallback stays the last tag's.
 KNOWN=$(printf '%s\t%s\t%s\t%s\t%s\n' \
     accessibility zh 35 '无障碍' "android-15.0.0_r1's text, revised in r10" \
     developer_options fa 35 'گزینه‌های برنامه‌نویسان' "android-15.0.0_r1's text, revised in r10" \
-    notification_access zh 35 '阅读、回复和控制通知' "android-15.0.0_r1's text, revised by r20")
+    notification_access zh 35 '阅读、回复和控制通知' "android-15.0.0_r1's text, revised by r20" \
+    accessibility ar 30 'إمكانية الوصول' "android-11.0.0_r1's to r20's text, revised by r35")
 
 if ! is_emulator; then
     echo "verify-labels.sh changes the phone's language and runs on emulators only" >&2
@@ -212,6 +213,18 @@ always_fa=$(phone_label always_on_vpn fa)
 adb shell cmd locale set-app-locales "$PKG" --locales fa
 adb shell am force-stop "$PKG"
 adb shell am start -W -n "$PKG/.MainActivity" >/dev/null
+# The network tab's usage access card keeps Datapavan's name for the access and gives the phone's own (the maintainer,
+# 2026-11-22): the page's and its switch's names, the phone's first.
+usage_fa=$(phone_label usage_access fa)
+usage_en=$(phone_label usage_access en)
+permit_en=$(phone_label permit_usage_access en)
+permit_fa=$(phone_label permit_usage_access fa)
+line="This phone's settings call it “$LRI$usage_en$PDI ($RLI$usage_fa$PDI)”, with the switch “$LRI$permit_en$PDI ($RLI$permit_fa$PDI)”."
+open_tab network || fail "the network tab did not open"
+for _ in $(seq 1 30); do screen_contains "$line" && break; sleep 1; done
+screen_contains "$line" || { scroll_to "This phone's settings call it" >/dev/null || true; screen_contains "$line"; } ||
+    fail "the usage access card does not say '$line'"
+echo "ok: phone in English, Datapavan in Persian: the usage access card says '$line'"
 open_tab phone || fail "the phone's tab did not open"
 button="$LRI$dev_en$PDI ($RLI$dev_fa$PDI)"
 scroll_to "$button" || fail "the finding of USB debugging has no button '$button'"
