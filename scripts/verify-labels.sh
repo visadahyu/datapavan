@@ -10,7 +10,8 @@
 # 3. The screens, from Android 13, which sets an app's own language: with the phone in English and Datapavan in
 #    Persian, the phone's finding of USB debugging names its page as the phone does, Datapavan's Persian beside it;
 #    with the phone in Persian (set by the locale manager's shell command on Android 17, else by the emulator's Custom
-#    Locale app) and Datapavan in English, the plan's card for USB debugging quotes the switch and the page in Persian,
+#    Locale app, else, on a userdebug image, by the property Android starts with and a restart of its framework) and
+#    Datapavan in English, the plan's card for USB debugging quotes the switch and the page in Persian,
 #    each in its own direction, English beside them; and
 #    in Advanced, the names' section quotes Android's always-on switch both ways.
 #
@@ -29,8 +30,16 @@ ADVANCED_APK="$ROOT/android/app/build-advanced/outputs/apk/debug/app-debug.apk"
 LRI=$'⁦'
 RLI=$'⁧'
 PDI=$'⁩'
-# Where an emulator's image shows another text than AOSP's at its release, "KEY LANG API: why". None so far.
-KNOWN=""
+# Where an emulator's image shows another text than AOSP's at the last tag of its release, by tabs: the key, the
+# language, the API level, the text it shows, and why. Translations are revised within a release: Android 15's Google
+# APIs image (revision 9, build AE3A.240806.043 of August 2024, the local dp-api35-ci's) shows android-15.0.0_r1's
+# text for these three, which r10 and r20 revised (read from android.googlesource.com on 2026-11-22). An image with
+# the last tag's text passes too. The phone's own text is what Datapavan reads either way; the fallback stays the last
+# tag's.
+KNOWN=$(printf '%s\t%s\t%s\t%s\t%s\n' \
+    accessibility zh 35 '无障碍' "android-15.0.0_r1's text, revised in r10" \
+    developer_options fa 35 'گزینه‌های برنامه‌نویسان' "android-15.0.0_r1's text, revised in r10" \
+    notification_access zh 35 '阅读、回复和控制通知' "android-15.0.0_r1's text, revised by r20")
 
 if ! is_emulator; then
     echo "verify-labels.sh changes the phone's language and runs on emulators only" >&2
@@ -80,13 +89,41 @@ set_phone_locale() {
         done
         return 1
     fi
-    adb shell am broadcast -a com.android.intent.action.SET_LOCALE --es com.android.intent.extra.LOCALE "$1" \
-        com.android.customlocale2 >/dev/null
-    for _ in $(seq 1 20); do
-        [ "$(adb shell getprop persist.sys.locale | tr -d '\r')" = "$1" ] && return 0
-        sleep 1
+    if custom_locale_app; then
+        adb shell am broadcast -a com.android.intent.action.SET_LOCALE --es com.android.intent.extra.LOCALE "$1" \
+            com.android.customlocale2 >/dev/null
+        for _ in $(seq 1 20); do
+            [ "$(adb shell getprop persist.sys.locale | tr -d '\r')" = "$1" ] && return 0
+            sleep 1
+        done
+        return 1
+    fi
+    # Android 15's Google APIs image has neither: on its userdebug build, the property Android starts with, and a
+    # restart of Android's framework, which ends every app (as Settings' own change does not).
+    [ "$(adb shell getprop ro.build.type | tr -d '\r')" != user ] || return 1
+    adb root >/dev/null
+    timeout 60 adb wait-for-device
+    adb shell setprop persist.sys.locale "$1"
+    adb shell setprop ctl.restart zygote
+    sleep 5
+    for _ in $(seq 1 90); do
+        if [ "$(adb shell getprop init.svc.bootanim 2>/dev/null | tr -d '\r')" != running ] &&
+            adb shell cmd package resolve-activity -c android.intent.category.HOME -a android.intent.action.MAIN >/dev/null 2>&1 &&
+            adb shell dumpsys window 2>/dev/null | grep -q 'mCurrentFocus=Window'; then
+            break
+        fi
+        sleep 2
     done
-    return 1
+    adb shell input keyevent KEYCODE_WAKEUP
+    adb shell wm dismiss-keyguard >/dev/null 2>&1 || true
+    [ "$(adb shell getprop persist.sys.locale | tr -d '\r')" = "$1" ]
+}
+
+# Whether the emulator's Custom Locale app is there. Read whole, as above.
+custom_locale_app() {
+    local packages
+    packages=$(adb shell pm list packages com.android.customlocale2 2>/dev/null | tr -d '\r')
+    grep -q customlocale2 <<<"$packages"
 }
 
 # Whether the screen's dump holds the text $1 anywhere in an element's text. A text with a double quote in it is
@@ -120,6 +157,7 @@ grep -qx 'labels-read done' <<<"$read_dump" || fail "the debug dump did not read
 grep -m1 '^labels-read maker' <<<"$read_dump"
 
 compared=0
+known_count=0
 differ=()
 while IFS=$'\t' read -r key lang text; do
     line=$(grep -m1 "^label $key $lang " <<<"$read_dump" || true)
@@ -128,8 +166,11 @@ while IFS=$'\t' read -r key lang text; do
     got=$(cut -d' ' -f6- <<<"$line")
     compared=$((compared + 1))
     if [ "$source" != phone ] || [ "$got" != "$text" ]; then
-        if grep -q "^$key $lang $API:" <<<"$KNOWN"; then
-            echo "  known: $key $lang: '$got', AOSP '$text' ($(grep "^$key $lang $API:" <<<"$KNOWN" | cut -d: -f2-))"
+        known=$(awk -F'\t' -v key="$key" -v lang="$lang" -v api="$API" -v got="$got" \
+            '$1 == key && $2 == lang && $3 == api && $4 == got { print $5 }' <<<"$KNOWN")
+        if [ "$source" = phone ] && [ -n "$known" ]; then
+            known_count=$((known_count + 1))
+            echo "  known: $key $lang: '$got', AOSP's at the release's last tag '$text': $known"
         else
             differ+=("$key $lang: $source '$got', AOSP's at API $API is '$text'")
         fi
@@ -139,7 +180,7 @@ if [ ${#differ[@]} -gt 0 ]; then
     printf '  %s\n' "${differ[@]}" >&2
     fail "${#differ[@]} of $compared labels are not AOSP's text at API $API"
 fi
-echo "ok: all $compared labels read from the phone in eight languages are AOSP's text at API $API"
+echo "ok: all $compared labels read from the phone in eight languages are AOSP's text at API $API, $known_count of them an earlier tag's, as known"
 
 usage_en=$(expected usage_access en)
 usage_fa=$(expected usage_access fa)
@@ -155,16 +196,17 @@ if [ "$API" -lt 33 ]; then
     echo "== Android's own labels checked on the emulator"
     exit 0
 fi
-packages=$(adb shell pm list packages com.android.customlocale2 | tr -d '\r')
-device_locale_command || grep -q customlocale2 <<<"$packages" ||
-    fail "this image can set no phone language: neither the locale manager's set-device-locale nor the Custom Locale app"
+device_locale_command || custom_locale_app || [ "$(adb shell getprop ro.build.type | tr -d '\r')" != user ] ||
+    fail "this image can set no phone language: no locale manager's set-device-locale, no Custom Locale app, and a user build"
 
-dev_en=$(expected developer_options en)
-dev_fa=$(expected developer_options fa)
-usb_en=$(expected usb_debugging en)
-usb_fa=$(expected usb_debugging fa)
-always_en=$(expected always_on_vpn en)
-always_fa=$(expected always_on_vpn fa)
+# The labels as this phone gave them above, which the screens must quote.
+phone_label() { grep -m1 "^label $1 $2 phone " <<<"$read_dump" | cut -d' ' -f6-; }
+dev_en=$(phone_label developer_options en)
+dev_fa=$(phone_label developer_options fa)
+usb_en=$(phone_label usb_debugging en)
+usb_fa=$(phone_label usb_debugging fa)
+always_en=$(phone_label always_on_vpn en)
+always_fa=$(phone_label always_on_vpn fa)
 
 # The phone in English, Datapavan in Persian: the finding's button is the phone's label, Persian beside it.
 adb shell cmd locale set-app-locales "$PKG" --locales fa
