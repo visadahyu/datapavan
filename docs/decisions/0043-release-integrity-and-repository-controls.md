@@ -18,7 +18,7 @@ the code is written with AI coding agents, to the maintainer's design and under 
 
 ## Decision
 
-1. **Matching hashes before signing.** Before any offline signing, starting with Datapavan 0.2.0, the APK
+1. **Matching hashes before signing.** Before any offline signing, starting with Datapavan Advanced 0.2.0, the APK
    built in CI and the APK built from F-Droid's build image must both match the bytes to be signed. A mismatch stops
    the release.
 2. **A public transparency log.** The hash of each release and of each data pack is published to a Sigsum

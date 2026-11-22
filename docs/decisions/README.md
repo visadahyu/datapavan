@@ -7,7 +7,9 @@ Decisions are made and approved by the maintainer; drafting is AI-assisted, whic
 When a decision changes, its record is edited to state the decision as it now stands, and a record whose
 decision no longer holds is deleted. Git keeps the history (the maintainer, 2026-11-22). A record's number is
 never used again, and its numbered decisions, points and questions keep their numbers, since the code cites
-them: an item that no longer holds stays as "N. (Removed.)". The numbers 0002, 0028 and 0029 are not used.
+them: an item that no longer holds stays as "N. (Removed.)" (the numbering rule of the editions cleanup's brief).
+The numbers 0002 and 0029 are not used; 0028 is kept for the ranges of kinds of app from the lab (ADR 0025,
+point 5).
 
 | # | Decision | Status |
 |---|---|---|
@@ -38,7 +40,7 @@ them: an item that no longer holds stays as "N. (Removed.)". The numbers 0002, 0
 | [0025](0025-guided-check-and-traffic-facts.md) | The guided check of one activity, and two traffic facts that need no comparison | Accepted |
 | [0026](0026-remediation-plan-v0.1.md) | The remediation plan's part for v0.1 | Accepted |
 | [0027](0027-app-structure-and-settings.md) | The app's structure and settings | Accepted |
-| 0028 | Not used | – |
+| 0028 | Kept for the ranges of kinds of app from the lab (ADR 0025, point 5) | – |
 | 0029 | Not used | – |
 | [0030](0030-more-languages-reviewed-by-independent-models.md) | Spanish, Russian, Chinese and Arabic at launch, reviewed by independent models | Accepted |
 | [0031](0031-datapavan-basic-on-google-play.md) | Datapavan Basic on Google Play: its own package and key | Accepted, being built |

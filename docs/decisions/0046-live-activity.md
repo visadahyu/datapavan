@@ -2,7 +2,7 @@
 
 - Status: Accepted (by the maintainer on 2026-11-15)
 - Date: 2026-11-14
-- Amends: [ADR 0025](0025-guided-check-and-traffic-facts.md) decision 1, for Advanced's live
+- See also: [ADR 0025](0025-guided-check-and-traffic-facts.md) decision 1, for Advanced's live
   surfaces only; [ADR 0034](0034-network-permissions.md), by one exported component (the widget), and its line on
   `PACKAGE_USAGE_STATS`; [ADR 0022](0022-network-use-and-unused-apps.md) decision 2, for Advanced only, which also
   reads the event stream; DESIGN.md's W5 row; the roadmap's line on the widget.

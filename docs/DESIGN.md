@@ -1202,7 +1202,7 @@ Each decision is recorded in full, with context and consequences, as an ADR in
 | [0025](decisions/0025-guided-check-and-traffic-facts.md) | The guided check of one activity, and two traffic facts that need no comparison | Accepted |
 | [0026](decisions/0026-remediation-plan-v0.1.md) | The remediation plan's part for v0.1 | Accepted |
 | [0027](decisions/0027-app-structure-and-settings.md) | The app's structure and settings | Accepted |
-| 0028 | Not used | – |
+| 0028 | Kept for the ranges of kinds of app from the lab (ADR 0025, point 5) | – |
 | 0029 | Not used | – |
 | [0030](decisions/0030-more-languages-reviewed-by-independent-models.md) | Spanish, Russian, Chinese and Arabic at launch, reviewed by independent models | Accepted |
 | [0031](decisions/0031-datapavan-basic-on-google-play.md) | Datapavan Basic on Google Play: its own package and key | Accepted, being built |

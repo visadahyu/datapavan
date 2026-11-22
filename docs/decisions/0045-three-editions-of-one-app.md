@@ -27,7 +27,7 @@ The first two kept two apps:
 - **A genuine app with no internet can judge the networked one from outside.**
 
 The third found that editions of one app keep all three, with fewer names, no interface between two apps, and no
-Google Play build that cannot read the connection log.
+log in a separate app that the Google Play build could not read.
 
 ## Decision
 

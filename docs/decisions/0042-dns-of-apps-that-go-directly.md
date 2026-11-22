@@ -30,7 +30,7 @@ leaves every direct app without names.
    encrypted path answers, and says so on the network screen while it does. With the strict setting, it is never
    used.
 4. **The user's own choice stays.** A DoH or DoT resolver of the user's choice, and the strict setting, stay beside
-   ODoH (points 6 and 7 below).
+   ODoH ("How it is built", points 6 and 7).
 
 ## Open questions
 

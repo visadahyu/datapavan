@@ -6,8 +6,8 @@
 ## Context
 
 The independent review of 2026-11-09 rated the engine's design and parsers above the field, and its forwarding
-path at the field's standard. Its findings 18 to 21 say why. The maintainer made them gates of Datapavan 0.2.0,
-Advanced's first release, with an ADR (D25).
+path at the field's standard. Its findings 18 to 21 say why. The maintainer made them gates of Datapavan Advanced
+0.2.0, its first release, with an ADR (D25).
 - **18. No app has a budget.** A UDP flow costs:
   - a task;
   - a socket;
