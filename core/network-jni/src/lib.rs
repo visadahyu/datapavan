@@ -624,7 +624,7 @@ fn set_non_blocking(fd: &OwnedFd) {
 /// `Engine.nativeStart(service, fd, mtu, keepFlows, tableFd, tableStart, tableLength)`: takes ownership
 /// of the tunnel's descriptor `fd` and starts the engine, stopping one that runs. One that runs is a
 /// tunnel set up again with other addresses, or one `nativeSwapTunnel` could not hand over (ADR 0044,
-/// decision 5 as amended, and unit 12b): it hands the new engine its chain, the
+/// the proposal for decision 5, and unit 12b): it hands the new engine its chain, the
 /// network's resolver, its stand-ins, names and counters ([`Engine::hand_over`]) before the new
 /// engine reads its first packet, so that no chained app's packet goes directly meanwhile. `keepFlows` is how
 /// many of the latest flows to keep for debug builds; release builds pass 0. `tableFd`, if not -1, is a
@@ -761,7 +761,7 @@ pub extern "system" fn Java_org_visadahyu_datapavan_network_Engine_nativeNetwork
 /// `Engine.nativeRouteMtu(fd)`: the MTU the kernel keeps for the route of the connected socket `fd`
 /// (`IP_MTU`), or -1 when it says nothing. Kotlin makes the socket, binds it to the network beneath,
 /// connects it, and closes it after this returns; it reads the first hop's MTU so, since
-/// `android.system.Os` offers no `getsockoptInt` to apps (ADR 0044, decision 5 as amended).
+/// `android.system.Os` offers no `getsockoptInt` to apps (ADR 0044, the proposal for decision 5).
 // SAFETY: exported under the JNI name of the Kotlin method `external fun nativeRouteMtu(fd: Int): Int`.
 #[unsafe(no_mangle)]
 pub extern "system" fn Java_org_visadahyu_datapavan_network_Engine_nativeRouteMtu<'caller>(

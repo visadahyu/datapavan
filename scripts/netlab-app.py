@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-# An app of the engine's network lab (core/net/tests/netlab.rs, ADR 0044, decision 5 as amended): sends
+# An app of the engine's network lab (core/net/tests/netlab.rs, ADR 0044, the proposal for decision 5): sends
 # datagrams of SIZE bytes from SOURCE to an echo server at SERVER:PORT through a UDP socket of each path
 # MTU discovery mode, unconnected and connected, two from each socket, and says for each what became of
 # it, one line for each socket:

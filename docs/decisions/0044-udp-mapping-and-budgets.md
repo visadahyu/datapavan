@@ -124,12 +124,12 @@ Advanced's first release, with an ADR (D25).
    - **ICMP echo:** carried through unprivileged ICMP sockets, protected, at most 32. Its owner cannot be asked of
      Android, so pings are refused while a chain is on. Where Android refuses such sockets, echo is dropped and
      counted.
-   - **Fragments:** an app's fragments are reassembled, within bounds, and those dropped are counted apart (below,
-     fragments and the MTU).
-   - **Too large:** the tunnel's MTU follows the network beneath, so that the app's own kernel fragments or
-     refuses a datagram larger than it, as without the VPN; the engine answers no "too large" itself and passes
-     on only what routers answer (below, fragments and the MTU). The app's "do not fragment" bit is not copied
-     onto the engine's sockets.
+   - **Fragments:** counted apart. They are reassembled only if the count shows a need. (Proposed on 2026-11-15,
+     below, "Proposed for decision 5": they are reassembled, within bounds.)
+   - **Too large:** a datagram larger than the network beneath can carry is answered with ICMP "fragmentation
+     needed" or "packet too big", with the network's MTU, which Kotlin passes from `LinkProperties`. The app's
+     "do not fragment" bit is not copied onto the engine's sockets. (Proposed on 2026-11-15, below, "Proposed for
+     decision 5": the tunnel's MTU follows the network beneath, and the engine passes on only what routers answer.)
    - **The lock:** the native side (`core/network-jni`) never holds the engine's lock while joining its thread.
 6. **Tests that drive time.**
    - The engine takes its limits and timings from its `Config`, so tests can use seconds.
@@ -139,7 +139,8 @@ Advanced's first release, with an ADR (D25).
    - Where namespaces are not available, those tests say plainly that they did not run. They never pass silently.
    - CI allows the namespaces.
 
-**Decision 5, fragments and the MTU (2026-11-15, unit 12; proposed).**
+**Proposed for decision 5: fragments and the MTU (2026-11-15, unit 12, which builds it; no acceptance by the
+maintainer is recorded).**
 - **Why.** Two things were measured in Linux namespaces on 2026-11-15:
   - **Apps' kernels fragment.** A default UDP socket, IPv4 or IPv6, whose path MTU is smaller than its datagram
     sends it as fragments. Only a socket set to "do not fragment" gets `EMSGSIZE`. An engine that drops fragments
@@ -651,7 +652,7 @@ Advanced's first release, with an ADR (D25).
   - phones of other makers, whose SELinux rules for ICMP sockets may differ, are not measured yet (the Galaxy
     A40's run is in unit 11b).
 
-**Unit 12, fragments and the MTU (2026-11-15, decision 5).**
+**Unit 12, fragments and the MTU (2026-11-15, the proposal for decision 5).**
 - **The engine answers no "too large" itself.** Answered by the engine, as a router would, a datagram larger than
   the first hop's MTU harms apps whose own link would have carried it, as the second review showed: a connected
   default socket fails its next call with `EMSGSIZE` and loses that datagram, an IPv6 socket set to

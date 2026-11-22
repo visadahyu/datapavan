@@ -129,7 +129,7 @@ fn queued(socket: &impl AsFd, quote: &mut [u8]) -> Vec<Queued> {
 
 /// What the app is told of an extended error: "destination unreachable" with its code, but ICMP's
 /// "fragmentation needed" (type 3 code 4, RFC 1191) and `ICMPv6`'s "packet too big" (type 2, RFC 8201),
-/// which are told with the MTU the kernel gives in `ee_info` (ADR 0044, decision 5 as amended); and
+/// which are told with the MTU the kernel gives in `ee_info` (ADR 0044, the proposal for decision 5); and
 /// "time exceeded in transit" (unit 11b). A router older than RFC 1191 gives an MTU of 0, which says
 /// nothing of the path: such an error is left out. The rest, as "parameter problem" or a fragment's
 /// reassembly that timed out, are left out too, as are errors of local origin, as the kernel's own

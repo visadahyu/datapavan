@@ -788,7 +788,7 @@ that matter most had no test; a narrow review of the fixes found none left. On t
 ping passed through the network part's own socket and its replies came back. How it is built: [ADR
 0044](decisions/0044-udp-mapping-and-budgets.md), "How it is built".
 
-Fragments and the MTU, 2026-11-15 (finding 21b, ADR 0044, decision 5), built by a fresh agent from a written brief.
+Fragments and the MTU, 2026-11-15 (finding 21b, ADR 0044, the proposal for decision 5), built by a fresh agent from a written brief.
 The engine puts the apps' IPv4 and IPv6 fragments together again, within bounds of 64 datagrams, 1 MiB and five
 seconds that every app shares, where the datagram heard from longest ago gives way; it drops a datagram whose
 fragments overlap, and its later ones, or whose first fragment lacks its header. The tunnel's MTU follows the network

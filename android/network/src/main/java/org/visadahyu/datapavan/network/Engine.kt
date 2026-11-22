@@ -69,7 +69,7 @@ internal object Engine {
      * budget for the engine and for each app, the echo requests carried, their replies, and those
      * refused, unsupported or dropped (ADR 0044, decisions 3 and 5), and last the datagrams put together
      * from the apps' fragments, those the engine's kernel refused to send as too long, dropped, and the
-     * routers' "fragmentation needed" and "packet too big" passed on to the apps (decision 5 as amended;
+     * routers' "fragmentation needed" and "packet too big" passed on to the apps (the proposal for decision 5;
      * the 20th counts the fragments dropped); and last the seconds, and segments with no count, placed in no
      * state because their app's state was told too late (W5, ADR 0046); and at 67 to 70 tracker blocking's
      * (W8, part 3a, ADR 0053): lookups answered with no address, connections refused, of those the ones refused

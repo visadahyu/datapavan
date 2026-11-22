@@ -1071,7 +1071,7 @@ fn ipv6_here() -> Outcome {
     Ok(())
 }
 
-/// ADR 0044, decision 5 as amended: a datagram larger than the tunnel's MTU, which the app's kernel
+/// ADR 0044, the proposal for decision 5: a datagram larger than the tunnel's MTU, which the app's kernel
 /// cuts into fragments at tun0's 1,500 bytes, reaches the server whole, put together by the engine,
 /// and as large an answer reaches the app whole; in IPv4 and IPv6. Before, the engine dropped every
 /// fragment.
@@ -2062,7 +2062,7 @@ async fn modes(
         .collect())
 }
 
-/// ADR 0044, decision 5 as amended, and the second review of unit 12 (R1, R3): while the tunnel's MTU
+/// ADR 0044, the proposal for decision 5, and the second review of unit 12 (R1, R3): while the tunnel's MTU
 /// is still 1,500 and the network beneath is narrower, as in the moment before the network part sets the tunnel up
 /// again with that network's MTU, each app socket's datagram that fits the tunnel reaches the server
 /// whole, whatever its path MTU discovery mode, as before this unit: the engine's kernel fragments it
@@ -2120,7 +2120,7 @@ fn set_tunnel_mtu(mtu: u16) -> Outcome {
     Ok(())
 }
 
-/// ADR 0044, decision 5 as amended: with the tunnel's MTU at the network's, 1,280, each app socket's
+/// ADR 0044, the proposal for decision 5: with the tunnel's MTU at the network's, 1,280, each app socket's
 /// datagram of 1,500 bytes meets the tunnel as it would meet that network without the network part, measured here
 /// against the same app on the narrow network itself, from an address of the namespace's own. A socket
 /// that may fragment (dont, want, omit) is fragmented by its own kernel, the engine puts the fragments
@@ -2396,7 +2396,7 @@ fn answer_ttl(response: &[u8]) -> Option<u32> {
     ))
 }
 
-/// ADR 0044, decision 5 as amended (re-review of unit 12, major 1): when the tunnel is set up again,
+/// ADR 0044, the proposal for decision 5 (re-review of unit 12, major 1): when the tunnel is set up again,
 /// the running engine stops and hands the new one its chain, the network's resolver, whether answers go
 /// uncached, the names DNS answers gave, and its counters, all before the new engine reads a packet. So
 /// a chained app's first datagram and first connection on the new tunnel go through the tool, and
@@ -2513,7 +2513,7 @@ fn second_tunnel(name: &str) -> Result<OwnedFd, Box<dyn std::error::Error>> {
     Ok(OwnedFd::from(file))
 }
 
-/// Android's in-place update of the VPN network (AOSP's `Vpn.establish`, ADR 0044's amendment of
+/// Android's in-place update of the VPN network (AOSP's `Vpn.establish`, ADR 0044's proposal for
 /// decision 5): the tunnel's addresses and the apps' routes go from the tun device `from` to `to`,
 /// then `from`'s addresses go and it goes down, as Android resets the old interface.
 fn move_tunnel(from: &str, to: &str) -> Outcome {

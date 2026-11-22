@@ -22,8 +22,8 @@
 //! The apps' fragments are put together again, and the "fragmentation needed" and "packet too big"
 //! that routers beyond the first hop send the engine's sockets reach the apps, with their MTU. The
 //! engine answers nothing as too large on its own: the tunnel's MTU is the first hop's, which the network part's
-//! Kotlin side reads and sets, so the apps' own kernels meet it as they would without the network part (decision 5
-//! as amended on 2026-11-15).
+//! Kotlin side reads and sets, so the apps' own kernels meet it as they would without the network part (proposal for
+//! decision 5 of 2026-11-15).
 //!
 //! The network part is not a hop (unit 11b): an app's datagram on the direct path and its ping leave with the
 //! app's own hop limit, what comes back reaches the app with the hop limit it arrived with, and the
@@ -252,7 +252,7 @@ pub struct Limits {
     /// sends again.
     pub echo_interval: Duration,
     /// At most this many datagrams are put together from the apps' fragments at once (ADR 0044,
-    /// decision 5 as amended): for a fragment of one more, the oldest incomplete one gives way.
+    /// the proposal for decision 5): for a fragment of one more, the oldest incomplete one gives way.
     pub fragment_datagrams: usize,
     /// At most this many bytes of fragments are held across them ([`crate::fragments::Bounds`]); past
     /// it, the oldest incomplete datagrams give way too.
@@ -882,7 +882,7 @@ pub struct ChainSetting {
     pub blocking: BlockSetting,
 }
 
-/// What an engine hands the next when the tunnel is set up again (ADR 0044, decision 5 as amended): what
+/// What an engine hands the next when the tunnel is set up again (ADR 0044, the proposal for decision 5): what
 /// was set on it from outside, the chain, the network's resolver and whether answers go uncached, and
 /// what it learned that the apps' next flows need, the stand-in addresses chained apps were given and
 /// the names DNS answers gave addresses; with its counters, which go on. So the new engine routes a
@@ -1583,7 +1583,7 @@ async fn run(
     };
     // Sized from the first tunnel's MTU, and never smaller than 1,500 bytes: a tunnel set up again and
     // handed over (`Engine::swap_tunnel`) keeps this buffer, which holds its packets too, since the network part
-    // never gives the tunnel an MTU above 1,500 (ADR 0044, decision 5 as amended).
+    // never gives the tunnel an MTU above 1,500 (ADR 0044, the proposal for decision 5).
     let mut buffer = vec![0u8; usize::from(mtu).max(1500) + 64];
     let mut swept = Instant::now();
     // Every task of the engine runs on this thread: the log reads its clock here alone.
@@ -1777,7 +1777,7 @@ impl Shared {
 /// The MTU the kernel keeps for the route of a connected socket (`IP_MTU`), or `None` when it says
 /// nothing, as for a socket not connected. The network part's Kotlin side reads the first hop's MTU of the network
 /// beneath with it, from a UDP socket bound to that network and connected toward an address only its
-/// default route covers, and gives the tunnel that MTU (ADR 0044, decision 5 as amended). On Linux
+/// default route covers, and gives the tunnel that MTU (ADR 0044, the proposal for decision 5). On Linux
 /// `IP_MTU` answers for an IPv6 socket too, with what router advertisements set.
 #[must_use]
 pub fn route_mtu(socket: &impl AsFd) -> Option<u32> {

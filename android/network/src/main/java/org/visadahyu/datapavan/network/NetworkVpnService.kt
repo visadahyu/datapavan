@@ -110,7 +110,7 @@ class NetworkVpnService : VpnService() {
     private val riseCheck = Any()
 
     /**
-     * The tunnel's MTU for this run (ADR 0044, decision 5 as amended): the first hop's of the network
+     * The tunnel's MTU for this run (ADR 0044, the proposal for decision 5): the first hop's of the network
      * beneath, as [TunnelMtu] chooses it from what the kernel said. Set on the main thread.
      */
     @Volatile

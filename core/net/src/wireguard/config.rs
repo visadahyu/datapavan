@@ -21,7 +21,7 @@ pub const MAX_ALLOWED: usize = 256;
 /// At most this many DNS servers.
 pub const MAX_DNS: usize = 8;
 /// The smallest and largest MTU accepted: IPv4's least (RFC 791) and the tunnel's own, which the network part never
-/// sets above 1,500 bytes (ADR 0044, decision 5 as amended). With an IPv6 address, at least 1,280 (RFC
+/// sets above 1,500 bytes (ADR 0044, the proposal for decision 5). With an IPv6 address, at least 1,280 (RFC
 /// 8200 5).
 pub const MTU_RANGE: std::ops::RangeInclusive<u16> = 576..=1_500;
 /// The MTU inside the tunnel when the configuration gives none: 1,280, as `WireGuard`'s own app uses

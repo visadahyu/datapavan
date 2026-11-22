@@ -1,4 +1,4 @@
-//! The apps' IP fragments, put together again (ADR 0044, decision 5 as amended on 2026-11-15). An
+//! The apps' IP fragments, put together again (ADR 0044, the proposal for decision 5 of 2026-11-15). An
 //! app's kernel cuts a datagram into fragments when it is larger than the tunnel's MTU, which is the
 //! first hop's of the network beneath, or than the path MTU a router told it of; the engine puts each
 //! datagram together again, and hands it on as any other packet.

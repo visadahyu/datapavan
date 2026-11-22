@@ -590,7 +590,7 @@ else
     fi
 fi
 
-# The tunnel's MTU follows the network beneath (ADR 0044, decision 5 as amended): the network part reads the first hop's
+# The tunnel's MTU follows the network beneath (ADR 0044, the proposal for decision 5): the network part reads the first hop's
 # MTU of each IP version from the kernel and gives the tunnel the smaller, within 1,280 and 1,500; its dump says what it
 # chose and what it read. The interface that holds the tunnel's address must carry that MTU. On the emulator both
 # networks are 1,500. Each output is read whole before it is parsed: under pipefail, a reader that stops early would
@@ -734,7 +734,7 @@ else
     echo "ok: set up again with the same addresses (interface $interface now), the tunnel kept a connection open through the network part, both ways, and its MTU"
 fi
 
-# Fragments (ADR 0044, decision 5 as amended): a ping of 2,000 bytes of data is a 2,028-byte request, which the
+# Fragments (ADR 0044, the proposal for decision 5): a ping of 2,000 bytes of data is a 2,028-byte request, which the
 # shell's kernel cuts into fragments at the tunnel's MTU of 1,500, and the engine puts together again before it
 # looks at what the request is: the 39th counter counts the datagrams it rebuilt. On an emulator it must rise; a
 # phone's shell may not send such a ping, so there it is reported. The reply is larger than the tunnel's MTU too,

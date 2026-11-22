@@ -22,7 +22,7 @@
 # - Through IPv6 the same, where the machine has IPv6: tun0 holds the tunnel's common IPv6 address
 #   (a /128), and the "internet" is 2001:db8::9 (RFC 3849) on the loopback. Where it has none, the lab
 #   says so, sets NETLAB_IPV6=absent for the test, and goes on with IPv4: the IPv6 tests then fail.
-# - A narrow network (ADR 0044, decision 5 as amended): a server at 198.51.100.20 and 2001:db8:1::20 on
+# - A narrow network (ADR 0044, the proposal for decision 5): a server at 198.51.100.20 and 2001:db8:1::20 on
 #   "far", one end of a veth pair whose other end, "near", is in the same namespace. What the
 #   namespace itself sends there takes table 101, whose routes go out of "near", a link of 1,280 bytes,
 #   from the "internet" addresses; packets from the apps still go into tun0 first, by the rule before

@@ -3290,7 +3290,7 @@ fn note_quic(shared: &Shared, quic: Option<QuicRead>) {
 /// ICMP errors, as a mapping's does (third round of unit 11b, finding 2): told as "host unreachable", it
 /// failed an app socket that asks for its errors too at its next send, losing that datagram as well.
 /// One the engine's kernel refused as too long to send (`EMSGSIZE`) is dropped and counted (ADR 0044,
-/// decision 5 as amended): its destination can be reached, and "host unreachable" would tell the app
+/// the proposal for decision 5): its destination can be reached, and "host unreachable" would tell the app
 /// otherwise.
 /// The tunnel's MTU is the first hop's, so the app's own kernel has already sized it for the network
 /// beneath; the engine's sockets fragment what is larger than the path, and a router beyond answers
@@ -4647,7 +4647,7 @@ fn read_mapped(
         };
         // A router's "time exceeded", "fragmentation needed" or "packet too big" (with its MTU), and an
         // unreachable with its code, reach the app from whoever sent them, as without the network part (ADR 0044,
-        // decision 5 as amended, and unit 11b). One for which no error to the app can be built is
+        // the proposal for decision 5, and unit 11b). One for which no error to the app can be built is
         // dropped, and counted.
         match told_to((app, destination), &error, &sent) {
             Some(packet) => {
@@ -7941,7 +7941,7 @@ mod tests {
     }
 
     /// A send the engine's kernel refused as too long (`EMSGSIZE`) is dropped and counted, never
-    /// answered "host unreachable" (ADR 0044, decision 5 as amended); another failure still is.
+    /// answered "host unreachable" (ADR 0044, the proposal for decision 5); another failure still is.
     #[test]
     fn a_send_too_long_is_dropped_and_counted() {
         let shared = shared();
