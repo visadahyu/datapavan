@@ -2064,7 +2064,7 @@ async fn resolve(shared: &Arc<Shared>, name: &str, port: u16) -> Option<(SocketA
     // resolver may take its time; a thread left asking ends when it answers, its answer then unread.
     let (answer, answered) = tokio::sync::oneshot::channel();
     std::thread::Builder::new()
-        .name("watch-resolve".into())
+        .name("network-resolve".into())
         .spawn(move || {
             let _ = answer.send(platform.resolve(&asked));
         })
@@ -2557,7 +2557,7 @@ mod tests {
     /// way; a refusal for want of an answer stands a while, then a new flow asks again; Watch's next hand-over that
     /// names the app ends its answer (the maintainer, 2026-11-20).
     #[test]
-    fn an_app_watch_did_not_name_goes_where_watch_answers_and_nowhere_before() {
+    fn an_app_not_yet_named_goes_where_the_kotlin_side_answers_and_nowhere_before() {
         use super::super::chain::Route;
         let shared = shared();
         let web = SocketAddr::from(([93, 184, 216, 34], 443));
@@ -2649,7 +2649,7 @@ mod tests {
     /// one that does not come within [`ASK_BOUND`] refuses the flow, never sending it directly; a late answer
     /// serves the next flow.
     #[test]
-    fn watch_is_asked_off_the_loop_and_an_answer_too_late_refuses_the_flow() {
+    fn the_kotlin_side_is_asked_off_the_loop_and_an_answer_too_late_refuses_the_flow() {
         use super::super::chain::Route;
         use std::sync::mpsc;
         struct Asked {
@@ -3003,7 +3003,7 @@ mod tests {
         shared.quarter.store(0, Ordering::Release);
         let (done, finished) = mpsc::channel();
         let (held, holding) = mpsc::channel();
-        let watch = {
+        let asker = {
             let (shared, done) = (Arc::clone(&shared), done.clone());
             std::thread::spawn(move || {
                 // As `hide_chained`: the live flows held, then each flow's route asked.
@@ -3012,7 +3012,7 @@ mod tests {
                 std::thread::sleep(Duration::from_millis(200));
                 let _ = shared.route(Some(10_300), SocketAddr::from(([93, 184, 216, 34], 443)));
                 drop(live);
-                let _ = done.send("watch");
+                let _ = done.send("asker");
             })
         };
         let engine = {
@@ -3033,7 +3033,7 @@ mod tests {
         };
         let first = finished.recv_timeout(Duration::from_secs(3));
         let second = finished.recv_timeout(Duration::from_secs(3));
-        let _ = (watch, engine);
+        let _ = (asker, engine);
         assert!(
             first.is_ok() && second.is_ok(),
             "deadlock: {first:?} {second:?}"

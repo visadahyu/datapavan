@@ -177,10 +177,10 @@ class ToolFinder(
         Socket().use { socket ->
             socket.connect(InetSocketAddress(host, port), CONNECT_MS)
             val tool = socket.remoteSocketAddress as InetSocketAddress
-            val watch = socket.localSocketAddress as InetSocketAddress
+            val own = socket.localSocketAddress as InetSocketAddress
             // Asked at once, while the other end is surely open: a proxy that refuses the greeting
             // closes it, and a closed connection has no owner left to name.
-            val early = ownerOf(tool, watch)
+            val early = ownerOf(tool, own)
             socket.soTimeout = READ_MS
             socket.getOutputStream().apply {
                 write(byteArrayOf(5, 1, 0))
@@ -196,7 +196,7 @@ class ToolFinder(
             // Just after connect() returns, the tool's end may still be half-open in the kernel, and a
             // half-open or closing end names no owner: Android then says root (CI, 2026-11-12: "held by
             // UID 0" for the test tool). Once the tool has answered, its end is surely its own: asked again.
-            val owner = known(early) ?: known(ownerOf(tool, watch)).also {
+            val owner = known(early) ?: known(ownerOf(tool, own)).also {
                 if (early == ROOT) note("$host:$port: no owner at once (UID 0), then ${it ?: "none"}")
             }
             Greeting(owner = owner, needsPassword = method == 0xff)

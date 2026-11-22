@@ -153,7 +153,7 @@ async fn a_direct_apps_lookup_goes_the_encrypted_way_and_never_to_the_network() 
 }
 
 #[tokio::test]
-async fn dns_over_quic_at_watchs_address_is_refused() -> Outcome {
+async fn dns_over_quic_at_the_tunnels_dns_address_is_refused() -> Outcome {
     let kotlin = Arc::new(Kotlin::default());
     let (mut engine, tunnel) = started(&kotlin, false)?;
     let doq = SocketAddr::from((Addresses::COMMON.dns4, 853));

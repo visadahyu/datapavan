@@ -2191,7 +2191,7 @@ mod tests {
     }
 
     #[tokio::test(flavor = "current_thread")]
-    async fn dns_over_tcp_to_watchs_address_is_answered_by_the_resolver() {
+    async fn dns_over_tcp_to_the_tunnels_dns_address_is_answered_by_the_resolver() {
         use tokio::io::{AsyncReadExt, AsyncWriteExt};
         let (shared, fake) = resolving("");
         let mut stream = connect_lookups(&shared, TcpLookups::Encrypted(None))

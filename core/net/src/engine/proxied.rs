@@ -2489,7 +2489,7 @@ mod tests {
     /// Where Watch does not see the app's lookups, an untied hello is no evidence (S-M3): under strict Private
     /// DNS, or for an app whose lookups never passed through Watch in the window, the hello names its flow.
     #[test]
-    fn an_untied_hello_counts_only_where_watch_sees_the_apps_lookups() {
+    fn an_untied_hello_counts_only_where_the_engine_sees_the_apps_lookups() {
         // Strict Private DNS, though the app looked a name up before.
         let shared = engine(true);
         let mut setting = ProxySetting {

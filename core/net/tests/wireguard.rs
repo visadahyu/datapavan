@@ -460,13 +460,13 @@ async fn a_chosen_apps_lookup_goes_to_its_configurations_dns_server() -> Outcome
     let mut server = Server::new(SERVER_KEY).await?;
     let setting = one(&server, &[FIRST], "10.77.0.2/32", "0.0.0.0/0")?;
     let (_engine, tunnel) = engine(&setting)?;
-    let (app, watch_dns) = (tun4(40_003), SocketAddr::from((Addresses::COMMON.dns4, 53)));
+    let (app, own_dns) = (tun4(40_003), SocketAddr::from((Addresses::COMMON.dns4, 53)));
     let query = [
         0x12, 0x34, 1, 0, 0, 1, 0, 0, 0, 0, 0, 0, 7, b'e', b'x', b'a', b'm', b'p', b'l', b'e', 3,
         b'c', b'o', b'm', 0, 0, 1, 0, 1,
     ];
     tunnel
-        .send(&packet::udp(app, watch_dns, &query).ok_or("datagram")?)
+        .send(&packet::udp(app, own_dns, &query).ok_or("datagram")?)
         .await?;
     let seen = server.next().await?;
     let parsed = packet::parse(&seen).map_err(|e| format!("{e:?}"))?;
@@ -496,7 +496,7 @@ async fn a_chosen_apps_lookup_goes_to_its_configurations_dns_server() -> Outcome
         .await?;
     let back = to_app(&tunnel).await?;
     let parsed = packet::parse(&back).map_err(|e| format!("{e:?}"))?;
-    assert_eq!((parsed.source, parsed.destination), (watch_dns, app));
+    assert_eq!((parsed.source, parsed.destination), (own_dns, app));
     let payload = packet::udp_payload(&back, &parsed).ok_or("payload")?;
     assert_eq!(
         &payload[payload.len() - 10..payload.len() - 6],
@@ -505,11 +505,11 @@ async fn a_chosen_apps_lookup_goes_to_its_configurations_dns_server() -> Outcome
     );
     // Asked again, answered from the tunnel's cache: the server sees nothing.
     tunnel
-        .send(&packet::udp(app, watch_dns, &query).ok_or("datagram")?)
+        .send(&packet::udp(app, own_dns, &query).ok_or("datagram")?)
         .await?;
     let again = to_app(&tunnel).await?;
     let parsed = packet::parse(&again).map_err(|e| format!("{e:?}"))?;
-    assert_eq!(parsed.source, watch_dns);
+    assert_eq!(parsed.source, own_dns);
     let payload = packet::udp_payload(&again, &parsed).ok_or("payload")?;
     assert_eq!(
         &payload[payload.len() - 10..payload.len() - 6],
@@ -802,7 +802,7 @@ async fn a_network_change_makes_the_socket_anew_and_tells_the_server_at_once() -
 fn engine_ticks() -> Result<u64, Box<dyn std::error::Error>> {
     for task in std::fs::read_dir("/proc/self/task")? {
         let path = task?.path();
-        if std::fs::read_to_string(path.join("comm"))?.trim() == "watch-engine" {
+        if std::fs::read_to_string(path.join("comm"))?.trim() == "network-engine" {
             let stat = std::fs::read_to_string(path.join("stat"))?;
             let after = stat.rsplit_once(") ").ok_or("stat")?.1;
             let fields: Vec<&str> = after.split(' ').collect();

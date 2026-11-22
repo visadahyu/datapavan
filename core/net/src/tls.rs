@@ -258,7 +258,7 @@ pub(crate) mod tests {
         }
         assert_eq!(server_name(b"GET / HTTP/1.1\r\n"), ServerName::None);
         assert_eq!(server_name(b"SSH-2.0-OpenSSH_9.9\r\n"), ServerName::None);
-        let mut bad = hello("watch test", 1000);
+        let mut bad = hello("network test", 1000);
         assert_eq!(server_name(&bad), ServerName::None);
         bad[0] = 23;
         assert_eq!(server_name(&bad), ServerName::None);

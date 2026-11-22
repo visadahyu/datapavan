@@ -1222,7 +1222,7 @@ impl Engine {
             .build()
             .and_then(|runtime| {
                 std::thread::Builder::new()
-                    .name("watch-engine".into())
+                    .name("network-engine".into())
                     .spawn(move || {
                         runtime.block_on(async move {
                             if let Ok(tun) = Tun::waiting(fd, config.limits.tunnel_wait) {

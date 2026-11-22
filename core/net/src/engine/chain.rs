@@ -318,9 +318,9 @@ mod tests {
         assert_eq!(shared.tool_target(forgotten), None);
         let server = SocketAddr::from(([93, 184, 216, 34], 443));
         assert_eq!(shared.tool_target(server), Some(Target::Address(server)));
-        let watch_dns = SocketAddr::from((super::super::Addresses::COMMON.dns4, 53));
+        let own_dns = SocketAddr::from((super::super::Addresses::COMMON.dns4, 53));
         assert_eq!(
-            shared.tool_target(watch_dns),
+            shared.tool_target(own_dns),
             Some(Target::Address(RESOLVERS[0]))
         );
     }

@@ -2085,12 +2085,12 @@ mod tests {
     }
 
     /// The log, as it is handed its batches, noting at each whether a flush asked is still waited for.
-    struct Watched {
+    struct Observed {
         flushed: Mutex<std::sync::mpsc::Receiver<()>>,
         seen: Mutex<Vec<Result<(), std::sync::mpsc::TryRecvError>>>,
     }
 
-    impl Platform for Watched {
+    impl Platform for Observed {
         fn owner(&self, _: u8, _: SocketAddr, _: SocketAddr) -> Option<u32> {
             None
         }
@@ -2111,7 +2111,7 @@ mod tests {
     #[tokio::test(flavor = "current_thread")]
     async fn a_flush_asked_as_the_engine_stops_is_let_go() -> std::io::Result<()> {
         let (done, flushed) = std::sync::mpsc::sync_channel(1);
-        let platform = Arc::new(Watched {
+        let platform = Arc::new(Observed {
             flushed: Mutex::new(flushed),
             seen: Mutex::default(),
         });

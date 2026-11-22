@@ -2130,9 +2130,9 @@ fn set_tunnel_mtu(mtu: u16) -> Outcome {
 /// takes them.
 #[test]
 #[ignore = "needs an unprivileged network namespace; scripts/check.sh rust runs it"]
-fn at_the_networks_mtu_apps_fragment_or_refuse_as_without_watch() -> Outcome {
+fn at_the_networks_mtu_apps_fragment_or_refuse_as_without_the_tunnel() -> Outcome {
     lab(
-        "at_the_networks_mtu_apps_fragment_or_refuse_as_without_watch",
+        "at_the_networks_mtu_apps_fragment_or_refuse_as_without_the_tunnel",
         &Limits::default(),
         |engine| async move {
             ipv6_here()?;
@@ -2152,10 +2152,10 @@ fn at_the_networks_mtu_apps_fragment_or_refuse_as_without_watch() -> Outcome {
                 ),
             ] {
                 let server = udp_echo(server_at).await?;
-                let through_watch = modes(app_at, server, size).await?;
-                let without_watch = modes(own_at, server, size).await?;
-                assert_eq!(through_watch, without_watch);
-                for line in &through_watch {
+                let through_tunnel = modes(app_at, server, size).await?;
+                let without_tunnel = modes(own_at, server, size).await?;
+                assert_eq!(through_tunnel, without_tunnel);
+                for line in &through_tunnel {
                     let refused = ["do ", "probe ", "interface ", "dontfrag "]
                         .iter()
                         .any(|mode| line.starts_with(mode));
