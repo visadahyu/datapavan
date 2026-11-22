@@ -1,6 +1,6 @@
 <?xml version="1.0" encoding="utf-8"?>
 <manifest xmlns:android="http://schemas.android.com/apk/res/android">
-    <!-- A VPN that forwards traffic needs sockets (ADR 0029: Watch, never Datapavan itself). -->
+    <!-- A VPN that forwards traffic needs sockets (ADR 0045: the network part, never the audit). -->
     <uses-permission android:name="android.permission.INTERNET" />
     <!-- Android 17 blocks private addresses (the test server on the LAN) without it, for apps targeting 37. -->
     <uses-permission android:name="android.permission.ACCESS_LOCAL_NETWORK" />

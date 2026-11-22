@@ -4,7 +4,7 @@
 
 ## What "VPN" means here
 
-Watch, the part of Datapavan planned for v0.2, is a service of Datapavan Advanced, not an app of its own ([ADR 0045](decisions/0045-three-editions-of-one-app.md), in place of [ADR 0029](decisions/0029-network-access-for-v0.2.md)); Datapavan Basic never has it. It uses Android's `VpnService` only to see and filter traffic on the device. It is a
+Watch, the part of Datapavan planned for v0.2, is a service of Datapavan Advanced, not an app of its own ([ADR 0045](decisions/0045-three-editions-of-one-app.md)); Datapavan Basic never has it. It uses Android's `VpnService` only to see and filter traffic on the device. It is a
 **firewall**, not a tunnel:
 
 - No Datapavan server exists, and no traffic is sent to us.

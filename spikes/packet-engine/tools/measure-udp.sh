@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # The UDP round of the spike: QUIC-sized datagrams both ways through one engine (or none), and the
-# engine's CPU time for them. Most of the bytes of Meta's apps travel over QUIC (ADR 0029).
+# engine's CPU time for them. Most of the bytes of Meta's apps travel over QUIC (ADR 0045, decision 11).
 #
 #   ANDROID_SERIAL=emulator-5556 HOST=10.0.2.2:8790 tools/measure-udp.sh userspace|system|gvisor|none [rounds] [datagrams]
 set -uo pipefail

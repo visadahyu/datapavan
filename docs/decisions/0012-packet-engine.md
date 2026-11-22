@@ -5,7 +5,7 @@
 
 ## Context
 
-The local VPN of Datapavan Watch (v0.2, ADR 0029) must carry every app's packets from the tunnel to
+The local VPN of Datapavan Advanced's network part (v0.2, ADR 0045) must carry every app's packets from the tunnel to
 their real destinations. It must also know which app each flow belongs to, show a refused or
 unreachable server as such, cost little battery, add under 1 MB per ABI (VPN.md), and run beside
 circumvention tools through a local SOCKS5 proxy (RESTRICTED-REGIONS.md). The candidates were a Rust

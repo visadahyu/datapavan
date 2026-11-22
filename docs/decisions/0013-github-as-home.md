@@ -1,21 +1,21 @@
-# 0013. GitHub as the only home; Codeberg dropped
+# 0013. GitHub as the only home, not Codeberg
 
 - Status: Accepted
 - Date: 2026-10-29
 - Decided by: mehdashti
 
 ## Context
-ADR 0002 made Codeberg the primary repository and GitHub a mirror. Codeberg's Terms of Use, amended by
-its 2026 general assembly, now prohibit sharing projects that mostly consist of code written by
+The project places itself within European digital sovereignty, and Codeberg, a non-profit in Berlin, would fit
+that. GitHub has the largest audience and the most capable free CI. Codeberg's Terms of Use, amended by its 2026
+general assembly, prohibit sharing projects that mostly consist of code written by
 generative AI tools (§ 2 (1) 7). Violations lead to removal of the content and, if repeated, to account
 suspension. Datapavan is developed with AI assistance and says so openly (README, `Assisted-by`
-trailers). Staying on Codeberg would mean either breaking its terms or hiding how the project is
+trailers). Hosting on Codeberg would mean either breaking its terms or hiding how the project is
 built. Neither is acceptable.
 
 ## Decision
 - GitHub (`visadahyu/datapavan`) is the only repository. Issues, pull requests and CI live there.
-- The Codeberg repositories are removed.
-- Supersedes [ADR 0002](0002-codeberg-with-github-mirror.md).
+- The project keeps no repository on Codeberg.
 
 ## Consequences
 - One remote, nothing to keep in sync, and CI results appear where the code lives.

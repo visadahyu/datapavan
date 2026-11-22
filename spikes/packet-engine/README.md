@@ -1,8 +1,10 @@
 # Packet-engine spike (ADR 0012)
 
-Throwaway code that picks the packet engine for Datapavan Watch, the separate VPN app of v0.2
-(ADR 0029, [docs/VPN.md](../../docs/VPN.md)). Nothing here is released or built by CI; the engine
-that wins moves into Watch's own module. Findings: [docs/spikes/2026-11-packet-engine.md](../../docs/spikes/2026-11-packet-engine.md).
+Throwaway code that picked the packet engine for Datapavan Advanced's network part (ADR 0045,
+[docs/VPN.md](../../docs/VPN.md)). Nothing here is released or built by CI; the engine that won is in
+`core/net` and `android/network`. Findings: [docs/spikes/2026-11-packet-engine.md](../../docs/spikes/2026-11-packet-engine.md).
+The spike is kept as it ran, as a record: its folders, packages and log tags keep the names they had then
+(`watch`, `org.visadahyu.datapavan.watch.spike`, `WatchSpike`), and so do its results.
 
 Three engines behind one surface (`PacketEngine` in Kotlin: start on the tunnel's descriptor, stop,
 counters):

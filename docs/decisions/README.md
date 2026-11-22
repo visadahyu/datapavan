@@ -1,15 +1,18 @@
 # Architecture decision records
 
-Each file records one lasting decision: its context, the decision, and its consequences. Decisions are
-made and approved by the maintainer; drafting is AI-assisted, which is disclosed (see
-[CONTRIBUTING.md](../../CONTRIBUTING.md)). A changed decision gets a new record that supersedes the old
-one. Until the first release, records may still be corrected for accuracy; every correction is visible
-in the Git history.
+Each file records one lasting decision as it stands: its context, the decision, and its consequences.
+Decisions are made and approved by the maintainer; drafting is AI-assisted, which is disclosed (see
+[CONTRIBUTING.md](../../CONTRIBUTING.md)).
+
+When a decision changes, its record is edited to state the decision as it now stands, and a record whose
+decision no longer holds is deleted. Git keeps the history (the maintainer, 2026-11-22). A record's number is
+never used again, and its numbered decisions, points and questions keep their numbers, since the code cites
+them: an item that no longer holds stays as "N. (Removed.)". The numbers 0002, 0028 and 0029 are not used.
 
 | # | Decision | Status |
 |---|---|---|
 | [0001](0001-apache-2-licence.md) | Apache-2.0 licence | Accepted |
-| [0002](0002-codeberg-with-github-mirror.md) | Codeberg as home, GitHub as read-only mirror | Superseded by 0013 |
+| 0002 | Not used | – |
 | [0003](0003-minimum-android-10.md) | Minimum Android version 10 (API 29) | Accepted |
 | [0004](0004-ui-languages-and-rtl.md) | Languages at launch, changed by ADR 0030; RTL from the first commit | Accepted |
 | [0005](0005-english-documentation.md) | Documentation in English only | Accepted |
@@ -20,7 +23,7 @@ in the Git history.
 | [0010](0010-cuneiform-brand-marks.md) | Old Persian cuneiform signs as brand marks | Accepted |
 | [0011](0011-m1-test-devices.md) | M1 tested on emulators and the Galaxy A40 only | Accepted |
 | [0012](0012-packet-engine.md) | Packet engine for the local VPN: Android's own TCP stack through rewritten addresses, in Rust | Accepted |
-| [0013](0013-github-as-home.md) | GitHub as the only home; Codeberg dropped | Accepted |
+| [0013](0013-github-as-home.md) | GitHub as the only home, not Codeberg | Accepted |
 | [0014](0014-v0.1-permissions.md) | Permissions for v0.1 "Audit" | Accepted |
 | [0015](0015-dataset-licences.md) | Licences of bundled datasets | Accepted |
 | [0016](0016-no-user-data.md) | No data from users; learning happens in the lab | Accepted |
@@ -35,8 +38,8 @@ in the Git history.
 | [0025](0025-guided-check-and-traffic-facts.md) | The guided check of one activity, and two traffic facts that need no comparison | Accepted |
 | [0026](0026-remediation-plan-v0.1.md) | The remediation plan's part for v0.1 | Accepted |
 | [0027](0027-app-structure-and-settings.md) | The app's structure and settings | Accepted |
-| 0028 | This number was not used | – |
-| [0029](0029-network-access-for-v0.2.md) | v0.2's VPN in a separate app, Datapavan Watch, so that Datapavan never holds INTERNET | Superseded by 0045 |
+| 0028 | Not used | – |
+| 0029 | Not used | – |
 | [0030](0030-more-languages-reviewed-by-independent-models.md) | Spanish, Russian, Chinese and Arabic at launch, reviewed by independent models | Accepted |
 | [0031](0031-datapavan-lite-on-google-play.md) | Datapavan Lite on Google Play: its own name, package and key | Accepted, being built |
 | [0032](0032-expert-tool-for-preinstalled-apps.md) | An expert tool of Datapavan's own for preinstalled apps | Proposed |
@@ -69,7 +72,7 @@ in the Git history.
 ```markdown
 # NNNN. Title
 
-- Status: Proposed | Accepted | Superseded by NNNN
+- Status: Proposed | Accepted
 - Date: YYYY-MM-DD
 - Decided by: name or pseudonym
 

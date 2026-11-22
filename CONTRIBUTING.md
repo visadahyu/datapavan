@@ -5,7 +5,10 @@ Thank you for helping. Issues and pull requests go to <https://github.com/visada
 ## Before you start
 
 - Read [docs/DESIGN.md](docs/DESIGN.md) and the [roadmap](ROADMAP.md). For larger changes, open an issue first so we can agree on the approach.
-- Lasting decisions are recorded as ADRs in [docs/decisions/](docs/decisions/). A change that alters one of them needs a new ADR.
+- Lasting decisions are recorded as ADRs in [docs/decisions/](docs/decisions/), each as it stands. A change that
+  alters one edits that ADR to state the decision as it now stands, with the maintainer's approval; a decision
+  that no longer holds has its ADR deleted, and Git keeps the history. Numbered decisions keep their numbers,
+  since the code cites them ([docs/decisions/README.md](docs/decisions/README.md)).
 - Security issues: see [SECURITY.md](SECURITY.md). Never in public issues.
 
 ## Setup and checks

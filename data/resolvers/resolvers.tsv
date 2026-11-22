@@ -1,5 +1,5 @@
 # SPDX-License-Identifier: CC0-1.0
-# Well-known public DNS resolvers (ADR 0029, DESIGN.md 13.2, W3): Watch says when an app sends its own DNS to one of
+# Well-known public DNS resolvers (ADR 0045, decision 11, DESIGN.md 13.2, W3): Datapavan Advanced says when an app sends its own DNS to one of
 # them, past the phone's settings. One row per service; every host and address has its operator's page in sources.tsv.
 # Columns:
 #   id        short name, lower case

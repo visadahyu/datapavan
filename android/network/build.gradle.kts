@@ -5,7 +5,7 @@ plugins {
     alias(libs.plugins.kotlin.compose)
 }
 
-// The network part (ADR 0029, ADR 0045): the tunnel, its log and the chain, as a library that only Datapavan Advanced
+// The network part (ADR 0045): the tunnel, its log and the chain, as a library that only Datapavan Advanced
 // includes, so that Datapavan Basic never carries the Rust engine or a reason to hold INTERNET. The
 // application's build (app/build.gradle.kts) checks the merged manifest of each edition against its own
 // allowlist, and that Advanced's APK holds this library's native code and keeps the methods it calls back.

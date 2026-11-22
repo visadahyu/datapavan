@@ -17,7 +17,7 @@ key online. Play also forbids an app to block or interfere with other apps' ads,
   an app to update itself outside Play, and Android has no upgrade between different packages or keys.
 - The app's page about itself says in a few calm lines which other editions exist and how to get them, with a link that opens in the browser. No prompts.
 - In v0.1, Lite has the same checks as Datapavan, and its store text says so and says that Google signs it. From v0.2 on it stays without the VPN and without blocking, which
-  live in Datapavan Watch on the open channels (ADR 0029).
+  are in Datapavan Advanced on the open channels (ADR 0045).
 - Datapavan comes first on the open channels, and Lite after it.
 
 ## Consequences

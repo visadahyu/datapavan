@@ -68,7 +68,7 @@ HELLO_ON_DEVICE=/data/local/tmp/network-hello.bin
 # A QUIC ClientHello for network.test offering ECH, in two Initial datagrams, its CRYPTO frames out of
 # order as Chrome sends them; the UDP echo sends them back, and only the name counts.
 QUIC_ON_DEVICE=/data/local/tmp/network-quic
-# An app's own DNS (ADR 0029): a plain query for example.org, and a TLS hello for dns.google.
+# An app's own DNS (ADR 0045, decision 11): a plain query for example.org, and a TLS hello for dns.google.
 DNS_ON_DEVICE=/data/local/tmp/network-dns.bin
 DOH_ON_DEVICE=/data/local/tmp/network-doh.bin
 # A connection kept open across the tunnel set up again (ADR 0044, unit 12b): nc writes its answers to a
@@ -271,7 +271,7 @@ traffic() {
         fail "$round: a QUIC connection was not named after its server name, with ECH offered; its flows: $(flows | grep -E ":$((PORT + 1)) ")"
     echo "ok: $round: a flow named from its QUIC server name, put together from two datagrams"
 
-    # An app's own DNS, past the network part's resolver (ADR 0029): plain DNS to Google's public resolver, and a
+    # An app's own DNS, past the network part's resolver (ADR 0045, decision 11): plain DNS to Google's public resolver, and a
     # TLS hello for its DNS-over-HTTPS name. Neither needs an answer to be recognised. nc quits 3 s after
     # its input ends (-q), so that od sees the end of the answer.
     answer=$(device 10 "nc -u -q 3 8.8.8.8 53 < $DNS_ON_DEVICE | od -An -tx1")

@@ -38,8 +38,8 @@ The defence is layered, from the first public release:
 6. **Reproducible builds,** so that anyone can rebuild a release from source and compare.
 7. **Takedowns.** With the registered trademark, the project asks stores and channels to remove fakes,
    and watches for them.
-8. **One sentence to teach:** "Genuine Datapavan has no internet access and never asks for it." (Until
-   2026-11-05 it said "v0.1"; ADR 0029 keeps the INTERNET permission out of Datapavan for good.)
+8. **One sentence to teach:** "Genuine Datapavan has no internet access and never asks for it." (ADR 0045,
+   decision 4, gives the sentence for each edition: Datapavan Basic never has the INTERNET permission.)
    Any copy that asks for it is not genuine. When a later version needs network access, the sentence
    changes with it, and the release notes say so.
 

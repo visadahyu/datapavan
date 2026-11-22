@@ -3,7 +3,7 @@
     xmlns:tools="http://schemas.android.com/tools">
 
     <!--
-        The network part (ADR 0029, ADR 0045): the tunnel, its log and the chain, the part of Datapavan Advanced
+        The network part (ADR 0045): the tunnel, its log and the chain, the part of Datapavan Advanced
         that uses the network. Only Advanced includes this library. Its permissions are those of ADR
         0034; app/build.gradle.kts fails the build if Advanced's merged manifest holds any other, and if
         Basic's holds any of these that Basic does not allow. The application's own manifest sets the

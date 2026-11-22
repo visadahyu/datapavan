@@ -28,7 +28,7 @@ service, is a network socket, so the audit app cannot make one.
    people to it only for the apps that Settings cannot handle, after what Settings and Watch can do.
    No other debloater is recommended in the app.
 2. **A third app within Datapavan,** beside the audit app and Watch: its own package, signed with the
-   same key, reproducible on its own, as Watch is under ADR 0029. It talks to no host other than the
+   same key, reproducible on its own, as each edition is (ADR 0045). It talks to no host other than the
    phone's own debugging service on loopback, which review and a test of its sockets check.
 3. **On the phone, through Android's own wireless debugging** (Android 11 and later), with no Shizuku
    and no computer: the user pairs it once with the code Android shows. When the work is done, the

@@ -117,10 +117,10 @@ Checks left from M4 (ADR 0022):
 
 ### v0.2, network monitoring, in Datapavan Advanced: local VPN, observe only
 
-A **local** VPN: no server is involved and the user's IP address does not change. [ADR 0029](docs/decisions/0029-network-access-for-v0.2.md)
-(accepted on 2026-11-05) made it an app of its own, Watch, so that the audit app never holds the INTERNET permission,
-and moved the QUIC server name and apps' own encrypted DNS into v0.2. [ADR 0045](docs/decisions/0045-three-editions-of-one-app.md)
-(2026-11-13) makes Watch part of Datapavan Advanced instead, while Datapavan Basic keeps the audit with no internet. Before this version
+A **local** VPN: no server is involved and the user's IP address does not change. It is the network part of
+Datapavan Advanced, while Datapavan Basic keeps the audit with no internet
+([ADR 0045](docs/decisions/0045-three-editions-of-one-app.md)), and its first release names flows by the QUIC server
+name and recognises apps' own encrypted DNS (ADR 0045, decision 11). Before this version
 starts, a spike picked the packet engine on 2026-11-07: Android's own TCP stack reached through rewritten addresses, in Rust ([ADR 0012](docs/decisions/0012-packet-engine.md)). Design: [docs/VPN.md](docs/VPN.md).
 
 Two releases, each of use on its own (the maintainer, 2026-11-09, in place of the three agreed on
@@ -131,7 +131,7 @@ signing session and texts reviewed in eight languages):
 1. **Datapavan Advanced 0.2.0, the connection log, next to circumvention tools:** the Watch service with its packet engine. It keeps
    a connection log per app: domain, IP, organisation, bytes, time, foreground or background. Names
    come from DNS, the TLS and QUIC server names, and apps' own encrypted DNS is recognised. The audit
-   reads the log inside Advanced, so ADR 0029's one-way interface between two apps is not built (ADR 0045).
+   reads the log inside Advanced (ADR 0045).
    Advanced works beside every tool the user has, as far as Android allows (one VPN at a time), since the tools themselves can take
    people's data ([RESTRICTED-REGIONS.md](docs/RESTRICTED-REGIONS.md)). It brings SOCKS5 chaining
    with UDP, a WireGuard upstream for VPN providers that offer one (Proton VPN, Mullvad and others),

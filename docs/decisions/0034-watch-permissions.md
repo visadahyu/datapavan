@@ -8,8 +8,8 @@
 
 ## Context
 
-Datapavan Watch (`org.visadahyu.datapavan.watch`) is the second app of
-[ADR 0029](0029-network-access-for-v0.2.md): a local VPN that passes every app's traffic on to its
+Datapavan Advanced's network part
+([ADR 0045](0045-three-editions-of-one-app.md)) is a local VPN that passes every app's traffic on to its
 real destination over protected sockets, logs flows by app UID, chains the apps the user picks
 through a circumvention tool's local SOCKS5 proxy, can carry a WireGuard configuration as its
 upstream, offers its log read-only to the audit app, and has a Quick Settings tile and onboarding
@@ -52,7 +52,7 @@ not checked.
    ([ADR 0012](0012-packet-engine.md)), the upstream DNS, the SOCKS5 client on the tool's loopback
    port, and WireGuard's UDP. Without it no socket opens, loopback included [unverified: Android's
    rule that sockets need the network group, not re-checked here]. It is the reason Watch exists
-   (ADR 0029).
+   (ADR 0045).
 
 2. **`ACCESS_NETWORK_STATE`** (normal, all versions). Network callbacks for the network under the
    tunnel (switches, metered state), its `LinkProperties` (the network's DNS servers and whether
@@ -156,7 +156,7 @@ exactly:
 - **Not an intent for `android.net.VpnService`.** It would miss the apps whose VPN service is not
   exported (the M2 miss) and adds nothing the launcher entry lacks.
 - **Not `QUERY_ALL_PACKAGES`.** It adds only apps without a launcher activity, which Watch's screens do
-  not need to name, and ADR 0029 keeps Watch to the VPN and its network access. The launcher entry
+  not need to name, and the network part keeps to the VPN and its network access (ADR 0045, decision 3). The launcher entry
   already lets Watch see almost every app the user can open, so the privacy policy says that plainly.
   Watch writes no list of apps anywhere.
 - **If the device test fails** (a tool of the table or a chained app stays nameless), the fallback, by
@@ -345,7 +345,7 @@ amendment.
   that Watch can see the apps that
   have an icon, to name the user's tool and the apps the user picks, and keeps no list of them beyond
   the chain's own settings: the tool it last went through and the apps the user picked. ADR
-  0029's sentence stays true as written.
+  0045's sentence (decision 4) stays true as written.
 - **Requirements this ADR puts on the engine (W2, W3):** call `establish()` at once; give the tunnel a
   /32 and a /128 address with the rewritten address and the in-tunnel DNS address outside them; send
   upstream queries for the network's resolver through `DnsResolver` on the network under the tunnel;
@@ -453,7 +453,7 @@ Library manifests (Google's Maven repository):
 - androidx.work work-runtime 2.10.0: https://dl.google.com/android/maven2/androidx/work/work-runtime/2.10.0/work-runtime-2.10.0.aar
 
 This repository: [ADR 0012](0012-packet-engine.md), [ADR 0014](0014-v0.1-permissions.md),
-[ADR 0024](0024-fake-copies-of-datapavan.md), [ADR 0029](0029-network-access-for-v0.2.md),
+[ADR 0024](0024-fake-copies-of-datapavan.md), [ADR 0045](0045-three-editions-of-one-app.md),
 [ADR 0031](0031-datapavan-lite-on-google-play.md), [DESIGN.md §13.2](../DESIGN.md),
 [VPN.md](../VPN.md), the [M2 spike](../spikes/2026-10-m2-access.md), the
 [packet-engine spike](../spikes/2026-11-packet-engine.md), and the audit app's packaged release

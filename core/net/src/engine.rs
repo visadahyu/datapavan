@@ -493,7 +493,7 @@ pub enum Ech {
     Hidden,
 }
 
-/// Whether a flow carries an app's own DNS, past the network part's resolver (W3, ADR 0029).
+/// Whether a flow carries an app's own DNS, past the network part's resolver (W3, ADR 0045, decision 11).
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum DnsUse {
     /// Not DNS, as far as the network part can tell, or the phone's own lookups through the network part's resolver.

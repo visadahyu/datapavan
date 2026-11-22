@@ -68,4 +68,4 @@ page Play image). All three gave the same counts, in two runs each:
 - **Not run yet:** Android 10, 12, 13, 14 and 16, and the A40 (Samsung, Android 11). The resolver is a
   module Google updates through Play system updates since Android 10, so vendors share its code, but
   a phone may run an older version of it.
-- An app with a resolver of its own (its own DNS, ADR 0029) never meets this cache.
+- An app with a resolver of its own (its own DNS, ADR 0045, decision 11) never meets this cache.

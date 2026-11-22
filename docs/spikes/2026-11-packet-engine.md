@@ -5,8 +5,8 @@ The day's battery cost is measured on Watch itself, not here. Code: [spikes/pack
 
 ## Question
 
-Which engine should carry every app's packets in Datapavan Watch, the separate VPN app of v0.2
-([ADR 0029](../decisions/0029-network-access-for-v0.2.md), [VPN.md](../VPN.md))? ADR 0012 named two
+Which engine should carry every app's packets in Datapavan Advanced's network part
+([ADR 0045](../decisions/0045-three-editions-of-one-app.md), [VPN.md](../VPN.md))? ADR 0012 named two
 candidates. The spike measures three, because the fastest Android clients today also use a third
 approach:
 
