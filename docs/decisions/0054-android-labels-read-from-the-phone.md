@@ -4,7 +4,8 @@
   run time from the phone's Settings app resources (as part 3b reads the tools' labels), the translated text as the
   fallback; AOSP's translations checked from its source; the A40's language changed to check Samsung's, restored
   after."). How it is built follows the coordinator's brief and its one audit (2026-11-22).
-- Date: 2026-11-22
+- Date: 2026-11-22; its fix round, after one review of the code and one of the screens and the coordinator's run on
+  the Galaxy A40, the same day.
 - Decided by: mehdashti; built by the builder of the labels unit with AI help.
 - Builds on: [ADR 0041](0041-watch-visibility-and-coexistence.md), "How the per-tool guides are built", whose way of
   reading another app's labels it shares; [ADR 0030](0030-more-languages-reviewed-by-independent-models.md), to which
@@ -39,36 +40,50 @@ to 17 (2026-11-22):
    lookup by the resource's name. Nothing is decompiled, and nothing of the system app runs. The shared module's
    `OtherAppResources` does it for both, and `SystemLabels` holds the rules below, so both editions read alike.
 2. **In the phone's language, with Datapavan's beside it.** Settings follows the phone's language, so the label is
-   read in the phone's languages, which from Android 13 come from `LocaleManager.getSystemLocales()`, since an app's
-   own language also changes what `Resources.getSystem()` reports in its process (`PhoneLocales`; W8 part 3b's guide
-   now asks the same way). Where Datapavan's language differs, language and script both (Traditional Chinese is not
-   Simplified), the label is read in Datapavan's language too and set beside the phone's by a translatable pattern,
-   `label_both` ("%1$s (%2$s)", full-width brackets for Chinese).
+   read in the phone's languages, region included, which from Android 13 come from `LocaleManager.getSystemLocales()`,
+   since an app's own language also changes what `Resources.getSystem()` reports in its process (`PhoneLocales`; W8
+   part 3b's guide now asks the same way). The region matters: the Galaxy A40's American English says "Optimize
+   battery usage" where its bare English, Samsung's British default, says "Optimise". Where Datapavan's language
+   differs, language and script both (Traditional Chinese is not Simplified), the label is read in Datapavan's
+   language too, in the phone's region for it where the phone has one, and set beside the phone's by a translatable
+   pattern, `label_both` ("%1$s (%2$s)", full-width brackets for Chinese). Datapavan's language is the one it shows:
+   the first of its configuration's it has words in, else English, so a phone in Hebrew gets English beside its
+   label.
 3. **Each label keeps the direction of the language it was read in.** AOSP's Persian and Arabic labels that begin with
    a Latin word ("DNS خصوصی") start with a right-to-left mark. Cleaning drops every direction mark (no app's resource
    may turn the sentence around it), so the label is isolated by its language's direction (right to left for Persian
    and Arabic), not by its first strong character, which would lay it out left to right.
 4. **The data: where to read each label, by maker and Android version.** `data/android-labels/labels.tsv` (CC0, names
    only) lists for each key the places to try, in order: a maker (`aosp`, or `Build.MANUFACTURER` in lower case) and
-   an API range, a package or `handler:ACTION` (the system app Android opens that intent with: Android 11's switch for
-   unused apps is the permission controller's, `com.google.android.permissioncontroller` on phones with Google's
-   services), the resource's type and name, the device a maker's row was seen on, and its source (AOSP's repository and
-   the tags its name was read at, or a device). The phone's maker's rows are tried first, then AOSP's. A row whose
-   package is not a system app is skipped, as is a label that is blank, equals its resource name or holds a `%`. It is
-   in the signed data pack and read through `DataPackStore.text`, so an imported pack's rows win and a maker's names
-   can be added without a release. Today it holds 22 rows for 21 keys, all AOSP's, each name present at every tag of
-   its range: no resource in range was renamed.
-5. **How a label is worded comes from where it came from.** A label read through the maker's own row, seen on a
-   screen, or through AOSP's name on a maker that has no row at all, is this phone's. One read through AOSP's name on a
-   maker whose rows cover other labels only is Android's name as that maker's Settings hold it, which its screen may
-   not show; so is the fallback. Where a part of a screen quotes such a label, a line under it says that the words in
-   quotes are Android's own names and that the phone may name them differently.
+   an API range, a package, the resource's type and name, the device a maker's row was seen on, and its source (AOSP's
+   repository and the tags its name was read at, or a device). An AOSP row reads Settings, which also holds SettingsLib's
+   strings, or the permission controller: Android 11's switch for unused apps is the permission controller's,
+   Google's (`com.google.android.permissioncontroller`) on phones with its services and AOSP's otherwise, so two rows
+   name both. A row naming the system app that opens an intent was tried and dropped: on Android 11,
+   `AUTO_REVOKE_PERMISSIONS` opens Settings' app page, which holds no such label. The phone's maker's rows are tried
+   first, then AOSP's. A row whose package is not a system app is skipped, as is a label that is blank, equals its
+   resource name or holds a `%`. It is in the signed data pack and read through `DataPackStore.text`, so an imported
+   pack's rows win and a maker's names can be added without a release. An imported pack is signed but may be mistaken,
+   so its rows are held to the data check's forms: a row that is not well-formed is left out, an AOSP row may name
+   only Settings or a permission controller, a key has at most eight rows, a screen reads at most three packages, and
+   a read that fails is no label. Today it holds 34 rows for 22 keys: 24 AOSP rows, each name present at every tag of
+   its range (no resource in range was renamed), and ten Samsung rows, below.
+5. **How a label is worded comes from where it came from.** A label is this phone's own only when it was read
+   through its maker's own row, which a device's screen showed, or through AOSP's name on a maker whose Settings show
+   AOSP's labels (`SystemLabels.AOSP_MAKERS`: Google, for Pixels and the emulators). On any other maker, a label read
+   through AOSP's name is Android's name as that maker's Settings hold it, which its screen may not show; so is the
+   fallback. Where a part of a screen names such labels, a line under it names them: "These are Android's own names,
+   and your phone may show others: …". The A40's run (2026-11-22, below) showed why: Samsung keeps AOSP's names but
+   not always its words ("Usage data access", "Appear on top", "Screen lock type"), and Chinese Private DNS is 私密 DNS
+   there, neither of AOSP's.
 6. **The fallback is Android's text at the release most phones run, Android 15 (API 35) on 2026-11-22.** Where the
    phone gives no label, the fallback is Datapavan's copy of AOSP's text: in the phone's language where Datapavan has
    it (the rule the restricted-settings label had before), else in Datapavan's own. Where some language's text changes
    after Android 15, a second string holds the later text and is picked by `Build.VERSION.SDK_INT`
-   (`android_label_KEY_api36`, `_api37`). When most phones move to a later release, `FALLBACK_API` in
-   `scripts/android-labels.py` moves, and `--write-fallbacks` writes the strings again.
+   (`android_label_KEY_api36`, `_api37`). Before Android 15 the fallback is Android 15's text, where earlier releases
+   differ (notification access on 10 to 14, Chinese Private DNS on 10 to 13), and the line under it says it is Android's
+   name. When most phones move to a later release, `FALLBACK_API` in `scripts/android-labels.py` moves, and
+   `--write-fallbacks` writes the strings again.
 7. **The fallbacks are AOSP's data, not translations: a bounded exception to ADR 0030.** The `android_label_*` strings
    are Android's own words, copied in all eight languages from AOSP's translation of each, each with a comment naming
    the resource and the tag, and never translated by ADR 0030's process: its translators copy them. Spanish's is
@@ -82,20 +97,25 @@ to 17 (2026-11-22):
    page, the switch, the setting), so that no word around it depends on its gender, number or case. Kind (b) is
    Datapavan's own words that name an idea, which stay translated. Not kind (a): Datapavan's own Settings and buttons,
    the tools' labels (ADR 0041) and other apps' (the Google app's "Hey Google"), and the plain "on its page".
-9. **What is kind (a), as built.** In the app module, 17 strings were the label alone and are replaced by it: the
-   plan's buttons for unused apps, accessibility, notification access, install unknown apps, display over other
-   apps, usage access, all files access, battery optimisation, VPN and developer options; the special access names
-   device admin, display over other apps, usage access, install unknown apps and all files access; the phone finding's
-   button to developer options; and "Allow restricted settings". Six sentences quote labels and are reshaped: the
-   plan's cards for wireless and USB debugging (the switch and its page), for a certificate authority (encryption and
-   credentials), for an app not opened that holds sensitive access (the switch for unused apps), the note on device
-   admin apps, and the steps to turn off a preinstalled app (Disable). The two steps around restricted settings
-   already took the label as a placeholder. The journal's undo of USB and wireless debugging names the switch as
+9. **What is kind (a), as built.** In the app module, 15 strings were the label alone and are replaced by it: the
+   plan's buttons for accessibility, notification access, install unknown apps, display over other apps, usage access,
+   all files access, battery optimisation, VPN and developer options; the special access names display over other
+   apps, usage access, install unknown apps and all files access; the phone finding's button to developer options; and
+   "Allow restricted settings". Six sentences quote labels and are reshaped: the plan's cards for wireless and USB
+   debugging (the switch and its page), for a certificate authority (encryption and credentials), for an app not opened
+   that holds sensitive access (the switch for unused apps, only where Android 11 or later offers it for the app; on
+   Android 10 and for a system app the card names no switch), the note on device admin apps, and the steps to turn off
+   a preinstalled app (Disable). The two steps around restricted settings already took the label as a placeholder.
+   The usage access card gains a line with the phone's names for the page and its switch, and "Now" one with the page's
+   (point 10). The journal's undo of USB and wireless debugging names the switch as
    Android does. In the network monitoring's module, Private DNS's heading is the label alone, and eight sentences are
    reshaped: Android's refusal (always-on VPN), strict Private DNS on the screen, in the chain section and in the
    names' section (Private DNS, Automatic, Off), where to find Private DNS, the limits of strict (always-on VPN), a
    configuration's server by name (Private DNS), and a phone with no screen lock (Screen lock).
-10. **Kind (b), with the borderline cases and why.** The plan's buttons for the app's page and for the security
+10. **Kind (b), with the borderline cases and why.** The plan's button to the switch for unused apps names its page
+    ("Unused app setting"), as a button with the switch's words would read as if it paused the app; the card quotes
+    the switch. "Device admin" in a list of one app's access stays Datapavan's, as Android's label names the page of
+    all such apps; the note on device admin apps quotes it. The plan's buttons for the app's page and for the security
     settings, and the finding's "Open security settings", stay Datapavan's words: the app's page is titled by the
     app's name, and Android does not tell an app whether its security settings open as "Security", "Security &
     privacy" (Safety Center, which Settings itself redirects to) or a maker's own page. So does "Open network
@@ -106,9 +126,11 @@ to 17 (2026-11-22):
     their button opens directly. The review of microphone, camera and location describes the choices on the
     permission controller's page ("asked every time, or deny"), whose words Google Play's system updates change apart
     from the phone's release; a later unit can read them. The proxy "in Android's settings" says where a proxy came
-    from and asks nothing of the user. Fourteen strings reuse the words "usage access" for the access itself
-    (`usage_access_body`, `now_no_access` and others): they stay as they are in this unit, a question for the
-    maintainer, since on Android 16 and later the phone names the setting "App usage data".
+    from and asks nothing of the user. Fourteen strings use "usage access" as Datapavan's name for the access itself
+    (`usage_access_body`, `now_no_access` and others), while Android 16 and later name the page "App usage data". The
+    maintainer decided on 2026-11-22 to keep Datapavan's name in them and add the phone's own where the user is sent to
+    Android's page: the usage access card says "This phone's settings call it “…”, with the switch “…”" (`usage_access`,
+    `permit_usage_access`), and "Now", without usage access, "This phone's settings call it "…"".
 11. **The licence.** AOSP's strings are Apache-2.0, as Datapavan is, so copying them raises no question of
     compatibility; the labels are a few words each. `NOTICE` says that the `android_label_*` strings and the texts
     the checks compare with are the Android Open Source Project's, from Settings, SettingsLib and the permission
@@ -125,26 +147,39 @@ to 17 (2026-11-22):
     cleaning and NFC), each with its text in Datapavan's eight languages, so that the coordinator reads a phone's
     screen in one language and changes it only where two names share a text. It enumerates the package's own string
     table by resource ID through Android's API, from the type of the app's own label, and refuses a package that is
-    not a system app. `labels-read` prints every label as read in each of the eight languages. Release builds carry
-    neither.
+    not a system app. `labels-read` prints every label as read in each of the eight languages, each in the phone's own
+    region for it where the phone has one, and `-` where nothing was read. Release builds carry neither.
 14. **The checks.** `scripts/android-labels.py` (in `scripts/check.sh data`) holds the rows to their form and their
     sources, and every `android_label_*` string, in each language, to AOSP's text at Android 15, or at the later
     release of its variant, as `scripts/testdata/android-labels-aosp.tsv` records it; `--fetch` writes that record
-    from AOSP's own files and `--against` checks it again; its self-test catches seven broken copies; the website's
-    two static mentions ("Usage access", "USB debugging") are held to the English fallback. `scripts/verify-labels.sh`
-    (the audit shard, on CI's Android 15) reads every label in eight languages through the debug dump and compares
-    each with AOSP's text at the emulator's own release, where a known difference names why (three texts of
-    Android 15's first build), then checks the screens with the phone in English and Datapavan in Persian, and the
-    other way round. It passed on Android 10, 15 and 17 emulators on 2026-11-22. JVM tests cover each rule.
+    from AOSP's own files and `--against` checks it again; it also holds each key's first AOSP row to the name its text
+    was recorded under, and each row's package to its repository; its self-test catches ten broken copies, each by the
+    problem it is about, and runs the fallbacks' writer twice to see it change nothing; the website's two static
+    mentions ("Usage access", "USB debugging") are held to the English fallback. `scripts/verify-labels.sh` (the audit
+    shard, on CI's Android 15) reads every label in eight languages through the debug dump and compares each with
+    AOSP's text at the emulator's own release, where a known difference names why (three texts of Android 15's first
+    build, one of Android 11's), then checks the screens with the phone in English and Datapavan in Persian, and the
+    other way round. It passed on Android 10, 11, 15 and 17 emulators on 2026-11-22. JVM tests cover each rule.
+15. **Samsung, read on a device.** The coordinator ran `labels-read` on a Galaxy A40 (SM-A405FN, One UI 3, Android 11,
+    build A405FNXXU4CWC3) on 2026-11-22: every key read from Settings by AOSP's names, and the screen showed the text
+    read for ten of them in English (usage access, display over other apps, battery optimisation, notification access,
+    all files access, install unknown apps, VPN, accessibility, developer options, USB debugging). Those ten are
+    `samsung` rows for Android 11, verified on that build, so on it they are the phone's own. Private DNS, device admin
+    apps, encryption and credentials and screen lock were not seen on the screen and stay Android's names there, with
+    the note, as does every label on other Android versions of Samsung's.
 
 ## Consequences
 
 - **Labels match the phone on AOSP's makers today, and on others as their rows arrive.** On a Pixel or an emulator
-  the labels are the phone's own; on Samsung, Xiaomi or Oppo they are AOSP's names as their Settings hold them until
-  the coordinator reads their names on a device. Only rows the data has verified on a screen say nothing more.
+  the labels are the phone's own; on Samsung's Android 11, ten are; elsewhere they are AOSP's names as each maker's
+  Settings hold them, and the screen names them as Android's until the coordinator reads them on a device. Only a
+  Google phone and rows the data has verified on a screen say nothing more.
 - **Limits.**
-  - A maker whose label the data lacks shows AOSP's text as its Settings hold it, which its screen may not show;
-    once the maker has rows for other labels, the screen says such a label is Android's name.
+  - A maker whose label the data lacks shows AOSP's text as its Settings hold it, which its screen may not show; the
+    screen then names it as Android's.
+  - `Build.MANUFACTURER` names the maker, not the system: MIUI and HyperOS are both `xiaomi`, and a custom system on a
+    Xiaomi phone gets MIUI's rows first. A maker's row with an API range of its own keeps the two apart where they
+    differ by version.
   - A label a maker moved to another screen is still named, but the steps around it ("on the developer options
     page") may lead elsewhere.
   - Settings in a language Datapavan lacks is read in that language, with Datapavan's beside it; the fallback there
@@ -156,9 +191,10 @@ to 17 (2026-11-22):
   - Translations are revised within a release, too: Android 15's emulator image of August 2024 shows
     android-15.0.0_r1's Chinese accessibility and notification access and Persian developer options, which later
     tags of 15 revised. A phone on an early build reads its own text; only its fallback would be the later one.
-  - Only an emulator's builds are checked today; the A40 (SM-A405FN) is the coordinator's to read.
+  - Only the emulators' builds and one Samsung build are checked; other makers wait for a device.
   - Reading costs Settings' resource table, about 2.7 MB of PSS in the network monitoring's process with its screen
-    open on the Android 15 emulator, within its memory budget of 48 MB.
+    open on the Android 15 emulator, within its memory budget of 48 MB. The network monitoring reads the data pack's
+    rows on a thread of its own, and shows Datapavan's copies until they are read, with no note meanwhile.
 - **Reading costs little.** Settings' resource table is opened once per screen, when the first label is asked for,
   and its strings are read by name.
 - **The translators' work changes shape.** A reshaped sentence takes a placeholder after a noun; the labels themselves
