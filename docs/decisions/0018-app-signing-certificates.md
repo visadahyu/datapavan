@@ -67,7 +67,8 @@ The research behind this record is kept in the maintainer's private repository.
 
    Play copies are read from devices on which they were installed from Play.
 5. **Matching on the phone.** For an app with one signer, any certificate in its signing history may
-   match a recorded key, and the app says when only an older one did. For an app with several signers,
+   match a recorded key, but for one marked compromised, which never makes a copy with an unknown current
+   signer genuine ([ADR 0049](0049-signing-keys-of-the-editions.md)); the app says when only an older one did. For an app with several signers,
    the set must match exactly. Install source adds detail but never decides a verdict, because adb and
    other installers can set it.
 6. **Verdicts:**

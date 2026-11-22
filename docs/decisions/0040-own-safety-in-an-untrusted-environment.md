@@ -2,7 +2,6 @@
 
 - Status: Accepted (by the maintainer on 2026-11-12)
 - Date: 2026-11-12
-- Amended by [ADR 0045](0045-three-editions-of-one-app.md) on 2026-11-13: the project ships as three editions of one app.
 
 ## Context
 
@@ -13,8 +12,8 @@ Datapavan judges other apps and the phone. Its own copy, though, can run where i
 - on a screen that is recorded or read by another app's accessibility service;
 - on a phone that someone else unlocks or extracts.
 
-What it holds is sensitive. The audit's findings can name stalkerware on the phone. Watch's log says which app
-spoke to whom. Watch's chain settings name the user's circumvention tool and the apps sent through it.
+What it holds is sensitive. The audit's findings can name stalkerware on the phone. Advanced's connection log says
+which app spoke to whom. Its chain settings name the user's circumvention tool and the apps sent through it.
 
 [ADR 0024](0024-fake-copies-of-datapavan.md) already states the principle: an app cannot prove its own
 authenticity from inside, and the check that decides happens outside the copy being judged. The same holds for
@@ -29,14 +28,13 @@ does.
 
 ## Decision
 
-1. **The screen is protected everywhere.** Both apps set FLAG_SECURE on every screen by default, as Molly does
+1. **The screen is protected everywhere.** Both editions set FLAG_SECURE on every screen by default, as Molly does
    for people at risk, and hide other apps' overlays from their own windows (Android 12 and later). A person who needs a screenshot to ask for help can lift the protection for a moment. It comes back by
    itself. On Android 14 and 15 the apps also notice screenshots and screen recording, and say so calmly.
-2. **The log keeps nothing until the user chooses.** Watch's log has no default retention: the user chooses at
-   onboarding (W9) between none, 1, 7 and 30 days, with each explained. Until W9 exists, the default is none.
-   This replaces the default of 30 days in DESIGN.md §6.4 and the W4 row, under the principle "no log that
-   becomes evidence by default".
-3. **A lock of Watch's own, and a panic answer.** Watch offers an optional lock of its own, as Molly does, so
+2. **The log keeps nothing until the user chooses.** The connection log has no default retention: the user
+   chooses at onboarding (W9) between none, 1, 7 and 30 days, with each explained. Until W9 exists, the default is
+   none. The principle: "no log that becomes evidence by default".
+3. **A lock of Advanced's own, and a panic answer.** Advanced offers an optional lock of its own, as Molly does, so
    that a forced unlock of the phone does not open the log and the chain settings. It answers PanicKit triggers:
    it can wipe its log and its chain settings, at the user's choice. The chain settings are kept as protected as
    the log.
@@ -51,17 +49,16 @@ does.
    Each signal comes with what it means for what the app shows. The app keeps working, and nothing is sent
    anywhere.
 5. **The attestation verifier follows Google's rules.** It reads the KeyDescription from the leaf and allows
-   no other occurrence (amended on 2026-11-17: first written as "its first occurrence counted from the root",
-   but Google's validator requires the extension in the leaf and nowhere else, which also closes a chain
-   extended below the attested key). It compares the challenge it sent. It reads the
+   no other occurrence, as Google's validator requires the extension in the leaf and nowhere else, which also
+   closes a chain extended below the attested key. It compares the challenge it sent. It reads the
    root of trust from the hardware-enforced list for TEE and StrongBox. It checks the validity of Remote Key
    Provisioning certificates, while factory-key chains stay exempt as Google says. It reads the full root of
    trust, the OS version and the OS, vendor and boot patch levels. The project's own Rust parser stays, and CI
    tests it on a corpus of real chains against Google's reference library.
-6. **The decisive check comes from outside: Datapavan Verifier.** A third small app of the project, signed with
-   the same key, holds the camera permission and nothing else of note. It checks a phone's attestation from a
-   second phone by scanning QR codes both ways, pinning what it saw between checks, as GrapheneOS's Auditor does.
-   The audit app and Watch stay without a camera.
+6. **The decisive check comes from outside: the Verifier.** A mode of Datapavan Basic, the one part of the project
+   that uses the camera ([ADR 0045](0045-three-editions-of-one-app.md), decision 1). It checks a phone's attestation
+   from a second phone by scanning QR codes both ways, pinning what it saw between checks, as GrapheneOS's Auditor
+   does. Advanced stays without a camera.
 7. **Systems signed with their own key are named.** A dataset of known OS keys lets the audit say "signed with
    its own key; it matches GrapheneOS's published key for this model", as an INFO fact. A self-signed key that
    matches no published one is a MEDIUM fact. Datapavan's own OS key joins the dataset in stage 3.
@@ -73,8 +70,8 @@ does.
   have none.
 - **Some users lose a convenience.** Screenshots of the apps need a deliberate step. This is the price of not
   leaking the screens of people at risk.
-- **A third app.** Datapavan Verifier is small, but it is one more package to sign, release and explain. In
-  return the camera stays out of the two apps that see the most.
+- **The camera in Basic alone.** The Verifier is one more mode to build and explain, and it gives Basic the camera
+  permission. In return the camera stays out of Advanced, the edition that faces the network.
 - **Honest limits.** On Android 10 to 13 no app can hide its views from an accessibility service, and on every
   version a service that declares itself an accessibility tool can still read the screen. The apps say this
   where it matters, above all next to the stalkerware finding.
@@ -140,9 +137,9 @@ below.
   raw bytes would not help: the hook in the app's process feeds that process too. On the phone, no check can
   tell these from the truth; decision 6's check from a second phone, which pins what it saw, closes them.
 - **A software answer.** A hook could also answer in software, with the app's challenge, under a chain it signs
-  itself or under AOSP's software attestation root, whose private key AOSP publishes; the check called that
-  "No hardware check available" (low), quieter than the unlocked bootloader it could hide. Now the chain is
-  judged at every security level. On a phone that declares secure hardware for its keys (`FEATURE_HARDWARE_KEYSTORE`
+  itself or under AOSP's software attestation root, whose private key AOSP publishes; called "No hardware check
+  available" (low), that would be quieter than the unlocked bootloader it could hide, so the chain is judged at
+  every security level. On a phone that declares secure hardware for its keys (`FEATURE_HARDWARE_KEYSTORE`
   from Android 12, `FEATURE_STRONGBOX_KEYSTORE` from 9, both answered by the package manager, apart from the
   keystore), a software answer is "Hardware check answered by software" (high). The feature is a declaration,
   not proof (the emulator, below, declares it too); a system with root can hide it, and a phone upgraded to
@@ -175,11 +172,10 @@ below.
   root, in date or not (not seen on a device), is judged the same way by version. On a phone that declares
   secure hardware, a software answer under any other chain, or one on Android 10 or 11, stays "Hardware check
   answered by software" (high): no virtual machine is known to give it. On Android 10 and 11, a software answer
-  with nothing declared is "No hardware check available", medium since the fifth review (2026-11-17; it was low
-  before): after the emulator got its
-  own finding, its only sound causes are phones launched before Android 8 and Android on a computer, while on
+  with nothing declared is "No hardware check available", medium: with the emulator's own finding beside it, its
+  only sound causes are phones launched before Android 8 and Android on a computer, while on
   most phones on those versions, which declare nothing since the feature begins at 12 and have no secure chip, a
-  hook reaches it with nothing to hide; its text now says that phones launched with Android 8 or later all
+  hook reaches it with nothing to hide; its text says that phones launched with Android 8 or later all
   support the check, so that an owner can tell it is not normal for their phone. Whether the app could read the
   version a phone launched with on 10 and 11: `Build.VERSION.DEVICE_INITIAL_SDK_INT` is public only from Android
   12; `ro.product.first_api_level` is a system property, read only through hidden API (`SystemProperties`),
@@ -198,9 +194,7 @@ below.
 - **The emulator, from its real chains.** The hardware-keystore feature does not prove the hardware: Android 15's
   emulator (CI's `dp-api35-ci`) declares `android.hardware.hardware_keystore=300` for a KeyMint that runs in
   software. What tells it is what the system says the device is: `Build.HARDWARE` (`ro.hardware`) is "ranchu" on
-  Android's emulator, and was "goldfish" before. Its chain was first assumed to be AOSP's software root; the
-  fourth review's round limited the emulator's claim to that root, and Android 15's emulator then showed
-  "answered by software" again, so its chains were read from the device with the lab record below (2026-11-17,
+  Android's emulator, and was "goldfish" before. Its chains were read from the device with the lab record below (2026-11-17,
   `core/engine/testdata/emulator`, with SOURCE):
   - Android 15 (`system-images;android-35;google_apis;x86_64`, revision 9, userdebug) runs AOSP's in-process
     KeyMint (`android.hardware.security.keymint-service`, KeyMint 300, documented in AOSP as insecure, its TA
@@ -260,7 +254,7 @@ below.
   `ro.hardware` to the emulator's, which gives "No hardware check on an emulator" (medium); on Android 10 and 11,
   where most phones declare nothing, a software answer gives "No hardware check available" (medium) with nothing
   to hide. Each says that the state cannot be confirmed, none shows a value as the hardware's, and a sound phone
-  gives each rarely, so none is made high, and since the fifth review (2026-11-17) none is low.
+  gives each rarely, so none is made high, and none is low.
 - **Not remembering earlier checks (trust on first use), with the reason.** The third review asked whether to
   remember, locally, what an earlier sound check saw (Google's root, the provisioning, the boot key) and report a
   weaker later answer as a change, high where it could hide an unlocked bootloader. It is not built on the phone,
@@ -400,7 +394,7 @@ Decoded but not shown, with the reason: `verifiedBootHash`, which nothing on the
 (decision 6's check pins it); `osVersion`, until real phones show how often it differs from what the system
 reports; the boot patch level, which equals the system's on every chain of the corpus. Shown but not judged: the
 vendor patch level. A Pixel 3 in the corpus, patched in August 2019, still stated its vendor level as September
-2018, so an old vendor level is no sign of an unpatched phone, and the finding that judged it is gone.
+2018, so an old vendor level is no sign of an unpatched phone, and no finding judges it.
 
 Still open from decisions 5 and 7: the dataset of the boot keys that systems such as GrapheneOS publish
 (decision 7), which would name the system and make the self-signed fact informational; a comparison of

@@ -40,7 +40,7 @@ The constraints:
    not yet allow.
 4. **A pack must be newer than the one in use** (its sequence number), so an old pack with known errors
    cannot be brought back. It must also date each dataset whose age the app shows from its `SOURCE`, so far
-   the attestation revocation list (ADR 0040, amended 2026-11-17): a pack that holds the attestation dataset
+   the attestation revocation list (ADR 0040): a pack that holds the attestation dataset
    without a `retrieved:` date the app can read, or with one after the pack's own date, is refused, with a
    message that says which, since the app could not tell how old its list of revoked keys is. The build of a
    pack to publish (`:app:dataPayload`) refuses a pack dated before any dataset it holds, so the project's

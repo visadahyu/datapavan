@@ -8,7 +8,7 @@
   [0043](0043-release-integrity-and-repository-controls.md) and [0045](0045-three-editions-of-one-app.md).
 - Amends: [docs/RELEASE.md](../RELEASE.md), its first steps and steps 4 to 7, which take the
   procedures below; the README's "Checking a copy", whose "Every genuine copy, on every channel, is signed with one
-  key" becomes one key for each edition; ADR 0018's matching of a signing history (decision 3).
+  key" becomes one key for each edition; ADR 0018's matching of a signing history (decision 5).
 
 ## Context
 

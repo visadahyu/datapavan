@@ -2,14 +2,13 @@
 
 - Status: Proposed (the direction agreed by the maintainer on 2026-11-07; details open)
 - Date: 2026-11-08
-- Amended by [ADR 0045](0045-three-editions-of-one-app.md) on 2026-11-13: the project ships as three editions of one app.
 
 ## Context
 
 Phone makers ship system apps that collect data and that Android's Settings cannot turn off or remove.
-The audit app finds them (M2) and does what Settings allow: permissions, background data, special
-access, and turning off the apps that Settings let the user turn off. From v0.3, Watch can also stop
-an app from sending, which reaches apps that cannot be turned off.
+The audit finds them (M2) and does what Settings allow: permissions, background data, special
+access, and turning off the apps that Settings let the user turn off. From v0.3, Datapavan Advanced can also
+stop an app from sending, which reaches apps that cannot be turned off.
 
 The tools that go further work through ADB, from a computer or through Shizuku on the phone
 (Universal Android Debloater, Canta and others). They are made for experts and sort apps by the risk of
@@ -19,16 +18,16 @@ Datapavan behind these tools on reach. Sending people to a third-party tool woul
 powerful step of the remediation plan to software whose rules, wording and keys Datapavan does not
 control.
 
-The audit app has no INTERNET permission. An ADB connection, even to the phone's own debugging
-service, is a network socket, so the audit app cannot make one.
+Datapavan Basic has no INTERNET permission. An ADB connection, even to the phone's own debugging
+service, is a network socket, so Basic cannot make one.
 
 ## Decision
 
-1. **Datapavan builds its own expert tool** (working name: the expert tool), and the audit app refers
-   people to it only for the apps that Settings cannot handle, after what Settings and Watch can do.
+1. **Datapavan builds its own expert tool** (working name: the expert tool), and the audit refers
+   people to it only for the apps that Settings cannot handle, after what Settings and the network part can do.
    No other debloater is recommended in the app.
-2. **A third app within Datapavan,** beside the audit app and Watch: its own package, signed with the
-   same key, reproducible on its own, as each edition is (ADR 0045). It talks to no host other than the
+2. **A part of Datapavan Advanced,** not an app of its own: it ships in Advanced's package, under Advanced's
+   key ([ADR 0045](0045-three-editions-of-one-app.md), decision 1). The tool talks to no host other than the
    phone's own debugging service on loopback, which review and a test of its sockets check.
 3. **On the phone, through Android's own wireless debugging** (Android 11 and later), with no Shizuku
    and no computer: the user pairs it once with the code Android shows. When the work is done, the
@@ -40,7 +39,7 @@ service, is a network socket, so the audit app cannot make one.
    impact, each change confirmed, a journal with undo, and the same safety floor: the holders of the
    default roles, the keyboard, start-up and core services, calls and mobile data, system updates and
    the rest of its list are never offered.
-6. **Ordered by what apps send,** from the lab's measurements and, on the user's phone, Watch's log,
+6. **Ordered by what apps send,** from the lab's measurements and, on the user's phone, the connection log,
    with the breakage risk beside it. Each entry records its evidence and can be disputed, as ADR 0015
    requires.
 7. **Stage 2 reuses the lists and the decision engine:** a Device Owner can turn off the same system
@@ -58,7 +57,7 @@ service, is a network socket, so the audit app cannot make one.
 
 ## Open questions
 
-- The tool's name and whether it ships with the audit app's first version that refers to it.
+- The tool's name and whether it ships with the first version of the audit that refers to it.
 - Whether some makers block `pm disable-user` for some packages, and what the tool says then.
 - How a system update that brings an app back is noticed and shown, without background work.
 - Whether a computer-based variant for Android 10 is worth its cost.

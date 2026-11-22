@@ -2,7 +2,6 @@
 
 - Status: Accepted
 - Date: 2026-10-31
-- Amended by [ADR 0045](0045-three-editions-of-one-app.md) on 2026-11-13: the project ships as three editions of one app.
 - Decided by: mehdashti
 
 ## Context
@@ -38,10 +37,14 @@ The defence is layered, from the first public release:
 6. **Reproducible builds,** so that anyone can rebuild a release from source and compare.
 7. **Takedowns.** With the registered trademark, the project asks stores and channels to remove fakes,
    and watches for them.
-8. **One sentence to teach:** "Genuine Datapavan has no internet access and never asks for it." (ADR 0045,
-   decision 4, gives the sentence for each edition: Datapavan Basic never has the INTERNET permission.)
-   Any copy that asks for it is not genuine. When a later version needs network access, the sentence
-   changes with it, and the release notes say so.
+8. **One sentence to teach,** with a part for each edition ([ADR 0045](0045-three-editions-of-one-app.md),
+   decision 4): "Genuine Datapavan Basic never has internet access. Genuine Datapavan Advanced uses it only for
+   your own apps' traffic and the servers you choose, and never asks for your camera, microphone, location,
+   contacts, messages or call log. No Datapavan app ever asks you for money." A copy of Basic that asks for
+   internet access, or a copy of Advanced that asks for one of those permissions, is not genuine. Basic's page
+   "Is this copy genuine?" takes this sentence with the release of Advanced's 0.2.0; until then it teaches
+   "Genuine Datapavan has no internet access and never asks for it", which stays true of Basic. When a later
+   version needs other access, the sentence changes with it, and the release notes say so.
 
 ## Consequences
 - The signing key's custody matters more than ever: it is made offline, with a documented ceremony

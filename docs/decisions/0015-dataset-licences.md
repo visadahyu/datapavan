@@ -6,9 +6,9 @@
 
 ## Context
 v0.1 has no INTERNET permission, so every dataset that Datapavan uses ships inside the APK and is
-updated with each release. The enterprise edition (stage 2) will be sold, so a dataset is usable only
-if its licence allows commercial use. Both editions use the same datasets, so that no finding depends
-on which edition a user runs.
+updated with each release. Datapavan Enterprise (stage 2) will be sold, so a dataset is usable only
+if its licence allows commercial use. Enterprise and the free editions use the same datasets, so that no finding
+depends on which edition a user runs.
 
 DESIGN §9 listed the candidates with their licences still to be verified. They were read from each
 project's own licence file or website on 2026-10-29:
@@ -39,18 +39,17 @@ project's own channels.
    shows the notice that ODbL § 4.3 requires: "Contains information from the εxodus tracker database,
    which is made available here under the Open Database License (ODbL)", with both names linked. The
    converted database is public in this repository, which meets the share-alike and access terms
-   (§§ 4.4 and 4.6), for the enterprise edition too. Signing the bundled files restricts no one's
+   (§§ 4.4 and 4.6), for Datapavan Enterprise too. Signing the bundled files restricts no one's
    rights under § 4.7, because the same files are public.
 2. **Our own lists under CC0 1.0.** The project compiles these lists itself:
    - proxy and remote-access SDK signatures;
    - official signing certificates of circumvention tools;
    - preinstalled data collectors;
-   - wake-word assistants.
-
-   - *(W8, part 1, 2026-11-20)* the Oblivious DoH relays, targets and default pairs (`data/odoh`) and the presets
+   - wake-word assistants;
+   - the Oblivious DoH relays, targets and default pairs (`data/odoh`) and the presets
      of encrypted resolvers the user may choose (`data/dns-presets`), facts read on the operators' own pages, the
      DNSCrypt project's signed lists at a pinned commit and the registries' RDAP records.
-   - *(W8, part 2a, 2026-11-20)* the Android packages of Telegram's, WhatsApp's and Signal's own clients and the
+   - the Android packages of Telegram's, WhatsApp's and Signal's own clients and the
      server names that tell their own connections, fronts and third parties from their proxies'
      (`data/messengers/clients.tsv`, `names.tsv`; ADR 0052), facts read on the makers' own pages, asset-links file and
      source at pinned commits. Beside them, Telegram's own list of its address ranges (`telegram-cidr.txt`), copied
@@ -58,35 +57,34 @@ project's own channels.
      for anyone who needs them, and only the facts are used, as decision 6 reasons for the attestation list. Each fetch
      is recorded in `SOURCE` with its date, SHA-256, Last-Modified header and the ranges added and removed, and a change
      stops the update until a person accepts it (decision 9's rule, as no licence file can be hashed). Compiled into
-     Watch's engine, as the resolvers are, and left out of the audit app's payload.
-   - *(W8, part 3b, 2026-11-21)* the per-tool guides for proxy mode (`data/tools/guides.tsv`, `guide-steps.tsv`,
+     the network part's engine, as the resolvers are, and left out of the audit's payload.
+   - the per-tool guides for proxy mode (`data/tools/guides.tsv`, `guide-steps.tsv`,
      `guide-labels.tsv`; [ADR 0041](0041-visibility-and-coexistence.md)), under the table of tools' CC0, read
      from each tool's own source at a release tag, one line of code per step and label. The labels are each tool's
      own few words for a menu, a switch or a button, quoted with their source line as facts of its interface, as the
-     table's proxy-label column already quotes them: no text of a tool beyond them is copied. NOTICE is unchanged,
-     since no third party's licensed work is added.
-
-   - *(W8, part 3a, 2026-11-21)* the graded table of tracker SDKs' hosts (`data/blocking`: `hosts.tsv`,
+     table's proxy-label column already quotes them: no text of a tool beyond them is copied. Nothing goes in
+     NOTICE, since no third party's licensed work is added.
+   - the graded table of tracker SDKs' hosts (`data/blocking`: `hosts.tsv`,
      `exceptions.tsv`, `waiting.tsv`; ADR 0053), facts read in the SDKs' own documentation and source at pinned commits
      or tags, Tweasel's CC0 tracker wiki (trackers.tweasel.org) and the vendors' own firewall pages, each row with its
      source and date. No row comes from DuckDuckGo's, Disconnect's or EasyPrivacy's lists, which are leads only; no
      εxodus data is in it: a row joins its εxodus tracker at run time by its package prefix, a collective database
-     (ODbL 4.5a). In the signed pack; Watch reads it from the pack the audit verifies.
+     (ODbL 4.5a). In the signed pack; the network part reads it from the pack the audit verifies.
 
    Each entry records its source, such as a security report or a project's release page, and a date.
    Only facts are recorded, such as package names and certificate digests, and never text from the
    sources. These lists live in files apart from the εxodus data, so the two licences never mix
    (a collective database, § 4.5). New tracker signatures are also offered to εxodus ETIP, which CC0
    allows.
-3. **Non-commercial datasets are excluded from both editions:** Disconnect, DuckDuckGo Tracker Radar
+3. **Non-commercial datasets are excluded from every edition:** Disconnect, DuckDuckGo Tracker Radar
    and JA4+.
 4. **v0.2 uses these, under these terms:**
    - EasyPrivacy, under CC BY-SA 3.0 or later;
    - DB-IP Lite, under CC BY 4.0 with its credit, and IPtoASN, under PDDL, to check it every month and
-     as its fallback ([ADR 0036](0036-ip-to-organisation-dataset.md), which reversed the first order on
-     2026-11-09: IPtoASN gives AS handles, not organisations);
+     as its fallback ([ADR 0036](0036-ip-to-organisation-dataset.md): IPtoASN gives AS handles, not
+     organisations);
    - JA3 and JA4, computed by our own code;
-   - *(W8, part 1, fix round, 2026-11-20)* the ICANN section of the public suffix list
+   - the ICANN section of the public suffix list
      (`data/public-suffix`), under MPL-2.0, as the list publishes it with its labels written as A-labels: a
      network's search domain that is a public suffix is never the network's own (ADR 0042).
 
@@ -131,7 +129,7 @@ project's own channels.
 12. **A lawyer reviews this record before the first public release.** It was drafted with AI help and
     is not legal advice. The review is part of the release checklist, next to the other actions
     deferred to the public v0.1 release.
-    *Note of 2026-11-12:* the review did not happen before the first public release (0.1.0, of
+    The review did not happen before the first public release (0.1.0, of
     2026-11-06), and RELEASE.md's checklist did not carry it. It is still open.
 
 ## Consequences

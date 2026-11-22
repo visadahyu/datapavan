@@ -80,8 +80,8 @@ The research behind this record is kept in the maintainer's private repository.
      later or updated from a source other than the maker's store or Google Play: high;
    - the same from the maker's store or Google Play, or put there by the phone's own setup (no
      installer, and signed with this phone's own system key): a note, because the maker still signs
-     its apps with that key. (The setup case was added on 2026-10-31, when the build found three such
-     Samsung apps on the A40; an app installed from a file always has an installer.)
+     its apps with that key. (The setup case comes from the build, which found three such Samsung apps
+     on the A40 on 2026-10-31; an app installed from a file always has an installer.)
    - an app installed later and signed with this phone's system key, which is not leaked: a note.
 7. **Nothing of the maker's is to be removed by default.** Where research shows what a maker's
    software sends, the page cites it with the vendor, model and year, and the remediation plan

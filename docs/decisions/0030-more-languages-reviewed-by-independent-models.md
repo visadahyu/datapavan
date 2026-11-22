@@ -2,7 +2,7 @@
 
 - Status: Accepted
 - Date: 2026-11-06
-- Changes [ADR 0004](0004-ui-languages-and-rtl.md), which held Arabic back until native reviewers were found.
+- See also: [ADR 0004](0004-ui-languages-and-rtl.md), the RTL rules and the shipped locales.
 - One bounded exception, [ADR 0054](0054-android-labels-read-from-the-phone.md): the `android_label_*` strings are
   Android's own labels, copied in every language from AOSP's translations and held to them by a check, never
   translated; the sentences around them are translated as below.

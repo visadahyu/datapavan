@@ -2,13 +2,14 @@
 
 - Status: Accepted (by the maintainer on 2026-11-08), not built yet
 - Date: 2026-11-08
-- Amended by [ADR 0045](0045-three-editions-of-one-app.md) on 2026-11-13: the project ships as three editions of one app.
+- See also: [ADR 0045](0045-three-editions-of-one-app.md), decision 1: the organisational edition is Datapavan
+  Enterprise, whose path is reviewed afresh when stage 2 begins.
 
 ## Context
 
 The maintainer, on 2026-11-08, set out three paths for Datapavan:
 
-1. the free edition for everyone, which v0.1 to v0.4 build in order;
+1. the free editions for everyone, Basic and Advanced, which v0.1 to v0.4 build in order;
 2. an organisational edition **beside** the device-management suite an organisation already runs
    (Intune, Workspace ONE, Knox and others), as the first step into organisations;
 3. later, a complete organisational edition that manages the phones itself.
@@ -19,8 +20,8 @@ check the signing keys of VPN apps, or know which preinstalled apps collect data
 administrators to "work with the OEM" to find the package names of preinstalled apps to turn off.
 Datapavan has that knowledge, on the phone and offline.
 
-The audit app holds no INTERNET permission, and the sentence it teaches against fake copies is
-"genuine Datapavan has no internet access" (ADR 0014, ADR 0024). An organisational edition that
+Datapavan Basic holds no INTERNET permission, and the sentence taught against fake copies says that
+genuine Basic never has internet access (ADR 0014, ADR 0024). An organisational edition that
 sends data over the network would break it.
 
 A spike on 2026-11-08 ([findings](../spikes/2026-11-enterprise-channels.md)) showed on Android 11,
@@ -48,8 +49,8 @@ suites' documentation (2026-11-08) found:
 
 ## Decision
 
-1. **One audit app, two modes.** The organisational edition is the audit app with its managed mode
-   turned on by a managed configuration. Same code and same rules; no separate product.
+1. **One audit app, two modes.** Datapavan Enterprise, the organisational edition, is Basic with its managed
+   mode turned on by a managed configuration. Same code and same rules; no separate product.
 2. **No INTERNET, ever, also for organisations.** Policy comes in as managed configurations; verdicts
    go out as keyed app states to the suite's agent, which uploads them; connections come from the
    network log when the organisation delegates it. Where a suite supports none of these (Intune for
@@ -63,9 +64,9 @@ suites' documentation (2026-11-08) found:
    enforces; on a fully managed phone this limit is the edition's own rule.
 4. **The person sees what is sent.** A screen on the phone lists every state sent to the suite, word
    for word, with its time. Nothing is sent that is not on that screen.
-5. **The network log stays on the phone.** When delegated, the audit app reads it to show the person
+5. **The network log stays on the phone.** When delegated, the audit reads it to show the person
    which app talked to whom, without a VPN, and to judge policy rules; the log itself is never
-   forwarded. Watch's VPN is not needed on such phones, so the organisation's own VPN keeps its slot.
+   forwarded. Advanced's VPN is not needed on such phones, so the organisation's own VPN keeps its slot.
 6. **Policy packs are open data.** The knowledge an organisation needs in its suite (preinstalled data
    collectors per maker and model, official keys of VPN apps, apps with traffic-sharing SDKs) is
    published as signed data under the same licences as today, in formats suites can import. The same
@@ -78,11 +79,11 @@ suites' documentation (2026-11-08) found:
 
 ## Consequences
 
-- The promise "no internet access" holds for every edition of the audit app.
+- The promise "no internet access" holds for Basic on every channel and in its managed mode.
 - An organisation with Workspace ONE, Knox Manage, SOTI, Hexnode, ManageEngine, Scalefusion or a suite
   on Google's API can receive verdicts in its own console. Intune customers get the verdict on the
   phone and the report file until Intune shows keyed app states.
-- On fully managed phones and Android 12+ work profiles, the audit app can show each app's connections
+- On fully managed phones and Android 12+ work profiles, Enterprise can show each app's connections
   without a VPN, where the organisation delegates the log.
 - Verdicts may pass through Google's servers on the way to some suites, which is one more reason to
   send only verdicts.
@@ -91,7 +92,7 @@ suites' documentation (2026-11-08) found:
 
 ## Open questions
 
-- Whether the managed-Play build is the audit app itself or the Lite edition of ADR 0031, and how a
+- Whether the managed-Play build is Basic's own package or Basic's Google Play build of ADR 0031, and how a
   person checks it is genuine when Google holds its key.
 - How Intune customers receive verdicts: a compliance connector, a report file, or nothing more.
 - What the person sees on their phone while network logging is on, on several makers' phones.

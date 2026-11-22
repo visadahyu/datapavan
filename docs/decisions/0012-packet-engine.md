@@ -23,10 +23,10 @@ three engines behind one surface, on the Android 17 and 15 emulators and on a Ga
 ## Decision
 
 **The system stack, in Rust.** Each new TCP connection's first SYN is held until Android has named
-the app (`getConnectionOwnerUid`) and the real server has accepted, or the app gets a reset. Watch
-runs inside its own tunnel and protects its upstream sockets, which this design requires. UDP is
-relayed in Rust, one socket per flow. (Amended by [ADR 0044](0044-udp-mapping-and-budgets.md), decision 1:
-one socket per app socket, whatever the destination, with answers only from addresses the app sent to.)
+the app (`getConnectionOwnerUid`) and the real server has accepted, or the app gets a reset. The network
+part runs inside its own tunnel and protects its upstream sockets, which this design requires. UDP is
+relayed in Rust, one socket per app socket, whatever the destination, with answers only from addresses the app
+sent to ([ADR 0044](0044-udp-mapping-and-budgets.md), decision 1).
 
 Why, from the spike:
 
@@ -36,7 +36,7 @@ Why, from the spike:
   and showed a closed port as refused, as gVisor did. `ipstack` lost the owner of half the short
   connections and showed a closed port as open.
 - **Size and memory.** The library is 0.96 MB for arm64 with both Rust engines in it; gVisor's is
-  5.4 MB per ABI. The watch app's memory: 46 MB, against 60 MB with gVisor.
+  5.4 MB per ABI. The spike app's memory: 46 MB, against 60 MB with gVisor.
 - **Robustness.** On Android 11, 15 and 17 it carried TCP and UDP without loss. Across a Wi-Fi
   switch the tunnel stayed up: the transfer in flight broke, as it does without a VPN, and the next
   one ran. IPv6 entered the tunnel and failed fast without an IPv6 network. It chained through a
@@ -51,16 +51,16 @@ single engine thread.
 
 ## Consequences
 
-- **VPN.md changes in three places.** Watch is inside its own tunnel and protects its sockets,
-  instead of being excluded. Onboarding asks for `ACCESS_LOCAL_NETWORK` on Android 17, which Watch
+- **VPN.md says so in three places.** The network part is inside its own tunnel and protects its sockets,
+  instead of being excluded. Onboarding asks for `ACCESS_LOCAL_NETWORK` on Android 17, which the network part
   needs to pass on any app's traffic to private addresses. The engine answers a segment of an
   unknown connection with a reset.
 - **Not yet measured:**
   - Android 10 and 12 to 14;
   - vendors other than Samsung, whose kernels and netd rules this design leans on (policy routing,
     `tcp_fwmark_accept`): device reports and the lab cover them;
-  - the battery cost of a whole day, against VPN.md's 3 % target: measured on Watch itself, not on
+  - the battery cost of a whole day, against VPN.md's 3 % target: measured on Advanced itself, not on
     the spike, since an idle VPN's cost is in its timers and wakeups.
-- **Still to build for chaining:** SOCKS5 UDP ASSOCIATE, so that QUIC and calls can go through a proxy
-  too; the spike chained TCP only.
+- **Chained UDP:** SOCKS5 UDP ASSOCIATE carries QUIC and calls through a proxy too
+  ([ADR 0044](0044-udp-mapping-and-budgets.md), decision 2); the spike chained TCP only.
 - **Accepted:** the maintainer chose the system stack on 2026-11-07, after the spike.

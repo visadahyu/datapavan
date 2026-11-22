@@ -14,7 +14,7 @@ them: an item that no longer holds stays as "N. (Removed.)". The numbers 0002, 0
 | [0001](0001-apache-2-licence.md) | Apache-2.0 licence | Accepted |
 | 0002 | Not used | – |
 | [0003](0003-minimum-android-10.md) | Minimum Android version 10 (API 29) | Accepted |
-| [0004](0004-ui-languages-and-rtl.md) | Languages at launch, changed by ADR 0030; RTL from the first commit | Accepted |
+| [0004](0004-ui-languages-and-rtl.md) | UI languages, eight with ADR 0030; RTL from the first commit | Accepted |
 | [0005](0005-english-documentation.md) | Documentation in English only | Accepted |
 | [0006](0006-rust-engine-unsafe-forbidden.md) | Rust engine with `unsafe` forbidden; separate JNI crate | Accepted |
 | [0007](0007-direct-jni-over-uniffi.md) | Direct JNI instead of UniFFI | Accepted |
