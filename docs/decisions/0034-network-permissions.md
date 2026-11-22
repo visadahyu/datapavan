@@ -16,7 +16,7 @@ through a circumvention tool's local SOCKS5 proxy, can carry a WireGuard configu
 upstream, keeps a connection log that Advanced's audit reads, and has a Quick Settings tile and onboarding
 for always-on VPN and battery managers ([DESIGN.md §13.2](../DESIGN.md), W1 to W9). It is a library that
 only Advanced includes (`:network`, ADR 0045, decision 10), so it carries Advanced's key, minSdk 29
-(Android 10) and targetSdk 37 (Android 17), and ships on GitHub, the website and F-Droid, not on Google Play.
+(Android 10) and targetSdk 37 (Android 17), and ships on GitHub, the website and F-Droid, not on Google Play (ADR 0045, decision 12).
 
 The build fails if Advanced's merged manifest holds anything that Basic's allowlist and this ADR do not
 list (ADR 0045, decision 9). So every feature of 0.2.0 needs its permission settled now, for each Android

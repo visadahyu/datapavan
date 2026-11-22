@@ -17,7 +17,7 @@ key online. Play also forbids an app to block or interfere with other apps' ads,
   an app to update itself outside Play, and Android has no upgrade between different packages or keys.
 - The app's page about itself says in a few calm lines which other editions exist and how to get them, with a link that opens in the browser. No prompts.
 - Basic on Google Play has the same checks as Basic on the open channels, and its store text says so and says that Google signs it. It stays without the VPN and without blocking, which
-  are in Datapavan Advanced on the open channels (ADR 0045).
+  are in Datapavan Advanced on the open channels (ADR 0045, decision 12).
 - Basic comes first on the open channels, and on Google Play after it.
 
 ## Consequences

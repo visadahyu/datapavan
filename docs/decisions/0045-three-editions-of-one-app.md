@@ -2,7 +2,7 @@
 
 - Status: Accepted (by the maintainer on 2026-11-13)
 - Date: 2026-11-13
-- Decision 11 accepted by the maintainer on 2026-11-05; the app's words for the network part on 2026-11-22.
+- Decisions 11 and 12 accepted by the maintainer on 2026-11-05; the app's words for the network part on 2026-11-22.
 
 ## Context
 
@@ -107,6 +107,9 @@ Google Play build that cannot read the connection log.
       sent to an address other than the network's are recognised and named in the log.
     - **UDP flows.** UDP flows that name no destination in the socket tables still pass the tunnel with one, so the
       log covers calls as well.
+12. **Advanced stays off Google Play until Play's policy for VPN apps is settled.** VPN apps face a policy of
+    their own on Google Play. Basic goes to Play (ADR 0031); Advanced stays on the open channels until that policy
+    is settled.
 
 ## Consequences
 

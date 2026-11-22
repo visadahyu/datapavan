@@ -2,14 +2,15 @@
 
 - Status: Accepted (by the maintainer on 2026-11-08), not built yet
 - Date: 2026-11-08
-- See also: [ADR 0045](0045-three-editions-of-one-app.md), decision 1: the organisational edition is Datapavan
-  Enterprise, whose path is reviewed afresh when stage 2 begins.
+- See also: [ADR 0045](0045-three-editions-of-one-app.md), decision 1: Datapavan Enterprise is the edition for
+  organisations, and its path is reviewed afresh when stage 2 begins. This ADR records the first path, not that
+  review's outcome.
 
 ## Context
 
 The maintainer, on 2026-11-08, set out three paths for Datapavan:
 
-1. the free editions for everyone, Basic and Advanced, which v0.1 to v0.4 build in order;
+1. the free edition for everyone (now Basic and Advanced), which v0.1 to v0.4 build in order;
 2. an organisational edition **beside** the device-management suite an organisation already runs
    (Intune, Workspace ONE, Knox and others), as the first step into organisations;
 3. later, a complete organisational edition that manages the phones itself.
@@ -49,7 +50,7 @@ suites' documentation (2026-11-08) found:
 
 ## Decision
 
-1. **One audit app, two modes.** Datapavan Enterprise, the organisational edition, is Basic with its managed
+1. **One audit app, two modes.** The organisational edition of this first path is Basic with its managed
    mode turned on by a managed configuration. Same code and same rules; no separate product.
 2. **No INTERNET, ever, also for organisations.** Policy comes in as managed configurations; verdicts
    go out as keyed app states to the suite's agent, which uploads them; connections come from the
@@ -83,7 +84,7 @@ suites' documentation (2026-11-08) found:
 - An organisation with Workspace ONE, Knox Manage, SOTI, Hexnode, ManageEngine, Scalefusion or a suite
   on Google's API can receive verdicts in its own console. Intune customers get the verdict on the
   phone and the report file until Intune shows keyed app states.
-- On fully managed phones and Android 12+ work profiles, Enterprise can show each app's connections
+- On fully managed phones and Android 12+ work profiles, the first path's edition can show each app's connections
   without a VPN, where the organisation delegates the log.
 - Verdicts may pass through Google's servers on the way to some suites, which is one more reason to
   send only verdicts.
