@@ -5,7 +5,8 @@
 - Date: 2026-11-22
 - Decided by: the direction by the maintainer, 2026-11-21 («همه تایید شد», to the coordinator's six
   recommendations). This record was drafted by the coordinator with AI help, and revised the same day after the
-  server was read: the relay is Caddy's configuration, not a program.
+  server was read (the relay is Caddy's configuration, not a program) and after one security review round
+  (strategy repository, `research/2026-11-w8/review-odoh-relay.md`).
 - Builds on:
   - [0016](0016-no-user-data.md), whose decision 5 requires a new ADR before any change to it;
   - [0042](0042-dns-of-apps-that-go-directly.md), the pairs and the ladder;
@@ -42,6 +43,16 @@
   A relay of the project's own would be the first server of the project that phones contact by themselves, and it
   would see their addresses. ADR 0016 decision 1 says the project collects no data from users. Its decision 5
   requires a new ADR, a legal review and a published threat assessment before that changes.
+- **What this record does not follow of ADR 0016, said plainly.** ADR 0016's decision 5 asks for a new ADR that
+  supersedes it, after the legal review and the published threat assessment.
+  - **This record revisits it in part,** which that decision does not provide for. On acceptance, ADR 0016's
+    decision 5 is amended to allow it, or ADR 0016 is superseded: the maintainer's choice.
+  - **The server goes first.** This record's gates (point 8) hold only the app's release. The relay on the
+    server is live and public as soon as the maintainer runs the install script. It then serves any ODoH client,
+    and its URL is in public data. That can come before the legal review, by the maintainer's word alone.
+  - **From that moment,** ADR 0016's consequence "There is no server to subpoena, breach or compel" is untrue for
+    the relay.
+  - **The other order** is to hold the install until the review. It is the maintainer's to choose.
 
 ## Decision
 1. **A relay only, never a target.**
@@ -51,24 +62,45 @@
      relay's, by ADR 0042's own pair rule in `catalogue.rs`, with the project as the relay's operator.
    - **A change to this** needs a new ADR.
 2. **A bounded exception to ADR 0016's decision 1.**
-   - **What the relay may handle, for the life of one request:**
+   - **What the relay may handle:**
      - the phone's address and port;
      - the TLS session;
      - the size and timing of the request;
      - the target it names.
-   - **No state outlives a request.** There is no count per address, not even for abuse. Caddy's core has none,
-     and none is better than one kept for ten minutes.
+   - **For how long:** one request's data lives for that request. The connection does not: one HTTP/2
+     connection, with its address, carries many requests, and Caddy keeps it open while idle for up to five
+     minutes.
+   - **The TLS session:** its resumption tickets could let the relay link one phone's connections across
+     addresses. Advanced's network monitoring keeps one TLS session cache per network beneath (ADR 0042), so it
+     does not resume across a change of network. Other clients may. Turning Caddy's session tickets off, for the
+     website too, is left to a later decision.
+   - **No count per address,** not even for abuse. Caddy's core has none, and none is better than one kept for ten
+     minutes.
    - **Nothing is written:** no access log, no log line with an address, no metrics by address, no sampling, no
      analytics, no backups of any of these.
      - **Caddy's error log,** which would carry the whole request when a target is down, has its request fields
        deleted for every site on the server.
-     - **The log level** stays at info: Go's own debug messages name an address in their text.
+     - **Go's error text,** which names both ends of a connection (a client that resets mid-response over
+       HTTP/1.1), has every address in it masked.
+     - **A message** cannot be filtered in Caddy 2.6.2. Its error log's message names only an upstream, and Go's
+       own messages, which name the client, come at the debug level. The log level therefore stays at info.
+     - **No access log:** the install script and the test fail when a site turns one on.
+     - **The firewall's log** of dropped packets names their source, five a minute. A relay client that tried QUIC
+       on UDP 443 would be logged. None tries today: Caddy offers no HTTP/3, the site has no HTTPS record, and the
+       app does not use QUIC.
    - **The abuse limit is what the relay forwards:**
      - at most one POST of at most 65,604 bytes per request;
+     - only once the whole body is in, so that a slow client holds no request open at a target;
      - only to the two targets of point 6, at one fixed path each.
 
-     It cannot be pointed at anyone else. An abuser can spend the server's bandwidth, and can make the targets
-     rate-limit the relay's one address, which fails it for every user of it. The ladder then moves on (point 7).
+     It cannot be pointed at anyone else.
+   - **What it does not bound:** time and concurrency at Caddy itself. Caddy 2.6.2 sets no read timeout, so slow
+     clients can hold as many connections as the server's memory allows, shared with the website and the mail
+     proxy, as they already could against the website.
+   - **The targets' limits:** an abuser can spend the server's bandwidth, and can make the targets rate-limit the
+     relay's one address. That fails the relay for every user of it. Both targets sit on Cloudflare's network
+     (AS13335; crypto.sx's behind Cloudflare's CDN), so one rate limit or bot decision there fails both of the
+     relay's pairs at once. The ladder then moves on (point 7).
    - **A later option:** a kernel rate limit per source address in `nftables`, which keeps its counts in the
      kernel for seconds. It needs the maintainer's word, and is not part of this decision.
    - **Anything wider** needs a new ADR. Every other part of ADR 0016 stands.
@@ -80,8 +112,11 @@
      - **Refused:** a duplicated or encoded `targethost`, an extra parameter, and any other order or path.
    - **The forwarded request** carries the body, ODoH's `Content-Type` and `Accept`, and the target's `Host`.
      - **Never sent:** none of the client's headers, and none that the proxy adds by itself (`X-Forwarded-*`, Go's
-       `User-Agent`).
-     - **The response:** the target's status and body come back without its cookies or any `Server` header.
+       `User-Agent`). The names of trailers a client declares reach the target, never their values.
+     - **The response:** the target's status and body come back with ODoH's type and none of the target's headers
+       (no cookie, `Server`, CORS, `Clear-Site-Data`, reporting or `Location` under datapavan.org's origin).
+   - **The path:** `/odoh/proxy`, and what Caddy's path matcher takes as equal to it (case, doubled slashes,
+     escapes). The target and its path stay fixed whatever the spelling.
    - **Refused:** any other method, type, size, query or path gets a 4xx without contacting anything.
    - **Why:** a relay that forwards anywhere would be a tool for attacking others and a reason to block it.
 4. **Caddy's configuration, published, instead of a relay program.**
@@ -99,43 +134,71 @@
        and already sandboxed. A relay program would add a second listener and a second parser behind it.
      - **Already hardened:** Caddy runs as its own user under a systemd sandbox, behind a firewall that limits
        where it may connect. A new program would need all of that again.
-     - **Nothing new to patch:** Debian's security updates, which the server installs by itself, cover Caddy.
-       A program of the project's own would be one more thing to watch for flaws and rebuild.
-     - **Caddy's logging** is removed by configuration, and the test proves it.
+     - **Nothing new to patch,** with a limit: Debian's security updates, which the server installs by itself,
+       fix some of Caddy's flaws, and leave others. In Debian 13, as the review read Debian's tracker on 2026-11-22:
+       - CVE-2026-77281 (a rewrite that ends in `?` re-expands its placeholders) is marked no-dsa;
+       - CVE-2026-55458 (the 101 path skips the cleanup of hop-by-hop headers) is still vulnerable;
+       - two more are undetermined.
+
+       The configuration avoids each construct: the rewrite's path is a literal, no target can answer 101 over
+       HTTP/2, the request body is never a placeholder, and no site uses `hide`. A program of the project's own
+       would still be one more thing to watch for flaws and rebuild.
+     - **Caddy's logging** is removed and masked by configuration, and the test proves it for each kind of line
+       above.
    - **The test:** `scripts/relaylab.sh` runs Debian 13's own Caddy package with these files, beside stand-ins
      for the targets that record what they receive. It tests:
      - every rule of point 3, over HTTP/1.1 and HTTP/2;
-     - the log, with a target down;
-     - a control run without the filter, which shows that the check would catch an address.
+     - the log, with a target down, with clients that reset mid-response and mid-body, and with failed handshakes;
+     - slow bodies, which reach no target;
+     - a control run without the filter, which shows that the checks would catch an address.
+   - **Where it runs:**
+     - **CI** runs it on the `dns` shard, with a Caddyfile of its own around the published files.
+     - **Its server mode** rebuilds the server's Caddyfile from the strategy repository's scripts and runs the
+       install script on it, with a failed restart and a target that does not answer. That repository is
+       private, so this mode runs on the maintainer's computer only.
+   - **Caddy 2.6.2's limits,** written around and tested:
+     - a lone `*` in a header deletion crashes the request;
+     - the proxy's own deletions run after its settings.
 
-     CI runs it on the `dns` shard.
-   - **Caddy 2.6.2's limits,** written around and tested: a lone `*` in a header deletion crashes the request,
-     and the proxy's own deletions run after its settings. The client's headers are therefore deleted before the
-     proxy, with `**`.
+     The client's headers are therefore deleted before the proxy, and every header of the target's after it, with
+     `**`. ODoH's type is set as the response is written.
 5. **Where it runs.**
    - **The server and the name:** the project's netcup server, at `https://datapavan.org/odoh/proxy`. This needs no
      new DNS record, certificate or firewall rule, and costs nothing new, as the memory of 2026-11-05 asks.
    - **The location,** read from the address of datapavan.org on 2026-11-22 (`data/odoh/sources.tsv`):
      - **The hosting network:** AS197540, netcup GmbH, Karlsruhe, Germany, by RIPEstat and RIPE's RDAP.
-     - **The jurisdictions:** DE, the server's, and TR, the operator's seat.
+     - **DE:** the hosting company's seat, the IPv4 /22's country, and where RIPEstat's GeoLite data places both
+       addresses (Nuremberg).
+     - **AT:** netcup's parent, Anexia Holding GmbH of Klagenfurt, holds the IPv4 /16 (country AT) and maintains
+       the /22. RIPE names the IPv6 /40 `DE-NETCUP-KVM-VIE`, after Vienna.
+     - **TR:** the operator's seat.
+     - **The data centre itself** is for the maintainer to read in netcup's control panel, and the data to cite.
+     - **Under the pair rule,** AT changes no pair today.
    - **The operator** is the project, seated where the maintainer resides, Türkiye.
    - **Who deploys:** the change to the server's Caddyfile is the maintainer's to run with sudo, since agents
      there have no root: `server/odoh-relay.sh` in the strategy repository.
      - **What it does:** it backs the Caddyfile up and writes the three parts between markers, so a second run
-       never adds them twice. It then validates the configuration, restarts Caddy, and checks the site and the
-       relay from the server.
-     - **If validation fails:** it puts the backup back.
+       never adds them twice. It then validates the configuration, restarts Caddy, and checks the site, the log
+       and the relay from the server.
+     - **If any step after the write fails** (the validation, the restart, a check of the site or the relay), it
+       puts the Caddyfile before it back and restarts Caddy on it. It checks the website and says what it did, or
+       which commands to run if even that Caddy does not start. A failed relay check therefore rolls the relay
+       back. `--remove` takes the relay out.
+     - **`site.sh`** refuses to write the Caddyfile over the relay, whose log filter protects every site.
 6. **Its place among the pairs.**
    - **Kept:** the volunteers' pairs stay.
    - **The project's pairs:** by the rule, on the recorded values, the relay pairs with:
      - Cloudflare's target (US, CR; AS13335);
      - crypto.sx's target (FR, US; AS13335, AS12876).
 
-     It does not pair with dnscry.pt's targets, which share Germany. The engine's tests hold this.
+     It does not pair with dnscry.pt's targets, which share Germany (and vie01 Austria). The engine's tests hold
+     this.
    - **Offered on debuggable builds alone,** until point 8's gates pass:
      - `relays.tsv` has a `status` column, and the relay's row says `debug`.
-     - Advanced's network monitoring leaves such rows out of a release build's tables before the engine or the
-       screen reads them (`DnsSettings.forBuild`, by Android's debuggable flag).
+     - A release build of Advanced's network monitoring keeps a row only when its status is `-`, and leaves every
+       other row out of its tables before the engine or the screen reads them (`DnsSettings.forBuild`, by
+       Android's debuggable flag). It fails closed: a misspelling, a new value, a moved column or a missing one
+       keeps the row out.
      - `pairs.tsv` does not name the relay, so no build uses it by default. A debug build offers its pairs on the
        DNS screen.
      - **Its release** takes a pack with the status `-`, and then a pair in `pairs.tsv` if it is to be a default.
@@ -161,6 +224,9 @@
        It is left to a later decision.
    - **What the relay sees.** If the server is breached or compelled to log, it learns addresses, times and sizes,
      and which target was asked. It never learns the question, which is sealed to the target.
+   - **What the hosting network sees.** netcup and its parent Anexia carry every client's packets to the server.
+     They see each client's address and timing, and can keep flow records, outside the project's control and
+     whatever Caddy writes.
      - **A risk this server has met before:** `homediyet.com` was found hacked on it before its reinstall of
        2026-11-06.
      - **What limits it:** the server is hardened, and the relay is the website's own Caddy, under its user and its
@@ -200,4 +266,5 @@
 - **Running a service.** The project must keep it up and watch it, without logs, and keep the pairs in the
   configuration in step with the data. That is a running cost in time. Caddy's patches come with Debian's.
 - **No collusion by design.** Running only a relay keeps ODoH's split. The project can never see a question tied to
-  an address, whatever it is compelled to do, as long as it runs no target in the pairs.
+  an address on its own, whatever it is compelled to do, as long as it runs no target in the pairs. A compelled log
+  of the relay joined with a compelled log of a target would link them.
