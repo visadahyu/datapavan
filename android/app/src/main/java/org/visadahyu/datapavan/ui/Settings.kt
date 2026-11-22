@@ -276,7 +276,7 @@ internal fun AboutPage(engineVersion: String, insets: PaddingValues, onBack: () 
             )
         }
         item {
-            // Google Play updates Lite, so Lite says nothing of newer versions and links the website's main page.
+            // Google Play updates its build of Basic, so it says nothing of newer versions and links the main page.
             if (!BuildConfig.PLAY) {
                 Text(stringResource(R.string.about_updates_title), style = MaterialTheme.typography.titleMedium)
                 // Advanced has the internet, for its apps' traffic only (ADR 0045, decision 4).

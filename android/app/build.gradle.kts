@@ -13,17 +13,18 @@ plugins {
 
 // The edition (ADR 0045; ADR 0031 for Google Play), chosen with -Pdatapavan.edition:
 // - "basic", the default: Datapavan Basic, which never has network access;
-// - "lite": Datapavan Basic for Google Play, under its own package, which Google signs;
+// - "play": Datapavan Basic for Google Play, under its own package, which Google signs: org.visadahyu.datapavan.lite,
+//   which Google Play holds, so the package keeps its name;
 // - "advanced": Datapavan Advanced, which adds the network part's tunnel, log and chain (the :network library).
 // A property rather than a product flavour, so that every task, output path and recipe (F-Droid,
 // scripts/reproducible.sh, CI) still builds Basic exactly as before.
 val edition = providers.gradleProperty("datapavan.edition").orNull ?: "basic"
-check(edition in setOf("basic", "lite", "advanced")) { "-Pdatapavan.edition is basic, lite or advanced, not '$edition'" }
+check(edition in setOf("basic", "play", "advanced")) { "-Pdatapavan.edition is basic, play or advanced, not '$edition'" }
 val editionName = edition
-val lite = edition == "lite"
+val play = edition == "play"
 val advanced = edition == "advanced"
 val editionApplicationId = when (edition) {
-    "lite" -> "org.visadahyu.datapavan.lite"
+    "play" -> "org.visadahyu.datapavan.lite"
     "advanced" -> "org.visadahyu.datapavan.advanced"
     else -> "org.visadahyu.datapavan"
 }
@@ -148,9 +149,9 @@ android {
         // The release's date, set with the version (docs/RELEASE.md, step 1). The app has no internet
         // access, so this date is all it knows of how old it is (Release.kt).
         buildConfigField("String", "RELEASE_DATE", "\"2026-11-08\"")
-        // Basic on Google Play ("lite"): Google Play updates it, so it says nothing of newer versions; About
+        // Basic on Google Play ("play"): Google Play updates it, so it says nothing of newer versions; About
         // names both editions.
-        buildConfigField("boolean", "PLAY", lite.toString())
+        buildConfigField("boolean", "PLAY", play.toString())
         // Whether the network part is in this build: the audit then opens it from its network page.
         buildConfigField("boolean", "ADVANCED", advanced.toString())
         // What users are taught this edition never asks for, the build's own list, for the page "Is this copy
@@ -365,7 +366,7 @@ abstract class JvmComponentsCheck : DefaultTask() {
 
     @TaskAction
     fun verify() {
-        val editions = setOf("basic", "lite", "advanced")
+        val editions = setOf("basic", "play", "advanced")
         val problems = mutableListOf<String>()
         data class Row(val line: Int, val pattern: String, val name: String, val licence: String, val editions: Set<String>, val text: String)
         val rows = table.get().asFile.readLines().withIndex()

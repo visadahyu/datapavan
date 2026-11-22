@@ -37,7 +37,7 @@ internal object LicenceList {
     data class JvmRow(val pattern: String, val component: Component, val editions: Set<String>)
 
     /** The editions a row of `jvm-components.tsv` may name; `all` stands for every one. */
-    val EDITIONS = setOf("basic", "lite", "advanced")
+    val EDITIONS = setOf("basic", "play", "advanced")
 
     private val CRATE = Regex("""^- ([A-Za-z0-9_-]+) ([0-9][0-9A-Za-z.+-]*): (.+)$""")
     private const val NO_TEXT = "; its package carries no licence text: "
@@ -91,7 +91,7 @@ internal object LicenceList {
             JvmRow(pattern, Component(name, null, licence, listOf(Text(text))), named)
         }
 
-    /** The Java and Kotlin libraries of [edition] (`basic`, `lite` or `advanced`), in the table's order. */
+    /** The Java and Kotlin libraries of [edition] (`basic`, `play` or `advanced`), in the table's order. */
     fun jvm(content: String, edition: String): List<Component> =
         jvmRows(content).filter { edition in it.editions }.map { it.component }
 
@@ -116,7 +116,7 @@ internal object LicenceList {
     /** The edition this build is, as `jvm-components.tsv` names it. */
     fun edition(advanced: Boolean, play: Boolean): String = when {
         advanced -> "advanced"
-        play -> "lite"
+        play -> "play"
         else -> "basic"
     }
 }
