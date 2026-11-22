@@ -17,12 +17,12 @@ import org.visadahyu.datapavan.labels.LabelRow
 import org.visadahyu.datapavan.labels.PhoneLabels
 import org.visadahyu.datapavan.labels.SystemLabels
 import org.visadahyu.datapavan.network.R
-import org.visadahyu.datapavan.network.WatchPacks
+import org.visadahyu.datapavan.network.NetworkPacks
 
 /**
  * Android's own labels as the network monitoring's screens quote them (ADR 0054): read from the phone's Settings in
  * the phone's language, with Datapavan's beside them where the two differ, else Datapavan's copy of AOSP's text.
- * WatchTheme gives each screen one [SystemLabels] for its locales, which reads nothing until a label is asked for.
+ * NetworkTheme gives each screen one [SystemLabels] for its locales, which reads nothing until a label is asked for.
  */
 internal object AndroidLabels {
     /**
@@ -60,7 +60,7 @@ internal object AndroidLabels {
     fun of(context: Context, rows: String?): SystemLabels = PhoneLabels.of(context, rows = { rows }, fallback = ::fallback)
 
     /** labels.tsv's text from the data pack in use; it parses the pack, so never on the main thread (the fix round's m3). */
-    fun rows(context: Context): String = runCatching { DataPackStore.read(context, WatchPacks).text(LabelRow.PATH) }.getOrNull().orEmpty()
+    fun rows(context: Context): String = runCatching { DataPackStore.read(context, NetworkPacks).text(LabelRow.PATH) }.getOrNull().orEmpty()
 }
 
 /**
@@ -69,7 +69,7 @@ internal object AndroidLabels {
  */
 internal data class ScreenLabels(val labels: SystemLabels, val ready: Boolean)
 
-/** The labels of a screen, which WatchTheme sets for its locales. */
+/** The labels of a screen, which NetworkTheme sets for its locales. */
 internal val LocalAndroidLabels = staticCompositionLocalOf<ScreenLabels?> { null }
 
 /** The labels for this screen's locales, the data pack's rows read on a thread of their own. */

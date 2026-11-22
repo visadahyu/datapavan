@@ -31,7 +31,7 @@ set -euo pipefail
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 APK="${1:-$ROOT/android/app/build-advanced/outputs/apk/debug/app-debug.apk}"
 PKG=org.visadahyu.datapavan.advanced
-WATCH_SCREEN=org.visadahyu.datapavan.network.MainActivity
+NETWORK_SCREEN=org.visadahyu.datapavan.network.MainActivity
 WORKLOAD=org.visadahyu.datapavan.workload
 CAMERA_SHUTTER=com.android.camera2:id/shutter_button
 CAMERA_DONE=com.android.camera2:id/done_button
@@ -69,7 +69,7 @@ cleanup() {
 }
 trap cleanup EXIT
 
-dump() { adb shell dumpsys activity service "$PKG/org.visadahyu.datapavan.network.WatchVpnService" "$@" | tr -d '\r'; }
+dump() { adb shell dumpsys activity service "$PKG/org.visadahyu.datapavan.network.NetworkVpnService" "$@" | tr -d '\r'; }
 workload_log() { adb logcat -d -s DatapavanWorkload | tr -d '\r' | sed -n 's/.*DatapavanWorkload: //p'; }
 device() {
     local seconds=$1
@@ -117,7 +117,7 @@ workload() {
 }
 watch_screen() {
     adb shell input keyevent KEYCODE_WAKEUP
-    adb shell am start -W -n "$PKG/$WATCH_SCREEN" --activity-clear-top >/dev/null
+    adb shell am start -W -n "$PKG/$NETWORK_SCREEN" --activity-clear-top >/dev/null
     sleep 1
     scroll_to_top
 }
@@ -250,7 +250,7 @@ allow_vpn "$PKG" || fail "Android did not take the VPN consent for $PKG"
 [ "$(adb shell getprop ro.build.version.sdk | tr -d '\r')" -lt 37 ] || adb shell pm grant "$PKG" android.permission.ACCESS_LOCAL_NETWORK
 adb shell cmd locale set-app-locales "$PKG" --locales en >/dev/null 2>&1 || true
 adb shell am force-stop "$PKG"
-adb shell am start -W -n "$PKG/$WATCH_SCREEN" --ez start true >/dev/null
+adb shell am start -W -n "$PKG/$NETWORK_SCREEN" --ez start true >/dev/null
 within 20 vpn_up || fail "Watch's tunnel did not come up"
 
 # 1. A file, through Android's documents screen: the confirmation says what it does and proposes the app it names.
@@ -407,7 +407,7 @@ pid=$(adb shell pidof "$PKG:watch" | tr -d '\r')
 [ -n "$pid" ] || fail "no process of Watch's"
 adb shell run-as "$PKG" kill -9 "$pid" || fail "Watch's process could not be killed"
 within 20 vpn_down || fail "Watch's VPN stayed up with its process killed"
-adb shell am start -S -W -n "$PKG/$WATCH_SCREEN" --ez start true >/dev/null
+adb shell am start -S -W -n "$PKG/$NETWORK_SCREEN" --ez start true >/dev/null
 within 20 vpn_up || fail "Watch's tunnel did not come up again"
 within 10 store_has 1 " set routes 1$" && within 10 store_has 2 " set " ||
     fail "the configurations did not come back from the store: $(store_line 1); $(store_line 2)"
@@ -528,7 +528,7 @@ pid=$(adb shell pidof "$PKG:watch" | tr -d '\r')
 [ -n "$pid" ] || fail "no process of Watch's"
 adb shell run-as "$PKG" kill -9 "$pid" || fail "Watch's process could not be killed"
 within 20 vpn_down || fail "Watch's VPN stayed up with its process killed"
-adb shell am start -S -W -n "$PKG/$WATCH_SCREEN" --ez start true >/dev/null
+adb shell am start -S -W -n "$PKG/$NETWORK_SCREEN" --ez start true >/dev/null
 within 20 vpn_up || fail "Watch's tunnel did not come up on the locked phone"
 within 10 store_has 1 "name locked unset routes 1$" ||
     fail "on the locked phone the first configuration is not held unset with its app: $(store_line 1)"
@@ -614,7 +614,7 @@ pid=$(adb shell pidof "$PKG:watch" | tr -d '\r')
 [ -n "$pid" ] || fail "no process of Watch's"
 adb shell run-as "$PKG" kill -9 "$pid" || fail "Watch's process could not be killed"
 within 20 vpn_down || fail "Watch's VPN stayed up with its process killed"
-adb shell am start -S -W -n "$PKG/$WATCH_SCREEN" --ez start true >/dev/null
+adb shell am start -S -W -n "$PKG/$NETWORK_SCREEN" --ez start true >/dev/null
 within 20 vpn_up || fail "Watch's tunnel did not come up with key A gone"
 lost_state() { grep -qE "^ *tunnel-state lost$" <<<"$(dump tunnel-store)"; }
 lost_notice() { [ "$(sed -n 's/^ *tunnel-lost notice //p' <<<"$(dump tunnel-store)")" = "$1" ]; }

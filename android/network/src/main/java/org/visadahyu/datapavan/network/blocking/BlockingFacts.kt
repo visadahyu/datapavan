@@ -13,7 +13,7 @@ import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import org.visadahyu.datapavan.audit.appSigning
 import org.visadahyu.datapavan.datapack.DataPackStore
-import org.visadahyu.datapavan.network.WatchPacks
+import org.visadahyu.datapavan.network.NetworkPacks
 import org.visadahyu.datapavan.network.chain.ChainSettings
 
 /**
@@ -50,7 +50,7 @@ internal class BlockingFacts(
          */
         fun read(context: Context, browsersIncluded: Boolean, covering: Boolean, hand: ((ByteArray) -> IntArray)?): BlockingFacts {
             val store = try {
-                DataPackStore.read(context, WatchPacks)
+                DataPackStore.read(context, NetworkPacks)
             } catch (e: RuntimeException) {
                 null
             }

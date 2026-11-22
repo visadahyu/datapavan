@@ -27,7 +27,7 @@ set -euo pipefail
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 APK="${1:-$ROOT/android/app/build-advanced/outputs/apk/debug/app-debug.apk}"
 PKG=org.visadahyu.datapavan.advanced
-WATCH_SCREEN=org.visadahyu.datapavan.network.MainActivity
+NETWORK_SCREEN=org.visadahyu.datapavan.network.MainActivity
 FIXTURE=org.visadahyu.datapavan.proxyfixture
 # shellcheck source=scripts/adb-ui.sh
 . "$ROOT/scripts/adb-ui.sh"
@@ -55,7 +55,7 @@ cleanup() {
 }
 trap cleanup EXIT
 
-dump() { adb shell dumpsys activity service "$PKG/org.visadahyu.datapavan.network.WatchVpnService" "$@" | tr -d '\r'; }
+dump() { adb shell dumpsys activity service "$PKG/org.visadahyu.datapavan.network.NetworkVpnService" "$@" | tr -d '\r'; }
 fixture_log() { adb logcat -d -s DatapavanProxyFixture | tr -d '\r' | sed -n 's/.*DatapavanProxyFixture: //p'; }
 proxies() { dump | sed -n 's/^ *flow-proxy //p'; }
 fail() {
@@ -139,7 +139,7 @@ SIGNAL_UID=$(uid_of "$FIXTURE.signal")
 allow_vpn "$PKG" || fail "Android did not take the VPN consent for $PKG"
 [ "$(adb shell getprop ro.build.version.sdk | tr -d '\r')" -lt 37 ] || adb shell pm grant "$PKG" android.permission.ACCESS_LOCAL_NETWORK
 adb shell am force-stop "$PKG"
-adb shell am start -W -n "$PKG/$WATCH_SCREEN" --ez start true >/dev/null
+adb shell am start -W -n "$PKG/$NETWORK_SCREEN" --ez start true >/dev/null
 for _ in $(seq 1 20); do vpn_up && break; sleep 1; done
 vpn_up || fail "Watch's tunnel did not come up"
 
@@ -194,7 +194,7 @@ echo "ok: Telegram's MTProto proxy (obfuscated and fake TLS, the cover naming no
 
 # The switch the rows point to is on Watch's screen, though this phone has no circumvention tool and no WireGuard
 # configuration: an app's own proxy was seen (the fix round's R-M4).
-adb shell am start -W -n "$PKG/$WATCH_SCREEN" >/dev/null
+adb shell am start -W -n "$PKG/$NETWORK_SCREEN" >/dev/null
 sleep 2
 scroll_to "Log where apps connect through your tool, WireGuard or a proxy" ||
     fail "the switch is not on Watch's screen, with no tool, no tunnel and a Telegram proxy seen"

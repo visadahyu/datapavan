@@ -95,7 +95,7 @@ badging=$("$TOOLS/aapt2" dump badging "$signed")
 grep -q "versionCode='$code' versionName='$version'" <<<"$badging" || fail "the APK's version is not $version ($code)"
 grep -q "application-debuggable" <<<"$badging" && fail "the release APK is debuggable"
 # The edition's allowlist (ADR 0045, decision 9), checked again on the signed APK, apart from the build's
-# own check (app/build.gradle.kts, basicPermissions and watchPermissions), so that a change to one is
+# own check (app/build.gradle.kts, basicPermissions and networkPermissions), so that a change to one is
 # caught by the other; and, by name, what the edition never requests (ADR 0045, decisions 1 and 3).
 allowed="android.permission.QUERY_ALL_PACKAGES android.permission.PACKAGE_USAGE_STATS android.permission.ACCESS_NETWORK_STATE android.permission.HIDE_OVERLAY_WINDOWS $PKG.DYNAMIC_RECEIVER_NOT_EXPORTED_PERMISSION"
 if [ "$EDITION" = basic ]; then

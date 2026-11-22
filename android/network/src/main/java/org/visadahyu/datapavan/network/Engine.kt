@@ -19,7 +19,7 @@ internal object Engine {
      * which the engine takes over as well.
      */
     external fun nativeStart(
-        service: WatchVpnService,
+        service: NetworkVpnService,
         fd: Int,
         mtu: Int,
         keepFlows: Int,
@@ -148,7 +148,7 @@ internal object Engine {
     /**
      * Every installed app's UID, while Watch routes any app (a configuration or the tool), or null when it routes
      * none (W7, part 2, fix round, the maintainer's word of 2026-11-20): a flow of a UID outside them, an app
-     * installed since, waits while the engine asks [WatchVpnService.routeOfApp], and goes nowhere until it answers.
+     * installed since, waits while the engine asks [NetworkVpnService.routeOfApp], and goes nowhere until it answers.
      */
     external fun nativeKnownApps(uids: IntArray?)
 
@@ -313,7 +313,7 @@ internal object Engine {
 }
 
 /** Watch's Rust reader of data packs (core/engine's `datapack`, through Watch's own library). */
-internal object WatchPacks : org.visadahyu.datapavan.datapack.PackNative {
+internal object NetworkPacks : org.visadahyu.datapavan.datapack.PackNative {
     override fun readDataPack(pack: ByteArray, keys: String): IntArray = Engine.nativeReadDataPack(pack, keys)
 
     override fun readDataPayload(payload: ByteArray): IntArray = Engine.nativeReadDataPayload(payload)

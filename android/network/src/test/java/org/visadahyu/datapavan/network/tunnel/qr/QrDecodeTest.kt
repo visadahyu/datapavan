@@ -144,7 +144,7 @@ class QrDecodeTest {
      * number; Watch bounds the text again and reads a number that names no failure as "stopped".
      */
     @Test
-    fun the_decoders_answer_is_primitives_and_watch_bounds_it_again() {
+    fun the_decoders_answer_is_primitives_and_the_caller_bounds_it_again() {
         val failure = IntArray(1) { -1 }
         val text = "[Interface]".toByteArray()
         val sent = QrDecode.answer(QrDecode.Result.Text(text), failure)

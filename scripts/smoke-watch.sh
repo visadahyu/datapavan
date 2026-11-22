@@ -16,7 +16,7 @@ ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 APK="${1:-$ROOT/android/app/build-advanced/outputs/apk/debug/app-debug.apk}"
 PKG=org.visadahyu.datapavan.advanced
 # Watch's screen in Datapavan Advanced (ADR 0045); debug builds export it for these checks.
-WATCH_SCREEN=org.visadahyu.datapavan.network.MainActivity
+NETWORK_SCREEN=org.visadahyu.datapavan.network.MainActivity
 RES="$ROOT/android/network/src/main/res"
 # shellcheck source=scripts/adb-ui.sh
 . "$ROOT/scripts/adb-ui.sh"
@@ -42,7 +42,7 @@ string() {
 open_in() {
     adb shell am force-stop "$PKG"
     adb shell cmd locale set-app-locales "$PKG" --locales "$1" >/dev/null
-    adb shell am start -W -n "$PKG/$WATCH_SCREEN" >/dev/null
+    adb shell am start -W -n "$PKG/$NETWORK_SCREEN" >/dev/null
 }
 
 # Waits up to $2 seconds for text starting with $1.
@@ -109,7 +109,7 @@ if [ "$(adb shell getprop ro.build.version.sdk | tr -d '\r')" -ge 33 ]; then
     open_in ""
 else
     echo "skipped: per-app languages need Android 13"
-    adb shell am start -W -n "$PKG/$WATCH_SCREEN" >/dev/null
+    adb shell am start -W -n "$PKG/$NETWORK_SCREEN" >/dev/null
 fi
 
 # The tunnel, in English from here on.
@@ -158,7 +158,7 @@ within 10 window_unprotected "$PKG" || fail "Watch's window stayed protected 10 
 within 10 screen_has "$(string values screenshots_block)" || fail "Watch does not offer to block screenshots again"
 adb shell input keyevent KEYCODE_HOME
 for _ in 1 2 3 4 5; do window_secure "$PKG" && break; sleep 1; done
-adb shell am start -W -n "$PKG/$WATCH_SCREEN" >/dev/null
+adb shell am start -W -n "$PKG/$NETWORK_SCREEN" >/dev/null
 # Read once its window is listed again: from then on it must be protected, with no wait.
 within 10 window_listed "$PKG" || fail "Watch's window was not listed 10 s after it came back"
 window_secure "$PKG" || fail "Watch's window was not protected again after it left the screen"

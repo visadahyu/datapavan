@@ -47,7 +47,7 @@ import org.visadahyu.datapavan.network.ui.HistoryView
 import org.visadahyu.datapavan.network.ui.NowScreen
 import org.visadahyu.datapavan.network.ui.NowView
 import org.visadahyu.datapavan.network.ui.RowNames
-import org.visadahyu.datapavan.network.ui.WatchTheme
+import org.visadahyu.datapavan.network.ui.NetworkTheme
 import org.visadahyu.datapavan.network.ui.rowOf
 
 /**
@@ -129,8 +129,8 @@ class NowActivity : ComponentActivity() {
             }
         }
         setContent {
-            val running by WatchVpnService.running.collectAsState()
-            WatchTheme {
+            val running by NetworkVpnService.running.collectAsState()
+            NetworkTheme {
                 NowScreen(
                     view = NowView(
                         snapshot = snapshot.value,
@@ -248,17 +248,17 @@ class NowActivity : ComponentActivity() {
         val now = System.currentTimeMillis()
         val facts = BlockingState.facts.value ?: ownFacts
             ?: BlockingFacts.read(this, settings.browsers, covering = settings.on, hand = null).also { ownFacts = it }
-        val tallies = if (WatchVpnService.running.value) Tallies.parse(Engine.nativeBlocked()) else emptyList()
+        val tallies = if (NetworkVpnService.running.value) Tallies.parse(Engine.nativeBlocked()) else emptyList()
         return BlockingView(settings.on, facts, tallies, settings.appsAllowed(now), settings.entriesAllowed(), settings.pausedUntil(now))
     }
 
     /** A tap of the undo: the allowance written, handed to the running service at once, and the view read again. */
     private fun changeBlocking(change: (BlockingSettings, Long) -> Unit) {
         change(BlockingSettings.of(this), System.currentTimeMillis())
-        if (WatchVpnService.running.value) {
+        if (NetworkVpnService.running.value) {
             startService(
-                Intent(this, WatchVpnService::class.java).setAction(WatchVpnService.ACTION_APPLY_BLOCKING)
-                    .putExtra(WatchVpnService.EXTRA_FULL, false),
+                Intent(this, NetworkVpnService::class.java).setAction(NetworkVpnService.ACTION_APPLY_BLOCKING)
+                    .putExtra(NetworkVpnService.EXTRA_FULL, false),
             )
         }
         lifecycleScope.launch { blocking.value = withContext(worker) { readBlocking() } }
@@ -436,7 +436,7 @@ class NowActivity : ComponentActivity() {
          */
         internal fun loadTables(context: Context): IntArray {
             val store = try {
-                DataPackStore.read(context, WatchPacks)
+                DataPackStore.read(context, NetworkPacks)
             } catch (e: RuntimeException) {
                 return IntArray(0)
             }

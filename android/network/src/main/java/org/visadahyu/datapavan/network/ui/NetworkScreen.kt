@@ -55,7 +55,7 @@ import org.visadahyu.datapavan.network.log.ConnectionLog
  * global pause follow the names' section ([blocking]; W8, part 3a).
  */
 @Composable
-internal fun WatchScreen(
+internal fun NetworkScreen(
     running: Boolean,
     privateDns: PrivateDns?,
     refused: Boolean,

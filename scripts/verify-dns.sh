@@ -46,7 +46,7 @@ set -euo pipefail
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 APK="${1:-$ROOT/android/app/build-advanced/outputs/apk/debug/app-debug.apk}"
 PKG=org.visadahyu.datapavan.advanced
-WATCH_SCREEN=org.visadahyu.datapavan.network.MainActivity
+NETWORK_SCREEN=org.visadahyu.datapavan.network.MainActivity
 WORKLOAD=org.visadahyu.datapavan.workload
 LAB="$ROOT/scripts/dnslab.sh"
 # shellcheck source=scripts/adb-ui.sh
@@ -79,7 +79,7 @@ cleanup() {
 }
 trap cleanup EXIT
 
-dump() { adb shell dumpsys activity service "$PKG/org.visadahyu.datapavan.network.WatchVpnService" "$@" | tr -d '\r'; }
+dump() { adb shell dumpsys activity service "$PKG/org.visadahyu.datapavan.network.NetworkVpnService" "$@" | tr -d '\r'; }
 way() { sed -n 's/^ *dns-way //p' <<<"$(dump)"; }
 held() { sed -n 's/^ *dns-held //p' <<<"$(dump)"; }
 workload_log() { adb logcat -d -s DatapavanWorkload | tr -d '\r' | sed -n 's/.*DatapavanWorkload: //p'; }
@@ -183,7 +183,7 @@ adb shell run-as "$PKG" sh -c "'mkdir -p files/dnslab && cp /data/local/tmp/dnsl
 adb shell rm -rf /data/local/tmp/dnslab
 allow_vpn "$PKG" || fail "Android did not take the VPN consent for $PKG"
 [ "$(adb shell getprop ro.build.version.sdk | tr -d '\r')" -lt 37 ] || adb shell pm grant "$PKG" android.permission.ACCESS_LOCAL_NETWORK
-adb shell am start -W -n "$PKG/$WATCH_SCREEN" --ez start true >/dev/null
+adb shell am start -W -n "$PKG/$NETWORK_SCREEN" --ez start true >/dev/null
 for _ in $(seq 1 20); do vpn_up && break; sleep 1; done
 vpn_up || fail "Watch's tunnel did not come up"
 applied=$(sed -n 's/^ *dns-applied //p' <<<"$(dump dns-apply)")
@@ -212,7 +212,7 @@ fi
 # and the screen says why (review R-M3). Then the leave, as W9's onboarding will ask it.
 if all_steps && [ "$(adb shell getprop ro.build.version.sdk | tr -d '\r')" -ge 33 ]; then
     adb shell pm revoke "$PKG" android.permission.POST_NOTIFICATIONS >/dev/null 2>&1 || true
-    adb shell am start -W -n "$PKG/$WATCH_SCREEN" >/dev/null
+    adb shell am start -W -n "$PKG/$NETWORK_SCREEN" >/dev/null
     scroll_to "Notify me while names go to the network" || fail "the screen has no \"Notify me\" switch"
     tap_starting "Notify me while names go to the network" || fail "the \"Notify me\" switch could not be tapped"
     denied=""

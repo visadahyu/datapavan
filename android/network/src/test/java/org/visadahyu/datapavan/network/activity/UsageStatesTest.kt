@@ -162,7 +162,7 @@ class UsageStatesTest {
 
     /** Watch starting again reads back to the phone's start: a service started three hours before, still running, is with its notification from Watch's start. */
     @Test
-    fun aRestartOfWatchFindsWhatIsOpenFromThePhonesStart() {
+    fun aRestartFindsWhatIsOpenFromThePhonesStart() {
         val states = UsageStates()
         assertEquals(at(600) - UsageStates.LOOKBACK_MS, states.queryFrom(at(600)))
         val reading = read(listOf(event(-3 * 3_600, Kind.SERVICE_START, "c", "Player"), event(-3_000, Kind.RESUMED, "a", "Main")), states = states)

@@ -51,7 +51,7 @@ class GuidesTest {
 
     /** Every string the data or a page names is one of Watch's, in the table the screen looks names up in, with as many places as are filled. */
     @Test
-    fun everyStringOfTheDataIsWatchs() {
+    fun everyStringOfTheDataIsTheModules() {
         for (guide in book.guides) {
             for (block in GuidePage.blocks(book, guide) + GuidePage.Block(GuidePage.Kind.TEXT, "guide_labels_tool", listOf(GuidePage.Fill.Tool)) +
                 GuidePage.Block(GuidePage.Kind.TEXT, "guide_labels_recorded") +

@@ -106,7 +106,7 @@
 
         <!-- Only Android may bind to it (BIND_VPN_SERVICE). -->
         <service
-            android:name=".WatchVpnService"
+            android:name=".NetworkVpnService"
             android:exported="false"
             android:process=":watch"
             android:permission="android.permission.BIND_VPN_SERVICE">

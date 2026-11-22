@@ -37,8 +37,8 @@ EMULATOR="$SDK/emulator/emulator"
 AVDMANAGER="$SDK/cmdline-tools/latest/bin/avdmanager"
 WATCH_APK="${WATCH_APK:-$ROOT/android/app/build-advanced/outputs/apk/debug/app-debug.apk}"
 WATCH=org.visadahyu.datapavan.advanced
-WATCH_SCREEN=org.visadahyu.datapavan.network.MainActivity
-WATCH_SERVICE=$WATCH/org.visadahyu.datapavan.network.WatchVpnService
+NETWORK_SCREEN=org.visadahyu.datapavan.network.MainActivity
+WATCH_SERVICE=$WATCH/org.visadahyu.datapavan.network.NetworkVpnService
 PROBE=org.visadahyu.lab.gapsprobe
 PEER=org.visadahyu.lab.gapsprobe.peer
 FIXTURE=org.visadahyu.lab.gapsfixture
@@ -408,7 +408,7 @@ watch_start() {
     # Right after boot the first start can be lost: it is sent again, up to three times.
     local try
     for try in 1 2 3; do
-        a shell am start -W -n "$WATCH/$WATCH_SCREEN" --ez start true >/dev/null
+        a shell am start -W -n "$WATCH/$NETWORK_SCREEN" --ez start true >/dev/null
         for _ in $(seq 1 20); do vpn_up && return 0; sleep 1; done
         a shell am force-stop "$WATCH"
     done

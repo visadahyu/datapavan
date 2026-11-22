@@ -633,7 +633,7 @@ private fun AppDetail(entry: AppEntry, trackers: AppTrackers?, trackerInfo: Map<
         if (DetailGroup.NETWORK.name in open) {
             item { usage() }
             // Datapavan Advanced: what this app sends now, and whether the user was using it (ADR 0046).
-            if (BuildConfig.ADVANCED) item { WatchNowEntry(app.packageName) }
+            if (BuildConfig.ADVANCED) item { NetworkNowEntry(app.packageName) }
         }
         if (signature != null || showKeys) {
             item { GroupHeader(DetailGroup.SIGNATURE, DetailGroup.SIGNATURE.name in open, toggle) }

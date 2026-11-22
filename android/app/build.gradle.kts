@@ -55,7 +55,7 @@ val basicPermissions = mapOf(
     "$editionApplicationId.DYNAMIC_RECEIVER_NOT_EXPORTED_PERMISSION" to "",
 )
 // What Watch adds in Advanced (ADR 0034).
-val watchPermissions = mapOf(
+val networkPermissions = mapOf(
     // Sockets, to pass each app's traffic on to where it was going.
     "android.permission.INTERNET" to "",
     // Only Android 10 and 11 need it, to follow the network under the tunnel.
@@ -64,7 +64,7 @@ val watchPermissions = mapOf(
     // Android 17: other apps' traffic to the local network leaves through Watch's sockets.
     "android.permission.ACCESS_LOCAL_NETWORK" to "",
 )
-val allowedPermissions = if (advanced) basicPermissions + watchPermissions else basicPermissions
+val allowedPermissions = if (advanced) basicPermissions + networkPermissions else basicPermissions
 // What users are taught each edition never holds (ADR 0045, decisions 1, 3 and 4). The build refuses them by
 // name as well, so that a wider allowlist cannot quietly break the sentence.
 val neverRequested = if (advanced) {
@@ -106,7 +106,7 @@ val requiredLibraries = buildMap {
     if (advanced) put(networkLibrary, "Java_org_visadahyu_datapavan_network_Engine_nativeStart")
 }
 val forbiddenLibraries = if (advanced) emptyList() else listOf(networkLibrary)
-// The methods of WatchVpnService that Watch's library calls back by name (core/network-jni/src/lib.rs), which
+// The methods of NetworkVpnService that Watch's library calls back by name (core/network-jni/src/lib.rs), which
 // R8 must neither remove nor rename (network/proguard-rules.pro).
 val jniCallbacks = if (advanced) listOf("ownerUid", "protectSocket", "logRecords", "statesWanted", "resolveEndpoint", "routeOfApp", "exchange", "dnsChanged") else emptyList()
 

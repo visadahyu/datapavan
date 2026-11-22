@@ -24,7 +24,7 @@ import org.visadahyu.datapavan.R
  * class name; Basic has no such screen and never shows this card.
  */
 @Composable
-internal fun WatchEntry() {
+internal fun NetworkEntry() {
     val context = LocalContext.current
     Card(modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 8.dp)) {
         Column(Modifier.padding(12.dp)) {
@@ -33,7 +33,7 @@ internal fun WatchEntry() {
             Text(stringResource(R.string.watch_entry_body), style = MaterialTheme.typography.bodyMedium)
             Spacer(Modifier.height(8.dp))
             OutlinedButton(
-                onClick = { context.startActivity(Intent().setClassName(context, WATCH_SCREEN)) },
+                onClick = { context.startActivity(Intent().setClassName(context, NETWORK_SCREEN)) },
                 modifier = Modifier.testTag("open-watch"),
             ) { Text(stringResource(R.string.watch_entry_open)) }
         }
@@ -41,22 +41,22 @@ internal fun WatchEntry() {
 }
 
 /** Watch's screen, in the :network library. */
-private const val WATCH_SCREEN = "org.visadahyu.datapavan.network.MainActivity"
+private const val NETWORK_SCREEN = "org.visadahyu.datapavan.network.MainActivity"
 
 /**
  * Datapavan Advanced only: from the audit's page of an app, Watch's view "Now" for that app (ADR 0046, decision
  * 2 (d)), which says what it sent and whether the user was using it. Opened by class name with the app's package
- * name and nothing else, as [WatchEntry] opens Watch's screen.
+ * name and nothing else, as [NetworkEntry] opens Watch's screen.
  */
 @Composable
-internal fun WatchNowEntry(packageName: String) {
+internal fun NetworkNowEntry(packageName: String) {
     val context = LocalContext.current
     OutlinedButton(
-        onClick = { context.startActivity(Intent().setClassName(context, WATCH_NOW).putExtra(WATCH_NOW_PACKAGE, packageName)) },
+        onClick = { context.startActivity(Intent().setClassName(context, NETWORK_NOW).putExtra(NETWORK_NOW_PACKAGE, packageName)) },
         modifier = Modifier.padding(vertical = 8.dp).testTag("open-watch-now"),
     ) { Text(stringResource(R.string.watch_now_open)) }
 }
 
 /** Watch's view "Now", in the :network library, and the one extra it reads: a package name. */
-private const val WATCH_NOW = "org.visadahyu.datapavan.network.NowActivity"
-private const val WATCH_NOW_PACKAGE = "package"
+private const val NETWORK_NOW = "org.visadahyu.datapavan.network.NowActivity"
+private const val NETWORK_NOW_PACKAGE = "package"

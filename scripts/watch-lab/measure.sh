@@ -45,7 +45,7 @@ SINCE="$(adb shell date +%s | tr -d '\r').000"
 adb shell am force-stop "$WATCH"
 adb shell am start -n "$WATCH/org.visadahyu.datapavan.network.MainActivity" --ez start true --es only_apps "$LOAD" >/dev/null
 sleep 3
-adb shell dumpsys activity service "$WATCH/org.visadahyu.datapavan.network.WatchVpnService" | tr -d '\r' | grep -q 'running true' || { echo "Watch's tunnel did not start"; exit 1; }
+adb shell dumpsys activity service "$WATCH/org.visadahyu.datapavan.network.NetworkVpnService" | tr -d '\r' | grep -q 'running true' || { echo "Watch's tunnel did not start"; exit 1; }
 before=$(cpu_ticks)
 run=$(date +%s)
 for r in $(seq 1 "$ROUNDS"); do
@@ -58,5 +58,5 @@ done
 after=$(cpu_ticks)
 echo "cpu_ticks=$((after - before)) engine=watch"
 adb shell dumpsys meminfo "$WATCH:watch" | tr -d '\r' | grep -E 'TOTAL PSS|TOTAL RSS|^ *TOTAL' | head -2 | sed 's/^ */meminfo: /'
-adb shell dumpsys activity service "$WATCH/org.visadahyu.datapavan.network.WatchVpnService" | tr -d '\r' | grep -E '^ *counters' | sed 's/^ *//'
+adb shell dumpsys activity service "$WATCH/org.visadahyu.datapavan.network.NetworkVpnService" | tr -d '\r' | grep -E '^ *counters' | sed 's/^ *//'
 adb shell am force-stop "$WATCH"

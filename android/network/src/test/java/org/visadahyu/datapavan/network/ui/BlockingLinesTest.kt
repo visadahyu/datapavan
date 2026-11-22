@@ -186,7 +186,7 @@ class BlockingLinesTest {
      * the pause only while blocking is on, and while paused its end and "Block again now".
      */
     @Test
-    fun watchsScreenSection() {
+    fun theNetworkScreensSection() {
         val off = blockingParts(BlockingSettingsView())
         assertEquals(
             listOf(BlockingPart.SWITCH, BlockingPart.NOTE, BlockingPart.NOT_COVERED, BlockingPart.BROWSERS, BlockingPart.BROWSERS_NOTE),

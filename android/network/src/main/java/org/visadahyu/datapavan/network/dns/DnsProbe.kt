@@ -3,7 +3,7 @@ package org.visadahyu.datapavan.network.dns
 import android.net.Network
 import java.net.Socket
 import java.security.cert.X509Certificate
-import org.visadahyu.datapavan.network.WatchVpnService
+import org.visadahyu.datapavan.network.NetworkVpnService
 
 /**
  * The screen's check of the user's own resolver before Watch saves it (W8's fix round, review R-M1): one query, by
@@ -24,5 +24,5 @@ object DnsProbe {
 
     /** Asks [choice]; [done] gets the milliseconds the answer took, or null with how it failed ([Exchanger.outcomeOf]). */
     fun check(choice: DnsSettings.Choice.Custom, done: (Long?, Int) -> Unit) =
-        (WatchVpnService.exchangerNow ?: standalone).probe(choice, done)
+        (NetworkVpnService.exchangerNow ?: standalone).probe(choice, done)
 }

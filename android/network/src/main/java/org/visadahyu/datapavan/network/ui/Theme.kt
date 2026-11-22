@@ -81,7 +81,7 @@ internal val DarkColors: ColorScheme = darkColorScheme(
 
 /** The brand's colours, light or dark as the system is. */
 @Composable
-internal fun WatchTheme(content: @Composable () -> Unit) {
+internal fun NetworkTheme(content: @Composable () -> Unit) {
     MaterialTheme(colorScheme = if (isSystemInDarkTheme()) DarkColors else LightColors) {
         // Android's own labels, read from the phone once for the screen's languages, and only if one is asked for
         // (ADR 0054).

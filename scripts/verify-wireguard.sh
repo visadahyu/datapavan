@@ -25,7 +25,7 @@ set -euo pipefail
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 APK="${1:-$ROOT/android/app/build-advanced/outputs/apk/debug/app-debug.apk}"
 PKG=org.visadahyu.datapavan.advanced
-WATCH_SCREEN=org.visadahyu.datapavan.network.MainActivity
+NETWORK_SCREEN=org.visadahyu.datapavan.network.MainActivity
 WORKLOAD=org.visadahyu.datapavan.workload
 SHELL_UID=2000
 # shellcheck source=scripts/adb-ui.sh
@@ -65,7 +65,7 @@ cleanup() {
 }
 trap cleanup EXIT
 
-dump() { adb shell dumpsys activity service "$PKG/org.visadahyu.datapavan.network.WatchVpnService" "$@" | tr -d '\r'; }
+dump() { adb shell dumpsys activity service "$PKG/org.visadahyu.datapavan.network.NetworkVpnService" "$@" | tr -d '\r'; }
 workload_log() { adb logcat -d -s DatapavanWorkload | tr -d '\r' | sed -n 's/.*DatapavanWorkload: //p'; }
 device() {
     local seconds=$1
@@ -197,7 +197,7 @@ wait_settled 60 || fail "the emulator's networks kept changing for 60 s ($(netwo
 allow_vpn "$PKG" || fail "Android did not take the VPN consent for $PKG"
 [ "$(adb shell getprop ro.build.version.sdk | tr -d '\r')" -lt 37 ] || adb shell pm grant "$PKG" android.permission.ACCESS_LOCAL_NETWORK
 adb shell am force-stop "$PKG"
-adb shell am start -W -n "$PKG/$WATCH_SCREEN" --ez start true >/dev/null
+adb shell am start -W -n "$PKG/$NETWORK_SCREEN" --ez start true >/dev/null
 for _ in $(seq 1 20); do vpn_up && break; sleep 1; done
 vpn_up || fail "Watch's tunnel did not come up"
 

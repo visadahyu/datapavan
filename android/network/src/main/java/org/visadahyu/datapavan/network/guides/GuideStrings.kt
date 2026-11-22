@@ -5,7 +5,7 @@ import org.visadahyu.datapavan.network.R
 /**
  * The guides' words by the names the data and [GuidePage] use (guide-steps.tsv's string column): a table rather than a
  * lookup by name, so that resource shrinking keeps them and a name the data misspells fails a test
- * (GuidesTest.everyStringOfTheDataIsWatchs), never the screen.
+ * (GuidesTest.everyStringOfTheDataIsTheModules), never the screen.
  */
 object GuideStrings {
     val ids: Map<String, Int> = mapOf(

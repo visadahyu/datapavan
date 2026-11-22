@@ -57,8 +57,8 @@ import org.visadahyu.datapavan.network.ui.AppChoice
 import org.visadahyu.datapavan.network.ui.ChainActions
 import org.visadahyu.datapavan.network.ui.ChainView
 import org.visadahyu.datapavan.network.ui.LogSwitch
-import org.visadahyu.datapavan.network.ui.WatchScreen
-import org.visadahyu.datapavan.network.ui.WatchTheme
+import org.visadahyu.datapavan.network.ui.NetworkScreen
+import org.visadahyu.datapavan.network.ui.NetworkTheme
 
 class MainActivity : ComponentActivity() {
     /** Android refused the VPN consent the last time Watch asked. */
@@ -133,10 +133,10 @@ class MainActivity : ComponentActivity() {
     private fun changeBlocking(full: Boolean, change: (org.visadahyu.datapavan.network.blocking.BlockingSettings) -> Unit) {
         change(org.visadahyu.datapavan.network.blocking.BlockingSettings.of(this))
         readBlocking()
-        if (WatchVpnService.running.value) {
+        if (NetworkVpnService.running.value) {
             startService(
-                Intent(this, WatchVpnService::class.java).setAction(WatchVpnService.ACTION_APPLY_BLOCKING)
-                    .putExtra(WatchVpnService.EXTRA_FULL, full),
+                Intent(this, NetworkVpnService::class.java).setAction(NetworkVpnService.ACTION_APPLY_BLOCKING)
+                    .putExtra(NetworkVpnService.EXTRA_FULL, full),
             )
         }
     }
@@ -236,11 +236,11 @@ class MainActivity : ComponentActivity() {
             }
         }
         setContent {
-            val running by WatchVpnService.running.collectAsState()
-            val privateDns by WatchVpnService.privateDns.collectAsState()
+            val running by NetworkVpnService.running.collectAsState()
+            val privateDns by NetworkVpnService.privateDns.collectAsState()
             val logLock by log.lock.collectAsState()
-            WatchTheme {
-                WatchScreen(
+            NetworkTheme {
+                NetworkScreen(
                     running = running,
                     privateDns = privateDns,
                     refused = refused.value,
@@ -279,7 +279,7 @@ class MainActivity : ComponentActivity() {
         // the VPN service itself is not exported.
         val debuggable = applicationInfo.flags and ApplicationInfo.FLAG_DEBUGGABLE != 0
         if (debuggable && savedInstanceState == null && intent.getBooleanExtra(EXTRA_START, false)) {
-            onlyApps = intent.getStringExtra(WatchVpnService.EXTRA_ONLY_APPS)
+            onlyApps = intent.getStringExtra(NetworkVpnService.EXTRA_ONLY_APPS)
             requestStart()
         }
         if (debuggable && intent.getBooleanExtra(EXTRA_STOP, false)) stopTunnel()
@@ -398,8 +398,8 @@ class MainActivity : ComponentActivity() {
         store.apps = if (out) store.apps + packageName else store.apps - packageName
         leftOut.value = store.apps
         if (out && packageName in ChainSettings.of(this).apps) changeChain { it.apps = it.apps - packageName }
-        if (WatchVpnService.running.value) {
-            startService(Intent(this, WatchVpnService::class.java).setAction(WatchVpnService.ACTION_APPLY_LEFT_OUT))
+        if (NetworkVpnService.running.value) {
+            startService(Intent(this, NetworkVpnService::class.java).setAction(NetworkVpnService.ACTION_APPLY_LEFT_OUT))
         }
     }
 
@@ -411,8 +411,8 @@ class MainActivity : ComponentActivity() {
 
     /** Hands the chain to the running tunnel; one that starts later reads it itself. */
     private fun applyChain() {
-        if (WatchVpnService.running.value) {
-            startService(Intent(this, WatchVpnService::class.java).setAction(WatchVpnService.ACTION_APPLY_CHAIN))
+        if (NetworkVpnService.running.value) {
+            startService(Intent(this, NetworkVpnService::class.java).setAction(NetworkVpnService.ACTION_APPLY_CHAIN))
         }
     }
 
@@ -559,7 +559,7 @@ class MainActivity : ComponentActivity() {
                             name = names[slot] ?: TunnelStore.Name.Removed,
                             local = slot in state.local,
                             apps = state.routes.count { (app, s) -> s == slot && app !in leftOut.value },
-                            shown = TunnelStates.shown(WatchVpnService.running.value, names[slot], null),
+                            shown = TunnelStates.shown(NetworkVpnService.running.value, names[slot], null),
                             plainDns = false,
                         )
                     },
@@ -585,7 +585,7 @@ class MainActivity : ComponentActivity() {
     /** The user's DNS setting and, while the tunnel runs, the way names go now; the ways themselves once, off this thread. */
     private fun readDns() {
         val settings = org.visadahyu.datapavan.network.dns.DnsSettings.of(this)
-        val running = WatchVpnService.running.value
+        val running = NetworkVpnService.running.value
         val status = if (running) org.visadahyu.datapavan.network.dns.DnsStatus.parse(Engine.nativeDnsStatus()) else null
         // A permission taken back in Android's settings turns "Notify me" off on the screen, and says why.
         val allowed = notificationsAllowed()
@@ -646,7 +646,7 @@ class MainActivity : ComponentActivity() {
     )
 
     private fun readStates() {
-        val running = WatchVpnService.running.value
+        val running = NetworkVpnService.running.value
         val lines = if (running) TunnelStates.read(Engine.nativeTunnelStates()) else emptyMap()
         val view = tunnels.value
         val configurations = view.configurations.map { c ->
@@ -678,8 +678,8 @@ class MainActivity : ComponentActivity() {
 
     /** Hands the configurations and routes to the running tunnel; one that starts later reads them itself. */
     private fun applyTunnels() {
-        if (WatchVpnService.running.value) {
-            startService(Intent(this, WatchVpnService::class.java).setAction(WatchVpnService.ACTION_APPLY_TUNNELS))
+        if (NetworkVpnService.running.value) {
+            startService(Intent(this, NetworkVpnService::class.java).setAction(NetworkVpnService.ACTION_APPLY_TUNNELS))
         }
     }
 
@@ -956,7 +956,7 @@ class MainActivity : ComponentActivity() {
         val debuggable = applicationInfo.flags and ApplicationInfo.FLAG_DEBUGGABLE != 0
         if (!debuggable) return
         if (intent.getBooleanExtra(EXTRA_START, false)) {
-            onlyApps = intent.getStringExtra(WatchVpnService.EXTRA_ONLY_APPS)
+            onlyApps = intent.getStringExtra(NetworkVpnService.EXTRA_ONLY_APPS)
             requestStart()
         }
         if (intent.getBooleanExtra(EXTRA_STOP, false)) stopTunnel()
@@ -976,13 +976,13 @@ class MainActivity : ComponentActivity() {
     }
 
     private fun startTunnel() {
-        val start = Intent(this, WatchVpnService::class.java).setAction(WatchVpnService.ACTION_START)
-        onlyApps?.let { start.putExtra(WatchVpnService.EXTRA_ONLY_APPS, it) }
+        val start = Intent(this, NetworkVpnService::class.java).setAction(NetworkVpnService.ACTION_START)
+        onlyApps?.let { start.putExtra(NetworkVpnService.EXTRA_ONLY_APPS, it) }
         startService(start)
     }
 
     private fun stopTunnel() {
-        startService(Intent(this, WatchVpnService::class.java).setAction(WatchVpnService.ACTION_STOP))
+        startService(Intent(this, NetworkVpnService::class.java).setAction(NetworkVpnService.ACTION_STOP))
     }
 
     companion object {

@@ -1,6 +1,6 @@
 //! Thin JNI bridge between Datapavan Watch and [`datapavan_net`], as `datapavan-jni` is for the audit
 //! app: `org.visadahyu.datapavan.network.Engine` starts and stops the engine, and the engine calls back
-//! into `WatchVpnService` for `getConnectionOwnerUid` and `protect`, to hand over the log's records, and
+//! into `NetworkVpnService` for `getConnectionOwnerUid` and `protect`, to hand over the log's records, and
 //! to ask for a reading of the apps' states. Every export converts its
 //! arguments, calls the engine and converts the result; all logic is in the engine, which holds no
 //! unsafe code (ADR 0006).
@@ -408,7 +408,7 @@ fn stop_running() {
     *setting() = None;
 }
 
-/// Answers the engine's questions through `WatchVpnService`.
+/// Answers the engine's questions through `NetworkVpnService`.
 struct Service {
     vm: JavaVM,
     service: jni::refs::Global<JObject<'static>>,
@@ -477,7 +477,7 @@ impl Platform for Service {
         true
     }
 
-    /// `WatchVpnService.routeOfApp(uid)`: where an app Watch did not name at its last hand-over goes, from its
+    /// `NetworkVpnService.routeOfApp(uid)`: where an app Watch did not name at its last hand-over goes, from its
     /// packages and Watch's store ([`app_route`]); none where Kotlin cannot say.
     fn route_of_app(&self, uid: u32) -> Option<AppRoute> {
         let uid = i32::try_from(uid).ok()?;
@@ -503,7 +503,7 @@ impl Platform for Service {
         app_route(&answer)
     }
 
-    /// `WatchVpnService.resolveEndpoint(name)`: a `WireGuard` endpoint's name asked of Android's own resolver
+    /// `NetworkVpnService.resolveEndpoint(name)`: a `WireGuard` endpoint's name asked of Android's own resolver
     /// on the network beneath the tunnel, which uses the user's Private DNS where it is on. Its answer is
     /// `encrypted` or `plain`, then the addresses, by spaces; null where Kotlin has no network to ask.
     fn resolve(&self, name: &str) -> Option<datapavan_net::Resolution> {
@@ -530,7 +530,7 @@ impl Platform for Service {
         resolution(&answer)
     }
 
-    /// `WatchVpnService.exchange(...)`, which hands the exchange to its own executor and returns at once; the
+    /// `NetworkVpnService.exchange(...)`, which hands the exchange to its own executor and returns at once; the
     /// reply comes by `nativeExchanged` (W8, part 1). Called on the engine's thread.
     fn exchange(&self, ticket: u64, request: &Exchange) -> bool {
         let Ok(ticket) = i64::try_from(ticket) else {
@@ -583,7 +583,7 @@ impl Platform for Service {
             .unwrap_or(false)
     }
 
-    /// `WatchVpnService.dnsChanged()`, which posts a look at the resolver's state to its main thread and returns
+    /// `NetworkVpnService.dnsChanged()`, which posts a look at the resolver's state to its main thread and returns
     /// at once.
     fn dns_changed(&self) {
         let _ = self.vm.attach_current_thread(|env| -> Result<(), Error> {
@@ -592,7 +592,7 @@ impl Platform for Service {
         });
     }
 
-    /// `WatchVpnService.statesWanted`, which hands a reading to its tracker's own thread when its rules
+    /// `NetworkVpnService.statesWanted`, which hands a reading to its tracker's own thread when its rules
     /// allow one, and returns at once.
     fn wants_states(&self) {
         let _ = self.vm.attach_current_thread(|env| -> Result<(), Error> {
@@ -2098,7 +2098,7 @@ mod tests {
         assert!(start_next(None, |given| started(&mut seen, given)));
         assert_eq!(port_of(&seen), None, "a chain of the run before");
 
-        // Unit 12b: a first start with the chain set before it, as `WatchVpnService.start` sets it now.
+        // Unit 12b: a first start with the chain set before it, as `NetworkVpnService.start` sets it now.
         stop_running();
         assert!(!set_chain(Some(a_chain(10_807))), "no engine runs yet");
         assert!(start_next(None, |given| started(&mut seen, given)));

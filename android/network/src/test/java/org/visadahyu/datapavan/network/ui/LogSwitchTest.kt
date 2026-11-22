@@ -65,7 +65,7 @@ class LogSwitchTest {
 
     /** Once seen, a proxy stays seen while Watch runs, between two engines too; Watch stopped, none is. */
     @Test
-    fun aProxySeenStaysSeenWhileWatchRuns() {
+    fun aProxySeenStaysSeenWhileTheTunnelRuns() {
         assertTrue(LogSwitch.seen(before = false, running = true) { counters(inferred = 1) })
         assertTrue(LogSwitch.seen(before = true, running = true) { LongArray(0) })
         assertFalse(LogSwitch.seen(before = true, running = false) { counters(inferred = 1) })

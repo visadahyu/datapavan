@@ -28,7 +28,7 @@ ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 APK="${1:-$ROOT/android/app/build-advanced/outputs/apk/debug/app-debug.apk}"
 PKG=org.visadahyu.datapavan.advanced
 # Watch's screen in Datapavan Advanced (ADR 0045); debug builds export it for these checks.
-WATCH_SCREEN=org.visadahyu.datapavan.network.MainActivity
+NETWORK_SCREEN=org.visadahyu.datapavan.network.MainActivity
 TOOL=org.visadahyu.datapavan.testtool
 WORKLOAD=org.visadahyu.datapavan.workload
 TOOL_PORT=10870
@@ -59,7 +59,7 @@ cleanup() {
 trap cleanup EXIT
 host_server --sentinel "$WORK/sentinel.log" || exit 1
 
-dump() { adb shell dumpsys activity service "$PKG/org.visadahyu.datapavan.network.WatchVpnService" "$@" | tr -d '\r'; }
+dump() { adb shell dumpsys activity service "$PKG/org.visadahyu.datapavan.network.NetworkVpnService" "$@" | tr -d '\r'; }
 # When the engine's counters began, then its counter at place $1, counting from 1, as Watch's dump prints
 # them, from one dump: two reads with another beginning span an engine Watch started afresh, whose
 # counters began again at 0 (unit 9b, fix round 2).
@@ -124,7 +124,7 @@ tool_log | grep -q "^listening $TOOL_PORT" || fail "the test tool does not liste
 allow_vpn "$PKG" || fail "Android did not take the VPN consent for $PKG"
 [ "$(adb shell getprop ro.build.version.sdk | tr -d '\r')" -lt 37 ] || adb shell pm grant "$PKG" android.permission.ACCESS_LOCAL_NETWORK
 adb shell am force-stop "$PKG"
-adb shell am start -W -n "$PKG/$WATCH_SCREEN" --ez start true >/dev/null
+adb shell am start -W -n "$PKG/$NETWORK_SCREEN" --ez start true >/dev/null
 for _ in $(seq 1 20); do vpn_up && break; sleep 1; done
 vpn_up || fail "Watch's tunnel did not come up"
 echo "ok: the tunnel is up for every app"
@@ -210,7 +210,7 @@ for _ in $(seq 1 10); do [ "$(tool_log | grep -c "^listening")" -gt "$listening"
 # Back to Watch as a user comes back to it, which makes it look for the tool again.
 adb shell input keyevent KEYCODE_HOME
 sleep 1
-adb shell am start -W -n "$PKG/$WATCH_SCREEN" >/dev/null
+adb shell am start -W -n "$PKG/$NETWORK_SCREEN" >/dev/null
 SWITCH="Send apps through Datapavan test tool"
 # A search that missed the listening tool is a defect of Watch's, which a user sees as "not answering"
 # (docs/ci-flakes.md, "Defects found by flakes"): the check looks once more, so that the rest of the screen
@@ -242,7 +242,7 @@ search_offers_tool() {
 reopen_screen() {
     adb shell input keyevent KEYCODE_HOME
     sleep 1
-    adb shell am start -W -n "$PKG/$WATCH_SCREEN" >/dev/null
+    adb shell am start -W -n "$PKG/$NETWORK_SCREEN" >/dev/null
 }
 # True once the screen shows the text $1 from the tool's section, after at most one more search.
 screen_says() {
@@ -448,7 +448,7 @@ echo "ok: on the screen, \"Now\" shows the picked app through the tool and the t
 
 # Back on the screen, which looks for the tool again: its proxy now asks for a password. The user then
 # allows UDP, and the picked app's datagrams go through the tool's relay.
-adb shell am start -W -n "$PKG/$WATCH_SCREEN" >/dev/null
+adb shell am start -W -n "$PKG/$NETWORK_SCREEN" >/dev/null
 UDP_SWITCH="Send UDP through Datapavan test tool too"
 screen_says "The proxy of Datapavan test tool asks for a password, so other apps on this phone cannot use it." ||
     fail "the chain screen did not say that the tool's proxy now asks for a password"
@@ -506,7 +506,7 @@ fi
 adb shell am force-stop "$TOOL"
 adb shell input keyevent KEYCODE_HOME
 sleep 1
-adb shell am start -W -n "$PKG/$WATCH_SCREEN" >/dev/null
+adb shell am start -W -n "$PKG/$NETWORK_SCREEN" >/dev/null
 for _ in $(seq 1 30); do screen_has "$WAITING" && break; sleep 1; done
 screen_has "$WAITING" || fail "with the tool stopped and the chain on, the screen did not say that the tool does not answer"
 scroll_to_top
@@ -539,7 +539,7 @@ workload_reaches() {
     for _ in $(seq 1 20); do [ "$(workload_log | grep -c "^tcp $HOST:$PORT pong$" || true)" -gt "$before" ] && return 0; sleep 1; done
     return 1
 }
-adb shell am start -W -n "$PKG/$WATCH_SCREEN" >/dev/null
+adb shell am start -W -n "$PKG/$NETWORK_SCREEN" >/dev/null
 seen=$(workload_flows_now)
 tap_text "Choose apps to leave out" || fail "the screen has no button to leave apps out"
 tap_text "Datapavan workload" || fail "the workload app is not in the list of apps to leave out"

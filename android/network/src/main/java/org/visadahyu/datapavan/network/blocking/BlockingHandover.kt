@@ -9,7 +9,7 @@ import java.util.concurrent.Future
 import org.visadahyu.datapavan.network.Engine
 
 /**
- * Hands tracker blocking to the engine for [org.visadahyu.datapavan.network.WatchVpnService] (W8, part 3a; ADR 0053), on
+ * Hands tracker blocking to the engine for [org.visadahyu.datapavan.network.NetworkVpnService] (W8, part 3a; ADR 0053), on
  * a thread of its own, one handover at a time, since it reads the data pack, the apps installed, the audit's scan and
  * signing certificates: the table at the tunnel's start and whenever the pack's changed, and the setting, whole, at the
  * start and whenever anything it depends on changed. What it read of the phone is kept between handovers, so that a

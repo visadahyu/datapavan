@@ -27,7 +27,7 @@ set -euo pipefail
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 APK="${1:-$ROOT/android/app/build-advanced/outputs/apk/debug/app-debug.apk}"
 PKG=org.visadahyu.datapavan.advanced
-WATCH_SCREEN=org.visadahyu.datapavan.network.MainActivity
+NETWORK_SCREEN=org.visadahyu.datapavan.network.MainActivity
 FIXTURE=org.visadahyu.datapavan.blockfixture
 A=$FIXTURE.a
 B=$FIXTURE.b
@@ -57,7 +57,7 @@ cleanup() {
 }
 trap cleanup EXIT
 
-dump() { adb shell dumpsys activity service "$PKG/org.visadahyu.datapavan.network.WatchVpnService" "$@" | tr -d '\r'; }
+dump() { adb shell dumpsys activity service "$PKG/org.visadahyu.datapavan.network.NetworkVpnService" "$@" | tr -d '\r'; }
 fixture_log() { adb logcat -d -s DatapavanBlockingFixture | tr -d '\r' | sed -n 's/.*DatapavanBlockingFixture: //p'; }
 fail() {
     echo "BLOCKING CHECK FAILED: $*" >&2
@@ -133,7 +133,7 @@ B_UID=$(uid_of "$B")
 [ -n "$A_UID" ] && [ -n "$B_UID" ] && [ -n "$(uid_of "$BROWSER")" ] || fail "the fixtures did not install"
 allow_vpn "$PKG" || fail "Android did not take the VPN consent for $PKG"
 [ "$(adb shell getprop ro.build.version.sdk | tr -d '\r')" -lt 37 ] || adb shell pm grant "$PKG" android.permission.ACCESS_LOCAL_NETWORK
-adb shell am start -W -n "$PKG/$WATCH_SCREEN" --ez start true >/dev/null
+adb shell am start -W -n "$PKG/$NETWORK_SCREEN" --ez start true >/dev/null
 for _ in $(seq 1 20); do vpn_up && break; sleep 1; done
 vpn_up || fail "Watch's tunnel did not come up"
 set_resolver=$(sed -n 's/^ *dns-network-resolver-set //p' <<<"$(dump dns-network-resolver "$HOST:$DNS_PORT")")
@@ -145,7 +145,7 @@ set_resolver=$(sed -n 's/^ *dns-network-resolver-set //p' <<<"$(dump dns-network
 ok "with blocking off, the lab's names resolve through Watch"
 
 # Blocking on, by its switch on Watch's screen; the browser is said to be left out.
-adb shell am start -W -n "$PKG/$WATCH_SCREEN" --activity-clear-top >/dev/null
+adb shell am start -W -n "$PKG/$NETWORK_SCREEN" --activity-clear-top >/dev/null
 tap_text "Block trackers" || fail "Watch's screen has no switch \"Block trackers\""
 state=""
 for _ in $(seq 1 10); do
@@ -231,12 +231,12 @@ done
 ok "one tap blocked B again: its lookup got none ${stopped} s after the tap"
 
 # 5. The pause, which names no app.
-adb shell am start -W -n "$PKG/$WATCH_SCREEN" --activity-clear-top >/dev/null
+adb shell am start -W -n "$PKG/$NETWORK_SCREEN" --activity-clear-top >/dev/null
 tap_text "Pause blocking for 10 minutes" || fail "Watch's screen has no \"Pause blocking for 10 minutes\""
 paused=""
 for _ in $(seq 1 20); do [ "$(lookup "$A" "$TRACKER")" = "ok $HOST" ] && { paused=yes; break; }; done
 [ -n "$paused" ] || fail "the pause did not lift A's block"
-adb shell am start -W -n "$PKG/$WATCH_SCREEN" --activity-clear-top >/dev/null
+adb shell am start -W -n "$PKG/$NETWORK_SCREEN" --activity-clear-top >/dev/null
 tap_text "Block again now" || fail "Watch's screen has no \"Block again now\" while paused"
 again=""
 for _ in $(seq 1 20); do [ "$(lookup "$A" "$TRACKER")" = none ] && { again=yes; break; }; done
@@ -245,7 +245,7 @@ ok "the pause lifted every block, and \"Block again now\" ended it"
 
 # 6. The browser: left out by default, blocked once included.
 [ "$(lookup "$BROWSER" "$TRACKER")" = "ok $HOST" ] || fail "the browser was blocked though browsers are left out"
-adb shell am start -W -n "$PKG/$WATCH_SCREEN" --activity-clear-top >/dev/null
+adb shell am start -W -n "$PKG/$NETWORK_SCREEN" --activity-clear-top >/dev/null
 tap_text "Also block in browsers" || fail "Watch's screen has no \"Also block in browsers\""
 included=""
 for _ in $(seq 1 20); do [ "$(lookup "$BROWSER" "$TRACKER")" = none ] && { included=yes; break; }; done

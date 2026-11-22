@@ -23,7 +23,7 @@ class ProxyRowTest {
      * as a fact, never "its own". The header stands for the destination, and the row links to the switch.
      */
     @Test
-    fun aProxyLeftOutSaysHowWatchKnowsAndLinksToTheSwitch() {
+    fun aProxyLeftOutSaysHowItIsKnownAndLinksToTheSwitch() {
         val telegram = ProxyFacts.of(LogRecord.Proxy(LogRecord.PROXY_MTPROTO, outsideMaker = true, leftOut = true), zeros, 0)
         val now = proxyRow(telegram, past = false)
         assertEquals(ProxyLine(R.string.now_proxy_hidden, ProxyFacts.Kind.MTPROTO), now.header)
@@ -51,7 +51,7 @@ class ProxyRowTest {
 
     /** With the switch on, a declared proxy and an inferred one say how Watch knows in their first line. */
     @Test
-    fun aProxyKeptSaysWhereAndHowWatchKnows() {
+    fun aProxyKeptSaysWhereAndHowItIsKnown() {
         val socks = ProxyFacts.of(
             LogRecord.Proxy(LogRecord.PROXY_SOCKS5, asked = "example.org", askedPort = 443, organisation = "Hetzner Online GmbH"), hetzner, 1080,
         )

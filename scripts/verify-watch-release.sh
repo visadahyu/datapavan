@@ -62,7 +62,7 @@ fail() {
     echo "How Watch's process last ended:" >&2
     adb shell dumpsys activity exit-info "$PKG" 2>/dev/null | tr -d '\r' | grep -E 'timestamp=|reason=' | head -6 >&2 || true
     echo "Watch's own account:" >&2
-    adb shell dumpsys activity service "$PKG/org.visadahyu.datapavan.network.WatchVpnService" 2>/dev/null | tr -d '\r' | sed -n 's/^ *//p' | tail -10 >&2 || true
+    adb shell dumpsys activity service "$PKG/org.visadahyu.datapavan.network.NetworkVpnService" 2>/dev/null | tr -d '\r' | sed -n 's/^ *//p' | tail -10 >&2 || true
     exit 1
 }
 
@@ -76,10 +76,10 @@ vpn_up() {
 
 # Watch's counters (Counters::snapshot in core/net/src/engine.rs), and its log's status line.
 counters() {
-    adb shell dumpsys activity service "$PKG/org.visadahyu.datapavan.network.WatchVpnService" | tr -d '\r' | sed -n 's/^ *counters //p'
+    adb shell dumpsys activity service "$PKG/org.visadahyu.datapavan.network.NetworkVpnService" | tr -d '\r' | sed -n 's/^ *counters //p'
 }
 log_line() {
-    adb shell dumpsys activity service "$PKG/org.visadahyu.datapavan.network.WatchVpnService" | tr -d '\r' | sed -n 's/^ *log retention //p'
+    adb shell dumpsys activity service "$PKG/org.visadahyu.datapavan.network.NetworkVpnService" | tr -d '\r' | sed -n 's/^ *log retention //p'
 }
 
 # Watch's memory, PSS in KB.
@@ -157,7 +157,7 @@ echo "ok: the release build's log gets records ($records)"
 # The debug builds' ways in are not in a release build (W7's fix round, and part 2's store, key and picture
 # commands): its dump takes no tunnel, route or chain and prints no tunnel's state and no flow's route. The file named does not exist; a build that read the
 # commands would say so.
-gate=$(adb shell dumpsys activity service "$PKG/org.visadahyu.datapavan.network.WatchVpnService" \
+gate=$(adb shell dumpsys activity service "$PKG/org.visadahyu.datapavan.network.NetworkVpnService" \
     tunnel-add 1 none.conf tunnel-route 2000 1 tunnel-remove 1 tunnel-store tunnel-key-time tunnel-key-probe open \
     qr-decode none.png | tr -d '\r')
 if grep -qE '^ *(tunnel|tunnel-[a-z-]+|flow-route|flow|chain|qr-[a-z]+) ' <<<"$gate"; then
@@ -167,7 +167,7 @@ echo "ok: the release build's dump takes no tunnel, no store, key or picture com
 
 # Nor the encrypted resolver's (W8, part 1): no setting, no lab tables, no validation from the check; and its state
 # names the kind of way alone, never which resolver.
-gate=$(adb shell dumpsys activity service "$PKG/org.visadahyu.datapavan.network.WatchVpnService" \
+gate=$(adb shell dumpsys activity service "$PKG/org.visadahyu.datapavan.network.NetworkVpnService" \
     dns-apply dns-strict on dns-choice odoh dns-validated off dns-pairs default | tr -d '\r')
 if grep -qE '^ *dns-(applied|validated-set) ' <<<"$gate"; then
     fail "the release build's dump answered a DNS debug command: $(grep -E '^ *dns-(applied|validated-set)' <<<"$gate" | head -2 | tr '\n' ' ')"

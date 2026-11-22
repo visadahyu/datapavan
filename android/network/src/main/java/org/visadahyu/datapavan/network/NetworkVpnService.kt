@@ -43,7 +43,7 @@ import org.visadahyu.datapavan.network.log.LogRecord
  * and with [VpnService.SERVICE_INTERFACE] when the user made Watch the always-on VPN. Both start the
  * tunnel. Android binds to the service while the tunnel is up, which keeps it running (ADR 0034).
  */
-class WatchVpnService : VpnService() {
+class NetworkVpnService : VpnService() {
     private var active = false
 
     /** The tunnel's addresses for this run (ADR 0041): the common ones, unless a network beneath uses them. */
@@ -141,9 +141,9 @@ class WatchVpnService : VpnService() {
      */
     private val exchanger = org.visadahyu.datapavan.network.dns.Exchanger(
         object : org.visadahyu.datapavan.network.dns.Exchanger.Host {
-            override fun protect(socket: java.net.Socket): Boolean = this@WatchVpnService.protect(socket)
+            override fun protect(socket: java.net.Socket): Boolean = this@NetworkVpnService.protect(socket)
 
-            override fun protect(socket: java.net.DatagramSocket): Boolean = this@WatchVpnService.protect(socket)
+            override fun protect(socket: java.net.DatagramSocket): Boolean = this@NetworkVpnService.protect(socket)
 
             override val network: Network? get() = current
 
@@ -1215,7 +1215,7 @@ class WatchVpnService : VpnService() {
     }
 
     /**
-     * `adb shell dumpsys activity service org.visadahyu.datapavan.advanced/org.visadahyu.datapavan.network.WatchVpnService`:
+     * `adb shell dumpsys activity service org.visadahyu.datapavan.advanced/org.visadahyu.datapavan.network.NetworkVpnService`:
      * the engine's counters, with when they began ([countersSince]), and Private DNS, and in debug builds
      * the flows it kept and Private DNS's provider, for the end-to-end test (scripts/verify-watch.sh).
      * Release builds print no destination and no provider.

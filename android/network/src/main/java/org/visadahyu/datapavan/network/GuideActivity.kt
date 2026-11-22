@@ -18,7 +18,7 @@ import org.visadahyu.datapavan.network.guides.GuideView
 import org.visadahyu.datapavan.network.guides.Guides
 import org.visadahyu.datapavan.network.guides.ToolLabels
 import org.visadahyu.datapavan.network.ui.GuideScreen
-import org.visadahyu.datapavan.network.ui.WatchTheme
+import org.visadahyu.datapavan.network.ui.NetworkTheme
 
 /**
  * One tool's guide for proxy mode (W8, part 3b; ADR 0041, "How the per-tool guides are built"), in Watch's process,
@@ -38,7 +38,7 @@ class GuideActivity : ComponentActivity() {
         ScreenProtection.attach(this, screenshotsForTests = testBuild && intent.getBooleanExtra(EXTRA_SCREENSHOTS, false))
         val id = intent.getStringExtra(EXTRA_GUIDE)
         val packageName = intent.getStringExtra(EXTRA_PACKAGE)
-        setContent { WatchTheme { GuideScreen(view.value) } }
+        setContent { NetworkTheme { GuideScreen(view.value) } }
         Thread {
             val book = Guides.book(this)
             val guide = id?.let(book::guide) ?: packageName?.let(book::guideOf)

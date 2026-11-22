@@ -61,14 +61,14 @@ capture() {
 
 # Whether Watch's own account says its tunnel runs (--now).
 watch_running() {
-    grep -qx 'running true' <<<"$(adb shell dumpsys activity service "$PKG/org.visadahyu.datapavan.network.WatchVpnService" | tr -d '\r' | sed 's/^ *//')"
+    grep -qx 'running true' <<<"$(adb shell dumpsys activity service "$PKG/org.visadahyu.datapavan.network.NetworkVpnService" | tr -d '\r' | sed 's/^ *//')"
 }
 
 # Whether Watch counts traffic of adb's shell, after one more request to the test server (--now).
 shell_counted() {
     adb shell "printf 'GET /ping HTTP/1.0\r\n\r\n' | nc -w 5 $HOST $PORT" >/dev/null 2>&1 || true
     sleep 2
-    grep -q '^activity-app 2000 ' <<<"$(adb shell dumpsys activity service "$PKG/org.visadahyu.datapavan.network.WatchVpnService" | tr -d '\r' | sed 's/^ *//')"
+    grep -q '^activity-app 2000 ' <<<"$(adb shell dumpsys activity service "$PKG/org.visadahyu.datapavan.network.NetworkVpnService" | tr -d '\r' | sed 's/^ *//')"
 }
 
 # Advanced's "Now" and an app's history (--now): Watch's tunnel up for adb's shell, which asks a test server on
@@ -80,7 +80,7 @@ now_screens() {
     # shellcheck source=scripts/host-ports.sh
     . "$ROOT/scripts/host-ports.sh"
     host_server || exit 1
-    trap 'adb shell dumpsys activity service "$PKG/org.visadahyu.datapavan.network.WatchVpnService" log-retention 0 >/dev/null 2>&1 || true; adb shell appops set "$PKG" GET_USAGE_STATS default >/dev/null 2>&1 || true; kill "$SERVER" 2>/dev/null || true; adb shell cmd uimode night no >/dev/null 2>&1 || true; adb shell cmd locale set-app-locales "$PKG" --locales en >/dev/null 2>&1 || true; adb shell rm -f "$DUMP" >/dev/null 2>&1 || true' EXIT
+    trap 'adb shell dumpsys activity service "$PKG/org.visadahyu.datapavan.network.NetworkVpnService" log-retention 0 >/dev/null 2>&1 || true; adb shell appops set "$PKG" GET_USAGE_STATS default >/dev/null 2>&1 || true; kill "$SERVER" 2>/dev/null || true; adb shell cmd uimode night no >/dev/null 2>&1 || true; adb shell cmd locale set-app-locales "$PKG" --locales en >/dev/null 2>&1 || true; adb shell rm -f "$DUMP" >/dev/null 2>&1 || true' EXIT
     allow_vpn "$PKG" || { echo "SCREENSHOTS FAILED: no VPN consent for $PKG" >&2; exit 1; }
     adb shell appops set "$PKG" GET_USAGE_STATS allow
     for mode in light dark; do
@@ -92,12 +92,12 @@ now_screens() {
             within 20 watch_running || { echo "SCREENSHOTS FAILED: Watch's tunnel did not come up in $locale" >&2; exit 1; }
             # The log kept for a week, so that the history shows the shell's entries and the days' buttons, not
             # only the line of a log that keeps nothing (review c1 of W5's third part, screens, nit 13).
-            grep -q '^log-retention 7 set$' <<<"$(adb shell dumpsys activity service "$PKG/org.visadahyu.datapavan.network.WatchVpnService" log-retention 7 | tr -d '\r' | sed 's/^ *//')" ||
+            grep -q '^log-retention 7 set$' <<<"$(adb shell dumpsys activity service "$PKG/org.visadahyu.datapavan.network.NetworkVpnService" log-retention 7 | tr -d '\r' | sed 's/^ *//')" ||
                 { echo "SCREENSHOTS FAILED: the log's retention could not be set in $locale" >&2; exit 1; }
             # The request again until Watch counts it: just after the tunnel starts, Android may not route it yet.
             within 30 shell_counted || { echo "SCREENSHOTS FAILED: Watch did not count the shell's request in $locale" >&2; exit 1; }
             # The shell's records written now, so that its history shows them, not "nothing kept yet".
-            grep -q '^log-flushed$' <<<"$(adb shell dumpsys activity service "$PKG/org.visadahyu.datapavan.network.WatchVpnService" log-flush | tr -d '\r' | sed 's/^ *//')" ||
+            grep -q '^log-flushed$' <<<"$(adb shell dumpsys activity service "$PKG/org.visadahyu.datapavan.network.NetworkVpnService" log-flush | tr -d '\r' | sed 's/^ *//')" ||
                 { echo "SCREENSHOTS FAILED: the log's records were not written in $locale" >&2; exit 1; }
             # "Now" for the shell alone, whose row is the first below the view's top.
             adb shell am start -n "$PKG/$watch" --activity-clear-top --ez now true --es now_package com.android.shell \

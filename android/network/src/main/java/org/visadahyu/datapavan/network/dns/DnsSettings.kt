@@ -6,7 +6,7 @@ import androidx.core.content.edit
 import java.io.File
 import org.visadahyu.datapavan.datapack.DataPackStore
 import org.visadahyu.datapavan.network.Engine
-import org.visadahyu.datapavan.network.WatchPacks
+import org.visadahyu.datapavan.network.NetworkPacks
 
 /**
  * The user's setting for the names of apps that go directly (W8, part 1, ADR 0042): their own resolver (a preset, or
@@ -191,7 +191,7 @@ class DnsSettings private constructor(private val prefs: SharedPreferences) {
                 return listOf("relays.tsv", "targets.tsv", "pairs.tsv", "presets.tsv").map { File(lab, it).takeIf(File::isFile)?.readText().orEmpty() }
             }
             val store = try {
-                DataPackStore.read(context, WatchPacks)
+                DataPackStore.read(context, NetworkPacks)
             } catch (e: RuntimeException) {
                 return List(4) { "" }
             }
@@ -217,7 +217,7 @@ class DnsSettings private constructor(private val prefs: SharedPreferences) {
          * accepts no search domain at all.
          */
         fun suffixes(context: Context): PublicSuffixes = try {
-            PublicSuffixes.parse(DataPackStore.read(context, WatchPacks).text(SUFFIXES).orEmpty())
+            PublicSuffixes.parse(DataPackStore.read(context, NetworkPacks).text(SUFFIXES).orEmpty())
         } catch (e: RuntimeException) {
             PublicSuffixes.parse("")
         }

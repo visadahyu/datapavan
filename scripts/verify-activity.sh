@@ -29,7 +29,7 @@ set -euo pipefail
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 APK="${1:-$ROOT/android/app/build-advanced/outputs/apk/debug/app-debug.apk}"
 PKG=org.visadahyu.datapavan.advanced
-WATCH_SCREEN=org.visadahyu.datapavan.network.MainActivity
+NETWORK_SCREEN=org.visadahyu.datapavan.network.MainActivity
 # The workload app under three package names, three apps: on screen, in the background, with a service.
 SCREEN_APP=org.visadahyu.datapavan.workload
 BACKGROUND_APP=org.visadahyu.datapavan.workload.b
@@ -70,9 +70,9 @@ fail() {
     exit 1
 }
 
-# Watch's own account, with debug commands (WatchVpnService.debugActivity).
+# Watch's own account, with debug commands (NetworkVpnService.debugActivity).
 watch_dump() {
-    adb shell dumpsys activity service "$PKG/org.visadahyu.datapavan.network.WatchVpnService" "$@" | tr -d '\r' | sed 's/^ *//'
+    adb shell dumpsys activity service "$PKG/org.visadahyu.datapavan.network.NetworkVpnService" "$@" | tr -d '\r' | sed 's/^ *//'
 }
 
 uid_of() { adb shell cmd package list packages -U "$1" | tr -d '\r' | sed -n "s/^package:$1 uid:\([0-9]*\)$/\1/p"; }
@@ -141,7 +141,7 @@ adb shell svc power stayon true
 adb shell input keyevent KEYCODE_WAKEUP
 adb shell wm dismiss-keyguard >/dev/null 2>&1 || true
 adb shell am force-stop "$PKG"
-adb shell am start -W -n "$PKG/$WATCH_SCREEN" --ez start true >/dev/null
+adb shell am start -W -n "$PKG/$NETWORK_SCREEN" --ez start true >/dev/null
 for _ in $(seq 1 20); do vpn_up && break; sleep 1; done
 vpn_up || fail "Watch's tunnel did not come up"
 echo "ok: the tunnel is up, with usage access"
@@ -392,7 +392,7 @@ for other in "$SCREEN_APP" "$BACKGROUND_APP" "$NOTICE_APP"; do
         fail "\"Now\" opened for $page shows $other too"
 done
 echo "ok: the audit's page of $page opens \"Now\" for that app"
-adb shell am start -W -n "$PKG/$WATCH_SCREEN" --activity-clear-top >/dev/null
+adb shell am start -W -n "$PKG/$NETWORK_SCREEN" --activity-clear-top >/dev/null
 
 # Item 6: without usage access, the dump says so, and the shell's flow has no state.
 adb shell appops set "$PKG" GET_USAGE_STATS deny
