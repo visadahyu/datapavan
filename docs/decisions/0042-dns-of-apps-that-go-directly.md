@@ -35,7 +35,9 @@ leaves every direct app without names.
 
 Answered by part 1 (2026-11-20), as far as it goes: **which relays and targets**, the datasets and the defaults
 above, with sh2o out; whether the project runs or sponsors a relay stays the maintainer's (a project relay paired
-only with other operators' targets adds a jurisdiction; running both halves would be collusion by design).
+only with other operators' targets adds a jurisdiction; running both halves would be collusion by design). The
+maintainer chose a relay of the project's own on 2026-11-21: [ADR 0055](0055-an-odoh-relay-of-the-projects-own.md)
+(proposed).
 **Fallbacks in filtered networks**: the ladder, its holds and strict above; still open at the frontier, and left
 for later with reasons: DNS over QUIC and DoH3 (no hook for the socket or the resolver in Android's HttpEngine),
 SNI left out and a ClientHello split on retry, per endpoint (no dataset field for them yet), and ODoH's reachability

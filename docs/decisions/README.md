@@ -61,6 +61,7 @@ in the Git history.
 | [0051](0051-two-lanes-and-an-analysis-machine.md) | Two lanes of work, and an isolated machine for suspect apps | Accepted |
 | [0052](0052-apps-built-in-proxies.md) | Apps' built-in proxies named: read from the connection, or inferred with substitution | Proposed |
 | [0053](0053-tracker-blocking.md) | Tracker blocking: hosts graded by what they do, the same in every app, refused before a byte leaves, undone in one tap | Proposed |
+| [0055](0055-an-odoh-relay-of-the-projects-own.md) | An Oblivious DoH relay of the project's own, and a bounded exception to ADR 0016 | Proposed |
 
 ## Template
 

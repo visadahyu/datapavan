@@ -3,6 +3,8 @@
 - Status: Accepted
 - Date: 2026-10-30
 - Decided by: mehdashti
+- Revisited in part by: [0055](0055-an-odoh-relay-of-the-projects-own.md) (proposed), a bounded exception for an ODoH
+  relay of the project's own
 
 ## Context
 Remediation needs knowledge: which preinstalled packages are safe to disable on which phones, which apps
