@@ -217,11 +217,11 @@ pub(crate) mod tests {
     #[test]
     fn reads_the_name_from_one_record_or_several() {
         let found = ServerName::Found(Hello {
-            name: "watch.test".into(),
+            name: "network.test".into(),
             ech: false,
         });
-        assert_eq!(server_name(&hello("Watch.Test", 1000)), found);
-        assert_eq!(server_name(&hello("watch.test", 20)), found);
+        assert_eq!(server_name(&hello("Network.Test", 1000)), found);
+        assert_eq!(server_name(&hello("network.test", 20)), found);
     }
 
     #[test]
@@ -248,7 +248,7 @@ pub(crate) mod tests {
 
     #[test]
     fn waits_for_more_and_gives_up_on_other_streams() {
-        let stream = hello("watch.test", 20);
+        let stream = hello("network.test", 20);
         for cut in 0..stream.len() {
             assert_eq!(
                 server_name(&stream[..cut]),

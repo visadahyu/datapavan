@@ -312,7 +312,7 @@ gone_id() {
 # Watch's view "Now" (ADR 0046) in the edition $1, a debug build, for the app $2 alone, opened through Watch's
 # screen and read from a uiautomator dump, kept in the file $3, by now-screen.py: its output once the app's row
 # shows with bytes, or the last reading after 20 s.
-watch_now() {
+network_now() {
     local read=""
     adb shell am start -n "$1/org.visadahyu.datapavan.network.MainActivity" --activity-clear-top --ez now true --es now_package "$2" >/dev/null
     for _ in $(seq 1 20); do

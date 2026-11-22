@@ -281,7 +281,7 @@ if [ -f "$ADVANCED_APK" ]; then
     # Whether the names' section's limits quote $1, the screen opened afresh in the language $2. The sentence holds
     # quotes, which the dump may write in other quotes, so the line above it, as that language's file has it, leads
     # there.
-    watch_says() {
+    network_says() {
         local above
         above=$(sed -n 's/.*<string name="dns_local_names">\([^<]*\)<.*/\1/p' "$ROOT/android/network/src/main/res/$2/strings.xml" | sed "s/\\\\'/'/g")
         adb shell am force-stop "$ADVANCED"
@@ -295,12 +295,12 @@ if [ -f "$ADVANCED_APK" ]; then
     }
     set_app_language "$ADVANCED" en
     quoted="\"$RLI$always_fa$PDI ($LRI$always_en$PDI)\" switch"
-    watch_says "$quoted" values || fail "with the phone in Persian, the names' section does not quote $quoted"
+    network_says "$quoted" values || fail "with the phone in Persian, the names' section does not quote $quoted"
     echo "ok: phone in Persian, Advanced in English: the names' section quotes $quoted"
     set_phone_locale en-US || fail "the phone's language did not change back to English"
     set_app_language "$ADVANCED" fa
     quoted="\"$LRI$always_en$PDI ($RLI$always_fa$PDI)\" switch"
-    watch_says "$quoted" values-fa || fail "with Advanced in Persian, the names' section does not quote $quoted"
+    network_says "$quoted" values-fa || fail "with Advanced in Persian, the names' section does not quote $quoted"
     echo "ok: phone in English, Advanced in Persian: the names' section quotes $quoted"
     adb shell cmd locale set-app-locales "$ADVANCED" --locales en
 else

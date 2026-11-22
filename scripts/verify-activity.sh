@@ -2,7 +2,7 @@
 # End-to-end check of the live counters behind Watch's view "Now" (W5, ADR 0046, decision 6, items 1 and 6;
 # item 5 is in verify-chain.sh, which has the tool), on an emulator only: it installs three copies of the
 # workload app (scripts/workload-app), grants usage access and keeps the screen on with adb, and puts both
-# back at the end. It starts the test server (scripts/watch-lab/server.py) on ports of this computer found
+# back at the end. It starts the test server (scripts/network-lab/server.py) on ports of this computer found
 # free (scripts/host-ports.sh), starts Watch's tunnel, and checks, from Watch's debug dump, which prints no
 # destination:
 #
@@ -71,14 +71,14 @@ fail() {
 }
 
 # Watch's own account, with debug commands (NetworkVpnService.debugActivity).
-watch_dump() {
+network_dump() {
     adb shell dumpsys activity service "$PKG/org.visadahyu.datapavan.network.NetworkVpnService" "$@" | tr -d '\r' | sed 's/^ *//'
 }
 
 uid_of() { adb shell cmd package list packages -U "$1" | tr -d '\r' | sed -n "s/^package:$1 uid:\([0-9]*\)$/\1/p"; }
 
-# The view "Now" for the app $1 alone, read from the screen (adb-ui.sh's watch_now).
-now_screen() { watch_now "$PKG" "$1" "$SCREENS/now.xml"; }
+# The view "Now" for the app $1 alone, read from the screen (adb-ui.sh's network_now).
+now_screen() { network_now "$PKG" "$1" "$SCREENS/now.xml"; }
 
 # From now-screen.py's output $1: bytes sent (field 3) or received (4) in the state $2, or 0.
 screen_bytes() { awk -v state="$2" -v field="${3:-3}" '$1 == "bytes" && $2 == state { print $field; found = 1 } END { if (!found) print 0 }' <<<"$1"; }
@@ -91,7 +91,7 @@ vpn_up() {
     grep -q "OwnerUid: $uid " <<<"$vpns" && return 0
     # Android 10 names no VPN's owner there: a VPN connected, and Watch's own account that its tunnel runs.
     [ "$(adb shell getprop ro.build.version.sdk | tr -d '\r')" -lt 30 ] && grep -q 'state: CONNECTED/CONNECTED' <<<"$vpns" &&
-        grep -qx 'running true' <<<"$(watch_dump)"
+        grep -qx 'running true' <<<"$(network_dump)"
 }
 
 workload_log() { adb logcat -d -s DatapavanWorkload | tr -d '\r' | sed -n 's/.*DatapavanWorkload: //p'; }
@@ -101,7 +101,7 @@ logged() { workload_log | sed -n "s/^$1 $2 \([0-9]*\).*/\1/p" | tail -1; }
 
 # The live view now: one app's line ("activity-app UID ..."), or nothing. The dump is read whole before grep
 # reads it: under pipefail, a grep that stops reading early fails the pipe.
-app_line() { grep "^activity-app $1 " <<<"$(watch_dump)" || true; }
+app_line() { grep "^activity-app $1 " <<<"$(network_dump)" || true; }
 
 # From an app's line: bytes up (2) or down (3) in window $2 (10m, 1h, screen) and column $3 (0 no state, 1 in
 # use, 2 with its notification, 3 in the background, 4 not told yet).
@@ -148,7 +148,7 @@ echo "ok: the tunnel is up, with usage access"
 # The table of trackers "Now" marks with (ADR 0046, decision 2 (d)): the εxodus network signatures of the data
 # pack the audit verifies, read in Watch's process by Watch's own library, one alternative outside the subset
 # refused; and a test's own name, not traffic of the run, found as the two trackers whose signatures name it.
-trackers=$(watch_dump activity-tracker x.doubleclick.net 443)
+trackers=$(network_dump activity-tracker x.doubleclick.net 443)
 read -r _ with_signature alternatives refused <<<"$(grep '^activity-trackers ' <<<"$trackers")"
 [ "${alternatives:-0}" -gt 600 ] && [ "${refused:-}" = 1 ] ||
     fail "the table of trackers is not read from the data pack: $(grep '^activity-tracker' <<<"$trackers" | tr '\n' ';')"
@@ -156,7 +156,7 @@ grep -q '^activity-tracker Google DoubleClick,Google AdMob$' <<<"$trackers" ||
     fail "the trackers of a name are not found: $(grep '^activity-tracker ' <<<"$trackers")"
 echo "ok: \"Now\" reads $alternatives network signatures of $with_signature trackers from the data pack, $refused refused, and finds a name's"
 # The log keeps what the engine writes, for its records' states below.
-grep -q '^log-retention 30 set$' <<<"$(watch_dump log-retention 30)" || fail "retention could not be set to 30 days"
+grep -q '^log-retention 30 set$' <<<"$(network_dump log-retention 30)" || fail "retention could not be set to 30 days"
 
 adb logcat -c
 # A foreground service, which sends 35 s after its screen leaves, for 20 s.
@@ -176,13 +176,13 @@ screen_sent=$(logged "$SCREEN_APP" stay-sent)
 echo "  sent: in the background $background_sent bytes (before, on screen, $on_screen_sent), from the service $notice_sent, on screen $screen_sent"
 # The states told up to two seconds ago: past the last bytes.
 sleep 4
-grep -q '^activity-read true$' <<<"$(watch_dump activity-read)" || fail "the tracker did not read the states"
-grep -q '^activity-states states ' <<<"$(watch_dump)" || fail "the dump does not say the states are known: $(grep '^activity-states' <<<"$(watch_dump)")"
+grep -q '^activity-read true$' <<<"$(network_dump activity-read)" || fail "the tracker did not read the states"
+grep -q '^activity-states states ' <<<"$(network_dump)" || fail "the dump does not say the states are known: $(grep '^activity-states' <<<"$(network_dump)")"
 
 background=$(app_line "$BACKGROUND_UID")
 notice=$(app_line "$NOTICE_UID")
 screen=$(app_line "$SCREEN_UID")
-[ -n "$background" ] && [ -n "$notice" ] && [ -n "$screen" ] || fail "an app is missing from the live view: $(watch_dump | grep '^activity-app' | tr '\n' ';')"
+[ -n "$background" ] && [ -n "$notice" ] && [ -n "$screen" ] || fail "an app is missing from the live view: $(network_dump | grep '^activity-app' | tr '\n' ';')"
 echo "  $background"
 echo "  $notice"
 echo "  $screen"
@@ -226,7 +226,7 @@ if [ "$(adb shell getprop ro.build.version.sdk | tr -d '\r')" -ge 33 ]; then
     within 120 silent_sent || fail "the service of the app whose notifications are off did not log what it sent"
     silent=$(logged "$NOTICE_APP" service-sent)
     sleep 4
-    grep -q '^activity-read true$' <<<"$(watch_dump activity-read)" || fail "the tracker did not read the states"
+    grep -q '^activity-read true$' <<<"$(network_dump activity-read)" || fail "the tracker did not read the states"
     notice=$(app_line "$NOTICE_UID")
     echo "  $notice"
     within_5 "$(up "$notice" 10m 3)" "$silent" ||
@@ -236,12 +236,12 @@ if [ "$(adb shell getprop ro.build.version.sdk | tr -d '\r')" -ge 33 ]; then
     echo "ok: a foreground service of an app whose notifications are off is in the background"
 fi
 # How late the usage events came into Android's record; a reading leaves them 2 seconds (ADR 0046).
-echo "  $(grep '^activity-late ' <<<"$(watch_dump)")"
+echo "  $(grep '^activity-late ' <<<"$(network_dump)")"
 grep -q " now=in-use " <<<"$screen" || fail "the app on screen is not in use now: $screen"
 
 # The log's records of the long connection: in use, then in the background, cut where it left the screen.
-grep -q '^log-flushed$' <<<"$(watch_dump log-flush)" || fail "the log did not take the engine's records"
-records=$(watch_dump log-today | sed -n "s/^log-record tcp $BACKGROUND_UID ${HOST//./\\.}:$PORT //p")
+grep -q '^log-flushed$' <<<"$(network_dump log-flush)" || fail "the log did not take the engine's records"
+records=$(network_dump log-today | sed -n "s/^log-record tcp $BACKGROUND_UID ${HOST//./\\.}:$PORT //p")
 grep -q " state=in-use " <<<"$records" && grep -q " state=background " <<<"$records" ||
     fail "the log's records of the connection opened on screen do not carry both states: $(tr '\n' ';' <<<"$records")"
 echo "ok: the log's records of the connection carry its app's state, in use and then in the background"
@@ -312,9 +312,9 @@ adb shell input keyevent KEYCODE_WAKEUP
 adb shell wm dismiss-keyguard >/dev/null 2>&1 || true
 adb shell svc power stayon true
 sleep 4
-grep -q '^activity-read true$' <<<"$(watch_dump activity-read)" || fail "the tracker did not read after the screen came on"
-read -r _ off_from off_until <<<"$(grep '^activity-off ' <<<"$(watch_dump)")"
-[ "${off_from:-0}" -gt 0 ] && [ "${off_until:-0}" -gt "$off_from" ] || fail "no window while the screen was off: $(grep '^activity-off' <<<"$(watch_dump)")"
+grep -q '^activity-read true$' <<<"$(network_dump activity-read)" || fail "the tracker did not read after the screen came on"
+read -r _ off_from off_until <<<"$(grep '^activity-off ' <<<"$(network_dump)")"
+[ "${off_from:-0}" -gt 0 ] && [ "${off_until:-0}" -gt "$off_from" ] || fail "no window while the screen was off: $(grep '^activity-off' <<<"$(network_dump)")"
 background=$(app_line "$BACKGROUND_UID")
 echo "  screen off for $(( (off_until - off_from) / 1000 )) s; $background"
 within_5 "$(up "$background" off 3)" "$sent_off" ||
@@ -324,7 +324,7 @@ off_screen=$(now_screen "$BACKGROUND_APP")
 read -r _ off_apps off_bytes <<<"$(grep '^off ' <<<"$off_screen")"
 # The line holds what the dump holds, and no more: the apps but the tool that sent in the background while
 # the screen was off, and their bytes sent (review c1 of W5's third part, screens, m6: checked from below only).
-read -r dump_apps dump_bytes <<<"$(watch_dump | python3 -I -c '
+read -r dump_apps dump_bytes <<<"$(network_dump | python3 -I -c '
 import sys
 apps = total = 0
 for line in sys.stdin:
@@ -399,8 +399,8 @@ adb shell appops set "$PKG" GET_USAGE_STATS deny
 answer=$(timeout 15 adb shell "printf 'GET /ping HTTP/1.0\r\n\r\n' | nc -w 5 $HOST $PORT" | tr -d '\r' || true)
 grep -q '^pong$' <<<"$answer" || fail "no answer over TCP from the test server"
 sleep 4
-grep -q '^activity-read true$' <<<"$(watch_dump activity-read)" || fail "the tracker did not read without usage access"
-grep -q '^activity-states no-access ' <<<"$(watch_dump)" || fail "the dump does not say usage access is missing: $(grep '^activity-states' <<<"$(watch_dump)")"
+grep -q '^activity-read true$' <<<"$(network_dump activity-read)" || fail "the tracker did not read without usage access"
+grep -q '^activity-states no-access ' <<<"$(network_dump)" || fail "the dump does not say usage access is missing: $(grep '^activity-states' <<<"$(network_dump)")"
 shell=$(app_line "$SHELL_UID")
 echo "  $shell"
 grep -q " now=none-no-access " <<<"$shell" || fail "the shell's state now is not 'none, no usage access': $shell"

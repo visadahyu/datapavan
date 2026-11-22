@@ -321,9 +321,9 @@ BUDGET_LOOKUPS=100
 BUDGET_P50_ABOVE_MS=100
 BUDGET_P95_ABOVE_MS=250
 BUDGET_PLAIN_P50_MS=100
-watch_pid=$(adb shell pidof "$PKG:network" | tr -d '\r')
-[ -n "$watch_pid" ] || watch_pid=$(adb shell pidof "$PKG" | tr -d '\r')
-cpu() { adb shell cat "/proc/$watch_pid/stat" | tr -d '\r' | awk '{print $14 + $15}'; }
+network_pid=$(adb shell pidof "$PKG:network" | tr -d '\r')
+[ -n "$network_pid" ] || network_pid=$(adb shell pidof "$PKG" | tr -d '\r')
+cpu() { adb shell cat "/proc/$network_pid/stat" | tr -d '\r' | awk '{print $14 + $15}'; }
 # Looks the names $1 (by commas) up in the workload app, in order, in one process (fresh names: no cache answers);
 # prints how many of them it logged an answer or a failure for.
 lookups() {

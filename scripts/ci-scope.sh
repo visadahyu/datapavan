@@ -275,7 +275,7 @@ emulator core/net/src/engine.rs
 emulator core/README.md
 emulator core/Cargo.lock
 emulator rust-toolchain.toml
-emulator scripts/verify-watch.sh
+emulator scripts/verify-network.sh
 emulator scripts/adb-ui.sh
 emulator scripts/emulator-shard.sh
 emulator scripts/test-tool/src/Tool.java
@@ -404,16 +404,16 @@ TABLE
         for shard in $listed; do echo "$full emulator $shard success"; done
         echo "$full repository success"
         echo "$failing build success"
-        for shard in $listed; do echo "$failing emulator $shard $([ "$shard" = watch ] && echo failure || echo success)"; done
+        for shard in $listed; do echo "$failing emulator $shard $([ "$shard" = network ] && echo failure || echo success)"; done
         echo "$build_only build success"
         for shard in $listed; do echo "$build_only emulator $shard skipped"; done
         echo "$legacy checks success"
         # Two runs of one commit, each missing a shard the other passed.
         echo "$half build success"
-        for shard in $listed; do echo "$half emulator $shard $([ "$shard" = watch ] && echo success || echo failure)"; done
+        for shard in $listed; do echo "$half emulator $shard $([ "$shard" = network ] && echo success || echo failure)"; done
         echo "$half --"
         echo "$half build success"
-        for shard in $listed; do echo "$half emulator $shard $([ "$shard" = watch ] && echo failure || echo success)"; done
+        for shard in $listed; do echo "$half emulator $shard $([ "$shard" = network ] && echo failure || echo success)"; done
         echo "$wg_failed build success"
         for shard in $listed; do echo "$wg_failed emulator $shard $([ "$shard" = wireguard ] && echo failure || echo success)"; done
     } >"$work/jobs"
@@ -431,21 +431,21 @@ TABLE
 full           build=false emulator=false wireguard=false shards=[]
 docs           build=false emulator=false wireguard=false shards=[]
 lab            build=true emulator=false wireguard=false shards=[]
-app            build=true emulator=true wireguard=true shards=["watch","audit","screens","dns","proxies","blocking","wireguard"]
-again          build=true emulator=true wireguard=true shards=["watch","audit","screens","dns","proxies","blocking","wireguard"]
-moved          build=true emulator=true wireguard=true shards=["watch","audit","screens","dns","proxies","blocking","wireguard"]
-failing        build=true emulator=true wireguard=false shards=["watch","audit","screens","dns","proxies","blocking"]
-fixed          build=true emulator=true wireguard=false shards=["watch","audit","screens","dns","proxies","blocking"]
+app            build=true emulator=true wireguard=true shards=["network","audit","screens","dns","proxies","blocking","wireguard"]
+again          build=true emulator=true wireguard=true shards=["network","audit","screens","dns","proxies","blocking","wireguard"]
+moved          build=true emulator=true wireguard=true shards=["network","audit","screens","dns","proxies","blocking","wireguard"]
+failing        build=true emulator=true wireguard=false shards=["network","audit","screens","dns","proxies","blocking"]
+fixed          build=true emulator=true wireguard=false shards=["network","audit","screens","dns","proxies","blocking"]
 build_only     build=false emulator=false wireguard=false shards=[]
 none_proved    build=false emulator=false wireguard=false shards=[]
-half           build=true emulator=true wireguard=false shards=["watch","audit","screens","dns","proxies","blocking"]
-symlink        build=true emulator=true wireguard=true shards=["watch","audit","screens","dns","proxies","blocking","wireguard"]
-submodule      build=true emulator=true wireguard=true shards=["watch","audit","screens","dns","proxies","blocking","wireguard"]
-unproved       build=true emulator=true wireguard=true shards=["watch","audit","screens","dns","proxies","blocking","wireguard"]
+half           build=true emulator=true wireguard=false shards=["network","audit","screens","dns","proxies","blocking"]
+symlink        build=true emulator=true wireguard=true shards=["network","audit","screens","dns","proxies","blocking","wireguard"]
+submodule      build=true emulator=true wireguard=true shards=["network","audit","screens","dns","proxies","blocking","wireguard"]
+unproved       build=true emulator=true wireguard=true shards=["network","audit","screens","dns","proxies","blocking","wireguard"]
 legacy         build=true emulator=false wireguard=true shards=["wireguard"]
 legacy_docs    build=true emulator=false wireguard=true shards=["wireguard"]
-wg_only        build=true emulator=true wireguard=true shards=["watch","audit","screens","dns","proxies","blocking","wireguard"]
-not_wg         build=true emulator=true wireguard=false shards=["watch","audit","screens","dns","proxies","blocking"]
+wg_only        build=true emulator=true wireguard=true shards=["network","audit","screens","dns","proxies","blocking","wireguard"]
+not_wg         build=true emulator=true wireguard=false shards=["network","audit","screens","dns","proxies","blocking"]
 wg_failed      build=true emulator=false wireguard=true shards=["wireguard"]
 wg_failed_docs build=true emulator=false wireguard=true shards=["wireguard"]
 CASES

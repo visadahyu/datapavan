@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # End-to-end check of Watch's connection log, milestone W4 (docs/DESIGN.md 13.2, ADR 0037), on an
 # emulator only: it sets a screen-lock PIN and locks the screen, which a phone's owner would not want.
-# It starts the test server (scripts/watch-lab/server.py), carries a TCP and a UDP flow of adb's shell
+# It starts the test server (scripts/network-lab/server.py), carries a TCP and a UDP flow of adb's shell
 # (UID 2000) through Watch, has the engine hand over its records at once (a debug command), and checks:
 # that the log holds both flows with their bytes; that the database files hold no destination in the
 # clear; that Watch's log output names no destination; that an earlier day cannot be opened while the
@@ -33,7 +33,7 @@ is_emulator || {
 }
 HOST=10.0.2.2
 # The test server, started on ports of this computer found free and held until the check ends
-# (scripts/host-ports.sh): WATCH_TEST_PORT, or a base picked from 8790 up.
+# (scripts/host-ports.sh): NETWORK_TEST_PORT, or a base picked from 8790 up.
 # shellcheck source=scripts/host-ports.sh
 . "$ROOT/scripts/host-ports.sh"
 
@@ -58,18 +58,18 @@ fail() {
 }
 
 # Watch's own account, with debug commands (NetworkVpnService.debugLog).
-watch_dump() {
+network_dump() {
     adb shell dumpsys activity service "$PKG/org.visadahyu.datapavan.network.NetworkVpnService" "$@" | tr -d '\r' | sed 's/^ *//'
 }
 
 log_line() {
-    watch_dump | sed -n 's/^log retention //p'
+    network_dump | sed -n 's/^log retention //p'
 }
 
 # The days of the log's rows ("records") or key rows ("keys") as the file holds them, one per line,
 # read before anything runs expiry.
 raw_days() {
-    watch_dump log-raw | sed -n 's/^log-raw //p' | python3 -I -c '
+    network_dump log-raw | sed -n 's/^log-raw //p' | python3 -I -c '
 import sys
 fields = sys.stdin.read().split()
 table = fields[fields.index(sys.argv[1]) + 1] if sys.argv[1] in fields else "-"
@@ -88,7 +88,7 @@ lock_sentence() {
         grep -E '^(Records of earlier days|This phone has no PIN, pattern or password|This phone did not let Watch)' | head -1 | grep . || echo none
 }
 
-start_watch() {
+start_network() {
     adb shell am start -W -n "$PKG/$NETWORK_SCREEN" --ez start true >/dev/null
     for _ in $(seq 1 20); do vpn_up && break; sleep 1; done
     vpn_up || fail "Watch's tunnel did not come up"
@@ -121,8 +121,8 @@ print(up, down)' "$SHELL_UID"
 
 # The log's count of the same, as "up down": every record of the shell today, as the tunnel carried it.
 log_bytes() {
-    watch_dump log-flush >/dev/null
-    watch_dump log-today | sed -n 's/^log-record //p' | python3 -I -c '
+    network_dump log-flush >/dev/null
+    network_dump log-today | sed -n 's/^log-record //p' | python3 -I -c '
 import re, sys
 uid, up, down = sys.argv[1], 0, 0
 for line in sys.stdin:
@@ -161,10 +161,10 @@ for _ in $(seq 1 20); do vpn_up && break; sleep 1; done
 vpn_up || fail "Watch's tunnel did not come up"
 echo "ok: the tunnel is up"
 # Watch's debug commands need its service running; the test starts from an empty log.
-watch_dump log-wipe | grep -q '^log-wiped true$' || fail "the log could not be wiped before the test"
+network_dump log-wipe | grep -q '^log-wiped true$' || fail "the log could not be wiped before the test"
 # The log keeps nothing until the user chooses (ADR 0040). The checks below keep 30 days.
 log_line | grep -qE '^0 days ' || fail "a new install's log keeps records: $(log_line)"
-watch_dump log-retention 30 | grep -q '^log-retention 30 set$' || fail "retention could not be set to 30 days"
+network_dump log-retention 30 | grep -q '^log-retention 30 set$' || fail "retention could not be set to 30 days"
 # The screen reads the retention when it opens: it opens afresh, as after the user chose 30 days there.
 adb shell am start -W -n "$PKG/$NETWORK_SCREEN" -f 0x10008000 >/dev/null
 echo "ok: a new install's log keeps nothing until the user chooses"
@@ -172,13 +172,13 @@ echo "ok: a new install's log keeps nothing until the user chooses"
 request='GET /ping HTTP/1.0\r\n\r\n'
 answer=$(timeout 15 adb shell "printf '$request' | nc -w 5 $HOST $PORT" | tr -d '\r' || true)
 grep -q '^pong$' <<<"$answer" || fail "no answer over TCP from the test server"
-answer=$(timeout 8 adb shell "echo watch-log | nc -u -w 3 $HOST $((PORT + 1))" | tr -d '\r' || true)
-grep -q '^watch-log$' <<<"$answer" || fail "no UDP echo"
+answer=$(timeout 8 adb shell "echo probe-log | nc -u -w 3 $HOST $((PORT + 1))" | tr -d '\r' || true)
+grep -q '^probe-log$' <<<"$answer" || fail "no UDP echo"
 
 # The TCP flow has ended, but its rewriting stays for half a minute, for what Android's stack still
 # sends, and the UDP flow stays open for a minute: the log gets each one's segment so far.
-watch_dump log-flush | grep -q '^log-flushed$' || fail "the log did not take the engine's records"
-today=$(watch_dump log-today | sed -n 's/^log-record //p')
+network_dump log-flush | grep -q '^log-flushed$' || fail "the log did not take the engine's records"
+today=$(network_dump log-today | sed -n 's/^log-record //p')
 grep -qE "^tcp $SHELL_UID $HOST:$PORT up=22 down=[1-9][0-9]* (continues|ended) " <<<"$today" ||
     fail "the log has no TCP flow of the shell with its 22 bytes up: $(grep -c . <<<"$today") records"
 # A network change, as on a freshly started emulator, ends UDP flows: then the segment is the whole flow.
@@ -200,7 +200,7 @@ fi
 
 # A flow open when the tunnel stops still reaches the log: the engine hands over its last records. The
 # tunnel stops once Watch lists the new connection, which stays open for 8 s.
-shell_tcp_flows() { watch_dump </dev/null | grep -cE "^flow tcp [^ ]+ ${HOST//./\\.}:$PORT $SHELL_UID opened " || true; }
+shell_tcp_flows() { network_dump </dev/null | grep -cE "^flow tcp [^ ]+ ${HOST//./\\.}:$PORT $SHELL_UID opened " || true; }
 flows_before=$(shell_tcp_flows)
 more_tcp_flows() { [ "$(shell_tcp_flows)" -gt "$flows_before" ]; }
 timeout 20 adb shell "sleep 8 | nc -w 10 $HOST $PORT" </dev/null >/dev/null 2>&1 &
@@ -212,7 +212,7 @@ wait "$talking" 2>/dev/null || true
 adb shell am start -W -n "$PKG/$NETWORK_SCREEN" --ez start true >/dev/null
 for _ in $(seq 1 20); do vpn_up && break; sleep 1; done
 vpn_up || fail "Watch's tunnel did not come up again"
-stopped_flow_logged() { grep -qE "^log-record tcp $SHELL_UID $HOST:$PORT up=0 down=0 ended " <<<"$(watch_dump log-today)"; }
+stopped_flow_logged() { grep -qE "^log-record tcp $SHELL_UID $HOST:$PORT up=0 down=0 ended " <<<"$(network_dump log-today)"; }
 within 15 stopped_flow_logged || fail "a flow open when the tunnel stopped did not reach the log within 15 s"
 echo "ok: a flow open when the tunnel stops reaches the log"
 
@@ -225,10 +225,10 @@ for _ in 1 2 3; do
 done
 timeout 60 adb shell "(printf 'POST /sink HTTP/1.0\r\nContent-Length: 1000000\r\n\r\n'; head -c 1000000 /dev/zero) | nc -w 10 $HOST $PORT > /dev/null" || true
 for i in 1 2 3 4 5; do
-    timeout 10 adb shell "echo watch-$i | nc -u -q 1 $HOST $((PORT + 1))" >/dev/null || true
+    timeout 10 adb shell "echo probe-$i | nc -u -q 1 $HOST $((PORT + 1))" >/dev/null || true
 done
 for name in example.com example.org example.net; do
-    timeout 10 adb shell "echo watch | nc -u -q 1 $name 9" >/dev/null 2>&1 || true
+    timeout 10 adb shell "echo probe | nc -u -q 1 $name 9" >/dev/null 2>&1 || true
 done
 # Both counts are read once they have stopped growing, two reads two seconds apart the same, for up to
 # 30 s: Android's statistics and the engine's last records both arrive a moment after the traffic.
@@ -256,8 +256,8 @@ PY
 echo "ok: over a scripted session the log's bytes are within 5 % of Android's own count"
 # Each download's packets on the tunnel hold at least its payload: none of them was counted after the
 # flow's last segment was written (as before 2026-11-10, when a download lost up to a quarter).
-watch_dump log-flush >/dev/null
-watch_dump log-today | sed -n 's/^log-record //p' | python3 -I -c '
+network_dump log-flush >/dev/null
+network_dump log-today | sed -n 's/^log-record //p' | python3 -I -c '
 import collections, re, sys
 down, wire = collections.Counter(), collections.Counter()
 for line in sys.stdin:
@@ -279,7 +279,7 @@ for file in log.db log.db-journal log.db-wal; do
     adb exec-out run-as "$PKG" cat "databases/$file" >"$files/$file" 2>/dev/null || true
 done
 [ -s "$files/log.db" ] || fail "no log database"
-if grep -aqE "10\.0\.2\.2|watch\.test|example\.(com|org)|8\.8\.8\.8" "$files"/*; then
+if grep -aqE "10\.0\.2\.2|network\.test|example\.(com|org)|8\.8\.8\.8" "$files"/*; then
     fail "a destination is in the log's files in the clear"
 fi
 # As bytes too (bash cannot hold the zero byte, so Python looks).
@@ -290,19 +290,19 @@ rm -rf "$files"
 echo "ok: the log's files hold no destination in the clear"
 
 uid=$(adb shell cmd package list packages -U "$PKG" | tr -d '\r' | sed -n "s/^package:$PKG uid:\([0-9]*\)$/\1/p")
-if adb logcat -d --uid="$uid" 2>/dev/null | grep -qE "10\.0\.2\.2|watch\.test|example\.(com|org)|8\.8\.8\.8"; then
+if adb logcat -d --uid="$uid" 2>/dev/null | grep -qE "10\.0\.2\.2|network\.test|example\.(com|org)|8\.8\.8\.8"; then
     fail "a destination reached logcat"
 fi
 echo "ok: no destination in Watch's logcat"
 
 # An earlier day opens only on an unlocked phone. Only today's day key stays in memory.
 earlier=$(($(local_day) - 3))
-watch_dump log-test-day "$earlier" | grep -q "^log-test-day $earlier written$" || fail "no test record for an earlier day"
-watch_dump log-day "$earlier" | grep -q "^log-day $earlier open 1$" || fail "the earlier day did not open on an unlocked phone"
+network_dump log-test-day "$earlier" | grep -q "^log-test-day $earlier written$" || fail "no test record for an earlier day"
+network_dump log-day "$earlier" | grep -q "^log-day $earlier open 1$" || fail "the earlier day did not open on an unlocked phone"
 adb shell locksettings set-pin "$PIN" >/dev/null
 PIN_SET=1
 adb shell input keyevent KEYCODE_SLEEP
-earlier_day() { watch_dump log-day "$earlier" | sed -n "s/^log-day $earlier //p"; }
+earlier_day() { network_dump log-day "$earlier" | sed -n "s/^log-day $earlier //p"; }
 earlier_is() { result=$(earlier_day); [ "$result" = "$1" ]; }
 within 15 earlier_is locked || fail "the earlier day was '$result' 15 s after the phone was locked"
 # The PIN is typed once Android shows its keyguard's PIN entry, and typed again only while Android still
@@ -340,7 +340,7 @@ adb shell locksettings clear --old "$PIN" >/dev/null
 PIN_SET=""
 echo "ok: an earlier day is locked with the phone, and opens once it is unlocked"
 
-watch_dump log-wipe | grep -q '^log-wiped true$' || fail "the wipe did not finish"
+network_dump log-wipe | grep -q '^log-wiped true$' || fail "the wipe did not finish"
 left=$(adb shell run-as "$PKG" ls databases 2>/dev/null | tr -d '\r' | grep -E '^log\.db' || true)
 [ -z "$left" ] || fail "the wipe left files: $left"
 log_line | grep -qE ' records 0 key-rows 0 key false ' || fail "the wipe left records or the key: $(log_line)"
@@ -350,30 +350,30 @@ echo "ok: the wipe leaves no file and no key"
 # days) is never read, and leaves the file, with its key row, when Watch's process starts again.
 now=$(local_day)
 past=$((now - 40))
-watch_dump log-put-day "$past" | grep -q "^log-put-day $past written$" || fail "no record put back for day $past"
+network_dump log-put-day "$past" | grep -q "^log-put-day $past written$" || fail "no record put back for day $past"
 raw_days records | grep -qx "$past" && raw_days keys | grep -qx "$past" || fail "the record put back for day $past is not in the file"
-result=$(watch_dump log-day "$past" | sed -n "s/^log-day $past //p")
+result=$(network_dump log-day "$past" | sed -n "s/^log-day $past //p")
 [ "$result" = "open 0" ] || fail "day $past, past retention, gave '$result'"
 raw_days records | grep -qx "$past" || fail "reading day $past deleted it: the read alone must not be what keeps it out"
 adb shell am force-stop "$PKG"
-start_watch
+start_network
 ! raw_days records | grep -qx "$past" && ! raw_days keys | grep -qx "$past" || fail "day $past, past retention, is still in the file after Watch started again"
 echo "ok: a day past retention is never read, and leaves the file when Watch starts again"
 
 # A shorter retention deletes at once what it no longer keeps; "none" leaves no file and no key.
 earlier=$((now - 3))
 for day in "$earlier" "$now"; do
-    watch_dump log-test-day "$day" | grep -q "^log-test-day $day written$" || fail "no test record for day $day"
+    network_dump log-test-day "$day" | grep -q "^log-test-day $day written$" || fail "no test record for day $day"
 done
-watch_dump log-retention 1 | grep -q '^log-retention 1 set$' || fail "retention could not be set to 1 day"
+network_dump log-retention 1 | grep -q '^log-retention 1 set$' || fail "retention could not be set to 1 day"
 days=$(raw_days records; raw_days keys)
 grep -qx "$now" <<<"$days" || fail "retention 1 deleted today's records"
 ! grep -qvx "$now" <<<"$days" || fail "retention 1 left earlier days in the file: $(sort -u <<<"$days" | tr '\n' ' ')"
-watch_dump log-retention 0 | grep -q '^log-retention 0 set$' || fail "retention could not be set to none"
+network_dump log-retention 0 | grep -q '^log-retention 0 set$' || fail "retention could not be set to none"
 left=$(adb shell run-as "$PKG" ls databases 2>/dev/null | tr -d '\r' | grep -E '^log\.db' || true)
 [ -z "$left" ] || fail "retention none left files: $left"
 log_line | grep -qE '^0 days 0 records 0 key-rows 0 key false ' || fail "retention none left records or the key: $(log_line)"
-watch_dump log-retention 30 | grep -q '^log-retention 30 set$' || fail "retention could not be set back to 30 days"
+network_dump log-retention 30 | grep -q '^log-retention 30 set$' || fail "retention could not be set back to 30 days"
 echo "ok: a shorter retention deletes at once, and none leaves no file and no key"
 
 # The log's model test (LogModel): random sequences of writes, reads, clock and time-zone changes,
@@ -381,10 +381,10 @@ echo "ok: a shorter retention deletes at once, and none leaves no file and no ke
 # each checked against a model of what the log must and must not give back.
 seed=${LOG_MODEL_SEED:-$(od -An -N4 -tu4 /dev/urandom | tr -d ' ')}
 steps=${LOG_MODEL_STEPS:-300}
-watch_dump log-model "$seed" "$steps" | grep -q "^log-model started seed $seed steps $steps$" || fail "the model test did not start"
+network_dump log-model "$seed" "$steps" | grep -q "^log-model started seed $seed steps $steps$" || fail "the model test did not start"
 result=""
 for _ in $(seq 1 360); do
-    result=$(watch_dump log-model-result | grep '^log-model ' || true)
+    result=$(network_dump log-model-result | grep '^log-model ' || true)
     case "$result" in "log-model running"*) sleep 5 ;; *) break ;; esac
 done
 echo "  $result"

@@ -1498,7 +1498,7 @@ pub(crate) mod tests {
     /// byte changed names no flow and is no QUIC (unit 9b, fix round 1).
     #[test]
     fn the_hello_is_read_only_from_a_packet_whose_tag_checks() {
-        let hello = tls::tests::handshake("watch.test", false);
+        let hello = tls::tests::handshake("network.test", false);
         let packet = initial_packet(1, &hex(CID), 0, &crypto(0, &hello), 1200);
         let mut damaged = packet.clone();
         let last = damaged.len() - 1;
@@ -1506,7 +1506,7 @@ pub(crate) mod tests {
         let mut initial = Initial::new();
         assert_eq!(initial.push(&damaged), ServerName::None);
         assert!(!initial.is_quic());
-        assert_eq!(Initial::new().push(&packet), found("watch.test", false));
+        assert_eq!(Initial::new().push(&packet), found("network.test", false));
     }
 
     /// RFC 9369 A.3's server Initial, sealed byte for byte from its frames, and opened with its tag
@@ -1606,7 +1606,7 @@ pub(crate) mod tests {
     /// is sent, and nothing from a packet whose tag or frames fail, or from what is no Initial.
     #[test]
     fn asked_reads_the_ids_of_an_apps_initial_and_nothing_else() {
-        let hello = tls::tests::handshake("watch.test", false);
+        let hello = tls::tests::handshake("network.test", false);
         let (destination, source) = (hex("0011223344556677"), hex("a1a2a3a4"));
         for version in [1, 0x6b33_43cf] {
             let Some(packet) = client_initial(
@@ -1826,7 +1826,7 @@ pub(crate) mod tests {
     /// than the largest a client sends (fix round 3, review E: 16 Initials of 4,000 bytes cost 200 us).
     #[test]
     fn a_datagram_larger_than_a_client_sends_is_not_read() {
-        let hello = tls::tests::handshake("watch.test", false);
+        let hello = tls::tests::handshake("network.test", false);
         for (size, read) in [(LARGEST_DATAGRAM, true), (LARGEST_DATAGRAM + 1, false)] {
             let packet = initial_packet(1, &hex(CID), 0, &crypto(0, &hello), size);
             assert_eq!(packet.len(), size);
@@ -1837,7 +1837,7 @@ pub(crate) mod tests {
                 "{size} bytes, unopened"
             );
             let name = if read {
-                found("watch.test", false)
+                found("network.test", false)
             } else {
                 ServerName::None
             };
@@ -1991,7 +1991,7 @@ pub(crate) mod tests {
     /// read in the other version (fix round 2, review D's surviving mutants).
     #[test]
     fn each_version_has_its_own_keys() {
-        let hello = tls::tests::handshake("watch.test", false);
+        let hello = tls::tests::handshake("network.test", false);
         let cid = [0x42; 8];
         let (half, rest) = hello.split_at(hello.len() / 2);
         let first = initial_packet(1, &cid, 0, &crypto(0, half), 0);
@@ -1999,7 +1999,7 @@ pub(crate) mod tests {
         assert_eq!(asked(&[first.clone(), second.clone()].concat()).len(), 2);
         let mut initial = Initial::new();
         assert_eq!(initial.push(&first), ServerName::Incomplete);
-        assert_eq!(initial.push(&second), found("watch.test", false));
+        assert_eq!(initial.push(&second), found("network.test", false));
     }
 
     /// The hello's reader reads a datagram as [`asked`] does (fix round 2, review D): a packet after one to
@@ -2007,14 +2007,14 @@ pub(crate) mod tests {
     /// one there undoes the name, nor do a datagram's many tiny Initials cost more than a few.
     #[test]
     fn the_hellos_reader_reads_a_datagram_no_further_than_asked_does() {
-        let hello = tls::tests::handshake("watch.test", false);
+        let hello = tls::tests::handshake("network.test", false);
         let packet = initial_packet(1, &hex(CID), 0, &crypto(0, &hello), 0);
         let mut damaged = initial_packet(1, &[0x22; 8], 0, &[0x01], 0);
         let last = damaged.len() - 1;
         damaged[last] ^= 1;
         assert_eq!(
             Initial::new().push(&[packet.clone(), damaged].concat()),
-            found("watch.test", false)
+            found("network.test", false)
         );
         let tiny = |pn| initial_packet(1, &hex(CID), pn, &[0x01], 0);
         let mut many: Vec<u8> = (1..=u32::try_from(MOST_PACKETS).unwrap_or(0))
@@ -2133,12 +2133,12 @@ pub(crate) mod tests {
 
     #[test]
     fn reads_a_hello_in_one_packet_in_both_versions() {
-        let hello = tls::tests::handshake("watch.test", false);
+        let hello = tls::tests::handshake("network.test", false);
         for version in [1, 0x6b33_43cf] {
             let packet = initial_packet(version, &hex(CID), 0, &crypto(0, &hello), 1200);
             assert_eq!(packet.len(), 1200);
             let mut initial = Initial::new();
-            assert_eq!(initial.push(&packet), found("watch.test", false));
+            assert_eq!(initial.push(&packet), found("network.test", false));
             assert!(initial.is_quic());
         }
     }

@@ -115,7 +115,7 @@ workload() {
         sleep 1
     done
 }
-watch_screen() {
+network_screen() {
     adb shell input keyevent KEYCODE_WAKEUP
     adb shell am start -W -n "$PKG/$NETWORK_SCREEN" --activity-clear-top >/dev/null
     sleep 1
@@ -258,7 +258,7 @@ config "$WGLAB_PLAIN" 10.77.0.2 fd77::2 "$WGLAB_PORT" "$WGLAB_PEER_PUBLIC" "Incl
 adb push "$WORK/wg-import-one.conf" /sdcard/Download/wg-import-one.conf >/dev/null
 adb shell am broadcast -a android.intent.action.MEDIA_SCANNER_SCAN_FILE -d file:///sdcard/Download/wg-import-one.conf >/dev/null
 rm -f "$WORK/wg-import-one.conf"
-watch_screen
+network_screen
 tap_tag tunnel-add-file || fail "Watch's screen has no way to add a file"
 within 20 screen_has "wg-import-one.conf" || fail "the documents screen does not show the configuration's file"
 tap_text "wg-import-one.conf" || fail "the configuration's file could not be picked"
@@ -346,7 +346,7 @@ rm -f "$WORK/two.conf"
 adb push "$WORK/$PICTURE" "/sdcard/Pictures/$PICTURE" >/dev/null
 adb shell am broadcast -a android.intent.action.MEDIA_SCANNER_SCAN_FILE -d "file:///sdcard/Pictures/$PICTURE" >/dev/null
 adb logcat -c
-watch_screen
+network_screen
 tap_tag tunnel-add-picture || fail "Watch's screen has no way to choose a picture"
 # The picker names each picture by when it was taken, which for a pushed file is its time: this run's is the one
 # taken at its file's time, whatever else the picker holds.
@@ -372,11 +372,11 @@ echo "ok: a picture of a QR code, read in an isolated process, confirmed and set
 # Each app's way: the workload app moves to the second configuration and back.
 # The list and the app's choices stay open across visits of the screen, as the user left them.
 route_to() {
-    watch_screen
+    network_screen
     tap_tag "route-choice-$WORKLOAD-$1" && return 0
-    watch_screen
+    network_screen
     if ! tap_tag "route-$WORKLOAD"; then
-        watch_screen
+        network_screen
         tap_tag routes-open || fail "no list of each app's way"
         tap_tag "route-$WORKLOAD" || fail "the workload app is not in the list of ways"
     fi
@@ -485,7 +485,7 @@ echo "ok: no file of Watch's, its dump or the device's log holds a key or a conf
 # the cancel deletes the file.
 before=$(images)
 adb emu virtualscene-image wall "$WORK/$PICTURE" >/dev/null 2>&1 || true
-watch_screen
+network_screen
 tap_tag tunnel-add-camera || fail "Watch's screen has no way to take a photo"
 if within 15 has_id "$CAMERA_SHUTTER"; then
     tap_dumped_id "$CAMERA_SHUTTER"
@@ -504,7 +504,7 @@ else
     sleep 2
     # The camera app, with no camera, stops; Android hands Watch its answer when Watch's screen is in front again
     # (an emulator of Android 15 showed the launcher instead), and only then is the photo's file deleted.
-    watch_screen
+    network_screen
 fi
 within 10 no_capture || fail "the camera's photo was not deleted: $(capture_left)"
 [ "$(images)" = "$before" ] || fail "the camera left a copy in MediaStore ($before images before, $(images) after)"
@@ -563,7 +563,7 @@ adb shell locksettings clear --old "$PIN" >/dev/null && PIN=""
 echo "ok: under key B, Watch started again on the locked phone held the app, which sent nothing directly, and asked for the unlock in one notification naming no configuration; at the unlock the tunnel came back and the notification went"
 
 # 6. A configuration removed with its apps waiting holds the app: nothing of it leaves directly.
-watch_screen
+network_screen
 tap_tag tunnel-remove-1 || fail "no way to remove the first configuration"
 within 10 has_id tunnel-remove-wait || fail "the removal does not ask what its apps do"
 tap_dumped_id tunnel-remove-wait
@@ -632,7 +632,7 @@ sleep 3
 [ -z "$(sentinel_since)" ] || fail "with key A gone, an app reached this computer directly"
 [ "$(flows_of "$WORKLOAD_UID" direct)" = "$direct_before" ] || fail "with key A gone, the app has flows that went directly"
 grep -qx done <<<"$(workload_log)" || fail "the workload app did not run: the step above proves nothing"
-watch_screen
+network_screen
 tap_tag tunnel-lost-let-go || fail "Watch's screen does not offer to let the apps go their way"
 within 10 lost_notice none || fail "the notification stayed after the choice"
 lost_state && fail "the store was not forgotten after the choice"

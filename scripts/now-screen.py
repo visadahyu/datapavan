@@ -57,7 +57,7 @@ def row_end(lines, first, whole):
     """Where the row that holds lines[first] ends: before the next app's label, the line before the line
     before the next "Now: ...", since each row is its label, its package line and its state now; or at the
     section after the rows. A destination's name, however much it looks like a package, ends nothing (review
-    c1 of W5's third part, screens, M1: a row ended at `watch.test`, so a chained app's place went unseen)."""
+    c1 of W5's third part, screens, M1: a row ended at `network.test`, so a chained app's place went unseen)."""
     for i in range(first + 1, len(lines)):
         if lines[i].startswith("What this view cannot see"):
             return i
@@ -91,8 +91,8 @@ def self_test():
     chained = ["Now", "Workload", "org.example.w", "Now: in use", "Sent 22 B and received 142 B while you were using it.",
                "Sent through your circumvention tool. Where it connected is not shown, because x is off."]
     # A chained app's row that shows a place named like a package: the check of item 5 must see it.
-    shown = read([dump(chained + ["watch.test", "name the connection sent", "Sent 1 B, received 2 B"])], "org.example.w")
-    assert "place watch.test" in shown, shown
+    shown = read([dump(chained + ["network.test", "name the connection sent", "Sent 1 B, received 2 B"])], "org.example.w")
+    assert "place network.test" in shown, shown
     assert "through-tool" in shown and "bytes in-use 22 142" in shown, shown
     # The same row with no place: none read.
     assert not any(line.startswith("place ") for line in read([dump(chained)], "org.example.w"))

@@ -19,14 +19,14 @@
 set -euo pipefail
 
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
-SHARDS="watch audit screens dns proxies blocking wireguard"
+SHARDS="network audit screens dns proxies blocking wireguard"
 
 # The checks of shard $1, in order.
 checks_of() {
     case $1 in
         # Watch in Datapavan Advanced: its smoke test, its engine end to end, its chaining through a test
         # tool, the live counters by the apps' states, its connection log, and its release build as users get it.
-        watch) echo smoke-watch.sh verify-watch.sh verify-chain.sh verify-activity.sh verify-log.sh verify-watch-release.sh ;;
+        network) echo smoke-network.sh verify-network.sh verify-chain.sh verify-activity.sh verify-log.sh verify-network-release.sh ;;
         # Basic: its smoke test, which installs it, then the audit with its fixture, the remediation plan,
         # the launcher shortcuts, the data pack import, and Android's own labels with the screens that quote them
         # (ADR 0054), which also installs Advanced for its names' section; each skip there fails the shard where

@@ -37,7 +37,7 @@ import java.util.Map;
  * It is the check's server, not part of what a tool does; it holds the phone's loopback only.
  *
  *   am start-foreground-service -n org.visadahyu.datapavan.testtool/.ToolService \
- *       --ei port 10870 [--es user U --es password P] [--es map watch.test=10.0.2.2] [--ei stun 10871]
+ *       --ei port 10870 [--es user U --es password P] [--es map network.test=10.0.2.2] [--ei stun 10871]
  */
 public final class ToolService extends Service {
     private static final String TAG = "DatapavanTestTool";

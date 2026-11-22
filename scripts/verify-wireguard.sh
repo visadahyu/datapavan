@@ -176,7 +176,7 @@ adb uninstall "$WORKLOAD" >/dev/null 2>&1 || true
 adb install "$ROOT/build/workload-app/workload-app.apk" >/dev/null
 WORKLOAD_UID=$(adb shell cmd package list packages -U "$WORKLOAD" | tr -d '\r' | sed -n "s/^package:$WORKLOAD uid:\([0-9]*\)$/\1/p")
 [ -n "$WORKLOAD_UID" ] || fail "the workload app did not install"
-# Mobile data beside Wi-Fi, as verify-watch.sh has it, so that the switch below has a network to go to.
+# Mobile data beside Wi-Fi, as verify-network.sh has it, so that the switch below has a network to go to.
 DATA_ALWAYS_ON=$(adb shell settings get global mobile_data_always_on | tr -d '\r')
 adb shell settings put global mobile_data_always_on 1
 if ! wait_up 60; then
@@ -251,7 +251,7 @@ echo "ok: two configurations at once, the workload app through the first peer an
 # address: a new socket on the new network, and a packet from it.
 wait_up 30 wifi || fail "not both Wi-Fi and mobile data before the switch ($(networks)), so the switch has nowhere to go"
 # Wi-Fi goes off where it is the default; Android may already use mobile data as the default while Wi-Fi is up
-# (verify-watch.sh, CI, 2026-11-12), and then mobile data goes off, which moves the default to Wi-Fi.
+# (verify-network.sh, CI, 2026-11-12), and then mobile data goes off, which moves the default to Wi-Fi.
 from=$(default_network)
 wifi=$(sed -n 's/\(^\|.*;\)\([0-9]*\) WIFI[^ ;]* CONNECTED.*/\2/p' <<<"$(networks)")
 radio=data

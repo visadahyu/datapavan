@@ -3,15 +3,15 @@
 # (spikes/packet-engine/tools/measure.sh), run through Watch itself, so that Watch's engine CPU for the
 # spike's workload can be set against the spike's system engine. Watch's tunnel carries only the
 # spike's workload app (org.visadahyu.datapavan.watch.load, installed from the spike), which loads the
-# test server (scripts/watch-lab/server.py). Prints one line per measurement, then Watch's CPU time in
+# test server (scripts/network-lab/server.py). Prints one line per measurement, then Watch's CPU time in
 # clock ticks, its memory and its counters. Only the workload's own log lines are read.
 #
-#   ANDROID_SERIAL=... HOST=192.168.1.20:8790 scripts/watch-lab/measure.sh [rounds, default 3]
+#   ANDROID_SERIAL=... HOST=192.168.1.20:8790 scripts/network-lab/measure.sh [rounds, default 3]
 set -uo pipefail
 : "${ANDROID_SERIAL:?set ANDROID_SERIAL: this script never guesses the device}"
 ROUNDS=${1:-3}
 HOST=${HOST:-10.0.2.2:8790}
-WATCH=org.visadahyu.datapavan.advanced
+ADVANCED=org.visadahyu.datapavan.advanced
 LOAD=org.visadahyu.datapavan.watch.load
 DOWNLOAD_BYTES=${DOWNLOAD_BYTES:-50000000}
 UPLOAD_BYTES=${UPLOAD_BYTES:-20000000}
@@ -35,17 +35,17 @@ load() { # load TAG OP URL [extra am args...]: one workload run, prints its resu
 
 cpu_ticks() { # utime+stime of Watch, in clock ticks
     local pid
-    pid=$(adb shell pidof "$WATCH:network" | tr -d '\r')
+    pid=$(adb shell pidof "$ADVANCED:network" | tr -d '\r')
     [ -n "$pid" ] || { echo 0; return; }
     adb shell cat "/proc/$pid/stat" | tr -d '\r' | awk '{print $14 + $15}'
 }
 
 adb shell pm path "$LOAD" >/dev/null || { echo "the spike's workload app is not installed (spikes/packet-engine/README.md)"; exit 1; }
 SINCE="$(adb shell date +%s | tr -d '\r').000"
-adb shell am force-stop "$WATCH"
-adb shell am start -n "$WATCH/org.visadahyu.datapavan.network.MainActivity" --ez start true --es only_apps "$LOAD" >/dev/null
+adb shell am force-stop "$ADVANCED"
+adb shell am start -n "$ADVANCED/org.visadahyu.datapavan.network.MainActivity" --ez start true --es only_apps "$LOAD" >/dev/null
 sleep 3
-adb shell dumpsys activity service "$WATCH/org.visadahyu.datapavan.network.NetworkVpnService" | tr -d '\r' | grep -q 'running true' || { echo "Watch's tunnel did not start"; exit 1; }
+adb shell dumpsys activity service "$ADVANCED/org.visadahyu.datapavan.network.NetworkVpnService" | tr -d '\r' | grep -q 'running true' || { echo "Watch's tunnel did not start"; exit 1; }
 before=$(cpu_ticks)
 run=$(date +%s)
 for r in $(seq 1 "$ROUNDS"); do
@@ -56,7 +56,7 @@ for r in $(seq 1 "$ROUNDS"); do
     load "$run-r$r" rtt "http://$HOST/ping" --ei n 100
 done
 after=$(cpu_ticks)
-echo "cpu_ticks=$((after - before)) engine=watch"
-adb shell dumpsys meminfo "$WATCH:network" | tr -d '\r' | grep -E 'TOTAL PSS|TOTAL RSS|^ *TOTAL' | head -2 | sed 's/^ */meminfo: /'
-adb shell dumpsys activity service "$WATCH/org.visadahyu.datapavan.network.NetworkVpnService" | tr -d '\r' | grep -E '^ *counters' | sed 's/^ *//'
-adb shell am force-stop "$WATCH"
+echo "cpu_ticks=$((after - before)) engine=network"
+adb shell dumpsys meminfo "$ADVANCED:network" | tr -d '\r' | grep -E 'TOTAL PSS|TOTAL RSS|^ *TOTAL' | head -2 | sed 's/^ */meminfo: /'
+adb shell dumpsys activity service "$ADVANCED/org.visadahyu.datapavan.network.NetworkVpnService" | tr -d '\r' | grep -E '^ *counters' | sed 's/^ *//'
+adb shell am force-stop "$ADVANCED"

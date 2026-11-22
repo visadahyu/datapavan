@@ -35,7 +35,7 @@ object TunnelMtu {
      * probe toward: drawn anew at each measure, from .2 to .254. One address used every time could have
      * a path MTU of its own in the kernel, which an app that sends there and a host that forges a "too
      * big" for it could set, and so steer the tunnel's MTU (re-review of unit 12, minor 4). .1 is left
-     * to the checks that send there (scripts/verify-watch.sh).
+     * to the checks that send there (scripts/verify-network.sh).
      */
     fun towardV4(random: Random): InetAddress =
         InetAddress.getByAddress(byteArrayOf(192.toByte(), 0, 2, random.nextInt(2, 255).toByte()))

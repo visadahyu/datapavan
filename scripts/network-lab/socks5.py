@@ -6,7 +6,7 @@
 # printed as one line, "connect NAME-OR-ADDRESS PORT" or "associate", with "refused" when it was; no
 # payload is printed or kept. The emulator reaches it at 10.0.2.2.
 #
-#   python3 -I scripts/watch-lab/socks5.py PORT [--user USER --password PASSWORD] [--map NAME=ADDRESS ...]
+#   python3 -I scripts/network-lab/socks5.py PORT [--user USER --password PASSWORD] [--map NAME=ADDRESS ...]
 import argparse
 import asyncio
 import ipaddress

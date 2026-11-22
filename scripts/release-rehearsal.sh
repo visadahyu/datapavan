@@ -12,7 +12,7 @@
 #
 # The signed APK is named as a release's is, with the edition (ADR 0045; the maintainer, 2026-11-14):
 # datapavan-basic-<version>.apk or datapavan-advanced-<version>.apk. --install is for Basic only;
-# scripts/verify-watch-release.sh runs Advanced's release build on an emulator.
+# scripts/verify-network-release.sh runs Advanced's release build on an emulator.
 #
 #   scripts/release-rehearsal.sh [--install] [EDITION]    EDITION: basic (the default) or advanced
 set -euo pipefail
@@ -49,7 +49,7 @@ else
     code=$(sed -n 's/^ *if (advanced) { versionCode = \([0-9]*\); versionName = ".*" }$/\1/p' "$gradle")
 fi
 [ -n "$version" ] && [ -n "$code" ] || fail "android/app/build.gradle.kts gives $NAME no version"
-[ -z "$INSTALL" ] || [ "$EDITION" = basic ] || fail "--install is for Basic; scripts/verify-watch-release.sh runs Advanced's release build"
+[ -z "$INSTALL" ] || [ "$EDITION" = basic ] || fail "--install is for Basic; scripts/verify-network-release.sh runs Advanced's release build"
 echo "== Rehearsal of the release of $NAME $version (versionCode $code)"
 
 # 1. The unsigned release APK, as RELEASE.md's checks build it. Advanced builds in build-advanced, with a

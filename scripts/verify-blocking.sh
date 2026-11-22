@@ -171,7 +171,7 @@ ok "a blocked name gets no address, and nothing leaves the phone for it"
 # 4. The undo, timed: one tap on B's row in "Now", which its bytes to the lab's control name put there.
 [[ $(run_fixture "$B" hello --es name "$PLAIN" --es host "$HOST" --es port "$TCP_PORT") == ok\ * ]] ||
     fail "B's hello to the control name did not go through"
-watch_now "$PKG" "$B" "$WORK/now.xml" >/dev/null
+network_now "$PKG" "$B" "$WORK/now.xml" >/dev/null
 tap_text "Allow trackers in this app" || fail "B's row in \"Now\" has no \"Allow trackers in this app\""
 tapped=$SECONDS
 through=""
@@ -220,7 +220,7 @@ ok "the allowed app's hello and QUIC hello went through, echoed"
 ok "a name whose CNAME chain leads to the blocked name is blocked"
 
 # 4 (cont.). One tap blocks B again.
-watch_now "$PKG" "$B" "$WORK/now.xml" >/dev/null
+network_now "$PKG" "$B" "$WORK/now.xml" >/dev/null
 tap_text "Block trackers again" || fail "B's row in \"Now\" has no \"Block trackers again\""
 tapped=$SECONDS
 stopped=""

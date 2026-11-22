@@ -14,7 +14,7 @@
 #   scripts/emulator-shards.sh [--alone] [--avd NAME] [shard...]
 #
 # With no shard named, every shard runs. --alone runs them one after another, for timing-sensitive work
-# on a busy machine (the watch shard holds the chain and release checks). The AVD defaults to CI's image,
+# on a busy machine (the network shard holds the chain and release checks). The AVD defaults to CI's image,
 # dp-api35-ci, which is brought to CI's phone size (1080 x 2400 at 420 dpi) with animations off, as CI's
 # runner does. Build the APKs first:
 #

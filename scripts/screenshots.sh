@@ -60,7 +60,7 @@ capture() {
 }
 
 # Whether Watch's own account says its tunnel runs (--now).
-watch_running() {
+network_running() {
     grep -qx 'running true' <<<"$(adb shell dumpsys activity service "$PKG/org.visadahyu.datapavan.network.NetworkVpnService" | tr -d '\r' | sed 's/^ *//')"
 }
 
@@ -74,7 +74,7 @@ shell_counted() {
 # Advanced's "Now" and an app's history (--now): Watch's tunnel up for adb's shell, which asks a test server on
 # this computer for a page, so that "Now" has a row to show and to open.
 now_screens() {
-    local watch=org.visadahyu.datapavan.network.MainActivity
+    local network=org.visadahyu.datapavan.network.MainActivity
     is_emulator || { echo "SCREENSHOTS FAILED: --now runs on an emulator only: it grants usage access and starts a VPN" >&2; exit 1; }
     HOST=10.0.2.2
     # shellcheck source=scripts/host-ports.sh
@@ -88,8 +88,8 @@ now_screens() {
         for locale in $locales; do
             adb shell cmd locale set-app-locales "$PKG" --locales "$locale"
             adb shell am force-stop "$PKG"
-            adb shell am start -W -n "$PKG/$watch" --ez start true >/dev/null
-            within 20 watch_running || { echo "SCREENSHOTS FAILED: Watch's tunnel did not come up in $locale" >&2; exit 1; }
+            adb shell am start -W -n "$PKG/$network" --ez start true >/dev/null
+            within 20 network_running || { echo "SCREENSHOTS FAILED: Watch's tunnel did not come up in $locale" >&2; exit 1; }
             # The log kept for a week, so that the history shows the shell's entries and the days' buttons, not
             # only the line of a log that keeps nothing (review c1 of W5's third part, screens, nit 13).
             grep -q '^log-retention 7 set$' <<<"$(adb shell dumpsys activity service "$PKG/org.visadahyu.datapavan.network.NetworkVpnService" log-retention 7 | tr -d '\r' | sed 's/^ *//')" ||
@@ -100,7 +100,7 @@ now_screens() {
             grep -q '^log-flushed$' <<<"$(adb shell dumpsys activity service "$PKG/org.visadahyu.datapavan.network.NetworkVpnService" log-flush | tr -d '\r' | sed 's/^ *//')" ||
                 { echo "SCREENSHOTS FAILED: the log's records were not written in $locale" >&2; exit 1; }
             # "Now" for the shell alone, whose row is the first below the view's top.
-            adb shell am start -n "$PKG/$watch" --activity-clear-top --ez now true --es now_package com.android.shell \
+            adb shell am start -n "$PKG/$network" --activity-clear-top --ez now true --es now_package com.android.shell \
                 --ez screenshots_for_tests true >/dev/null
             passed=1
             sleep 3

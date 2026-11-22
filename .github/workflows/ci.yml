@@ -329,14 +329,14 @@ jobs:
 
   # On a real Android system, in shards that run side by side, each on a freshly booted emulator of its own
   # (scripts/emulator-shard.sh says which check is in which):
-  # - watch: Watch's smoke test (every language, its tunnel on and off with every app inside it,
-  #   scripts/smoke-watch.sh) and its engine end to end (TCP, UDP, DNS, refused and unreachable
-  #   destinations, each flow's owner, a network switch, scripts/verify-watch.sh), its chaining through a
+  # - network: the network part's smoke test (every language, its tunnel on and off with every app inside it,
+  #   scripts/smoke-network.sh) and its engine end to end (TCP, UDP, DNS, refused and unreachable
+  #   destinations, each flow's owner, a network switch, scripts/verify-network.sh), its chaining through a
   #   test tool's SOCKS5 proxy on the phone (the tool found, TCP, UDP and lookups through it, a wrong
   #   password refused, nothing direct once it stops, scripts/verify-chain.sh), its connection log (flows
   #   with their bytes, no destination in the clear or in logcat, an earlier day shut while the screen is
   #   locked, the wipe, scripts/verify-log.sh), and its release build as users get it (traffic through it,
-  #   each flow's app, the log, its memory budget, scripts/verify-watch-release.sh);
+  #   each flow's app, the log, its memory budget, scripts/verify-network-release.sh);
   # - audit: the audit app's smoke test (overview shown, no INTERNET permission, no crash), then the audit
   #   verification, which gives a test fixture app risky access and checks that the audit reports it, the
   #   remediation plan's hand-off, journal and undo with the same fixture, the launcher shortcuts as
@@ -347,7 +347,7 @@ jobs:
   # - screens: screenshots in every language with an accessibility check (scripts/screenshots.sh);
   # - blocking: tracker blocking and its undo (W8, part 3a, ADR 0053), the project's blocking fixture against the
   #   blocking lab on the runner's loopback (scripts/verify-blocking.sh, scripts/blocklab.py), a skip failing;
-  # - wireguard: Watch's WireGuard upstream and the import of its configurations against the lab's peers of the
+  # - wireguard: the network part's WireGuard upstream and the import of its configurations against the lab's peers of the
   #   kernel's WireGuard on the runner (scripts/verify-wireguard.sh, verify-wireguard-import.sh), only where the
   #   scope rule's WireGuard checks run, and in the weekly run.
   # A shard that fails leaves the others running (fail-fast off), so that a repeat runs only the shard that
@@ -526,9 +526,10 @@ jobs:
           # A phone-sized screen; without a profile the emulator is 320 x 640, smaller than any phone.
           profile: pixel_7
           disable-animations: true
-          # The runner's four cores and enough memory for Watch, its tunnel, the workload apps and the audit's scan
-          # at once: with the runner's default of two cores the emulator stopped answering adb three times in six
-          # runs at the audit's step of the watch shard (2026-11-19, docs/ci-flakes.md). The local AVDs have four.
+          # The runner's four cores and enough memory for the network part, its tunnel, the workload apps and the
+          # audit's scan at once: with the runner's default of two cores the emulator stopped answering adb three
+          # times in six runs at the audit's step of the network shard (2026-11-19, docs/ci-flakes.md). The local
+          # AVDs have four.
           cores: 4
           ram-size: 4096M
           emulator-options: -no-window -gpu swiftshader_indirect -noaudio -no-boot-anim -camera-back none -no-snapshot

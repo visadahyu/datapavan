@@ -275,7 +275,7 @@ class MainActivity : ComponentActivity() {
                 )
             }
         }
-        // Debug builds only: scripts/verify-watch.sh starts the tunnel for its own apps from adb, since
+        // Debug builds only: scripts/verify-network.sh starts the tunnel for its own apps from adb, since
         // the VPN service itself is not exported.
         val debuggable = applicationInfo.flags and ApplicationInfo.FLAG_DEBUGGABLE != 0
         if (debuggable && savedInstanceState == null && intent.getBooleanExtra(EXTRA_START, false)) {
@@ -1013,7 +1013,7 @@ class MainActivity : ComponentActivity() {
         /** ClipDescription.EXTRA_IS_SENSITIVE, which Android 13 added; earlier versions ignore it. */
         private const val EXTRA_IS_SENSITIVE = "android.content.extra.IS_SENSITIVE"
 
-        /** Debug builds: start the tunnel at once (scripts/verify-watch.sh). */
+        /** Debug builds: start the tunnel at once (scripts/verify-network.sh). */
         private const val EXTRA_START = "start"
 
         /** Debug builds: keep the screen unprotected, for screenshots taken by a script. */

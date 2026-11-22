@@ -1,16 +1,16 @@
 #!/usr/bin/env bash
-# The ports of this computer that an emulator check's test server takes (scripts/watch-lab/server.py),
+# The ports of this computer that an emulator check's test server takes (scripts/network-lab/server.py),
 # found free and then held for the whole check. Another program on one of them, even on 127.0.0.1 alone,
 # which the emulator reaches as 10.0.2.2, answers in the server's place: a check that wants a connection
 # refused, or an echo, then fails as if Watch were at fault (2026-11-18: a program on 127.0.0.1:8791 made
-# verify-watch.sh's "refused" step read an empty answer).
+# verify-network.sh's "refused" step read an empty answer).
 #
 #   . scripts/host-ports.sh; host_server [--sentinel FILE]
 #       starts the test server on free ports and holds them until the check ends: TCP PORT (HTTP), UDP
 #       PORT+1 (echo), TCP PORT+1 bound without listening (refused, as the checks want, and taken from any
 #       other program), and with --sentinel TCP and UDP PORT+3 (verify-chain.sh's sentinel, which writes to
 #       FILE). It sets PORT and SERVER (the server's pid, for the check's cleanup to stop). The base is
-#       WATCH_TEST_PORT if it is set, else the first of 8790, 8800, ... 8990 the server can hold; with
+#       NETWORK_TEST_PORT if it is set, else the first of 8790, 8800, ... 8990 the server can hold; with
 #       HOST_PORTS_FIXED=1, as for a phone, whose computer's firewall was opened for 8790 and 8791, it is
 #       8790 and is never moved. A port held at a base that may not move stops the check at once, naming
 #       the port and, where ss can tell, the program that holds it.
@@ -18,7 +18,7 @@
 #       checks that logic against throwaway listeners and the real server on ports from 20000 up, with no
 #       emulator.
 
-HOST_PORTS_SERVER="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/watch-lab/server.py"
+HOST_PORTS_SERVER="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/network-lab/server.py"
 
 # What holds port $1 of this computer, TCP or UDP, on any address: "tcp 127.0.0.1:8791 by python3 (pid
 # 4321)", or nothing when it is free. Whether it is free is asked of the kernel by binding the port as the
@@ -72,12 +72,12 @@ host_server() {
         sentinel=(--sentinel "$2")
         offsets+=(3)
     fi
-    if [ -n "${WATCH_TEST_PORT:-}" ]; then
-        first=$WATCH_TEST_PORT tries=1
-        fixed="WATCH_TEST_PORT=$WATCH_TEST_PORT names it: set it to another base, or leave it unset to have one picked"
+    if [ -n "${NETWORK_TEST_PORT:-}" ]; then
+        first=$NETWORK_TEST_PORT tries=1
+        fixed="NETWORK_TEST_PORT=$NETWORK_TEST_PORT names it: set it to another base, or leave it unset to have one picked"
     elif [ -n "${HOST_PORTS_FIXED:-}" ]; then
         tries=1
-        fixed="the phone reaches this computer through its firewall, opened for $first and $((first + 1)): free them, or open others and set WATCH_TEST_PORT to their base"
+        fixed="the phone reaches this computer through its firewall, opened for $first and $((first + 1)): free them, or open others and set NETWORK_TEST_PORT to their base"
     fi
     out=$(mktemp)
     for ((base = first; base < first + 10 * tries; base += 10)); do
@@ -124,7 +124,7 @@ host_server() {
 # or stop at; and the server, once ready, holds every port it should, the refused one refused.
 host_ports_self_test() {
     local failures=0 base out holders=() pid mark
-    unset WATCH_TEST_PORT HOST_PORTS_FIXED
+    unset NETWORK_TEST_PORT HOST_PORTS_FIXED
     fail_test() {
         echo "self-test: $*" >&2
         failures=$((failures + 1))
@@ -211,16 +211,16 @@ PY
     # A held base: passed by when the base may move, a stop naming the port and its program when it may not.
     hold tcp 127.0.0.1 $((base + 1)) plain
     # Run in a subshell, which stops a server it started itself and says so.
-    out=$({ WATCH_TEST_PORT=$base host_server && kill "$SERVER" && echo "taken"; } 2>&1 || true)
+    out=$({ NETWORK_TEST_PORT=$base host_server && kill "$SERVER" && echo "taken"; } 2>&1 || true)
     if grep -q '^taken$' <<<"$out"; then
-        fail_test "WATCH_TEST_PORT's held base was taken"
-    elif ! grep -q "$((base + 1)) by python3" <<<"$out" || ! grep -q "WATCH_TEST_PORT=$base" <<<"$out"; then
-        fail_test "the stop names neither the port, its program nor WATCH_TEST_PORT: $out"
+        fail_test "NETWORK_TEST_PORT's held base was taken"
+    elif ! grep -q "$((base + 1)) by python3" <<<"$out" || ! grep -q "NETWORK_TEST_PORT=$base" <<<"$out"; then
+        fail_test "the stop names neither the port, its program nor NETWORK_TEST_PORT: $out"
     fi
     out=$({ HOST_PORTS_FIXED=1 HOST_PORTS_FIRST=$base host_server && kill "$SERVER" && echo "taken"; } 2>&1 || true)
     if grep -q '^taken$' <<<"$out"; then
         fail_test "a phone's held base was moved"
-    elif ! grep -q "firewall" <<<"$out" || ! grep -q "WATCH_TEST_PORT" <<<"$out"; then
+    elif ! grep -q "firewall" <<<"$out" || ! grep -q "NETWORK_TEST_PORT" <<<"$out"; then
         fail_test "a phone's stop does not say how to go on: $out"
     fi
     if HOST_PORTS_FIRST=$base HOST_PORTS_TRIES=50 host_server 2>/dev/null && [ "$PORT" != "$base" ]; then

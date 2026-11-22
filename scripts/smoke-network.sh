@@ -4,12 +4,12 @@
 # that its text is translated and laid out right to left where the language is; then turns the tunnel
 # on and off from Watch's screen and checks that Android lists Watch's VPN only while it is on, with
 # every app inside it, Watch itself and adb's shell among them, and that Watch did not crash. It needs
-# nothing but adb. scripts/verify-watch.sh checks the traffic through it.
+# nothing but adb. scripts/verify-network.sh checks the traffic through it.
 #
 # On an emulator the VPN consent is given through appops. On a phone, the person holding it taps
 # Android's consent dialog the first time; the script waits three minutes for that.
 #
-#   scripts/smoke-watch.sh [path/to/Datapavan-Advanced-debug.apk]
+#   scripts/smoke-network.sh [path/to/Datapavan-Advanced-debug.apk]
 set -euo pipefail
 
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
@@ -22,10 +22,10 @@ RES="$ROOT/android/network/src/main/res"
 . "$ROOT/scripts/adb-ui.sh"
 
 fail() {
-    echo "WATCH SMOKE FAILED: $*" >&2
+    echo "NETWORK SMOKE FAILED: $*" >&2
     adb logcat -d -b crash 2>/dev/null | tail -40 >&2 || true
     mkdir -p "$ROOT/build/screenshots"
-    adb exec-out screencap -p >"$ROOT/build/screenshots/smoke-watch-failure.png" 2>/dev/null || true
+    adb exec-out screencap -p >"$ROOT/build/screenshots/smoke-network-failure.png" 2>/dev/null || true
     if adb shell uiautomator dump "$DUMP" >/dev/null 2>&1; then
         echo "On screen:" >&2
         adb shell cat "$DUMP" | grep -o 'text="[^"]\+"' | head -20 >&2 || true

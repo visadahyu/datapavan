@@ -587,7 +587,7 @@ mod tests {
     /// of another connection's keys does not, nor does a datagram of another protocol.
     #[test]
     fn a_quic_initial_is_answered_through_its_keys() {
-        let hello = crate::tls::tests::handshake("watch.test", false);
+        let hello = crate::tls::tests::handshake("network.test", false);
         let destination = [0x11; 8];
         let Some(initial) = quic::client_initial(
             1,

@@ -50,7 +50,7 @@ class NetworkVpnService : VpnService() {
     @Volatile
     private var addresses = TunnelAddresses.COMMON
 
-    /** Debug builds: a set to take whatever the networks beneath, for scripts/verify-watch.sh, which cannot make its network clash. */
+    /** Debug builds: a set to take whatever the networks beneath, for scripts/verify-network.sh, which cannot make its network clash. */
     @Volatile
     private var forced: TunnelAddresses.Set? = null
 
@@ -1217,7 +1217,7 @@ class NetworkVpnService : VpnService() {
     /**
      * `adb shell dumpsys activity service org.visadahyu.datapavan.advanced/org.visadahyu.datapavan.network.NetworkVpnService`:
      * the engine's counters, with when they began ([countersSince]), and Private DNS, and in debug builds
-     * the flows it kept and Private DNS's provider, for the end-to-end test (scripts/verify-watch.sh).
+     * the flows it kept and Private DNS's provider, for the end-to-end test (scripts/verify-network.sh).
      * Release builds print no destination and no provider.
      */
     override fun dump(fd: FileDescriptor?, writer: PrintWriter, args: Array<out String>?) {
@@ -1276,7 +1276,7 @@ class NetworkVpnService : VpnService() {
             }
             // The tunnel set up again with nothing changed, by the path a new MTU takes: the same addresses
             // and apps, so Android keeps its VPN network and the running engine takes the new tunnel and
-            // keeps its flows (ADR 0044, unit 12b), which scripts/verify-watch.sh checks on a connection
+            // keeps its flows (ADR 0044, unit 12b), which scripts/verify-network.sh checks on a connection
             // kept open.
             if ("setup-again" in args.orEmpty()) {
                 main.post { setUpAgain() }

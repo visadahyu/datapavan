@@ -70,7 +70,7 @@
         <!--
             The network part runs in a process of its own, ":network": its screen, its tunnel and its log's expiry. The
             part that faces the network then shares no memory with the audit, a crash of either leaves the
-            other running, and Watch keeps its own memory budget (scripts/verify-watch-release.sh). They
+            other running, and Watch keeps its own memory budget (scripts/verify-network-release.sh). They
             talk only through the intent that opens Watch's screen.
 
             Watch's screen, opened from the audit's network page. Not exported: Advanced has one launcher

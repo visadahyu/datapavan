@@ -41,7 +41,7 @@ SHELL_UID=2000
 is_emulator || { echo "verify-chain.sh runs on an emulator only" >&2; exit 2; }
 HOST=10.0.2.2
 # The test server, started on ports of this computer found free and held until the check ends
-# (scripts/host-ports.sh): WATCH_TEST_PORT, or a base picked from 8790 up.
+# (scripts/host-ports.sh): NETWORK_TEST_PORT, or a base picked from 8790 up.
 # shellcheck source=scripts/host-ports.sh
 . "$ROOT/scripts/host-ports.sh"
 PASSWORD="$(python3 -I -c 'import secrets;print(secrets.token_urlsafe(15))')"
@@ -117,7 +117,7 @@ TOOL_UID=$(adb shell cmd package list packages -U "$TOOL" | tr -d '\r' | sed -n 
 
 adb logcat -c
 adb shell am start-foreground-service -n "$TOOL/.ToolService" --ei port "$TOOL_PORT" \
-    --es user datapavan --es password "$PASSWORD" --es map "watch.test=$HOST" >/dev/null
+    --es user datapavan --es password "$PASSWORD" --es map "network.test=$HOST" >/dev/null
 for _ in $(seq 1 10); do tool_log | grep -q "^listening" && break; sleep 1; done
 tool_log | grep -q "^listening $TOOL_PORT" || fail "the test tool does not listen"
 
@@ -151,14 +151,14 @@ grep -qE "^tcp [^ ]+ $HOST:$PORT $SHELL_UID opened" <<<"$list" || fail "the shel
 grep -qE "^tcp [^ ]+ $HOST:$PORT $TOOL_UID opened" <<<"$list" || fail "the tool's own connection is not counted under the tool"
 echo "ok: TCP by address through the tool; the tool's own connection went directly, counted under it"
 
-answer=$(ping_from_shell watch.test)
+answer=$(ping_from_shell network.test)
 grep -q pong <<<"$answer" || fail "TCP by name through the tool: no answer ($answer)"
-grep -q "^connect watch.test $PORT$" <<<"$(tool_log)" || fail "the tool was not given the name"
-grep -qE "^tcp [^ ]+ 198\.1[89]\.[0-9]+\.[0-9]+:$PORT $SHELL_UID opened dns .* watch\.test$" <<<"$(flows)" ||
-    fail "the shell did not connect to a stand-in named watch.test"
+grep -q "^connect network.test $PORT$" <<<"$(tool_log)" || fail "the tool was not given the name"
+grep -qE "^tcp [^ ]+ 198\.1[89]\.[0-9]+\.[0-9]+:$PORT $SHELL_UID opened dns .* network\.test$" <<<"$(flows)" ||
+    fail "the shell did not connect to a stand-in named network.test"
 echo "ok: the shell's lookup got a stand-in, and its name went to the tool"
 
-echo=$(device 5 "echo chained-udp | toybox nc -u -w 2 watch.test $((PORT + 1))")
+echo=$(device 5 "echo chained-udp | toybox nc -u -w 2 network.test $((PORT + 1))")
 grep -q chained-udp <<<"$echo" || fail "UDP through the tool's relay: no echo ($echo)"
 grep -q "^associate$" <<<"$(tool_log)" || fail "the tool was not asked for a UDP relay"
 echo "ok: UDP through the tool's relay, by name"
@@ -205,7 +205,7 @@ grep -q "chain off" <<<"$unchained" || fail "the chain did not turn off; Watch's
 # and offers its own user name and password, which go into the tool as a user would set them.
 adb shell cmd locale set-app-locales "$PKG" --locales en-US >/dev/null 2>&1 || true
 listening=$(tool_log | grep -c "^listening")
-adb shell am start-foreground-service -n "$TOOL/.ToolService" --ei port "$TOOL_PORT" --es map "watch.test=$HOST" >/dev/null
+adb shell am start-foreground-service -n "$TOOL/.ToolService" --ei port "$TOOL_PORT" --es map "network.test=$HOST" >/dev/null
 for _ in $(seq 1 10); do [ "$(tool_log | grep -c "^listening")" -gt "$listening" ] && break; sleep 1; done
 # Back to Watch as a user comes back to it, which makes it look for the tool again.
 adb shell input keyevent KEYCODE_HOME
@@ -319,7 +319,7 @@ stun_listening=$(tool_log | grep -cE "^stun 127\.0\.0\.[12] $STUN_PORT$" || true
 adb shell am force-stop "$TOOL"
 adb shell am start-foreground-service -n "$TOOL/.ToolService" --ei port "$TOOL_PORT" \
     --es user "$user" --es password "$password" --ei stun "$STUN_PORT" \
-    --es map "watch.test=$HOST,stun-a.test=127.0.0.1,stun-b.test=127.0.0.2" >/dev/null
+    --es map "network.test=$HOST,stun-a.test=127.0.0.1,stun-b.test=127.0.0.2" >/dev/null
 for _ in $(seq 1 10); do [ "$(tool_log | grep -c "^listening")" -gt "$listening" ] && break; sleep 1; done
 # The STUN server for unit 9b's step starts with the tool here, the only start that asks for it. Its two
 # lines are read now, not at the step near the end of the run, by when logcat's ring may have turned past
@@ -390,7 +390,7 @@ scroll_to_top
 scroll_to "Only the apps I choose" && marked "Only the apps I choose" || fail "the choice of apps changed when the chain turned on"
 scroll_to_top
 sleep 2
-through=$(tool_log | grep -c "^connect watch.test $PORT$")
+through=$(tool_log | grep -c "^connect network.test $PORT$")
 associations=$(tool_log | grep -c "^associate$" || true)
 # Runs the workload app once with the extras given, and prints its log lines of that run.
 work() {
@@ -400,14 +400,14 @@ work() {
     for _ in $(seq 1 "${WORK_WAIT:-30}"); do [ "$(workload_log | grep -c "^done$")" -gt "$runs" ] && break; sleep 1; done
     workload_log | awk -v runs="$runs" '$0 == "done" { done++; next } done == runs'
 }
-log=$(work --es name watch.test --es tcp "watch.test:$PORT" --es udp "watch.test:$((PORT + 1))")
-grep -qE "^resolved watch\.test 198\.1[89]\." <<<"$log" || fail "the workload app's lookup got no stand-in: $log"
-grep -q "^tcp watch.test:$PORT pong$" <<<"$log" || fail "the workload app's TCP did not get through: $log"
+log=$(work --es name network.test --es tcp "network.test:$PORT" --es udp "network.test:$((PORT + 1))")
+grep -qE "^resolved network\.test 198\.1[89]\." <<<"$log" || fail "the workload app's lookup got no stand-in: $log"
+grep -q "^tcp network.test:$PORT pong$" <<<"$log" || fail "the workload app's TCP did not get through: $log"
 # TCP only until the user allows UDP (ADR 0041, decision 5): the echo server on this computer would
 # answer a datagram that went through the tool or directly, so no echo means it went nowhere.
-grep -q "^udp watch.test:$((PORT + 1)) echo$" <<<"$log" && fail "the workload app's UDP got through before the user allowed it"
+grep -q "^udp network.test:$((PORT + 1)) echo$" <<<"$log" && fail "the workload app's UDP got through before the user allowed it"
 [ "$(tool_log | grep -c "^associate$")" = "$associations" ] || fail "the tool was asked for a UDP relay before the user allowed it"
-[ "$(tool_log | grep -c "^connect watch.test $PORT$")" -gt "$through" ] || fail "the workload app's TCP did not go through the tool"
+[ "$(tool_log | grep -c "^connect network.test $PORT$")" -gt "$through" ] || fail "the workload app's TCP did not go through the tool"
 grep -qE "^tcp [^ ]+ 198\.1[89]\.[0-9]+\.[0-9]+:$PORT $WORKLOAD_UID opened" <<<"$(flows)" ||
     fail "the workload app's flow is not listed under its own UID"
 through=$(tool_log | grep -c "^connect $HOST $PORT$")
@@ -431,8 +431,8 @@ echo "ok: the live view keeps no destination of the picked app while its destina
 # 2026-11-19). The run's names and addresses are looked for in every text of the screen too, so that a place
 # read as something else still fails the check (review c1 of W5's third part, screens, M1).
 screens=$(mktemp -d)
-chained_screen=$(watch_now "$PKG" "$WORKLOAD" "$screens/now.xml")
-tool_screen=$(watch_now "$PKG" "$TOOL" "$screens/tool.xml")
+chained_screen=$(network_now "$PKG" "$WORKLOAD" "$screens/now.xml")
+tool_screen=$(network_now "$PKG" "$TOOL" "$screens/tool.xml")
 rm -rf "$screens"
 adb shell input keyevent KEYCODE_BACK
 grep -qx through-tool <<<"$chained_screen" || fail "\"Now\" does not show the picked app as sent through the tool: $(tr '\n' ';' <<<"$chained_screen" | cut -c1-800)"
@@ -440,7 +440,7 @@ grep -qx tool <<<"$tool_screen" || fail "\"Now\" does not show the tool's row as
 grep -qx tool-hidden <<<"$tool_screen" || fail "\"Now\" does not say why the tool's servers are not shown: $(tr '\n' ';' <<<"$tool_screen" | cut -c1-800)"
 for read in "$chained_screen" "$tool_screen"; do
     ! grep -q '^place ' <<<"$read" || fail "\"Now\" names a place: $(grep '^place ' <<<"$read")"
-    for name in watch.test "$HOST"; do
+    for name in network.test "$HOST"; do
         ! grep -qF "$name" <<<"$(grep '^texts ' <<<"$read")" || fail "\"Now\" shows $name while it is not logged"
     done
 done
@@ -454,8 +454,8 @@ screen_says "The proxy of Datapavan test tool asks for a password, so other apps
     fail "the chain screen did not say that the tool's proxy now asks for a password"
 tap_text "$UDP_SWITCH" || fail "the chain screen has no switch for UDP"
 sleep 2
-log=$(work --es udp "watch.test:$((PORT + 1))")
-grep -q "^udp watch.test:$((PORT + 1)) echo$" <<<"$log" || fail "the workload app's UDP did not get through once allowed: $log"
+log=$(work --es udp "network.test:$((PORT + 1))")
+grep -q "^udp network.test:$((PORT + 1)) echo$" <<<"$log" || fail "the workload app's UDP did not get through once allowed: $log"
 [ "$(tool_log | grep -c "^associate$")" -gt "$associations" ] || fail "the tool was not asked for a UDP relay once UDP was allowed"
 echo "ok: the screen says the proxy asks for a password; with UDP allowed, the picked app's UDP goes through the tool"
 

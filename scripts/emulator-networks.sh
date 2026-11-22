@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# The emulator's networks, for the checks that switch the network beneath Watch (scripts/verify-watch.sh, and since
+# The emulator's networks, for the checks that switch the network beneath Watch (scripts/verify-network.sh, and since
 # W7's fix round scripts/verify-wireguard.sh): Android's default network and its list, whether a type is up, waits
 # until mobile data and Wi-Fi are up and settled, and Wi-Fi brought back where the emulator lost it. Sourced; uses
 # adb on the device ANDROID_SERIAL names.
@@ -80,7 +80,7 @@ wifi_again() {
 # The emulator came up with Wi-Fi and without its mobile data network, and turning mobile data off and on did not
 # bring it, four runs out of five (CI, 2026-11-20 and 2026-11-21: runs 44796928789, 44877347782, 44899858955 and
 # 44905337897, in the WireGuard check; docs/ci-flakes.md). So before a check fails for it, the radios are restarted
-# with airplane mode, as verify-watch.sh has done since 2026-11-12; then the emulator's modem is told to register
+# with airplane mode, as verify-network.sh has done since 2026-11-12; then the emulator's modem is told to register
 # again through the emulator's console (`gsm voice home`, `gsm data home`); and only if mobile data is still not up
 # is the emulator booted anew, once, and waited for. Only where mobile data is not up, and only before Watch starts:
 # nothing of Watch's state is lost by it. Returns whether mobile data came up.

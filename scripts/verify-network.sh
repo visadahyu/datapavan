@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # End-to-end check of Watch's packet engine, milestones W2 and W3 (docs/DESIGN.md, 13.2), on an
-# emulator or a phone: starts the test server (scripts/watch-lab/server.py) on this computer, starts
+# emulator or a phone: starts the test server (scripts/network-lab/server.py) on this computer, starts
 # Watch's tunnel for every app through its debug entry, and plays the app with adb's own shell (UID 2000) and its nc.
 # Through Watch it checks that TCP and UDP reach the server and come back; that a connection closed at
 # once, a refused one and an unreachable one each get their owner named; that the app sees the refusal
@@ -12,16 +12,16 @@
 # all of it still works after the network beneath switches from Wi-Fi to mobile data. Nothing is left
 # running: the tunnel and the server stop at the end.
 #
-# The emulator reaches this computer at 10.0.2.2. On a phone, set WATCH_TEST_HOST to the computer's
+# The emulator reaches this computer at 10.0.2.2. On a phone, set NETWORK_TEST_HOST to the computer's
 # address on the same Wi-Fi; the network switch is then skipped, since it would cut the phone off.
 #
 # The test server holds ports of this computer for the whole check: TCP 8790, UDP 8791, and TCP 8791 bound
-# without listening, which the check needs refused (scripts/host-ports.sh). WATCH_TEST_PORT names another
+# without listening, which the check needs refused (scripts/host-ports.sh). NETWORK_TEST_PORT names another
 # base. On the emulator, a base another program holds is passed for the next free one; on a phone it is
 # not, since the computer's firewall must let the phone reach those ports: a held one stops the check at
-# once, naming the program, and WATCH_TEST_PORT names the base the firewall was opened for.
+# once, naming the program, and NETWORK_TEST_PORT names the base the firewall was opened for.
 #
-#   scripts/verify-watch.sh [path/to/Datapavan-Advanced-debug.apk]
+#   scripts/verify-network.sh [path/to/Datapavan-Advanced-debug.apk]
 set -euo pipefail
 
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
@@ -34,14 +34,14 @@ SHELL_UID=2000
 . "$ROOT/scripts/adb-ui.sh"
 
 if is_emulator; then
-    HOST=${WATCH_TEST_HOST:-10.0.2.2}
+    HOST=${NETWORK_TEST_HOST:-10.0.2.2}
 else
-    HOST=${WATCH_TEST_HOST:?set WATCH_TEST_HOST to this computer's address on the phone's Wi-Fi}
+    HOST=${NETWORK_TEST_HOST:?set NETWORK_TEST_HOST to this computer's address on the phone's Wi-Fi}
     # The computer's firewall lets the phone through to the ports it was opened for: never moved.
     HOST_PORTS_FIXED=1
 fi
 # The test server, started on ports of this computer found free and held until the check ends
-# (scripts/host-ports.sh): WATCH_TEST_PORT, or a base picked from 8790 up.
+# (scripts/host-ports.sh): NETWORK_TEST_PORT, or a base picked from 8790 up.
 # shellcheck source=scripts/host-ports.sh
 . "$ROOT/scripts/host-ports.sh"
 
@@ -63,18 +63,18 @@ restore_private_dns() {
     put_setting private_dns_specifier "$DNS_HOST"
     DNS_MODE=""
 }
-# A TLS ClientHello for watch.test, which the test server answers as bad HTTP; only its name counts.
-HELLO_ON_DEVICE=/data/local/tmp/watch-hello.bin
-# A QUIC ClientHello for watch.test offering ECH, in two Initial datagrams, its CRYPTO frames out of
+# A TLS ClientHello for network.test, which the test server answers as bad HTTP; only its name counts.
+HELLO_ON_DEVICE=/data/local/tmp/network-hello.bin
+# A QUIC ClientHello for network.test offering ECH, in two Initial datagrams, its CRYPTO frames out of
 # order as Chrome sends them; the UDP echo sends them back, and only the name counts.
-QUIC_ON_DEVICE=/data/local/tmp/watch-quic
+QUIC_ON_DEVICE=/data/local/tmp/network-quic
 # An app's own DNS (ADR 0029): a plain query for example.org, and a TLS hello for dns.google.
-DNS_ON_DEVICE=/data/local/tmp/watch-dns.bin
-DOH_ON_DEVICE=/data/local/tmp/watch-doh.bin
+DNS_ON_DEVICE=/data/local/tmp/network-dns.bin
+DOH_ON_DEVICE=/data/local/tmp/network-doh.bin
 # A connection kept open across the tunnel set up again (ADR 0044, unit 12b): nc writes its answers to a
 # file on the device, and its second request waits until a marker file is there.
-KEPT_GO=/data/local/tmp/watch-kept-go
-KEPT_OUT=/data/local/tmp/watch-kept-out
+KEPT_GO=/data/local/tmp/network-kept-go
+KEPT_OUT=/data/local/tmp/network-kept-out
 # The adb shell on this computer that holds that connection, while it is open.
 KEPT=""
 # The emulator's setting to keep mobile data up while Wi-Fi is on, before the test changed it.
@@ -103,7 +103,7 @@ trap cleanup EXIT
 host_server || exit 1
 
 fail() {
-    echo "WATCH CHECK FAILED: $*" >&2
+    echo "NETWORK CHECK FAILED: $*" >&2
     adb logcat -d -b crash 2>/dev/null | tail -40 >&2 || true
     # A process Android ended leaves no crash: how Watch's last ones ended, with no destination.
     echo "How Watch's process last ended:" >&2
@@ -116,7 +116,7 @@ fail() {
     grep -E '^(running|counters|mtu|setups)' <<<"$account" >&2 || true
     # Watch's own log: how each setup went, and its warnings. It names no destination.
     echo "Watch's log:" >&2
-    adb logcat -d -s Watch:I 2>/dev/null | tr -d '\r' | tail -15 >&2 || true
+    adb logcat -d -s Network:I 2>/dev/null | tr -d '\r' | tail -15 >&2 || true
     if is_emulator; then
         echo "The shell's flows:" >&2
         grep -E "^flow [a-z]+ [^ ]+ [^ ]+ $SHELL_UID " <<<"$account" >&2 || echo "  none" >&2
@@ -211,7 +211,7 @@ tunnel_records() {
     local deadline=$((SECONDS + $1)) from
     from=$(tunnel_address)
     while :; do
-        device 4 "echo watch-ready | nc -u -w 1 192.0.2.1 9" >/dev/null
+        device 4 "echo probe-ready | nc -u -w 1 192.0.2.1 9" >/dev/null
         grep -qE "^udp ${from//./\\.}:[0-9]+ 192\.0\.2\.1:9 $SHELL_UID " <<<"$(flows)" && return 0
         [ "$SECONDS" -lt "$deadline" ] || return 1
         sleep 1
@@ -246,8 +246,8 @@ traffic() {
     has_flow tcp "$HOST:$((PORT + 1))" refused || fail "$round: no refused flow of the shell"
     echo "ok: $round: a refused connection, refused for the app"
 
-    answer=$(device 8 "echo watch-$round | nc -u -w 3 $HOST $((PORT + 1))")
-    grep -q "^watch-$round\$" <<<"$answer" || fail "$round: no UDP echo"
+    answer=$(device 8 "echo probe-$round | nc -u -w 3 $HOST $((PORT + 1))")
+    grep -q "^probe-$round\$" <<<"$answer" || fail "$round: no UDP echo"
     has_flow udp "$HOST:$((PORT + 1))" opened || fail "$round: no UDP flow of the shell"
     echo "ok: $round: UDP through Watch, owner named"
 
@@ -260,14 +260,14 @@ traffic() {
 
     # W3: a flow to an address from a DNS answer is named after the name the app asked for (UDP opens
     # at once, whether or not the address answers), and a TLS connection after its server name.
-    device 6 "echo watch | nc -u -w 1 example.com 9" >/dev/null
+    device 6 "echo probe | nc -u -w 1 example.com 9" >/dev/null
     has_named_flow udp 9 example.com dns || fail "$round: a flow to example.com was not named after its DNS answer"
     echo "ok: $round: a flow named from its DNS answer"
     device 10 "nc -w 2 $HOST $PORT < $HELLO_ON_DEVICE" >/dev/null
-    has_named_flow tcp "$PORT" watch.test tls - || fail "$round: a TLS connection was not named after its server name"
+    has_named_flow tcp "$PORT" network.test tls - || fail "$round: a TLS connection was not named after its server name"
     echo "ok: $round: a flow named from its TLS server name"
     device 10 "(cat $QUIC_ON_DEVICE-1.bin; sleep 1; cat $QUIC_ON_DEVICE-2.bin) | nc -u -w 2 $HOST $((PORT + 1))" >/dev/null
-    has_named_flow udp "$((PORT + 1))" watch.test quic ech ||
+    has_named_flow udp "$((PORT + 1))" network.test quic ech ||
         fail "$round: a QUIC connection was not named after its server name, with ECH offered; its flows: $(flows | grep -E ":$((PORT + 1)) ")"
     echo "ok: $round: a flow named from its QUIC server name, put together from two datagrams"
 
@@ -301,7 +301,7 @@ for _ in range(int.from_bytes(data[6:8], "big")):
 PY
     ) || own=""
     if [ -n "$own" ]; then
-        device 6 "echo watch | nc -u -w 1 $own 7" >/dev/null
+        device 6 "echo probe | nc -u -w 1 $own 7" >/dev/null
         has_named_flow udp 7 example.org dns || fail "$round: the app's own DNS answer did not name its next flow"
         echo "ok: $round: the answer of the app's own resolver names its next flow"
     else
@@ -317,13 +317,13 @@ PY
     if adb shell dumpsys activity service "$PKG/org.visadahyu.datapavan.network.NetworkVpnService" | grep -q 'organisations 20'; then
         # One of Google's name servers' addresses: apps rarely look its name up, and a name from DNS
         # would come first (Android or an app may look up dns.google, which names 8.8.8.8).
-        device 6 "echo watch | nc -u -w 1 216.239.32.10 9" >/dev/null
+        device 6 "echo probe | nc -u -w 1 216.239.32.10 9" >/dev/null
         has_named_flow udp 9 'Google LLC' org || fail "$round: a flow to 216.239.32.10 was not named after Google's network"
         flow_listed "^udp [^ ]+ 216\.239\.32\.10:9 $SHELL_UID opened org [^ ]+ [^ ]+ as15169:hosting - Google LLC$" ||
             fail "$round: Google's network was not marked as one that hosts other companies' servers"
         echo "ok: $round: a flow named from the organisation table"
         # The owners' table names the company people know, not the registry's "Facebook, Inc.".
-        device 6 "echo watch | nc -u -w 1 157.240.1.35 9" >/dev/null
+        device 6 "echo probe | nc -u -w 1 157.240.1.35 9" >/dev/null
         flow_listed "^udp [^ ]+ 157\.240\.1\.35:9 $SHELL_UID opened org [^ ]+ [^ ]+ as32934:own - Meta Platforms, Inc\.$" ||
             fail "$round: a flow to Meta's network was not named after Meta"
         echo "ok: $round: a network named after the company that owns it"
@@ -338,7 +338,7 @@ adb install -r "$APK" >/dev/null
 hello=$(mktemp)
 python3 -I - "$hello" <<'PY'
 import struct, sys
-name = b"watch.test"
+name = b"network.test"
 body = b"\x03\x03" + bytes(32) + b"\x00\x00\x02\x13\x01\x01\x00"
 extension = struct.pack("!HHHBH", 0, len(name) + 5, len(name) + 3, 0, len(name)) + name
 body += struct.pack("!H", len(extension)) + extension
@@ -417,7 +417,7 @@ def initial(pn, frames, size):
 def crypto(offset, data):
     return b"\x06" + struct.pack("!HH", 0x4000 | offset, 0x4000 | len(data)) + data
 
-name = b"watch.test"
+name = b"network.test"
 extensions = struct.pack("!HHHBH", 0, len(name) + 5, len(name) + 3, 0, len(name)) + name
 extensions += bytes([0xFE, 0x0D, 0, 12, 0, 0, 1, 0, 1, 7, 0, 0, 0, 2, 1, 2])
 extensions += struct.pack("!HH", 21, 1400) + bytes(1400)
@@ -637,7 +637,7 @@ fi
 # after, and Android's log tells a destroy by netd, which is reported and passes, from a stall, which fails. A destroy
 # passes only if the running engine took the tunnel, as Watch's dump counts ("setups kept N"): a new engine, the
 # fallback when a swap fails, ends the connections itself, which a destroy by netd must not hide.
-KEPT_REQUEST='GET /ping HTTP/1.1\r\nHost: watch\r\n\r\n'
+KEPT_REQUEST='GET /ping HTTP/1.1\r\nHost: probe\r\n\r\n'
 kept_ask() { device 5 "touch $KEPT_GO" >/dev/null; }
 # Waits up to 10 s until the kept connection has had $1 answers.
 kept_answered() {
@@ -716,7 +716,7 @@ if ! kept_answered 2; then
         fail "netd destroyed the sockets on the tunnel's address ($kept_destroyed), but the running engine did not take the tunnel set up again: Watch's setups went from '$setups_before' to '$setups_after', so the kept connection may have ended with a new engine"
     note="netd destroyed the sockets on the tunnel's address when the tunnel was set up again with the same addresses ($kept_destroyed): the connection kept open through Watch ended with them, as Android ends it; a new connection through Watch passed right after"
     echo "::warning title=netd destroyed the tunnel's sockets::$note"
-    [ -z "${GITHUB_STEP_SUMMARY:-}" ] || echo "- verify-watch.sh: $note (ADR 0044, unit 12b)" >>"$GITHUB_STEP_SUMMARY"
+    [ -z "${GITHUB_STEP_SUMMARY:-}" ] || echo "- verify-network.sh: $note (ADR 0044, unit 12b)" >>"$GITHUB_STEP_SUMMARY"
 fi
 mtu_after=$(adb shell dumpsys activity service "$PKG/org.visadahyu.datapavan.network.NetworkVpnService" </dev/null | tr -d '\r' | sed -n 's/^ *mtu //p')
 read -r chosen_after _ <<<"$mtu_after"
@@ -763,7 +763,7 @@ fi
 strangers() {
     adb shell dumpsys activity service "$PKG/org.visadahyu.datapavan.network.NetworkVpnService" | tr -d '\r' | sed -n 's/^ *counters //p' | awk '{print $19}'
 }
-watch_uid=$(adb shell cmd package list packages -U "$PKG" | tr -d '\r' | sed -n "s/^package:$PKG uid:\([0-9]*\)$/\1/p")
+network_uid=$(adb shell cmd package list packages -U "$PKG" | tr -d '\r' | sed -n "s/^package:$PKG uid:\([0-9]*\)$/\1/p")
 listener_hex=$(python3 -I -c 'import sys; print("".join(f"{int(b):02X}" for b in reversed(sys.argv[1].split("."))))' "$(tunnel_address)")
 listener=$(adb shell cat /proc/net/tcp 2>/dev/null | tr -d '\r' | python3 -I -c '
 import sys
@@ -771,7 +771,7 @@ for line in sys.stdin:
     f = line.split()
     if len(f) > 7 and f[3] == "0A" and f[7] == sys.argv[1] and f[1].startswith(sys.argv[2] + ":"):
         print(int(f[1].split(":")[1], 16))
-        break' "$watch_uid" "$listener_hex")
+        break' "$network_uid" "$listener_hex")
 if [ -n "$listener" ]; then
     before=$(strangers)
     answer=$(device 8 "echo hello | nc -w 5 $(tunnel_address) $listener")

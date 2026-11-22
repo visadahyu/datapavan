@@ -421,8 +421,8 @@ public final class GapsRows {
             String result = !mode.equals("hostname") ? "measured" : own == 0 && systemTls > 0 ? "held" : "not held";
             List<String> described = new ArrayList<>();
             for (Map.Entry<String, Integer> e : system.entrySet()) described.add(e.getValue() + " " + e.getKey());
-            String watchSays = run.observed.stream().filter(l -> l.startsWith("private-dns " + mode + " ")).map(l -> l.replaceAll(".*watch=", "")).findFirst().orElse("-");
-            Map<String, String> resolver = row(result, trials + " lookups of names under .example, Private DNS " + mode + " (Watch read: " + watchSays
+            String networkSays = run.observed.stream().filter(l -> l.startsWith("private-dns " + mode + " ")).map(l -> l.replaceAll(".*watch=", "")).findFirst().orElse("-");
+            Map<String, String> resolver = row(result, trials + " lookups of names under .example, Private DNS " + mode + " (Watch read: " + networkSays
                     + "); their names in the capture: " + seen + (mode.equals("hostname") ? " (encrypted)" : "")
                     + "; the window's DNS flows: " + own + " under the probe's UID, " + (described.isEmpty() ? "none under a UID of the system" : String.join(", ", described))
                     + ", " + unknown + " without owner, and " + others + " of other apps, not counted"

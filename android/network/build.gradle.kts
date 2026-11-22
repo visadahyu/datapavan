@@ -241,7 +241,7 @@ androidComponents {
             abis.set(shippedAbis)
             platformLevel.set(variant.minSdk.apiLevel)
             // -Pdatapavan.rustRelease=true: optimised Rust in a debug build too, so that the CPU check
-            // (scripts/watch-lab/measure.sh) measures the engine as it ships, with the debug build's
+            // (scripts/network-lab/measure.sh) measures the engine as it ships, with the debug build's
             // test entry.
             release.set(variant.buildType == "release" || providers.gradleProperty("datapavan.rustRelease").orNull == "true")
             cargo.set(cargoExecutable)

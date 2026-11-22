@@ -9,7 +9,7 @@
 #
 # The APK is the one the notes name, and its name carries the edition (ADR 0045; the maintainer,
 # 2026-11-14): datapavan-basic-<version>.apk, or for 0.1.2 and earlier datapavan-<version>.apk. The steps
-# below are Basic's: Advanced's signed release check is still to build, and scripts/verify-watch-release.sh
+# below are Basic's: Advanced's signed release check is still to build, and scripts/verify-network-release.sh
 # runs its release build meanwhile.
 #
 #   scripts/verify-signed-release.sh DIRECTORY [EDITION]    EDITION: basic, the default
@@ -35,7 +35,7 @@ field() { sed -n "s/^$1: //p" "$OUT/notes.txt"; }
 
 case $EDITION in
     basic) ;;
-    advanced) fail "Advanced's signed release check is still to build (ADR 0045); scripts/verify-watch-release.sh runs its release build" ;;
+    advanced) fail "Advanced's signed release check is still to build (ADR 0045); scripts/verify-network-release.sh runs its release build" ;;
     *) fail "the edition is basic or advanced, not \"$EDITION\"" ;;
 esac
 case $(field APK) in

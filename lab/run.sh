@@ -35,10 +35,10 @@ SDK="${ANDROID_HOME:-${ANDROID_SDK_ROOT:-$HOME/Android/sdk}}"
 ADB="$SDK/platform-tools/adb"
 EMULATOR="$SDK/emulator/emulator"
 AVDMANAGER="$SDK/cmdline-tools/latest/bin/avdmanager"
-WATCH_APK="${WATCH_APK:-$ROOT/android/app/build-advanced/outputs/apk/debug/app-debug.apk}"
-WATCH=org.visadahyu.datapavan.advanced
+NETWORK_APK="${NETWORK_APK:-$ROOT/android/app/build-advanced/outputs/apk/debug/app-debug.apk}"
+ADVANCED=org.visadahyu.datapavan.advanced
 NETWORK_SCREEN=org.visadahyu.datapavan.network.MainActivity
-WATCH_SERVICE=$WATCH/org.visadahyu.datapavan.network.NetworkVpnService
+NETWORK_SERVICE=$ADVANCED/org.visadahyu.datapavan.network.NetworkVpnService
 PROBE=org.visadahyu.lab.gapsprobe
 PEER=org.visadahyu.lab.gapsprobe.peer
 FIXTURE=org.visadahyu.lab.gapsfixture
@@ -95,8 +95,8 @@ if [ ! -f "$IMAGE_DIR/source.properties" ]; then
 fi
 case $BEHAVIOUR in
     vpn-seen | loopback | carried-by-system | short-lived | webview)
-        [ -f "$WATCH_APK" ] || {
-            echo "no Watch debug build at $WATCH_APK; build it with:" >&2
+        [ -f "$NETWORK_APK" ] || {
+            echo "no Watch debug build at $NETWORK_APK; build it with:" >&2
             echo "  cd android && ./gradlew -Pdatapavan.edition=advanced --project-cache-dir .gradle-advanced :app:assembleDebug" >&2
             exit 2
         } ;;
@@ -385,42 +385,42 @@ lan_permission() {
 # stops reading early fails the pipe.
 vpn_up() {
     local uid vpn
-    uid=$(a shell cmd package list packages -U "$WATCH" | tr -d '\r' | sed -n "s/^package:$WATCH uid:\([0-9]*\)$/\1/p")
+    uid=$(a shell cmd package list packages -U "$ADVANCED" | tr -d '\r' | sed -n "s/^package:$ADVANCED uid:\([0-9]*\)$/\1/p")
     vpn=$(grep -E 'ni\{(VPN |\[type: VPN)' <<<"$(a shell dumpsys connectivity | tr -d '\r')" || true)
     [ -n "$uid" ] && grep -q CONNECTED <<<"$vpn" || return 1
     if grep -q "OwnerUid:" <<<"$vpn"; then
         grep -qE "OwnerUid: $uid( |$)" <<<"$vpn"
     else
-        grep -q '^ *running true' <<<"$(a shell dumpsys activity service "$WATCH_SERVICE" | tr -d '\r')"
+        grep -q '^ *running true' <<<"$(a shell dumpsys activity service "$NETWORK_SERVICE" | tr -d '\r')"
     fi
 }
-watch_start() {
-    # The emulator allows Watch's VPN without the consent dialog, as verify-watch.sh does. Right after an
+network_start() {
+    # The emulator allows Watch's VPN without the consent dialog, as verify-network.sh does. Right after an
     # install the setting can be lost (AppOps does not know the UID yet), so it is set until it reads back.
     local mode
     for _ in $(seq 1 15); do
-        a shell appops set "$WATCH" ACTIVATE_VPN allow
-        mode=$(a shell appops get "$WATCH" ACTIVATE_VPN | tr -d '\r')
+        a shell appops set "$ADVANCED" ACTIVATE_VPN allow
+        mode=$(a shell appops get "$ADVANCED" ACTIVATE_VPN | tr -d '\r')
         grep -q 'allow' <<<"$mode" && break
         sleep 2
     done
-    lan_permission "$WATCH"
+    lan_permission "$ADVANCED"
     # Right after boot the first start can be lost: it is sent again, up to three times.
     local try
     for try in 1 2 3; do
-        a shell am start -W -n "$WATCH/$NETWORK_SCREEN" --ez start true >/dev/null
+        a shell am start -W -n "$ADVANCED/$NETWORK_SCREEN" --ez start true >/dev/null
         for _ in $(seq 1 20); do vpn_up && return 0; sleep 1; done
-        a shell am force-stop "$WATCH"
+        a shell am force-stop "$ADVANCED"
     done
-    a exec-out screencap -p >"$KEEP/watch-not-up.png" 2>/dev/null || true
-    a logcat -d >"$KEEP/watch-not-up.log" 2>/dev/null || true
+    a exec-out screencap -p >"$KEEP/network-not-up.png" 2>/dev/null || true
+    a logcat -d >"$KEEP/network-not-up.log" 2>/dev/null || true
     echo "Watch's tunnel did not come up (screen and logcat in $KEEP)" >&2
     return 1
 }
 # Watch's flows (debug builds keep the latest 512), into flows-$1.txt, each through lab/redact-flows.awk: a
 # flow to anything but the lab's own addresses keeps its count, port and UID only.
 flows() {
-    a shell dumpsys activity service "$WATCH_SERVICE" | tr -d '\r' | sed -n 's/^ *flow //p' |
+    a shell dumpsys activity service "$NETWORK_SERVICE" | tr -d '\r' | sed -n 's/^ *flow //p' |
         awk -f "$ROOT/lab/redact-flows.awk" >"$OUT/flows-$1.txt"
 }
 # Starts the probe's step and reads Watch's flows every few seconds until the line $2 shows (at most $3
@@ -429,18 +429,18 @@ flows() {
 flows_during() {
     local label=$1 line=$2 seconds=$3
     shift 3
-    a shell dumpsys activity service "$WATCH_SERVICE" | tr -d '\r' | sed -n 's/^ *flow //p' | sort -u >"$OUT/flows-$label.before"
+    a shell dumpsys activity service "$NETWORK_SERVICE" | tr -d '\r' | sed -n 's/^ *flow //p' | sort -u >"$OUT/flows-$label.before"
     check_alone "before $label"
     probe "$@"
     set -- "$label" "$line" "$seconds"
     : >"$OUT/flows-$1.tmp"
     for _ in $(seq 1 $(($3 / 3))); do
-        a shell dumpsys activity service "$WATCH_SERVICE" | tr -d '\r' | sed -n 's/^ *flow //p' >>"$OUT/flows-$1.tmp"
+        a shell dumpsys activity service "$NETWORK_SERVICE" | tr -d '\r' | sed -n 's/^ *flow //p' >>"$OUT/flows-$1.tmp"
         grep -qF -- "$2" "$OUT/probe.raw" && break
         sleep 3
     done
     sleep 3
-    a shell dumpsys activity service "$WATCH_SERVICE" | tr -d '\r' | sed -n 's/^ *flow //p' >>"$OUT/flows-$1.tmp"
+    a shell dumpsys activity service "$NETWORK_SERVICE" | tr -d '\r' | sed -n 's/^ *flow //p' >>"$OUT/flows-$1.tmp"
     sort -u "$OUT/flows-$1.tmp" | comm -23 - "$OUT/flows-$1.before" | awk -f "$ROOT/lab/redact-flows.awk" >"$OUT/flows-$1.txt"
     rm -f "$OUT/flows-$1.tmp" "$OUT/flows-$1.before"
     grep -qF -- "$2" "$OUT/probe.raw" || { collect; echo "no line '$2' after $3 s" >&2; return 1; }
@@ -449,16 +449,16 @@ flows_during() {
 
 vpn_seen() {
     install "$PROBE_APK"
-    install "$WATCH_APK"
+    install "$NETWORK_APK"
     probe "$PROBE" vpn-seen none
     wait_line "vpn-seen none done" 30
-    watch_start
+    network_start
     probe "$PROBE" vpn-seen inside
     wait_line "vpn-seen inside done" 30
     # Left out as the user leaves an app out on Watch's screen (ADR 0041): Watch's own list of apps, which
     # it reads when its tunnel starts. Debug builds let adb write into the app's files.
-    a shell am force-stop "$WATCH"
-    a shell "run-as $WATCH sh -c 'mkdir -p shared_prefs && cat > shared_prefs/left_out.xml'" <<EOF
+    a shell am force-stop "$ADVANCED"
+    a shell "run-as $ADVANCED sh -c 'mkdir -p shared_prefs && cat > shared_prefs/left_out.xml'" <<EOF
 <?xml version='1.0' encoding='utf-8' standalone='yes' ?>
 <map>
     <set name="apps">
@@ -466,7 +466,7 @@ vpn_seen() {
     </set>
 </map>
 EOF
-    watch_start
+    network_start
     probe "$PROBE" vpn-seen left-out
     wait_line "vpn-seen left-out done" 30
 }
@@ -511,8 +511,8 @@ loopback() {
     install "$PROBE_APK"
     install "$PEER_APK"
     install "$FIXTURE_APK"
-    install "$WATCH_APK"
-    watch_start
+    install "$NETWORK_APK"
+    network_start
     flows before
     probe "$PROBE" loopback listen
     wait_line "loopback listen ready" 30
@@ -655,9 +655,9 @@ sys.stdout.buffer.write(b"\x89PNG\r\n\x1a\n" + chunk(b"IHDR", struct.pack("!IIBB
 
 carried_by_system() {
     install "$PROBE_APK"
-    install "$WATCH_APK"
+    install "$NETWORK_APK"
     lan_permission "$PROBE"
-    watch_start
+    network_start
     case ,$PARTS, in *,download,*) ;; *) carried_tab_and_resolver; return ;; esac
     flows download-before
     probe "$PROBE" carried-by-system download
@@ -691,7 +691,7 @@ carried_resolver() {
         if [ "$mode" = hostname ]; then a shell settings put global private_dns_specifier dns.google; fi
         a shell settings put global private_dns_mode "$mode"
         sleep 10
-        echo "private-dns $mode watch=$(a shell dumpsys activity service "$WATCH_SERVICE" | tr -d '\r' | sed -n 's/^ *private-dns //p' | tr ' ' _)" >>"$OUT/observed.txt"
+        echo "private-dns $mode watch=$(a shell dumpsys activity service "$NETWORK_SERVICE" | tr -d '\r' | sed -n 's/^ *private-dns //p' | tr ' ' _)" >>"$OUT/observed.txt"
         flows_during "resolve-$mode" "carried-by-system resolve-$mode done" $((TRIALS * 6 + 120)) \
             "$PROBE" carried-by-system "resolve-$mode" --ei trials "$TRIALS"
     done
@@ -701,9 +701,9 @@ carried_resolver() {
 
 short_lived() {
     install "$PROBE_APK"
-    install "$WATCH_APK"
+    install "$NETWORK_APK"
     lan_permission "$PROBE"
-    watch_start
+    network_start
     local step
     for step in udp-closed udp-open tcp-closed tcp-open; do
         flows_during "$step" "short-lived $step done" $((TRIALS / 5 + 120)) "$PROBE" short-lived "$step" --ei trials "$TRIALS"
@@ -712,9 +712,9 @@ short_lived() {
 
 webview() {
     install "$PROBE_APK"
-    install "$WATCH_APK"
+    install "$NETWORK_APK"
     lan_permission "$PROBE"
-    watch_start
+    network_start
     flows before
     probe "$PROBE" webview page
     wait_line "webview page loaded" 60

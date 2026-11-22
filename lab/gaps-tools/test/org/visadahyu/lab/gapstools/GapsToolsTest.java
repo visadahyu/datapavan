@@ -161,7 +161,7 @@ public final class GapsToolsTest {
         equal("in part", tcp.get("result"));
     }
 
-    static void testLoopbackRowNotHeldWhenWatchSawIt() throws Exception {
+    static void testLoopbackRowNotHeldWhenTheTunnelSawIt() throws Exception {
         String log = "loopback listen ready\nloopback listen v4 accepted=yes ask=match\nloopback connect v4 answer=match\n"
                 + "loopback listen v6 accepted=yes ask=match\nloopback connect v6 answer=match\n"
                 + "fixture socket v4 answer=refused error=SocketException:socket_failed:_EPERM_(Operation_not_permitted)\n";

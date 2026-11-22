@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-# The test server for Watch's end-to-end check (scripts/verify-watch.sh), from the packet-engine
+# The test server for Watch's end-to-end check (scripts/verify-network.sh), from the packet-engine
 # spike: GET /bytes/N sends N bytes, POST /sink reads and drops the body, GET /ping answers four bytes.
 # UDP on the next port echoes every datagram. The emulator reaches it at 10.0.2.2, a phone on the
 # same Wi-Fi at the computer's address. Nothing it receives is kept.
@@ -11,7 +11,7 @@
 # written as "tcp" or "udp" to FILE, for verify-chain.sh. Once every port is bound it prints "ready PORT";
 # a port it cannot bind ends it at once, with the error.
 #
-#   python3 -I scripts/watch-lab/server.py [port, default 8790] [--sentinel FILE]
+#   python3 -I scripts/network-lab/server.py [port, default 8790] [--sentinel FILE]
 import selectors
 import socket
 import sys
@@ -80,11 +80,11 @@ def echo_udp(sock):
 
 def sentinel(tcp, udp, out):
     """Writes "tcp" for each connection and "udp" for each datagram that reaches the sentinel's port."""
-    watch = selectors.DefaultSelector()
-    watch.register(tcp, selectors.EVENT_READ, "tcp")
-    watch.register(udp, selectors.EVENT_READ, "udp")
+    selector = selectors.DefaultSelector()
+    selector.register(tcp, selectors.EVENT_READ, "tcp")
+    selector.register(udp, selectors.EVENT_READ, "udp")
     while True:
-        for key, _ in watch.select():
+        for key, _ in selector.select():
             if key.data == "tcp":
                 key.fileobj.accept()[0].close()
             else:
