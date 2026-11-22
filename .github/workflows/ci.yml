@@ -340,9 +340,10 @@ jobs:
   # - audit: the audit app's smoke test (overview shown, no INTERNET permission, no crash), then the audit
   #   verification, which gives a test fixture app risky access and checks that the audit reports it, the
   #   remediation plan's hand-off, journal and undo with the same fixture, the launcher shortcuts as
-  #   Android hands them to the launcher, and the data pack import (scripts/smoke.sh,
-  #   scripts/verify-audit.sh, scripts/verify-plan.sh, scripts/verify-shortcuts.sh,
-  #   scripts/verify-datapack.sh);
+  #   Android hands them to the launcher, the data pack import, and Android's own labels read from the phone in eight
+  #   languages against AOSP's text, with the screens that quote them, a skip failing (ADR 0054) (scripts/smoke.sh,
+  #   scripts/verify-audit.sh, scripts/verify-plan.sh, scripts/verify-shortcuts.sh, scripts/verify-datapack.sh,
+  #   scripts/verify-labels.sh);
   # - screens: screenshots in every language with an accessibility check (scripts/screenshots.sh);
   # - blocking: tracker blocking and its undo (W8, part 3a, ADR 0053), the project's blocking fixture against the
   #   blocking lab on the runner's loopback (scripts/verify-blocking.sh, scripts/blocklab.py), a skip failing;
@@ -375,6 +376,8 @@ jobs:
       PROXYLAB_NO_BUILD: ${{ matrix.shard == 'proxies' && '1' || '' }}
       # The blocking shard (W8, part 3a, ADR 0053): a check that cannot start the blocking lab fails on CI.
       BLOCKING_REQUIRED: ${{ matrix.shard == 'blocking' && '1' || '' }}
+      # The audit shard's labels check (ADR 0054): a check that skips its screens fails on CI.
+      LABELS_REQUIRED: ${{ matrix.shard == 'audit' && '1' || '' }}
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:

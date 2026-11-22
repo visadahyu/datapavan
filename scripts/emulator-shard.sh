@@ -28,8 +28,10 @@ checks_of() {
         # tool, the live counters by the apps' states, its connection log, and its release build as users get it.
         watch) echo smoke-watch.sh verify-watch.sh verify-chain.sh verify-activity.sh verify-log.sh verify-watch-release.sh ;;
         # Basic: its smoke test, which installs it, then the audit with its fixture, the remediation plan,
-        # the launcher shortcuts and the data pack import.
-        audit) echo smoke.sh verify-audit.sh verify-plan.sh verify-shortcuts.sh verify-datapack.sh ;;
+        # the launcher shortcuts, the data pack import, and Android's own labels with the screens that quote them
+        # (ADR 0054), which also installs Advanced for its names' section; each skip there fails the shard where
+        # LABELS_REQUIRED=1, as on CI.
+        audit) echo smoke.sh verify-audit.sh verify-plan.sh verify-shortcuts.sh verify-datapack.sh verify-labels.sh ;;
         # Basic's screens in every language with the accessibility check.
         screens) echo screenshots.sh ;;
         # Watch's WireGuard upstream against the lab's peers of the kernel's WireGuard, and the import of its
@@ -126,6 +128,18 @@ case "${1:-}" in
                     rm -f "$log"
                     if [ "${PROXYLAB_REQUIRED:-}" = 1 ] && [ "$last" != "== Apps' built-in proxies checked on the emulator" ]; then
                         echo "$check ended without its last line, with PROXYLAB_REQUIRED=1: '$last'" >&2
+                        exit 1
+                    fi
+                    ;;
+                verify-labels.sh)
+                    # With the switch on, the labels check must reach its last line and skip nothing (ADR 0054).
+                    log=$(mktemp)
+                    "$ROOT/scripts/$check" | tee "$log"
+                    last=$(tail -n 1 "$log")
+                    skipped=$(grep -c '^skipped:' "$log" || true)
+                    rm -f "$log"
+                    if [ "${LABELS_REQUIRED:-}" = 1 ] && { [ "$last" != "== Android's own labels checked on the emulator" ] || [ "$skipped" != 0 ]; }; then
+                        echo "$check skipped $skipped steps or ended without its last line, with LABELS_REQUIRED=1: '$last'" >&2
                         exit 1
                     fi
                     ;;
