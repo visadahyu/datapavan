@@ -43,6 +43,7 @@
     <string name="severity_info">提示</string>
     <string name="special_accessibility">无障碍服务</string>
     <string name="special_notification_listener">读取通知</string>
+    <string name="special_device_admin">设备管理应用</string>
     <string name="special_battery_exempt">电池使用无限制</string>
     <string name="action_security_settings">打开安全设置</string>
     <string name="finding_vpn_remote_control_title">可以控制手机的 VPN 应用</string>
@@ -446,6 +447,7 @@
     <string name="plan_short_preinstalled">随手机预装</string>
 
     <string name="screen_app_info">应用页面</string>
+    <string name="screen_unused">闲置应用设置</string>
     <string name="screen_device_admins">安全设置</string>
     <string name="screen_security">安全设置</string>
 
@@ -659,6 +661,10 @@
     <string name="android_label_usage_access">使用情况访问权限</string>
     <!-- Android's own label: Settings' usage_access at android-16.0.0_r4. -->
     <string name="android_label_usage_access_api36">应用使用情况数据</string>
+    <!-- Android's own label: Settings' permit_usage_access at android-15.0.0_r36. -->
+    <string name="android_label_permit_usage_access">授予使用情况访问权限</string>
+    <!-- Android's own label: Settings' permit_usage_access at android-16.0.0_r4. -->
+    <string name="android_label_permit_usage_access_api36">允许访问应用使用情况数据</string>
     <!-- Android's own label: SettingsLib's install_other_apps at android-15.0.0_r36. -->
     <string name="android_label_install_unknown_apps">安装未知应用</string>
     <!-- Android's own label: SettingsLib's install_other_apps at android-17.0.0_r1. -->

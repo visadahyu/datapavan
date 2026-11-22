@@ -41,6 +41,7 @@
     <string name="severity_info">Заметка</string>
     <string name="special_accessibility">Сервис специальных возможностей</string>
     <string name="special_notification_listener">Читает уведомления</string>
+    <string name="special_device_admin">Администратор устройства</string>
     <string name="special_battery_exempt">Расход заряда без ограничений</string>
     <string name="action_security_settings">Открыть настройки безопасности</string>
     <string name="finding_vpn_remote_control_title">VPN-приложение, которое может управлять телефоном</string>
@@ -455,6 +456,7 @@
     <string name="plan_short_preinstalled">Предустановлено на телефоне</string>
 
     <string name="screen_app_info">Страница приложения</string>
+    <string name="screen_unused">Настройки неиспользуемых приложений</string>
     <string name="screen_device_admins">Настройки безопасности</string>
     <string name="screen_security">Настройки безопасности</string>
 
@@ -675,6 +677,10 @@
     <string name="android_label_usage_access">Доступ к данным об использовании</string>
     <!-- Android's own label: Settings' usage_access at android-16.0.0_r4. -->
     <string name="android_label_usage_access_api36">Данные об использовании приложений</string>
+    <!-- Android's own label: Settings' permit_usage_access at android-15.0.0_r36. -->
+    <string name="android_label_permit_usage_access">Разрешить доступ</string>
+    <!-- Android's own label: Settings' permit_usage_access at android-16.0.0_r4. -->
+    <string name="android_label_permit_usage_access_api36">Разрешить доступ к статистике использования</string>
     <!-- Android's own label: SettingsLib's install_other_apps at android-15.0.0_r36. -->
     <string name="android_label_install_unknown_apps">Установка неизвестных приложений</string>
     <!-- Android's own label: SettingsLib's install_other_apps at android-17.0.0_r1. -->

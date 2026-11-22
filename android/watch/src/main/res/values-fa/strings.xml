@@ -728,4 +728,8 @@
     <string name="android_label_screen_lock_api36">قفل صفحه</string>
     <!-- Android's own label: Settings' unlock_set_unlock_launch_picker_title at android-17.0.0_r1. -->
     <string name="android_label_screen_lock_api37">قفل صفحه</string>
+    <!-- Android's own label: Settings' usage_access at android-15.0.0_r36. -->
+    <string name="android_label_usage_access">دسترسی به داده‌های مصرف</string>
+    <!-- Android's own label: Settings' usage_access at android-16.0.0_r4. -->
+    <string name="android_label_usage_access_api36">داده‌های مصرف برنامه</string>
 </resources>

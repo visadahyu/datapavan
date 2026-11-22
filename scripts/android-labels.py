@@ -87,17 +87,25 @@ COLUMNS = ["key", "maker", "api", "package", "type", "name", "verified", "source
 KEY = re.compile(r"^[a-z][a-z0-9_]*$")
 MAKER = re.compile(r"^(aosp|[a-z0-9][a-z0-9 _-]*)$")
 API = re.compile(r"^(\d+)-(\d*)$")
-PACKAGE = re.compile(r"^([a-z][a-z0-9_]*(\.[a-z][a-z0-9_]*)+|handler:[A-Za-z0-9_.]+)$")
+PACKAGE = re.compile(r"^[a-z][a-z0-9_]*(\.[a-z][a-z0-9_]*)+$")
+# The packages an aosp row may read, by its repository: SettingsLib's strings are merged into Settings' package, and the
+# permission controller is Google's on phones with its services, AOSP's on others. As SystemLabels.AOSP_PACKAGES.
+PACKAGES_OF = {
+    "settings": {"com.android.settings"},
+    "settingslib": {"com.android.settings"},
+    "permissioncontroller": {"com.google.android.permissioncontroller", "com.android.permissioncontroller"},
+}
 NAME = re.compile(r"^[a-z][a-z0-9_]*$")
 SOURCE = re.compile(r"^(aosp:(settings|settingslib|permissioncontroller)@(android-[0-9.]+_r\d+)\.\.(android-[0-9.]+_r\d+)|device)$")
 VARIANT = re.compile(r"^android_label_([a-z0-9_]+?)(?:_api(\d+))?$")
-# As OtherAppResources.clean: no control or direction characters, no soft hyphen or zero-width space, one line.
+# As OtherAppResources.clean: no direction characters, soft hyphen or zero-width space; a control character turns into
+# a space; one line. Only ASCII whitespace collapses, as Java's \s, so a no-break space (French, before a colon) stays.
 MARKS = set("\u200e\u200f\u202a\u202b\u202c\u202d\u202e\u2066\u2067\u2068\u2069\u061c\u00ad\u200b")
 
 
 def clean(text):
-    flat = "".join(c for c in text if c not in MARKS and (ord(c) >= 0x20 or c in "\t\n") and not 0x7f <= ord(c) < 0xa0)
-    return re.sub(r"\s+", " ", flat).strip()
+    flat = "".join(" " if ord(c) < 0x20 or 0x7f <= ord(c) < 0xa0 else c for c in text if c not in MARKS)
+    return re.sub(r"[ \t\n\x0b\f\r]+", " ", flat).strip(" \t\n\x0b\f\r")
 
 
 def unquote(raw):
@@ -120,7 +128,8 @@ def unquote(raw):
             quoted = not quoted
             i += 1
             continue
-        if c.isspace() and not quoted:
+        # As aapt2: only ASCII whitespace collapses; a no-break space is kept.
+        if c in " \t\n\r\f\v" and not quoted:
             if not out or out[-1] != " ":
                 out.append(" ")
             i += 1
@@ -181,6 +190,8 @@ def check_rows(rows, problems):
         if row["maker"] == "aosp" and not row["source"].startswith("aosp:"):
             problems.append(f"{where}: an aosp row's source is the AOSP repository and its tags")
         m = SOURCE.match(row["source"])
+        if m.group(1).startswith("aosp:") and row["package"] not in PACKAGES_OF[m.group(2)]:
+            problems.append(f"{where}: package {row['package']} is not where {m.group(2)}'s strings are ({', '.join(sorted(PACKAGES_OF[m.group(2)]))})")
         if m.group(1).startswith("aosp:"):
             first, last = m.group(3), m.group(4)
             if first not in API_OF or last not in API_OF:
@@ -297,6 +308,14 @@ def check_recorded(rows, recorded, problems):
     for key, api, lang in sorted(recorded):
         if api not in covered(rows, key):
             problems.append(f"{RECORDED.name}: {key} at API {api} ({lang}) is covered by no aosp row")
+    # Each key's first aosp row at a release reads the name AOSP's text was recorded under, so that a misspelt name
+    # fails here and not only against AOSP's files.
+    for (key, api, lang), (name, _) in sorted(recorded.items()):
+        if lang != "en":
+            continue
+        first = next((row for row in rows if row["key"] == key and row["maker"] == "aosp" and api_range(row["api"])[0] <= api <= api_range(row["api"])[1]), None)
+        if first is not None and first["name"] != name:
+            problems.append(f"{RECORDED.name}: {key} at API {api} was recorded under {name}, but its first aosp row reads {first['name']}")
 
 
 def check(rows_path=DATA, recorded_path=RECORDED, modules=MODULES, site=SITE):
@@ -327,10 +346,14 @@ def wanted_files(rows):
     return sorted(files)
 
 
+# The most a fetched file may hold, base64 included: Settings' largest strings.xml is about 1.5 MB.
+MAX_FETCH = 8 << 20
+
+
 def fetch(directory, rows):
     for repo, tag, lang in wanted_files(rows):
         target = cache_path(directory, repo, tag, lang)
-        if target.exists() or target.with_suffix(".missing").exists():
+        if target.exists():
             continue
         project, res = repository(repo, tag)
         url = f"{HOST}/{project}/+/refs/tags/{tag}/{res}/{LANGS[lang]}/strings.xml?format=TEXT"
@@ -338,12 +361,15 @@ def fetch(directory, rows):
         for attempt in range(4):
             try:
                 with urllib.request.urlopen(url, timeout=60) as response:
-                    target.write_bytes(base64.b64decode(response.read()))
+                    body = response.read(MAX_FETCH + 1)
+                if len(body) > MAX_FETCH:
+                    raise SystemExit(f"{url} is larger than {MAX_FETCH} bytes")
+                target.write_bytes(base64.b64decode(body, validate=True))
                 break
             except urllib.error.HTTPError as error:
+                # Every repository read has all eight languages at every tag: a missing file is a wrong path.
                 if error.code == 404:
-                    target.with_suffix(".missing").write_text(url + "\n")
-                    break
+                    raise SystemExit(f"{url} is not there (404)")
                 time.sleep(5 * (attempt + 1))
             except (urllib.error.URLError, TimeoutError):
                 time.sleep(5 * (attempt + 1))
@@ -407,9 +433,10 @@ def android_escape(text):
 REPOSITORY_NAMES = {"settings": "Settings'", "settingslib": "SettingsLib's", "permissioncontroller": "the permission controller's"}
 
 
-def write_fallbacks(module_name, keys, rows, recorded):
-    """The android_label_* block of each of the module's strings.xml, written from the recorded texts."""
-    module = {"app": MODULES[0], "watch": MODULES[1]}[module_name]
+def write_fallbacks(module_name, keys, rows, recorded, modules=None):
+    """The android_label_* block of each of the module's strings.xml, written from the recorded texts: the block before
+    it, its heading comment included, goes first, so that writing twice gives the same file."""
+    module = (modules or {"app": MODULES[0], "watch": MODULES[1]})[module_name]
     names = {}
     for key in keys:
         if key not in recorded_keys(recorded):
@@ -426,7 +453,14 @@ def write_fallbacks(module_name, keys, rows, recorded):
         path = module / folder / "strings.xml"
         lines = path.read_text(encoding="utf-8").split("\n")
         kept = []
+        in_heading = False
         for line in lines:
+            if line.strip().startswith("<!-- Android's own labels (ADR 0054)"):
+                in_heading = "-->" not in line
+                continue
+            if in_heading:
+                in_heading = "-->" not in line
+                continue
             if "<string name=\"android_label_" in line or line.strip().startswith("<!-- Android's own label"):
                 continue
             kept.append(line)
@@ -449,40 +483,68 @@ def write_fallbacks(module_name, keys, rows, recorded):
 
 
 def self_test():
+    """Broken copies of the data, each of which must fail the check with the problem it is about."""
     rows_text = DATA.read_text(encoding="utf-8")
     recorded_text = RECORDED.read_text(encoding="utf-8")
     _, _, base = check()
     if base:
         print("self-test: the data itself fails the check:", *base, sep="\n  ")
         return 1
-    caught = 0
     cases = []
     first_aosp = next(line for line in rows_text.splitlines() if line and not line.startswith("#"))
-    cases.append(("a maker's row with no device", rows_text + first_aosp.replace("\taosp\t", "\tsamsung\t", 1) + "\n", recorded_text, None))
-    cases.append(("an api range its tags do not match", rows_text.replace(first_aosp, first_aosp.replace("\t29-\t", "\t30-\t", 1)), recorded_text, None))
-    cases.append(("a missing column", rows_text.replace(first_aosp, first_aosp.rsplit("\t", 1)[0]), recorded_text, None))
-    cases.append(("a source that is no AOSP repository", rows_text.replace(first_aosp, first_aosp.replace("aosp:settings@", "aosp:launcher@")), recorded_text, None))
+    lockdown = next(line for line in rows_text.splitlines() if "\tvpn_menu_lockdown\t" in line)
+    controller = next(line for line in rows_text.splitlines() if "\tauto_revoke_label\t" in line)
+    cases.append(("a maker's row with no device", rows_text + first_aosp.replace("\taosp\t", "\tsamsung\t", 1) + "\n", recorded_text,
+                  "names the device"))
+    cases.append(("an api range its tags do not match", rows_text.replace(first_aosp, first_aosp.replace("\t29-\t", "\t30-\t", 1)), recorded_text,
+                  "are not its Android versions"))
+    cases.append(("a missing column", rows_text.replace(first_aosp, first_aosp.rsplit("\t", 1)[0]), recorded_text, "columns, not 8"))
+    cases.append(("a source that is no AOSP repository", rows_text.replace(first_aosp, first_aosp.replace("aosp:settings@", "aosp:launcher@")),
+                  recorded_text, "source 'aosp:launcher@"))
+    cases.append(("a misspelt resource name", rows_text.replace(first_aosp, first_aosp.replace("\tusage_access\t-", "\tusage_acces\t-")),
+                  recorded_text, "its first aosp row reads usage_acces"))
+    cases.append(("a misspelt name in a row of a later release", rows_text.replace(lockdown, lockdown.replace("vpn_menu_lockdown", "vpn_lockdown_typo")),
+                  recorded_text, "its first aosp row reads vpn_lockdown_typo"))
+    cases.append(("a package where the repository's strings are not", rows_text.replace(controller, controller.replace("\tcom.google.android.permissioncontroller\t", "\tcom.android.settings\t")),
+                  recorded_text, "is not where permissioncontroller's strings are"))
     recorded_lines = [line for line in recorded_text.splitlines() if line and not line.startswith("#")]
     at_fallback = next(line for line in recorded_lines if line.split("\t")[1] == str(FALLBACK_API) and line.split("\t")[2] == "de")
-    cases.append(("a fallback that is not AOSP's text", rows_text, recorded_text.replace(at_fallback, at_fallback.rsplit("\t", 1)[0] + "\tSomething else"), None))
-    cases.append(("a release with no recorded text", rows_text, recorded_text.replace(recorded_lines[0] + "\n", ""), None))
+    cases.append(("a fallback that is not AOSP's text", rows_text, recorded_text.replace(at_fallback, at_fallback.rsplit("\t", 1)[0] + "\tSomething else"),
+                  "AOSP's at API 35 is 'Something else'"))
+    cases.append(("a release with no recorded text", rows_text, recorded_text.replace(recorded_lines[0] + "\n", ""), "no AOSP text for"))
     later = next(line for line in recorded_lines if line.split("\t")[1] == str(LAST_API) and line.split("\t")[2] == "fr")
-    cases.append(("a change after the fallback's release with no string for it", rows_text, recorded_text.replace(later, later.rsplit("\t", 1)[0] + "\tUn autre nom"), None))
+    cases.append(("a change after the fallback's release with no string for it", rows_text, recorded_text.replace(later, later.rsplit("\t", 1)[0] + "\tUn autre nom"),
+                  "is missing"))
     failed = []
     with tempfile.TemporaryDirectory() as work:
-        for what, rows_copy, recorded_copy, _ in cases:
+        for what, rows_copy, recorded_copy, wanted in cases:
             rows_path = Path(work) / "labels.tsv"
             recorded_path = Path(work) / "recorded.tsv"
             rows_path.write_text(rows_copy, encoding="utf-8")
             recorded_path.write_text(recorded_copy, encoding="utf-8")
             _, _, problems = check(rows_path, recorded_path)
-            if problems:
-                caught += 1
-            else:
-                failed.append(what)
+            if not any(wanted in problem for problem in problems):
+                failed.append(f"{what}: wanted '{wanted}', got {problems[:3]}")
+        # The writer of the fallbacks, twice over a copy of the app's files: the second run changes nothing.
+        copy = Path(work) / "res"
+        for folder in MODULE_DIRS.values():
+            (copy / folder).mkdir(parents=True)
+            (copy / folder / "strings.xml").write_bytes((MODULES[0] / folder / "strings.xml").read_bytes())
+        problems = []
+        rows = check_rows(table(DATA), problems)
+        recorded = read_recorded(RECORDED, problems)
+        keys = [VARIANT.match(n).group(1) for n in fallback_strings(MODULES[0])["en"] if not VARIANT.match(n).group(2)]
+        write_fallbacks("app", keys, rows, recorded, {"app": copy})
+        once = {f: (copy / f / "strings.xml").read_bytes() for f in MODULE_DIRS.values()}
+        write_fallbacks("app", keys, rows, recorded, {"app": copy})
+        if any((copy / f / "strings.xml").read_bytes() != once[f] for f in MODULE_DIRS.values()):
+            failed.append("the fallbacks' writer changes a file it has written")
+        if once["values"] != (MODULES[0] / "values" / "strings.xml").read_bytes():
+            failed.append("the fallbacks' writer does not give the app's strings.xml as it is")
     for what in failed:
         print(f"self-test: not caught: {what}")
-    print(f"android labels self-test: {caught} of {len(cases)} broken copies caught")
+    print(f"android labels self-test: {len(cases) - len([f for f in failed if ':' in f and 'writer' not in f])} of {len(cases)} broken copies caught"
+          f", and the writer {'is not' if any('writer' in f for f in failed) else 'is'} idempotent")
     return 1 if failed else 0
 
 

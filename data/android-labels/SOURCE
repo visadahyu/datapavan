@@ -9,7 +9,9 @@ repositories: settings = platform/packages/apps/Settings, res/values*/strings.xm
   platform/frameworks/base, packages/SettingsLib/res/values*/strings.xml, merged into Settings' package
   (com.android.settings) under the same names; permissioncontroller = platform/packages/apps/PackageInstaller,
   res/values*/strings.xml, for Android 11, whose permission controller held the switch for unused apps.
-rows: 22 for 21 labels, all aosp, each name present at every tag of its range. A maker's rows are added as the
-  coordinator reads them on a device (MainActivity's debug command labels-find), each with the model and build it
-  was read on.
-not-settled: no maker's row yet; the A40 (SM-A405FN) is read by the coordinator, not here.
+rows: 34 for 22 labels. 24 aosp rows, each name present at every tag of its range; two of them read Android 11's
+  switch for unused apps from Google's and AOSP's permission controller. 10 samsung rows, read by the coordinator on a
+  Galaxy A40 (SM-A405FN, One UI 3, Android 11, build A405FNXXU4CWC3) on 2026-11-22 with MainActivity's debug command
+  labels-read: AOSP's names, whose text the screen showed in English.
+not-settled: Samsung's other Android versions and labels (Private DNS, device admin apps, encryption and credentials,
+  screen lock), and every other maker.

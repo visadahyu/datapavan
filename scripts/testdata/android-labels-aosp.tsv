@@ -694,7 +694,7 @@ notification_access	34	zh	manage_notification_access_title	设备和应用通知
 notification_access	35	en	manage_notification_access_title	Notification read, reply & control
 notification_access	35	fa	manage_notification_access_title	خواندن، پاسخ دادن، و کنترل اعلان
 notification_access	35	ar	manage_notification_access_title	قراءة الإشعارات والردّ عليها والتحكّم فيها
-notification_access	35	fr	manage_notification_access_title	Notifications : lecture, contrôle et réponse
+notification_access	35	fr	manage_notification_access_title	Notifications : lecture, contrôle et réponse
 notification_access	35	de	manage_notification_access_title	Benachrichtigungen lesen, beantworten & verwalten
 notification_access	35	es	manage_notification_access_title	Lectura, respuesta y control de notificaciones
 notification_access	35	ru	manage_notification_access_title	Чтение уведомлений, управление ими и ответы на них
@@ -702,7 +702,7 @@ notification_access	35	zh	manage_notification_access_title	读取、回复和控
 notification_access	36	en	manage_notification_access_title	Notification read, reply & control
 notification_access	36	fa	manage_notification_access_title	خواندن، پاسخ دادن، و کنترل اعلان
 notification_access	36	ar	manage_notification_access_title	قراءة الإشعارات والردّ عليها والتحكّم فيها
-notification_access	36	fr	manage_notification_access_title	Notifications : lecture, contrôle et réponse
+notification_access	36	fr	manage_notification_access_title	Notifications : lecture, contrôle et réponse
 notification_access	36	de	manage_notification_access_title	Benachrichtigungen lesen, beantworten & verwalten
 notification_access	36	es	manage_notification_access_title	Lectura, respuesta y control de notificaciones
 notification_access	36	ru	manage_notification_access_title	Чтение уведомлений, управление ими и ответы на них
@@ -710,7 +710,7 @@ notification_access	36	zh	manage_notification_access_title	读取、回复和控
 notification_access	37	en	manage_notification_access_title	Notification read, reply & control
 notification_access	37	fa	manage_notification_access_title	خواندن، پاسخ دادن، و کنترل اعلان
 notification_access	37	ar	manage_notification_access_title	قراءة الإشعارات والردّ عليها والتحكّم فيها
-notification_access	37	fr	manage_notification_access_title	Notifications : lecture, contrôle et réponse
+notification_access	37	fr	manage_notification_access_title	Notifications : lecture, contrôle et réponse
 notification_access	37	de	manage_notification_access_title	Benachrichtigungen lesen, beantworten & verwalten
 notification_access	37	es	manage_notification_access_title	Lectura, respuesta y control de notificaciones
 notification_access	37	ru	manage_notification_access_title	Чтение уведомлений, управление ими и ответы на них
@@ -787,6 +787,78 @@ overlay	37	de	system_alert_window_settings	Über anderen Apps einblenden
 overlay	37	es	system_alert_window_settings	Mostrar sobre otras aplicaciones
 overlay	37	ru	system_alert_window_settings	Поверх других приложений
 overlay	37	zh	system_alert_window_settings	显示在其他应用的上层
+permit_usage_access	29	en	permit_usage_access	Permit usage access
+permit_usage_access	29	fa	permit_usage_access	اجازه دسترسی به میزان استفاده
+permit_usage_access	29	ar	permit_usage_access	السماح بالدخول إلى الاستخدام
+permit_usage_access	29	fr	permit_usage_access	Autoriser l'accès aux données d'utilisation
+permit_usage_access	29	de	permit_usage_access	Zugriff auf Nutzungsdaten gewähren
+permit_usage_access	29	es	permit_usage_access	Permitir acceso a los datos de uso
+permit_usage_access	29	ru	permit_usage_access	Доступ к истории использования
+permit_usage_access	29	zh	permit_usage_access	允许查看使用情况
+permit_usage_access	30	en	permit_usage_access	Permit usage access
+permit_usage_access	30	fa	permit_usage_access	اجازه دسترسی به میزان استفاده
+permit_usage_access	30	ar	permit_usage_access	السماح بالوصول إلى بيانات الاستخدام
+permit_usage_access	30	fr	permit_usage_access	Autoriser l'accès aux données d'utilisation
+permit_usage_access	30	de	permit_usage_access	Zugriff auf Nutzungsdaten gewähren
+permit_usage_access	30	es	permit_usage_access	Permitir acceso a los datos de uso
+permit_usage_access	30	ru	permit_usage_access	Доступ к истории использования
+permit_usage_access	30	zh	permit_usage_access	允许查看使用情况
+permit_usage_access	31	en	permit_usage_access	Permit usage access
+permit_usage_access	31	fa	permit_usage_access	اجازه دسترسی به داده‌های مصرف
+permit_usage_access	31	ar	permit_usage_access	السماح بالوصول إلى بيانات الاستخدام
+permit_usage_access	31	fr	permit_usage_access	Autoriser l'accès aux données d'utilisation
+permit_usage_access	31	de	permit_usage_access	Zugriff auf Nutzungsdaten gewähren
+permit_usage_access	31	es	permit_usage_access	Permitir acceso al uso
+permit_usage_access	31	ru	permit_usage_access	Разрешить доступ
+permit_usage_access	31	zh	permit_usage_access	允许查看使用情况
+permit_usage_access	32	en	permit_usage_access	Permit usage access
+permit_usage_access	32	fa	permit_usage_access	اجازه دسترسی به داده‌های مصرف
+permit_usage_access	32	ar	permit_usage_access	السماح بالوصول إلى بيانات الاستخدام
+permit_usage_access	32	fr	permit_usage_access	Autoriser l'accès aux données d'utilisation
+permit_usage_access	32	de	permit_usage_access	Zugriff auf Nutzungsdaten gewähren
+permit_usage_access	32	es	permit_usage_access	Permitir acceso al uso
+permit_usage_access	32	ru	permit_usage_access	Разрешить доступ
+permit_usage_access	32	zh	permit_usage_access	允许查看使用情况
+permit_usage_access	33	en	permit_usage_access	Permit usage access
+permit_usage_access	33	fa	permit_usage_access	اجازه دسترسی به داده‌های مصرف
+permit_usage_access	33	ar	permit_usage_access	السماح بالوصول إلى بيانات الاستخدام
+permit_usage_access	33	fr	permit_usage_access	Autoriser l'accès aux données d'utilisation
+permit_usage_access	33	de	permit_usage_access	Zugriff auf Nutzungsdaten gewähren
+permit_usage_access	33	es	permit_usage_access	Permitir acceso al uso
+permit_usage_access	33	ru	permit_usage_access	Разрешить доступ
+permit_usage_access	33	zh	permit_usage_access	允许查看使用情况
+permit_usage_access	34	en	permit_usage_access	Permit usage access
+permit_usage_access	34	fa	permit_usage_access	اجازه دسترسی به داده‌های مصرف
+permit_usage_access	34	ar	permit_usage_access	السماح بالوصول إلى بيانات الاستخدام
+permit_usage_access	34	fr	permit_usage_access	Autoriser l'accès aux données d'utilisation
+permit_usage_access	34	de	permit_usage_access	Zugriff auf Nutzungsdaten gewähren
+permit_usage_access	34	es	permit_usage_access	Permitir acceso al uso
+permit_usage_access	34	ru	permit_usage_access	Разрешить доступ
+permit_usage_access	34	zh	permit_usage_access	授予使用情况访问权限
+permit_usage_access	35	en	permit_usage_access	Permit usage access
+permit_usage_access	35	fa	permit_usage_access	اجازه دسترسی به داده‌های مصرف
+permit_usage_access	35	ar	permit_usage_access	السماح بالوصول إلى بيانات الاستخدام
+permit_usage_access	35	fr	permit_usage_access	Autoriser l'accès aux données d'utilisation
+permit_usage_access	35	de	permit_usage_access	Zugriff auf Nutzungsdaten gewähren
+permit_usage_access	35	es	permit_usage_access	Permitir acceso al uso
+permit_usage_access	35	ru	permit_usage_access	Разрешить доступ
+permit_usage_access	35	zh	permit_usage_access	授予使用情况访问权限
+permit_usage_access	36	en	permit_usage_access	Permit access to app usage data
+permit_usage_access	36	fa	permit_usage_access	مجاز کردن دسترسی به داده‌های مصرف برنامه
+permit_usage_access	36	ar	permit_usage_access	السماح بالوصول إلى بيانات استخدام التطبيق
+permit_usage_access	36	fr	permit_usage_access	Autoriser l'accès aux données d'utilisation des applications
+permit_usage_access	36	de	permit_usage_access	Zugriff auf App-Nutzungsdaten erlauben
+permit_usage_access	36	es	permit_usage_access	Dar acceso a datos de uso de apps
+permit_usage_access	36	ru	permit_usage_access	Разрешить доступ к статистике использования
+permit_usage_access	36	zh	permit_usage_access	允许访问应用使用情况数据
+permit_usage_access	37	en	permit_usage_access	Permit access to app usage data
+permit_usage_access	37	fa	permit_usage_access	مجاز کردن دسترسی به داده‌های مصرف برنامه
+permit_usage_access	37	ar	permit_usage_access	السماح بالوصول إلى بيانات استخدام التطبيق
+permit_usage_access	37	fr	permit_usage_access	Autoriser l'accès aux données d'utilisation des applications
+permit_usage_access	37	de	permit_usage_access	Zugriff auf App-Nutzungsdaten erlauben
+permit_usage_access	37	es	permit_usage_access	Dar acceso a datos de uso de apps
+permit_usage_access	37	ru	permit_usage_access	Разрешить доступ к статистике использования
+permit_usage_access	37	zh	permit_usage_access	允许访问应用使用情况数据
 private_dns	29	en	select_private_dns_configuration_title	Private DNS
 private_dns	29	fa	select_private_dns_configuration_title	DNS خصوصی
 private_dns	29	ar	select_private_dns_configuration_title	نظام أسماء النطاقات الخاص

@@ -43,6 +43,7 @@
     <string name="severity_info">نکته</string>
     <string name="special_accessibility">سرویس دسترس‌پذیری</string>
     <string name="special_notification_listener">خواندن اعلان‌ها</string>
+    <string name="special_device_admin">سرپرست دستگاه</string>
     <string name="special_battery_exempt">مصرف باتری نامحدود</string>
     <string name="action_security_settings">باز کردن تنظیمات امنیتی</string>
     <string name="finding_vpn_remote_control_title">برنامه وی‌پی‌انی که می‌تواند گوشی را کنترل کند</string>
@@ -454,6 +455,7 @@
     <string name="plan_short_preinstalled">از اول روی گوشی</string>
 
     <string name="screen_app_info">صفحه برنامه</string>
+    <string name="screen_unused">تنظیم برنامه‌های استفاده‌نشده</string>
     <string name="screen_device_admins">تنظیمات امنیتی</string>
     <string name="screen_security">تنظیمات امنیتی</string>
 
@@ -670,6 +672,10 @@
     <string name="android_label_usage_access">دسترسی به داده‌های مصرف</string>
     <!-- Android's own label: Settings' usage_access at android-16.0.0_r4. -->
     <string name="android_label_usage_access_api36">داده‌های مصرف برنامه</string>
+    <!-- Android's own label: Settings' permit_usage_access at android-15.0.0_r36. -->
+    <string name="android_label_permit_usage_access">اجازه دسترسی به داده‌های مصرف</string>
+    <!-- Android's own label: Settings' permit_usage_access at android-16.0.0_r4. -->
+    <string name="android_label_permit_usage_access_api36">مجاز کردن دسترسی به داده‌های مصرف برنامه</string>
     <!-- Android's own label: SettingsLib's install_other_apps at android-15.0.0_r36. -->
     <string name="android_label_install_unknown_apps">نصب برنامه‌های ناشناس</string>
     <!-- Android's own label: SettingsLib's install_other_apps at android-17.0.0_r1. -->

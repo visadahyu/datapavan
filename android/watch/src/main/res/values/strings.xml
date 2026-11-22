@@ -747,8 +747,6 @@
     <string name="blocking_kept_code">Not blocked: in this app, this host also serves sign-in or sharing.</string>
     <string name="blocking_kept_unread">Not blocked: this host may also serve sign-in or sharing, and Datapavan has not yet read this app\'s code.</string>
     <string name="blocking_kept_own">Not blocked: this app uses this host for its own work.</string>
-         from AOSP's own translation, never translated, for where the phone gives none. scripts/android-labels.py holds
-         them to AOSP; an _apiN string is the text from Android's API level N on. -->
     <!-- Android's own labels (ADR 0054): AOSP's text at the release most phones run, each copied in every language
          from AOSP's own translation, never translated, for where the phone gives none. scripts/android-labels.py holds
          them to AOSP; an _apiN string is the text from Android's API level N on. -->
@@ -766,4 +764,8 @@
     <string name="android_label_screen_lock_api36">Screen lock</string>
     <!-- Android's own label: Settings' unlock_set_unlock_launch_picker_title at android-17.0.0_r1. -->
     <string name="android_label_screen_lock_api37">Screen lock</string>
+    <!-- Android's own label: Settings' usage_access at android-15.0.0_r36. -->
+    <string name="android_label_usage_access">Usage access</string>
+    <!-- Android's own label: Settings' usage_access at android-16.0.0_r4. -->
+    <string name="android_label_usage_access_api36">App usage data</string>
 </resources>

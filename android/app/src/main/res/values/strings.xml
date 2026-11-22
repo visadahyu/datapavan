@@ -52,6 +52,7 @@
     <string name="severity_info">Note</string>
     <string name="special_accessibility">Accessibility service</string>
     <string name="special_notification_listener">Reads notifications</string>
+    <string name="special_device_admin">Device admin</string>
     <string name="special_battery_exempt">Unrestricted battery use</string>
     <string name="action_security_settings">Open security settings</string>
     <string name="finding_vpn_remote_control_title">VPN app that can control the phone</string>
@@ -485,6 +486,7 @@
     <string name="plan_short_preinstalled">Came with the phone</string>
 
     <string name="screen_app_info">App page</string>
+    <string name="screen_unused">Unused app setting</string>
     <string name="screen_device_admins">Security settings</string>
     <string name="screen_security">Security settings</string>
 
@@ -700,8 +702,6 @@
     <string name="licences_data_note">The databases Datapavan compares your apps and your phone with have licences of their own, such as the Open Database License of the εxodus tracker list. The Data sources page in Settings names each one with its licence and where it comes from.</string>
     <!-- A line of a list of parts that the screen could not read: shown as it is. -->
     <string name="licences_unread">Shown as the list has it: %1$s</string>
-         from AOSP's own translation, never translated, for where the phone gives none. scripts/android-labels.py holds
-         them to AOSP; an _apiN string is the text from Android's API level N on. -->
     <!-- Android's own labels (ADR 0054): AOSP's text at the release most phones run, each copied in every language
          from AOSP's own translation, never translated, for where the phone gives none. scripts/android-labels.py holds
          them to AOSP; an _apiN string is the text from Android's API level N on. -->
@@ -709,6 +709,10 @@
     <string name="android_label_usage_access">Usage access</string>
     <!-- Android's own label: Settings' usage_access at android-16.0.0_r4. -->
     <string name="android_label_usage_access_api36">App usage data</string>
+    <!-- Android's own label: Settings' permit_usage_access at android-15.0.0_r36. -->
+    <string name="android_label_permit_usage_access">Permit usage access</string>
+    <!-- Android's own label: Settings' permit_usage_access at android-16.0.0_r4. -->
+    <string name="android_label_permit_usage_access_api36">Permit access to app usage data</string>
     <!-- Android's own label: SettingsLib's install_other_apps at android-15.0.0_r36. -->
     <string name="android_label_install_unknown_apps">Install unknown apps</string>
     <!-- Android's own label: SettingsLib's install_other_apps at android-17.0.0_r1. -->

@@ -746,4 +746,8 @@
     <string name="android_label_screen_lock_api36">Déverrouillage de l\'écran</string>
     <!-- Android's own label: Settings' unlock_set_unlock_launch_picker_title at android-17.0.0_r1. -->
     <string name="android_label_screen_lock_api37">Déverrouillage de l\'écran</string>
+    <!-- Android's own label: Settings' usage_access at android-15.0.0_r36. -->
+    <string name="android_label_usage_access">Accès aux données d\'utilisation</string>
+    <!-- Android's own label: Settings' usage_access at android-16.0.0_r4. -->
+    <string name="android_label_usage_access_api36">Données d\'utilisation d\'applis</string>
 </resources>

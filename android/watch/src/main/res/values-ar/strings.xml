@@ -796,4 +796,8 @@
     <string name="android_label_screen_lock_api36">قفل الشاشة</string>
     <!-- Android's own label: Settings' unlock_set_unlock_launch_picker_title at android-17.0.0_r1. -->
     <string name="android_label_screen_lock_api37">قفل الشاشة</string>
+    <!-- Android's own label: Settings' usage_access at android-15.0.0_r36. -->
+    <string name="android_label_usage_access">الوصول إلى بيانات الاستخدام</string>
+    <!-- Android's own label: Settings' usage_access at android-16.0.0_r4. -->
+    <string name="android_label_usage_access_api36">بيانات استخدام التطبيق</string>
 </resources>

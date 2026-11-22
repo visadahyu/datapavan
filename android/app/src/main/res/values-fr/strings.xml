@@ -43,6 +43,7 @@
     <string name="severity_info">Info</string>
     <string name="special_accessibility">Service d\'accessibilité</string>
     <string name="special_notification_listener">Lit les notifications</string>
+    <string name="special_device_admin">Administrateur de l\'appareil</string>
     <string name="special_battery_exempt">Batterie sans restriction</string>
     <string name="action_security_settings">Ouvrir les paramètres de sécurité</string>
     <string name="finding_vpn_remote_control_title">VPN capable de contrôler le téléphone</string>
@@ -460,6 +461,7 @@
     <string name="plan_short_preinstalled">Fournie avec le téléphone</string>
 
     <string name="screen_app_info">Page de l\'appli</string>
+    <string name="screen_unused">Paramètre des applis inutilisées</string>
     <string name="screen_device_admins">Paramètres de sécurité</string>
     <string name="screen_security">Paramètres de sécurité</string>
 
@@ -679,6 +681,10 @@
     <string name="android_label_usage_access">Accès aux données d\'utilisation</string>
     <!-- Android's own label: Settings' usage_access at android-16.0.0_r4. -->
     <string name="android_label_usage_access_api36">Données d\'utilisation d\'applis</string>
+    <!-- Android's own label: Settings' permit_usage_access at android-15.0.0_r36. -->
+    <string name="android_label_permit_usage_access">Autoriser l\'accès aux données d\'utilisation</string>
+    <!-- Android's own label: Settings' permit_usage_access at android-16.0.0_r4. -->
+    <string name="android_label_permit_usage_access_api36">Autoriser l\'accès aux données d\'utilisation des applications</string>
     <!-- Android's own label: SettingsLib's install_other_apps at android-15.0.0_r36. -->
     <string name="android_label_install_unknown_apps">Installation d\'applis inconnues</string>
     <!-- Android's own label: SettingsLib's install_other_apps at android-17.0.0_r1. -->
@@ -714,7 +720,7 @@
     <!-- Android's own label: Settings' manage_external_storage_title at android-15.0.0_r36. -->
     <string name="android_label_all_files_access">Accès à tous les fichiers</string>
     <!-- Android's own label: Settings' manage_notification_access_title at android-15.0.0_r36. -->
-    <string name="android_label_notification_access">Notifications : lecture, contrôle et réponse</string>
+    <string name="android_label_notification_access">Notifications : lecture, contrôle et réponse</string>
     <!-- Android's own label: Settings' vpn_settings_title at android-15.0.0_r36. -->
     <string name="android_label_vpn">VPN</string>
     <!-- Android's own label: Settings' unused_apps_switch at android-15.0.0_r36. -->

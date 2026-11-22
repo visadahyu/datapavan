@@ -43,6 +43,7 @@
     <string name="severity_info">ملاحظة</string>
     <string name="special_accessibility">خدمة تسهيل الاستخدام</string>
     <string name="special_notification_listener">قراءة الإشعارات</string>
+    <string name="special_device_admin">مشرف الجهاز</string>
     <string name="special_battery_exempt">استخدام البطارية غير المحدّد بقيود</string>
     <string name="action_security_settings">فتح إعدادات الأمان</string>
     <string name="finding_vpn_remote_control_title">تطبيق VPN يمكنه التحكم في الهاتف</string>
@@ -479,6 +480,7 @@
     <string name="plan_short_preinstalled">جاء مع الهاتف</string>
 
     <string name="screen_app_info">صفحة التطبيق</string>
+    <string name="screen_unused">إعداد التطبيق غير المستخدَم</string>
     <string name="screen_device_admins">إعدادات الأمان</string>
     <string name="screen_security">إعدادات الأمان</string>
 
@@ -707,6 +709,10 @@
     <string name="android_label_usage_access">الوصول إلى بيانات الاستخدام</string>
     <!-- Android's own label: Settings' usage_access at android-16.0.0_r4. -->
     <string name="android_label_usage_access_api36">بيانات استخدام التطبيق</string>
+    <!-- Android's own label: Settings' permit_usage_access at android-15.0.0_r36. -->
+    <string name="android_label_permit_usage_access">السماح بالوصول إلى بيانات الاستخدام</string>
+    <!-- Android's own label: Settings' permit_usage_access at android-16.0.0_r4. -->
+    <string name="android_label_permit_usage_access_api36">السماح بالوصول إلى بيانات استخدام التطبيق</string>
     <!-- Android's own label: SettingsLib's install_other_apps at android-15.0.0_r36. -->
     <string name="android_label_install_unknown_apps">تثبيت التطبيقات غير المعروفة</string>
     <!-- Android's own label: SettingsLib's install_other_apps at android-17.0.0_r1. -->
