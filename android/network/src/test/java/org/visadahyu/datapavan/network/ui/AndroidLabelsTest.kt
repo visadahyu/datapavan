@@ -8,7 +8,7 @@ import org.junit.Test
 import org.visadahyu.datapavan.labels.LabelRow
 import org.visadahyu.datapavan.network.R
 
-/** The network monitoring's Android labels (ADR 0054): its keys and its fallback strings agree with the data. */
+/** The network part's Android labels (ADR 0054): its keys and its fallback strings agree with the data. */
 class AndroidLabelsTest {
     private val fields = R.string::class.java.fields.filter { it.name.startsWith("android_label_") }.associate { it.getInt(null) to it.name }
 

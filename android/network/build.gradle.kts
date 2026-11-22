@@ -254,8 +254,8 @@ androidComponents {
         }
         variant.sources.jniLibs?.addGeneratedSourceDirectory(cargoTask, CargoNdkTask::outputDir)
 
-        // The table from address to organisation, if data/dbip-asn/update.py has built one; it is not
-        // committed until ADR 0036's size question is settled, so a clean checkout builds without it.
+        // The table from address to organisation, if data/dbip-asn/update.py has built one. It is not in this
+        // repository (ADR 0036, "The size, and where the table lives"), so a clean checkout builds without it.
         val tableTask = tasks.register<OrganisationTable>("organisationTable$suffix") {
             table.from(repositoryRoot.file("data/dbip-asn/asn.bin"))
         }

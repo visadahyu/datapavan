@@ -20,7 +20,7 @@ import org.visadahyu.datapavan.network.R
 import org.visadahyu.datapavan.network.NetworkPacks
 
 /**
- * Android's own labels as the network monitoring's screens quote them (ADR 0054): read from the phone's Settings in
+ * Android's own labels as the network part's screens quote them (ADR 0054): read from the phone's Settings in
  * the phone's language, with Datapavan's beside them where the two differ, else Datapavan's copy of AOSP's text.
  * NetworkTheme gives each screen one [SystemLabels] for its locales, which reads nothing until a label is asked for.
  */

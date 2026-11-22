@@ -274,7 +274,7 @@ done
 screen_contains "$card" || fail "no card of the plan says '$card'"
 echo "ok: phone in Persian, Datapavan in English: the plan's card says '$card'"
 
-# Advanced's network monitoring, both ways: its names' section quotes Android's always-on switch.
+# Advanced's network part, both ways: its names' section quotes Android's always-on switch.
 if [ -f "$ADVANCED_APK" ]; then
     adb shell pm list packages "$ADVANCED" | grep -q "package:$ADVANCED\$" || INSTALLED_ADVANCED=1
     adb install -r "$ADVANCED_APK" >/dev/null
