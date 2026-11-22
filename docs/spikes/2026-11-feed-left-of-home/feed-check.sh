@@ -2,7 +2,7 @@
 # The measurement of docs/spikes/2026-11-feed-left-of-home.md (ADR 0046, decision 5): on a Google Play emulator
 # image, does the Google app's traffic while the user scrolls the feed left of the home screen count as in use?
 # Runs on the emulator ANDROID_SERIAL names, after scripts/verify-activity.sh installed Advanced's debug build;
-# prints what Watch's debug dump says of the Google app while the feed shows. Emulators only: it grants usage
+# prints what the network part's debug dump says of the Google app while the feed shows. Emulators only: it grants usage
 # access and starts a VPN, and takes them back at the end.
 set -uo pipefail
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../../.." && pwd)"
@@ -10,14 +10,14 @@ PKG=org.visadahyu.datapavan.advanced
 GOOGLE=com.google.android.googlequicksearchbox
 . "$ROOT/scripts/adb-ui.sh"
 is_emulator || { echo "emulator only" >&2; exit 2; }
-dumpw() { adb shell dumpsys activity service "$PKG/org.visadahyu.datapavan.watch.WatchVpnService" "$@" | tr -d '\r' | sed 's/^ *//'; }
+dumpw() { adb shell dumpsys activity service "$PKG/org.visadahyu.datapavan.network.NetworkVpnService" "$@" | tr -d '\r' | sed 's/^ *//'; }
 adb shell pm path "$GOOGLE" >/dev/null 2>&1 || { echo "feed: no Google app on this image"; exit 0; }
 allow_vpn "$PKG"
 adb shell appops set "$PKG" GET_USAGE_STATS allow
 adb shell svc power stayon true
 adb shell input keyevent KEYCODE_WAKEUP
 adb shell wm dismiss-keyguard >/dev/null 2>&1 || true
-adb shell am start -W -n "$PKG/org.visadahyu.datapavan.watch.MainActivity" --ez start true >/dev/null
+adb shell am start -W -n "$PKG/org.visadahyu.datapavan.network.MainActivity" --ez start true >/dev/null
 sleep 8
 GUID=$(adb shell cmd package list packages -U "$GOOGLE" | tr -d '\r' | sed -n "s/^package:$GOOGLE uid:\([0-9]*\)$/\1/p")
 echo "feed: Google app uid $GUID, version $(adb shell dumpsys package "$GOOGLE" | tr -d '\r' | sed -n 's/^ *versionName=//p' | sed -n 1p)"

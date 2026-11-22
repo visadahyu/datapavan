@@ -8,10 +8,10 @@ holds, "Now" shows the Google app sending in the background while the user reads
 ## Method
 
 [`2026-11-feed-left-of-home/feed-check.sh`](2026-11-feed-left-of-home/feed-check.sh), on an emulator after
-`scripts/verify-activity.sh` installed Advanced's debug build: Watch's tunnel up with usage access, the home
-screen, a swipe to the feed, twelve swipes through it five seconds apart, then what Watch's debug dump says of
-the Google app. It also records the home screen's package, the window holding the focus while the feed shows,
-and the packages of the screen's nodes. It reads only the emulator's own lab traffic.
+`scripts/verify-activity.sh` installed Advanced's debug build: the network part's tunnel up with usage access, the
+home screen, a swipe to the feed, twelve swipes through it five seconds apart, then what the network part's debug
+dump says of the Google app. It also records the home screen's package, the window holding the focus while the feed
+shows, and the packages of the screen's nodes. It reads only the emulator's own lab traffic.
 
 ## Result
 
@@ -33,7 +33,7 @@ adb without installing anything or changing a permission:
   switch, no Google Discover;
 - while it shows, the window holding the focus is Samsung Free's own `ui.MainActivity`, and Android's usage
   events record `ACTIVITY_RESUMED` for it when it shows and `ACTIVITY_PAUSED` and `ACTIVITY_STOPPED` when it goes
-  (`dumpsys usagestats`, twice), so Watch places its traffic in use, by the same rule as any app on screen;
+  (`dumpsys usagestats`, twice), so Advanced places its traffic in use, by the same rule as any app on screen;
 - Samsung Free answered "There is no server response" (its terms were not accepted on this phone), so no bytes
   were measured: the finding is the state, which is what decides the count.
 

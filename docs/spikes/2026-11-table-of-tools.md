@@ -44,19 +44,19 @@ Outline, WireGuard, Lantern (release builds) and Proton have no proxy mode.
   port moves (for user 10, 2090). Android 17 blocks loopback between profiles anyway.
 - **No password possible:** NekoBox (the mixed inbound has no user setting), ByeByeDPI, Oblivion,
   Shadowsocks, SagerNet. Tor (Orbot, InviZible) accepts any username and password but never asks for
-  one; it uses them to isolate streams. Watch can send a random pair to Tor for isolation, not for
+  one; it uses them to isolate streams. Advanced can send a random pair to Tor for isolation, not for
   protection.
 - **Optional password:** v2rayNG, Exclave, Husi, FlClash, Hiddify (user name fixed to `hiddify`), Karing,
-  WG Tunnel, sing-box and Clash Meta (in the profile). Watch's "offer a generated password" fits these.
+  WG Tunnel, sing-box and Clash Meta (in the profile). Advanced's "offer a generated password" fits these.
 - **No UDP:** Orbot and InviZible (Tor carries TCP only; UDP ASSOCIATE is refused). Shadowsocks drops
   to TCP only when a plugin is used without a UDP fallback profile.
 - **ByeByeDPI is not a tunnel.** It reshapes packets to get past DPI and sends traffic straight out.
   Names in SOCKS requests are resolved by ByeDPI with the system resolver, so DNS goes to the network.
-  Chaining through it hides nothing; Watch should say so.
+  Chaining through it hides nothing; Advanced should say so.
 - **Loopback ports left open in VPN mode** (`proxy-in-vpn`): v2rayNG, NekoBox, Husi, Exclave, SagerNet,
   FlClash, Shadowsocks, ByeByeDPI, Oblivion, Orbot, InviZible, Psiphon (on a port chosen at run time),
-  and, by a third-party report only, V2Box and Npv Tunnel. This matters less for W6, since Watch takes
-  the VPN slot, but it is a privacy fact the audit app could show.
+  and, by a third-party report only, V2Box and Npv Tunnel. This matters less for W6, since Advanced takes
+  the VPN slot, but it is a privacy fact Basic's audit could show.
 
 ## Unverified or contradictory values
 
@@ -89,14 +89,14 @@ W6 tests v2rayNG, NekoBox, Hiddify and Orbot on the A40 and the emulators. For e
 
 - **v2rayNG:** 10808 answers the SOCKS5 greeting with `05 00`, and an HTTP CONNECT on the same port; with
   a username and password set it answers `05 02`; UDP ASSOCIATE carries a DNS query; the random-port
-  option is off on a fresh install; proxy mode keeps running when Watch's VPN starts.
+  option is off on a fresh install; proxy mode keeps running when Advanced's VPN starts.
 - **NekoBox:** 2080 is a mixed port with no password; UDP ASSOCIATE works; the port in a work profile
   (expected 2080 plus the user number).
 - **Hiddify:** "Proxy service only" opens 12334 on 127.0.0.1 (and ::1 with IPv6 on); with "local proxy
   auth" on, the greeting asks for user `hiddify` and the secret; Clash API on 16756 answers on
   loopback (a privacy fact).
 - **Orbot:** Power User Mode opens 9050 and 8118; UDP ASSOCIATE is refused; with InviZible running first,
-  Orbot's port moves to 9051 and Watch still finds it by owner, not by number.
+  Orbot's port moves to 9051 and Advanced still finds it by owner, not by number.
 
 Beyond W6, a device test (or a read of the APK by Datapavan's own tooling) is the only way to settle:
 Karing with TUN off; the ports and passwords of Happ, V2Box, Npv Tunnel, NetMod and HTTP Injector;
@@ -108,7 +108,7 @@ owner lookup should name the app, so that a shared port never names the wrong to
 
 Eight tools were added and three rows updated, from the tools' own code at named commits, their official
 docs, channels and store listings; 272 rows of evidence. Each row was researched by an AI agent, and the
-values that decide whether Watch can find a tool (SlipNet's port and password default, DNSTT's listener) were
+values that decide whether Advanced can find a tool (SlipNet's port and password default, DNSTT's listener) were
 read again in the code.
 
 - **New, with a proxy mode:**
@@ -117,13 +117,13 @@ read again in the code.
     makes credentials but leaves them off, though a code comment says otherwise). UDP ASSOCIATE is refused.
   - **DNSTT.XYZ** (`xyz.dnstt.app`), a dnstt and Slipstream client. "Proxy Mode" listens on
     127.0.0.1:1080, but that port is a raw pipe into the DNS tunnel: the SOCKS5 server is the one at the
-    far end. Watch's greeting crosses the tunnel, slowly. Its release builds use the debug signing key.
+    far end. Advanced's greeting crosses the tunnel, slowly. Its release builds use the debug signing key.
   - **v2RayTun** (`com.v2raytun.android`), closed source: a proxy mode and a SOCKS5 password setting
     appear only in third-party copies of its release notes; its port is unknown.
 - **New, VPN only:**
   - **Geph** (`io.geph.android`). Its "Local proxy" switch adds SOCKS5 on 127.0.0.1:9909 and HTTP on
     9910, off on fresh installs, and only while Geph's own VPN runs. Geph stops its engine when another
-    VPN takes over, so Watch cannot chain through it.
+    VPN takes over, so Advanced cannot chain through it.
   - **OpenVPN Connect** (`net.openvpn.openvpn`). Its "Proxies" are HTTP proxies it uses to reach the
     server, not a local listener.
   - **Surfboard** (`com.getsurfboard`). Listeners come only from a profile's `socks5-listen` and

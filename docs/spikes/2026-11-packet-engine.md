@@ -1,7 +1,8 @@
-# Spike: the packet engine for Datapavan Watch (ADR 0012)
+# Spike: the packet engine for Datapavan Advanced's network part (ADR 0012)
 
 Status: **done for the choice** (2026-11-07), recorded in [ADR 0012](../decisions/0012-packet-engine.md).
-The day's battery cost is measured on Watch itself, not here. Code: [spikes/packet-engine/](../../spikes/packet-engine/README.md).
+The day's battery cost is measured on Advanced itself, not here. Code:
+[spikes/packet-engine/](../../spikes/packet-engine/README.md).
 
 ## Question
 
@@ -23,8 +24,9 @@ finding the app.
 
 ## Method
 
-- **Apps.** `watch` holds the `VpnService` and the engines; `load` is the workload. The tunnel takes
-  only the workload app (`addAllowedApplication`), so no other app's traffic passes it.
+- **Apps.** `watch` holds the `VpnService` and the engines; `load` is the workload (the spike keeps
+  the names it ran with). The tunnel takes only the workload app (`addAllowedApplication`), so no
+  other app's traffic passes it.
 - **Workload** against `tools/server.py` on the development computer, per round:
   - one 50 MB download;
   - one 20 MB upload;
@@ -50,7 +52,7 @@ Medians of three rounds; the baseline of six.
 | Connect, p50 ms | 0.42 | 0.27 | 0.35 | 0.66 |
 | Kept-alive round trip, p50 ms | 0.40 | 0.42 | 0.38 | 0.44 |
 | Engine CPU for the three rounds, s | | 3.6 | 3.5 | 6.7 |
-| Watch app memory (PSS), MB | | 37 | 38 | 53 |
+| `watch` app memory (PSS), MB | | 37 | 38 | 53 |
 | Native library, arm64-v8a | | 0.96 MB, both Rust engines together | | 5.4 MB |
 | Native library, armeabi-v7a | | 0.63 MB | | 5.4 MB |
 | Flows whose app was not found | | 218 of 305 | 250 of 305 | 1 of 305 |
@@ -89,7 +91,7 @@ their spread. CPU and memory are what the engines themselves add.
 | Connect, p50 ms | 9.2 | 6.0 | 10.1 | 10.9 |
 | Kept-alive round trip, p50 ms | 6.6 | 7.4 | 6.9 | 7.1 |
 | **Engine CPU for the three rounds, s** | | 63 | **40** | 139 |
-| Watch app memory (PSS), MB | | 46 | 46 | 60 |
+| `watch` app memory (PSS), MB | | 46 | 46 | 60 |
 | Owner lookup, mean ms | | 9.0 | 3.2 | 2.2 |
 | Flows whose app was not found | | 147 of 304 | 0 of 304 | 0 of 304 |
 
@@ -131,8 +133,8 @@ dialled upstream are dropped, which a real build would have to queue.
 - **SOCKS5 chaining** through a test proxy on the computer's loopback (`tools/socks5.py`, CONNECT
   only): 208 Mbit/s down and 220 up on the emulator, every connection through the proxy. Two traps
   for later. The phone's Private DNS probe (DNS over TLS to the network's resolver) also went into
-  the tunnel, since Watch is inside it, and a proxy that cannot reach the network's own resolver
-  refuses it. UDP ASSOCIATE is not built.
+  the tunnel, since the `watch` app is inside it, and a proxy that cannot reach the network's own
+  resolver refuses it. UDP ASSOCIATE is not built.
 - **A restart under a kept-alive connection.** At first the engine dropped a segment of a connection
   it did not know, so after a restart an app's pooled connection hung until its timeouts. Now it
   answers with a reset, as a real stack does, and the app reconnected within a second.
@@ -147,8 +149,8 @@ in daily use, so this is the idle cost only.
 | | |
 |---|---|
 | Battery | 100 % to 90 %: 288 mAh by the charge counter, 22.6 mAh an hour |
-| Watch, by Android's estimate | 1.84 mAh, all of it Wi-Fi (191 Wi-Fi wakeups charged to it); 2.93 mAh with the system's share spread over apps. That is 0.6 to 1.0 % of the night's drain |
-| Watch's CPU | 8.9 s in the whole night (2.2 user, 6.8 kernel), and no wakelock of its own |
+| The `watch` app, by Android's estimate | 1.84 mAh, all of it Wi-Fi (191 Wi-Fi wakeups charged to it); 2.93 mAh with the system's share spread over apps. That is 0.6 to 1.0 % of the night's drain |
+| The `watch` app's CPU | 8.9 s in the whole night (2.2 user, 6.8 kernel), and no wakelock of its own |
 | Phone awake | 30 min of the 12 h 43 min (4 %): the tunnel did not keep the phone awake |
 | Engine | 440 TCP and 544 UDP flows, 2.0 MB up and 5.5 MB down; 984 owner lookups, 11.3 ms on average; 3 flows without a known owner; 184 failed upstream connects |
 
@@ -158,34 +160,34 @@ in daily use, so this is the idle cost only.
 - **Owner lookups took 11.3 ms on average**, against about 3 ms in the daytime runs above. A phone in
   deep idle is slower to answer a binder call. The connect waits for the slower of the lookup and the
   upstream connect, so this matters for the first connection after the phone wakes. To measure on
-  Watch.
+  Advanced.
 - **The last failed connect was IPv6 on a network without IPv6** ("network unreachable"), the case of
   the short checks above. The counters do not say how many of the 184 were.
 
 ## Who owns a local proxy port
 
-The circumvention research left one idea untested: Watch connects to a tool's local proxy and asks
+The circumvention research left one idea untested: Advanced connects to a tool's local proxy and asks
 Android who owns the other end of that loopback connection, to learn which app is behind the port.
-The workload app played the tool, listening on a loopback port (`--es op listen`); the watch app
+The workload app played the tool, listening on a loopback port (`--es op listen`); the `watch` app
 connected and asked `getConnectionOwnerUid` for both ends (`--es action loopback`). Run on 2026-11-08
 on the A40 (Samsung, Android 11) and the Android 17 emulator (Google), both apps targeting API 37:
 
 | Case | A40, Android 11 | Emulator, Android 17 |
 |---|---|---|
 | No VPN running | `SecurityException` | -1 |
-| Tool inside Watch's tunnel, bound to 127.0.0.1 | the tool's UID | the tool's UID |
+| Tool inside the `watch` app's tunnel, bound to 127.0.0.1 | the tool's UID | the tool's UID |
 | The same, bound to 0.0.0.0 | the tool's UID | the tool's UID |
 | The same, bound to `::` | the tool's UID | the tool's UID |
 | Tool outside the tunnel | -1 | -1 |
 
-- **It works, on both,** for every way a tool binds its port. Watch learns the UID of the app behind
+- **It works, on both,** for every way a tool binds its port. Advanced learns the UID of the app behind
   the port, with no root and nothing read from the connection.
-- **Only while the tool is inside Watch's tunnel.** Android shows a VPN the owner of a connection only
-  for apps its VPN covers. So Watch must never exclude the tool from its tunnel, which is also what
+- **Only while the tool is inside the VPN's tunnel.** Android shows a VPN the owner of a connection only
+  for apps its VPN covers. So Advanced must never exclude the tool from its tunnel, which is also what
   chaining needs (finding 6).
-- **The UID is not yet a name.** `getPackagesForUid` gave nothing without package visibility. Watch
+- **The UID is not yet a name.** `getPackagesForUid` gave nothing without package visibility. Advanced
   needs a `<queries>` entry or `QUERY_ALL_PACKAGES` to turn the UID into the tool's package; the
-  circumvention report notes that a `<queries>` entry missed a VPN app before. To settle on Watch.
+  circumvention report notes that a `<queries>` entry missed a VPN app before. To settle on Advanced.
 - **Android 17's local network permission does not cover loopback.** Both apps had
   `ACCESS_LOCAL_NETWORK` declared but not granted, and the loopback connection went through.
 - **Still to run:** a phone of another maker (a Pixel and a Xiaomi), and real tools (v2rayNG,
@@ -211,12 +213,12 @@ on the A40 (Samsung, Android 11) and the Android 17 emulator (Google), both apps
    multi-threaded runtime, against VPN.md's single engine thread. On a current-thread runtime it hung
    the engine when it stopped, with connections still open. Its README calls it "unstable, under
    development".
-6. **The system stack works only with Watch inside its own tunnel.** Android routes the answers of the
-   engine's listener back through the tunnel only for UIDs inside the VPN, by policy routing. So Watch
+6. **The system stack works only with the VPN app inside its own tunnel.** Android routes the answers of the
+   engine's listener back through the tunnel only for UIDs inside the VPN, by policy routing. So Advanced
    adds itself to the tunnel and calls `VpnService.protect` on each upstream socket, one more upcall
    per flow. VPN.md's "Datapavan itself is excluded from the tunnel" does not hold for this engine.
 7. **Android 17 asks for `ACCESS_LOCAL_NETWORK`** before an app that targets it reaches a private
-   address. Watch's own upstream sockets are such an app's, so Watch needs it for every app's LAN
+   address. Advanced's own upstream sockets are such an app's, so Advanced needs it for every app's LAN
    traffic (printers, TVs, a NAS), and the permission and its explanation belong in its onboarding.
 8. **The tunnel descriptor:** `Builder.setBlocking(false)` is needed. The engines read until "would
    block", and the Rust side also sets `O_NONBLOCK` itself.
@@ -233,8 +235,8 @@ on the A40 (Samsung, Android 11) and the Android 17 emulator (Google), both apps
   parsers split between Go and Rust.
 - **`ipstack` is out** unless it is forked, for findings 3 and 5.
 
-## Left for Watch itself
+## Left for Advanced itself
 
-- The battery cost of a day of ordinary use, against VPN.md's 3 %, on Watch rather than the spike.
+- The battery cost of a day of ordinary use, against VPN.md's 3 %, on Advanced rather than the spike.
 - Android 10 and 12 to 14, and other vendors.
 - A working IPv6 path; SOCKS5 UDP ASSOCIATE; ICMP answers for unreachable destinations.

@@ -1,4 +1,4 @@
-# GotaTun's protocol core beside Watch's engine (before W7)
+# GotaTun's protocol core beside the network part's engine (before W7)
 
 A spike of 2026-11-19, asked for by [ADR 0035](../decisions/0035-wireguard-upstream.md) ("Before building W7"), on
 its questions 2 (`ring` or `aws-lc-rs`) and 3 (the size budget), and on the interoperation tests its settled section
@@ -9,15 +9,15 @@ its own; nothing went into `core/net` or the app. Everything below is GotaTun 0.
 
 ## Method
 
-- **Size.** [`size.sh`](../../spikes/wireguard-core/size.sh) builds Watch's library as
-  `android/watch/build.gradle.kts` does (cargo-ndk, API 29, `build --locked --release`, the Gradle task's environment
+- **Size.** [`size.sh`](../../spikes/wireguard-core/size.sh) builds the network part's library as
+  `android/network/build.gradle.kts` does (cargo-ndk, API 29, `build --locked --release`, the Gradle task's environment
   and remapped paths, `core`'s release profile) and strips it as the APK's packaging does (`llvm-strip
-  --strip-unneeded`). Variants: `today` (`core/watch-jni`); `baseline`, the spike's crate `size/`, which includes
-  `core/watch-jni/src/lib.rs` unchanged; `ring` and `aws-lc`, the same with one more export that runs a session
+  --strip-unneeded`). Variants: `today` (`core/network-jni`); `baseline`, the spike's crate `size/`, which includes
+  `core/network-jni/src/lib.rs` unchanged; `ring` and `aws-lc`, the same with one more export that runs a session
   between two `Tunn`s (handshake with a preshared key, the queued first packet, a data packet each way, the timers,
   the counters), so nothing W7 calls is dropped as dead code; and `ring-in-core`, `aws-lc-in-core`, the same crate
   built as a member of a copy of `core`'s workspace, the shape W7 will have. `today` as measured is byte for byte the
-  `libdatapavan_watch.so` in Advanced's release APK built from the same `core`, for all three ABIs: the method
+  `libdatapavan_network.so` in Advanced's release APK built from the same `core`, for all three ABIs: the method
   measures what ships.
 - **Reproducible.** [`reproducible.sh`](../../spikes/wireguard-core/reproducible.sh), the method of
   `scripts/reproducible.sh`: two fresh clones of the commit at paths of different lengths, each with its own target
@@ -49,11 +49,11 @@ its own; nothing went into `core/net` or the app. Everything below is GotaTun 0.
 
 ## 1. Size per ABI
 
-Stripped `libdatapavan_watch.so`, bytes:
+Stripped `libdatapavan_network.so`, bytes:
 
 | | arm64-v8a | armeabi-v7a | x86_64 |
 |---|---|---|---|
-| Today (`core/watch-jni`) | 1,384,656 | 1,220,364 | 1,590,136 |
+| Today (`core/network-jni`) | 1,384,656 | 1,220,364 | 1,590,136 |
 | With GotaTun on `ring` | 1,533,936 | 1,343,124 | 1,781,544 |
 | With GotaTun on `aws-lc-rs` | 1,555,096 | 1,351,152 | 1,804,296 |
 | `ring`, added | +149,280 (+10.8 %) | +122,760 (+10.1 %) | +191,408 (+12.0 %) |
@@ -72,14 +72,14 @@ the `ring` library is 1.46, 1.28 and 1.70.
   with `ring`, still above 1 MB. Its cost in speed was not measured.
 - **`tokio`** comes in with `sync`, `rt`, `time`, `macros` and `io-util` (its `net` only with the `device`
   feature), all of which the engine already enables: it adds nothing. `nix` gains `fs` and `user`.
-- **Crates.** GotaTun has 29 direct dependencies on Android (28 and the crypto crate), as ADR 0035 counted. Watch's
-  library goes from 54 crates to 120 with `ring` (66 new, 8 of them procedural macros that run in the build only) and
-  to 121 with `aws-lc-rs` (`aws-lc-rs`, `aws-lc-sys` and `untrusted` 0.7 instead of `ring` and `untrusted` 0.9). The
-  lock gains a second generation of RustCrypto's traits beside the engine's (`digest` 0.10, `cipher` 0.4, `aead` 0.5,
-  `hmac` 0.12, `universal-hash` 0.5, `block-buffer`, `crypto-common`, `inout`), two versions each of `rand_core` (0.6,
-  0.9) and `getrandom` (0.2, 0.3), and `thiserror` 1: `cargo deny` warns of 14 duplicated crates against 1 in `core`.
-  GotaTun keeps RustCrypto's `chacha20poly1305` for XChaCha20 in cookie replies only, and `blake2`, `hmac` and
-  `x25519-dalek` for the handshake.
+- **Crates.** GotaTun has 29 direct dependencies on Android (28 and the crypto crate), as ADR 0035 counted. The
+  network part's library goes from 54 crates to 120 with `ring` (66 new, 8 of them procedural macros that run in the
+  build only) and to 121 with `aws-lc-rs` (`aws-lc-rs`, `aws-lc-sys` and `untrusted` 0.7 instead of `ring` and
+  `untrusted` 0.9). The lock gains a second generation of RustCrypto's traits beside the engine's (`digest` 0.10,
+  `cipher` 0.4, `aead` 0.5, `hmac` 0.12, `universal-hash` 0.5, `block-buffer`, `crypto-common`, `inout`), two versions
+  each of `rand_core` (0.6, 0.9) and `getrandom` (0.2, 0.3), and `thiserror` 1: `cargo deny` warns of 14 duplicated
+  crates against 1 in `core`. GotaTun keeps RustCrypto's `chacha20poly1305` for XChaCha20 in cookie replies only, and
+  `blake2`, `hmac` and `x25519-dalek` for the handshake.
 
 ## 2. Reproducible
 
@@ -189,7 +189,7 @@ address, a provider's server.
 From 0.10.2 to 0.10.3 the API did not change. Two changes: the TAI64N handshake timestamp's base is now the
 kernel's (2^62 + 10 instead of 2^62 + 37, so stamps are 27 s earlier than 0.10.2's; a client moving from 0.10.2
 may see its first handshakes ignored for up to 27 s), and `portable-atomic` for targets without 64-bit atomics (none
-of Watch's). What `Tunn` asks of its caller:
+of Advanced's targets). What `Tunn` asks of its caller:
 
 - **Construction:** `Tunn::new(static_private, peer_public, preshared_key, persistent_keepalive, IndexTable,
   Arc<RateLimiter>)`. The caller makes the `IndexTable` (session indices from an OS-seeded `StdRng`) and the
@@ -250,11 +250,11 @@ VPN.md's "at most 1 MB per ABI" was a target set before the engine was built, an
 WireGuard: 1.38 MB on arm64 today. GotaTun adds 0.15 MB there, about 11 %. No change to GotaTun's use brings the library
 back under 1 MB: `opt-level = "z"` comes closest at 1.28 MB with `ring`, at a cost in speed not measured.
 
-Proposed: VPN.md's target becomes a measured budget for Watch's library per ABI, set where W7 lands with some room
-for W8 to W10 (for example 2 MB per ABI as stripped in the APK, against 1.53, 1.34 and 1.78 MB with `ring`), and a
-gate in the release build that fails above it, so that each later increase is seen in the commit that makes it and
-decided there. Against the field this stays small: the packet-engine spike measured Go's gVisor library at 5.4 MB per
-ABI on its own, and WireGuard's own app carries the Go runtime as well (its library was not measured). The gate is
+Proposed: VPN.md's target becomes a measured budget for the network part's library per ABI, set where W7 lands with
+some room for W8 to W10 (for example 2 MB per ABI as stripped in the APK, against 1.53, 1.34 and 1.78 MB with `ring`),
+and a gate in the release build that fails above it, so that each later increase is seen in the commit that makes it
+and decided there. Against the field this stays small: the packet-engine spike measured Go's gVisor library at 5.4 MB
+per ABI on its own, and WireGuard's own app carries the Go runtime as well (its library was not measured). The gate is
 what the field mostly lacks; the number itself is the maintainer's call.
 
 ## What W7's brief must take from this
@@ -297,4 +297,4 @@ what the field mostly lacks; the number itself is the maintainer's call.
 - Repository: [ADR 0035](../decisions/0035-wireguard-upstream.md), [VPN.md](../VPN.md),
   [ADR 0044](../decisions/0044-udp-mapping-and-budgets.md), [ADR 0046](../decisions/0046-live-activity.md),
   [packet-engine spike](2026-11-packet-engine.md), `core/deny.toml`, `scripts/reproducible.sh`,
-  `android/watch/build.gradle.kts`.
+  `android/network/build.gradle.kts`.
