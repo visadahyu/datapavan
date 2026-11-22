@@ -1,0 +1,50 @@
+# SPDX-License-Identifier: Apache-2.0
+# The relay lab (scripts/relaylab.sh, ADR 0055): Datapavan's ODoH relay as the project's server runs it, Debian 13's
+# Caddy with server/'s configuration, and two stand-ins for the targets it forwards to, under the targets' own names,
+# which record every request they get. The network has no way out and nothing is published on the host: the test's
+# client runs inside the relay's container. RELAYLAB_WORK holds the test's Caddyfile, its test CA and the stand-ins'
+# certificates, made for each run. scripts/relaylab.sh stops the project at its end (stop, not down).
+name: datapavan-relaylab
+
+x-stub: &stub
+  image: datapavan-relaylab
+  # Built by `relay`; never pulled.
+  pull_policy: never
+  restart: "no"
+  init: true
+  volumes:
+    - ${RELAYLAB_WORK:?the test's folder}:/lab:ro
+
+services:
+  relay:
+    build: .
+    image: datapavan-relaylab
+    container_name: datapavan-relaylab
+    restart: "no"
+    init: true
+    volumes:
+      - ${RELAYLAB_WORK:?the test's folder}:/lab:ro
+    networks:
+      lab:
+        aliases:
+          - datapavan.org
+    command: ["run-caddy"]
+  cloudflare:
+    <<: *stub
+    networks:
+      lab:
+        aliases:
+          - odoh.cloudflare-dns.com
+    command: ["relaylab-stub", "-name", "cloudflare", "-cert", "/lab/cloudflare.pem", "-key", "/lab/cloudflare.key"]
+  crypto-sx:
+    <<: *stub
+    networks:
+      lab:
+        aliases:
+          - odoh.crypto.sx
+    # HTTP/1.1 alone, so that the relay's way to a target is tested over both protocols.
+    command: ["relaylab-stub", "-name", "crypto-sx", "-http1", "-cert", "/lab/crypto-sx.pem", "-key", "/lab/crypto-sx.key"]
+
+networks:
+  lab:
+    internal: true

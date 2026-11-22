@@ -1,0 +1,25 @@
+#!/bin/sh
+# SPDX-License-Identifier: Apache-2.0
+# The relay lab's stand-in for systemctl, for odoh-relay.sh in the container: `restart caddy` stops the running
+# Caddy, which run-caddy starts again, and waits until the new one listens; `is-active caddy`. Nothing else.
+set -eu
+pid() { cat /run/caddy.pid 2>/dev/null || true; }
+listening() { curl -s -o /dev/null --max-time 2 -k --resolve datapavan.org:443:127.0.0.1 https://datapavan.org/; }
+case "${1:-} ${2:-}" in
+    "restart caddy")
+        old=$(pid)
+        [ -z "$old" ] || kill "$old" 2>/dev/null || true
+        for _ in $(seq 1 50); do
+            new=$(pid)
+            if [ -n "$new" ] && [ "$new" != "$old" ] && kill -0 "$new" 2>/dev/null && listening; then exit 0; fi
+            sleep 0.2
+        done
+        echo "caddy did not come back" >&2
+        exit 1
+        ;;
+    "is-active caddy")
+        p=$(pid)
+        if [ -n "$p" ] && kill -0 "$p" 2>/dev/null; then echo active; else echo failed; exit 3; fi
+        ;;
+    *) echo "the relay lab's systemctl knows only restart and is-active of caddy, not: $*" >&2; exit 1 ;;
+esac

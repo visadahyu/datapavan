@@ -1,0 +1,7 @@
+# SPDX-License-Identifier: Apache-2.0
+# The DNS lab's pairs for Datapavan's relay (scripts/dnslab.sh with DNSLAB_RELAY=caddy): the lab's two targets, in
+# place of server/odoh-pairs.caddy's, by their names inside the lab.
+(odoh_pairs) {
+	import odoh_target lab-a target-a.dnslab.test /dns-query %2Fdns-query
+	import odoh_target lab-b target-b.dnslab.test /dns-query %2Fdns-query
+}

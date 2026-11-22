@@ -1,0 +1,20 @@
+# SPDX-License-Identifier: Apache-2.0
+# Datapavan's relay in the DNS lab (scripts/dnslab.sh with DNSLAB_RELAY=caddy): the server's own files (server/,
+# mounted at /server) on Debian 13's Caddy, with the lab's pairs and the lab relay's name and certificate. The
+# censor's relay front then reaches this relay in place of odoh-server-go's, at /odoh/proxy.
+{
+	admin off
+	servers {
+		protocols h1 h2
+	}
+	import /server/log.caddy
+}
+
+import /server/odoh-relay.caddy
+import /relay/dnslab-pairs.caddy
+
+relay.dnslab.test:443 {
+	tls /certs/relay.pem /certs/relay.key
+	import odoh_relay
+	respond 404
+}
