@@ -3,7 +3,8 @@
 # The relay lab's Caddy, started as Debian's caddy.service starts it, and again whenever it stops: the lab's
 # stand-in for systemd, so that odoh-relay.sh's `systemctl restart caddy` works here (the `systemctl` beside this).
 # It reads /etc/caddy/Caddyfile, copied from /lab/Caddyfile at the container's start, trusts the lab's test CA for
-# the targets (SSL_CERT_FILE), and writes everything Caddy logs to /var/log/caddy.log, which the test reads.
+# the targets (SSL_CERT_FILE), and writes everything Caddy logs to /var/log/caddy.log, which the test reads. While
+# /run/caddy.hold exists, as after a restart the test made fail, Caddy stays down.
 set -eu
 [ ! -f /lab/Caddyfile ] || cp /lab/Caddyfile /etc/caddy/Caddyfile
 chown root:caddy /etc/caddy/Caddyfile
@@ -11,6 +12,7 @@ chmod 640 /etc/caddy/Caddyfile
 export SSL_CERT_FILE=/lab/ca.pem XDG_DATA_HOME=/var/lib/caddy XDG_CONFIG_HOME=/var/lib/caddy/.config
 mkdir -p /var/lib/caddy
 while :; do
+    while [ -e /run/caddy.hold ]; do sleep 0.2; done
     caddy run --environ --config /etc/caddy/Caddyfile --adapter caddyfile >>/var/log/caddy.log 2>&1 &
     echo $! >/run/caddy.pid
     wait $! || true

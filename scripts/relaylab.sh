@@ -8,14 +8,18 @@
 # and HTTP/2 from a client address of its own (127.0.0.9, inside the relay's container) and asserts every rule of
 # server/README.md from what came back and from what the stand-ins got:
 #   - an allowed POST is forwarded with its body, the target's Host, ODoH's Content-Type and Accept, and no other
-#     header (none of the client's, none Caddy adds); the target's status and body come back, without its cookie or
-#     Server;
+#     header (none of the client's, none Caddy adds); the target's status and body come back with ODoH's type and
+#     none of the target's headers (its cookie, Server, CORS, Clear-Site-Data, reporting, Location, ...);
 #   - the target's path is taken plain or with each "/" as "%2F", as RFC 9230's URI template writes it; any other
 #     method, type or size, any query that is not exactly one allowed target (another host, a duplicated or encoded
 #     targethost, an extra parameter, another order or path, another encoding) gets a 4xx, and no stand-in is
 #     contacted;
 #   - with a stand-in down, the relay fails, and nothing Caddy logs carries the client's address, nor does a failed
-#     TLS handshake or the mail site's failing proxy; a control without server/log.caddy shows the address there.
+#     TLS handshake or the mail site's failing proxy, nor a client that resets the connection mid-response (Go's
+#     error text, which names both ends) or mid-body; a slow body reaches no target; no access log is on; a control
+#     without server/log.caddy shows the address there;
+#   - with RELAYLAB_SERVER, odoh-relay.sh leaves the Caddyfile and Caddy as it found them when a restart fails or a
+#     target does not answer through the relay, installs, changes nothing on a second run, and removes (--remove).
 #
 #   scripts/relaylab.sh                  the test, with a Caddyfile of its own around server/'s files
 #   RELAYLAB_SERVER=DIR scripts/relaylab.sh
@@ -180,7 +184,10 @@ print("%s %s %s%s, headers: %s" % (r["proto"], r["method"], r["host"], r["uri"],
 ' "$host" "$sha" "$ODOH" 2>&1) && pass "$label: the target got $verdict" || fail "$label: $verdict"
 }
 
-# A response as the client sees it: the status wanted, no cookie, no Server.
+# The target's headers, which must never come back under datapavan.org's origin.
+TARGET_HEADERS='set-cookie|set-cookie2|server|x-relaylab-target|clear-site-data|access-control-[a-z-]+|nel|report-to|location|link|refresh|content-disposition|cross-origin-resource-policy|cache-control'
+
+# A response as the client sees it: the status wanted, ODoH's type, none of the target's headers.
 answered() {
     local label=$1 want=$2 body_want=${3:-}
     [ "$STATUS" = "$want" ] || { fail "$label: status $STATUS, wanted $want (body: ${BODY:0:120})"; return; }
@@ -188,11 +195,15 @@ answered() {
         fail "$label: body '${BODY:0:120}', wanted '$body_want'"
         return
     fi
-    if grep -qE '^(set-cookie|set-cookie2|server):' <<<"$HEADERS"; then
-        fail "$label: the response carries $(grep -E '^(set-cookie|set-cookie2|server):' <<<"$HEADERS" | tr '\n' ' ')"
+    if grep -qE "^($TARGET_HEADERS):" <<<"$HEADERS"; then
+        fail "$label: the response carries $(grep -E "^($TARGET_HEADERS):" <<<"$HEADERS" | tr '\n' ' ')"
         return
     fi
-    pass "$label: $STATUS, the target's body, no cookie and no Server"
+    if ! grep -qx "content-type: $ODOH" <<<"$HEADERS"; then
+        fail "$label: the response's type is not ODoH's: $(grep '^content-type:' <<<"$HEADERS" || echo none)"
+        return
+    fi
+    pass "$label: $STATUS, the target's body, ODoH's type, none of the target's headers"
 }
 
 # A refusal: a 4xx (the one wanted) and no target contacted.
@@ -211,6 +222,33 @@ refused() {
 log_lines() { in_relay cat /var/log/caddy.log | wc -l; }
 # Whether Caddy's log since line $1 carries an address of the client's or its claimed one.
 log_since() { in_relay cat /var/log/caddy.log | tail -n +$(($1 + 1)); }
+# Whether the Caddyfile in the container turns any access log on: its adapted JSON names "logs" once, the global
+# log's, and no server's (review m6).
+no_access_log() {
+    local n
+    n=$(in_relay sh -c 'caddy adapt --adapter caddyfile --config /etc/caddy/Caddyfile 2>/dev/null' | grep -o '"logs":' | wc -l)
+    [ "$n" = 1 ] && pass "$1: no server logs its requests (the adapted configuration names \"logs\" once, the global log's)" ||
+        fail "$1: the adapted configuration names \"logs\" $n times: an access log is on, or the global log is gone"
+}
+
+# A client that asks a target, through the relay over HTTP/1.1, for a large answer, reads 100 kB of it and closes,
+# which resets the connection with unread data: Caddy's proxy then logs Go's error text, which names the client's
+# address and port (review M1). The abort races the request's end: Caddy logs either that text or "context
+# canceled", so it is tried until it logs a write error, at most ten times; sets ABORT_MARK.
+abort_mid_response() {
+    local proto=${1:-http1.1}
+    for _ in 1 2 3 4 5 6 7 8 9 10; do
+        ABORT_MARK=$(log_lines)
+        in_relay sh -c "printf big-8000000 >/tmp/big; curl -s --$proto --interface $CLIENT \
+            --cacert /var/lib/caddy/caddy/pki/authorities/local/root.crt --resolve datapavan.org:443:127.0.0.1 \
+            -X POST 'https://datapavan.org/odoh/proxy?$CF' -H 'Content-Type: $ODOH' --data-binary @/tmp/big |
+            head -c 100000 >/dev/null; true"
+        sleep 1
+        log_since "$ABORT_MARK" | grep -q 'incomplete response","error":"write ' && return 0
+    done
+    return 1
+}
+
 no_address() {
     local label=$1 mark=$2 lines found
     lines=$(log_since "$mark")
@@ -263,19 +301,62 @@ if [ -n "$STRATEGY" ]; then
     in_relay sh -c 'cat >/tmp/odoh-relay.sh' <"$STRATEGY/odoh-relay.sh"
     # Caddy's internal root, trusted as the server's real chain is, so that the script's checks from the server work.
     in_relay sh -c 'cp /var/lib/caddy/caddy/pki/authorities/local/root.crt /usr/local/share/ca-certificates/caddy-local.crt && update-ca-certificates >/dev/null 2>&1'
+    sum() { in_relay sha256sum /etc/caddy/Caddyfile | cut -d' ' -f1; }
+    site_code() { req http1.1 https://datapavan.org/; echo "$STATUS"; }
+    original=$(sum)
+    # A step after the write fails: the server is left as the script found it (review M2).
+    # rolled_back LABEL OUTPUT EXIT
+    rolled_back() {
+        local label=$1 out=$2 code=$3 state
+        state=$(in_relay systemctl is-active caddy || true)
+        if [ "$code" = 0 ]; then
+            fail "$label: the script succeeded: $(tail -3 <<<"$out" | tr '\n' ' ')"
+        elif [ "$(sum)" != "$original" ]; then
+            fail "$label: the new Caddyfile stayed: $(tail -8 <<<"$out" | tr '\n' ' ')"
+        elif [ "$state" != active ] || [ "$(site_code)" != 200 ]; then
+            fail "$label: Caddy is $state, the website answers $(site_code): $(tail -8 <<<"$out" | tr '\n' ' ')"
+        elif in_relay test -e /etc/caddy/Caddyfile.before-odoh-relay; then
+            fail "$label: its backup stayed behind"
+        elif ! grep -q '^the Caddyfile before it is back' <<<"$out"; then
+            fail "$label: the script did not say what it did: $(tail -6 <<<"$out" | tr '\n' ' ')"
+        else
+            pass "$label: rolled back, Caddy active and the website at 200: $(grep -E '^(!!|the Caddyfile before|Caddy )' <<<"$out" | tr '\n' ' ' | cut -c1-400)"
+        fi
+    }
+    in_relay touch /run/relaylab-fail-restart
+    code=0; out=$(in_relay bash /tmp/odoh-relay.sh 2>&1) || code=$?
+    rolled_back "odoh-relay.sh with Caddy's restart failing" "$out" "$code"
+    in_relay rm -f /run/relaylab-fail-restart
+    "${compose[@]}" stop crypto-sx >/dev/null 2>&1
+    code=0; out=$(in_relay bash /tmp/odoh-relay.sh 2>&1) || code=$?
+    rolled_back "odoh-relay.sh with a target not answering through the relay" "$out" "$code"
+    "${compose[@]}" start crypto-sx >/dev/null 2>&1
+    sleep 2
     for run in first second; do
-        before=$(in_relay sha256sum /etc/caddy/Caddyfile | cut -d' ' -f1)
+        before=$(sum)
         if out=$(in_relay bash /tmp/odoh-relay.sh 2>&1) && tail -1 <<<"$out" | grep -qx RELAY_DONE; then
-            pass "odoh-relay.sh, its $run run: $(grep -E '^(ok|==)' <<<"$out" | tr '\n' ' ' | cut -c1-600)"
+            pass "odoh-relay.sh, its $run run: $(grep -E '^(ok|==)' <<<"$out" | tr '\n' ' ' | cut -c1-700)"
         else
             fail "odoh-relay.sh, its $run run: $(tail -25 <<<"$out" | tr '\n' ' ')"
         fi
-        after=$(in_relay sha256sum /etc/caddy/Caddyfile | cut -d' ' -f1)
+        after=$(sum)
         if [ "$run" = second ]; then
             [ "$before" = "$after" ] && pass "its second run left the Caddyfile as it was" ||
                 fail "its second run changed the Caddyfile"
         fi
     done
+    installed=$(sum)
+    no_access_log "after odoh-relay.sh"
+    # --remove takes every part out, to the byte; then it goes back in for the checks below.
+    if out=$(in_relay bash /tmp/odoh-relay.sh --remove 2>&1) && tail -1 <<<"$out" | grep -qx RELAY_REMOVED &&
+        [ "$(sum)" = "$original" ]; then
+        pass "odoh-relay.sh --remove: the Caddyfile as it was before, to the byte: $(grep -E '^ok' <<<"$out" | tr '\n' ' ' | cut -c1-300)"
+    else
+        fail "odoh-relay.sh --remove: $(tail -8 <<<"$out" | tr '\n' ' ')"
+    fi
+    out=$(in_relay bash /tmp/odoh-relay.sh 2>&1) || true
+    tail -1 <<<"$out" | grep -qx RELAY_DONE && [ "$(sum)" = "$installed" ] &&
+        pass "odoh-relay.sh after --remove: the same Caddyfile again" || fail "odoh-relay.sh after --remove: $(tail -6 <<<"$out" | tr '\n' ' ')"
     in_relay test -f /etc/caddy/Caddyfile.before-odoh-relay && pass "the Caddyfile before it is kept as Caddyfile.before-odoh-relay" ||
         fail "no backup of the Caddyfile"
     [ "$(in_relay grep -c '^	import odoh_relay$' /etc/caddy/Caddyfile)" = 1 ] &&
@@ -288,6 +369,8 @@ if [ -n "$STRATEGY" ]; then
     [ "$STATUS" = 301 ] && grep -qx 'location: https://datapavan.org/x' <<<"$HEADERS" &&
         pass "its redirects still answer: $STATUS to https://datapavan.org/x" || fail "www.datapavan.org answers $STATUS"
 fi
+
+[ -n "$STRATEGY" ] || no_access_log "the test's Caddyfile"
 
 # ---- the rules, over each protocol
 for proto in http1.1 http2; do
@@ -377,6 +460,41 @@ for proto in http1.1 http2; do
     done
 done
 
+# ---- aborts and slow bodies (review M1, m1)
+echo "== aborts and slow bodies"
+mark=$(log_lines)
+if abort_mid_response http1.1; then
+    lines=$(log_since "$ABORT_MARK")
+    grep -q '"error":"write tcp ADDR->ADDR' <<<"$lines" &&
+        pass "an HTTP/1.1 client resetting mid-response: Caddy logs the abort with both ends as ADDR" ||
+        fail "an HTTP/1.1 client resetting mid-response: the abort's error is not masked: $(grep 'incomplete' <<<"$lines" | head -c 400)"
+else
+    fail "an HTTP/1.1 client resetting mid-response: Caddy never logged the abort's write error in ten tries, so the check proves nothing"
+fi
+# Over HTTP/2 the abort is a stream's cancel, logged without an address; run for the log's check below.
+abort_mid_response http2 >/dev/null || true
+for proto in http1.1 http2; do
+    # Five clients that send a body of 1,000 bytes at 100 bytes a second and give up after 3 s, and one that sends
+    # it whole in about 2.5 s: only that one reaches a target, once (buffer_requests).
+    b=$(counts)
+    in_relay sh -c "head -c 1000 /dev/urandom >/tmp/slow
+        for i in 1 2 3 4 5; do
+            curl -s --$proto --interface $CLIENT --limit-rate 100 --max-time 3 -o /dev/null \
+                --cacert /var/lib/caddy/caddy/pki/authorities/local/root.crt --resolve datapavan.org:443:127.0.0.1 \
+                -X POST 'https://datapavan.org/odoh/proxy?$SX' -H 'Content-Type: $ODOH' --data-binary @/tmp/slow &
+        done
+        wait; true"
+    STATUS=499
+    refused "$proto, five slow bodies given up mid-way" 499 "$b"
+    sha=$(in_relay sh -c "sha256sum /tmp/slow | cut -d' ' -f1")
+    in_relay cp /tmp/slow /tmp/q
+    mark_sx=$(count crypto-sx)
+    req "$proto" --limit-rate 400 -X POST "https://datapavan.org/odoh/proxy?$SX" -H "Content-Type: $ODOH" --data-binary @/tmp/q
+    answered "$proto, a slow body sent whole" 200 "answer of crypto-sx to $sha"
+    forwarded "$proto, a slow body sent whole" crypto-sx odoh.crypto.sx "$mark_sx" "$sha"
+done
+no_address "aborts mid-response and mid-body" "$mark"
+
 # ---- the log: a target down, a failed handshake, the mail site's proxy failing
 echo "== Caddy's log"
 mark=$(log_lines)
@@ -418,6 +536,13 @@ else
     sleep 1
     log_since "$mark" | grep -q "\"remote_ip\":\"$CLIENT\"" && pass "the control: without the filter, Caddy's error log names $CLIENT, so the check above can see it" ||
         fail "the control: even without the filter no address was logged, so the check above proves nothing"
+    "${compose[@]}" start crypto-sx >/dev/null 2>&1
+    sleep 2
+    if abort_mid_response http1.1 && log_since "$ABORT_MARK" | grep -q "\"error\":\"[^\"]*$CLIENT:[0-9]"; then
+        pass "the control: without the filter, an abort mid-response logs $CLIENT and its port in the error's text"
+    else
+        fail "the control: without the filter, the abort's error did not name $CLIENT, so its check proves nothing"
+    fi
     in_relay sh -c "cp /tmp/Caddyfile.kept /etc/caddy/Caddyfile"
     in_relay systemctl restart caddy
     "${compose[@]}" start crypto-sx >/dev/null 2>&1
