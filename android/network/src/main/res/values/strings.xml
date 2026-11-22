@@ -5,8 +5,8 @@
     <string name="app_name" translatable="false">Datapavan Advanced</string>
     <string name="network_tagline">See where each app on your phone connects.</string>
     <!-- Whether Datapavan's VPN is running. -->
-    <string name="status_on">Datapavan's VPN is on.</string>
-    <string name="status_off">Datapavan's VPN is off.</string>
+    <string name="status_on">Datapavan\'s VPN is on.</string>
+    <string name="status_off">Datapavan\'s VPN is off.</string>
     <string name="turn_on">Turn on</string>
     <string name="turn_off">Turn off</string>
     <!-- Private DNS on "Automatic", and the network's DNS server supports encryption, so Android uses it. -->
@@ -95,7 +95,7 @@
     <!-- Apps and the VPN (ADR 0041): every app can tell that a VPN is on; an app that does not work with Datapavan can be left out of the tunnel. -->
     <string name="left_out_title">Apps and the VPN</string>
     <string name="vpn_seen">Android tells every app that a VPN is on, and Datapavan cannot hide that. Some apps report it, and some refuse to work while a VPN is on.</string>
-    <string name="left_out_body">If an app does not work with Datapavan's VPN, leave it out. It then goes to the internet without Datapavan: Datapavan does not see or record its connections, and it does not go through your circumvention tool. Android no longer tells that app its network is a VPN, but the app may still find that the phone has a VPN interface. While the VPN is on, a change takes a moment, because Datapavan sets up its tunnel again.</string>
+    <string name="left_out_body">If an app does not work with Datapavan\'s VPN, leave it out. It then goes to the internet without Datapavan: Datapavan does not see or record its connections, and it does not go through your circumvention tool. Android no longer tells that app its network is a VPN, but the app may still find that the phone has a VPN interface. While the VPN is on, a change takes a moment, because Datapavan sets up its tunnel again.</string>
     <string name="left_out_none">No app is left out.</string>
     <plurals name="left_out_count">
         <item quantity="one">%d app is left out.</item>
