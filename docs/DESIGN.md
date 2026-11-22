@@ -71,7 +71,7 @@ Each limit is a reason for the next stage. Where each one is addressed:
 ## 5. Roadmap for stage 1
 
 Each release can ship on its own and is useful by itself. v0.1 is Datapavan Basic, released as Datapavan Basic
-0.1.2. v0.2's network monitoring, v0.3's blocking and v0.4's reports land in Datapavan Advanced, and what of them
+0.1.2. v0.2's network part, v0.3's blocking and v0.4's reports land in Datapavan Advanced, and what of them
 needs no network comes to Basic as well ([ADR 0045](decisions/0045-three-editions-of-one-app.md)). The two editions
 share one version line: Datapavan Advanced 0.2.0, its first release, is built from the same commit as Datapavan
 Basic 0.2.0 (the maintainer, 2026-11-14).
@@ -89,14 +89,14 @@ Shipping without network permission at all is a strong trust signal: the app *ca
 - **Sensor access:** apps that hold microphone, camera or location access, especially where the app's purpose does not need it; a link to the system's privacy dashboard (Android 12+), which shows when each app used them; and advice to prefer one-time grants.
 - **Strict sensor mode (guided):** Android does not let one app change another app's permissions, so stage 1 walks the user through every app with microphone, camera or location access, opens each app's permission page, recommends *Ask every time* or *Don't allow*, and warns when an app gains the access again. Voice assistants' wake-word listening ("Hey Google", Bixby) is named, with the setting that turns it off. Stage 2 enforces the same policy without the user's clicks.
 - **Tracker SDK detection:** scan each app's DEX class names on the device, in the base APK and every split, against a bundled tracker-signature database, and, in the same pass, against Datapavan's own list of traffic-sharing (proxy), remote-support and screen-recording SDKs (`data/sdks`, ADR 0019), whose findings state what was found, what the code does when it is on and what could not be checked, never intent or consent. Trackers whose code the app contains are shown apart from those it only refers to. The first scan reads every app's code (about 90 seconds for 436 apps on the A40); results are cached per app version and signature data. DEX files that an APK stores uncompressed, most of them, are mapped from the APK as Android itself does, so only the pages the parser needs are read; compressed ones are read into memory, and those over 48 MB are reported as unreadable instead. Each class name is matched once, without building lists of names, and the number of apps scanned at once follows the phone's memory. Where an SDK capability needs a system service that the phone lacks in the current profile, such as Google Play services for reading Google's advertising ID, the app's page says so for that capability only, with the time of the check (ADR 0021); Google Play services, the Play Store and HMS Core are each judged genuine, a substitute such as microG, or absent. Installed VPN, proxy and circumvention apps are also checked against their developers' official signing certificates (`data/app-signers`, ADR 0018): a copy is called modified only on positive evidence (every official key known and the data fresh, or a debug key the developer never uses), a key not known yet is shown as a fact with its fingerprint, and a genuine build disguised under another name keeps its disguise behind a tap. Datasets ship as signed data packs ([DATA-PACKS.md](DATA-PACKS.md), ADR 0017): the APK carries the current one, and a newer pack can be imported through the system file picker, without network access. The signature (Ed25519, in signify's format) is checked before anything is read, and a pack is never replaced by an older one. A *Data sources* screen shows each dataset's date and licence notice and the pack's fingerprint, and the overview warns when the data is more than six months old. Every entry that names a company records its evidence and can be disputed publicly (ADR 0015).
-- **Network usage per app** (ADR 0022): bytes received and sent, for mobile data (all SIMs together) and Wi-Fi, with the part Android counted as background, over the last 30 or 7 days, read from `NetworkStatsManager`. It needs the *Usage access* special permission, which the app explains and asks for but never requires. The audit reads only totals for the period, never which app was opened when, and keeps nothing; in Datapavan Advanced, Watch also reads which app was on screen and when, and keeps the states it derives only in memory for "Now" and in the connection log the user chooses to keep (ADR 0046, which amends ADR 0022 for Advanced). Android counts per user ID, so apps that share one are shown together and never split; traffic routed through a local proxy app counts under that app; tethering, removed apps and the system get lines of their own. Sizes use the step of the phone's own data-usage screen, so that the two can be compared: 1,024 in AOSP, 1,000 on Samsung phones, measured per vendor. The overview lists the apps that used the most.
+- **Network usage per app** (ADR 0022): bytes received and sent, for mobile data (all SIMs together) and Wi-Fi, with the part Android counted as background, over the last 30 or 7 days, read from `NetworkStatsManager`. It needs the *Usage access* special permission, which the app explains and asks for but never requires. The audit reads only totals for the period, never which app was opened when, and keeps nothing; in Datapavan Advanced, the network part also reads which app was on screen and when, and keeps the states it derives only in memory for "Now" and in the connection log the user chooses to keep (for Advanced, ADR 0046). Android counts per user ID, so apps that share one are shown together and never split; traffic routed through a local proxy app counts under that app; tethering, removed apps and the system get lines of their own. Sizes use the step of the phone's own data-usage screen, so that the two can be compared: 1,024 in AOSP, 1,000 on Samsung phones, measured per vendor. The overview lists the apps that used the most.
 - **Apps not opened for a long time** (ADR 0022): the last time each app was visible or ran a foreground service, from `UsageStatsManager`. Apps not opened for 90 days that still hold a sensitive permission, special access, VPN permission or background data use are listed for the remediation plan, with a link to Android's own page of unused apps; "not opened" is stated as a fact, and apps that work without being opened, such as keyboards and VPNs, say that it means little.
 - **The guided check** (ADR 0025): on an app's page, the user names one activity, Datapavan reads the app's counts, opens the app, and reads again when the user returns, at least 15 seconds later and with no query in between, checking against the phone's live totals that Android's count is up to date. It shows received and sent bytes per minute and the background share; for activities that only receive, sent bytes as a share of received ones next to what acknowledgements and requests alone take (about 0.5 to 3 %). Two facts need no comparison: an app installed and never opened that used data, and background sending by keyboards, live wallpapers and home screens. Nothing is an alert, nothing is kept, and no string judges an app.
 - **Plain-language card per app:** what it can access, what trackers it carries, how much it sends, and what the user can do about it, at the top of the app's page (ADR 0027).
 - **Structure** ([ADR 0027](decisions/0027-app-structure-and-settings.md)): four destinations in a navigation bar (summary, apps, phone, network); the app list with search, filters and orders; sections on an app's page that open and close; settings for appearance and language on every supported Android version, and the pages about the app itself.
 - **Remediation plan:** findings become a short queue of actions ordered by how much risk each removes, at a light, medium or strict level, each previewed and confirmed in one tap, recorded in a journal and reversible. A safety floor protects the phone's core functions at every level. In v0.1 an action opens the right system screen; the Device Owner edition applies the same plan by itself. Design: [REMEDIATION.md](REMEDIATION.md). v0.1's part ([ADR 0026](decisions/0026-remediation-plan-v0.1.md)): items from the phone's debugging and certificate authorities, apps with access that can control the phone, doubtful copies, apps that install apps or contain a traffic-sharing SDK, apps not opened for 90 days that still hold something, and, at the strict level only, preinstalled apps; in three classes by what the action removes, then trackers' purpose, time not opened and name, with no score; sessions of five cards; a care step before control access and before preinstalled apps; a safety floor computed on the phone (default apps, keyboards, screen readers, device owners and preinstalled admins, the installer and permission controller) plus `data/remediation/floor.tsv` by function; and a journal that reads each item again when the user comes back, records what actually changed, says what has come back since, offers undo through the same screen and asks once, three days later, whether everything still works.
 
-### v0.2, network monitoring, in Datapavan Advanced: local VPN, observe only
+### v0.2, the network part, in Datapavan Advanced: local VPN, observe only
 
 - Connection log per app: destination domain, IP, organisation (from an offline IP-to-ASN database), bytes, time, and foreground/background state.
 - A timeline answering "who did this app talk to?", with tracker destinations flagged.
@@ -144,8 +144,8 @@ Shipping without network permission at all is a strong trust signal: the app *ca
 +---------------------------------------------------------------------------------------+
 ```
 
-The picture shows the parts, not the packages. Since [ADR 0045](decisions/0045-three-editions-of-one-app.md)
-the VPN host and the forwarder live in the `:watch` library, which only Datapavan Advanced includes: Advanced
+The picture shows the parts, not the packages. The VPN host and the forwarder live in the `:network` library,
+which only Datapavan Advanced includes ([ADR 0045](decisions/0045-three-editions-of-one-app.md)): Advanced
 holds `INTERNET` and reads its own log, and Datapavan Basic never holds `INTERNET`.
 
 ### 6.1 Why a Rust core
@@ -163,20 +163,19 @@ holds `INTERNET` and reads its own log, and Datapavan Basic never holds `INTERNE
   3. QUIC Initial packets carry SNI too, but parsing them is harder (later).
   4. If no hostname is known, an offline IP-to-ASN lookup gives at least the organisation.
 
-  (Amended 2026-11-18, in W5's first part: the connection's own server name, TLS or QUIC, now comes first, then
-  the DNS answer, whose name is kept beside it where the two differ, then the organisation. A DNS answer is tied to
-  a flow by its address alone, and either name can be wrong. [ADR 0044](decisions/0044-udp-mapping-and-budgets.md),
-  decision 4.)
+  The connection's own server name, TLS or QUIC, comes first, then the DNS answer, whose name is kept beside it
+  where the two differ, then the organisation. A DNS answer is tied to a flow by its address alone, and either name
+  can be wrong ([ADR 0044](decisions/0044-udp-mapping-and-budgets.md), decision 4).
 - **Shrinking visibility:** Encrypted Client Hello (ECH), apps with their own DNS-over-HTTPS, and Android Private DNS all hide hostnames. Step 4 is the fallback, and the UI must show plainly when a destination is "unknown".
 
 ### 6.3 DNS handling
 
-The VPN advertises its own DNS address inside the tunnel. The core answers queries and resolves them
-upstream: for apps that go directly by Oblivious DoH by default, or a DoH or DoT resolver the user chose, in an
-order of privacy that ends at the network's resolver only outside the strict setting ([ADR 0042](decisions/0042-dns-of-apps-that-go-directly.md),
-W8's part 1). The engine seals ODoH and keeps the policy and the caches; Watch's Kotlin side carries the
-exchanges on Android's own TLS. Blocked tracker domains get an empty answer. If the user has Android Private DNS
-on, onboarding must detect it and explain the trade-off.
+The VPN advertises its own DNS address inside the tunnel. The core answers queries and resolves them upstream: for
+apps that go directly by Oblivious DoH by default, or a DoH or DoT resolver the user chose, in an order of privacy
+that ends at the network's resolver only outside the strict setting ([ADR
+0042](decisions/0042-dns-of-apps-that-go-directly.md), W8's part 1). The engine seals ODoH and keeps the policy and
+the caches; the network part's Kotlin side carries the exchanges on Android's own TLS. Blocked tracker domains get an
+empty answer. If the user has Android Private DNS on, onboarding must detect it and explain the trade-off.
 
 ### 6.4 Storage and retention
 
@@ -209,7 +208,7 @@ on, onboarding must detect it and explain the trade-off.
 | Supply-chain attacker | Compromises a dependency or our build | Pinned dependencies with SHA-256 verification, exclusive repository content, cargo-deny advisories in CI, reproducible builds, signed releases |
 | Device seizure or inspection | A phone check at a border or checkpoint; the connection log becomes evidence | No destination logging for flows chained through a circumvention proxy (default); selectable retention, including none; one-tap wipe |
 | State network observer | Sees that a device runs Datapavan (for example through list-update requests) | List updates are optional and can be imported as files; no other network traffic of our own |
-| App on the same device that probes loopback | Finds the circumvention tool's local proxy to learn that the user runs one, or uses a proxy with no password to learn the server's address and send traffic through it ([ADR 0041](decisions/0041-visibility-and-coexistence.md), decision 5) | Watch says on its screen what the tool's proxy lets other apps do, and offers a password where the tool takes one; the chained apps' UDP goes through the tool only once the user turns it on, since no tool is known to keep other apps off its UDP relay. Traffic between apps over loopback never enters the tunnel, so Watch does not see it |
+| App on the same device that probes loopback | Finds the circumvention tool's local proxy to learn that the user runs one, or uses a proxy with no password to learn the server's address and send traffic through it ([ADR 0041](decisions/0041-visibility-and-coexistence.md), decision 5) | Datapavan Advanced says on its network screen what the tool's proxy lets other apps do, and offers a password where the tool takes one; the chained apps' UDP goes through the tool only once the user turns it on, since no tool is known to keep other apps off its UDP relay. Traffic between apps over loopback never enters the tunnel, so Advanced does not see it |
 | Malformed or hostile input | Packets, DEX files of other apps, attestation certificates or data packs crash or exploit a parser | Rust; fuzzing of all parsers (`cargo fuzz`, also in CI); the forwarder fails closed |
 
 Beyond its own assets, Datapavan protects the user from untrusted VPN apps: remote control, modified
@@ -332,14 +331,14 @@ M1 to M5, which the ADRs cite.
 
 **Before W1:**
 
-- **Watch's permissions,** in an ADR of their own, as ADR 0014 did for v0.1: each permission, why, and
-  what fails without it, read for every Android version from 10 to 17. Watch needs `INTERNET` and, on
-  Android 17, `ACCESS_LOCAL_NETWORK` (spike, finding 7). Proposed: the log records the app's UID only,
-  and the audit app, which already holds package visibility and usage access (ADR 0014), turns UIDs
-  into apps and flow times into foreground or background. Watch's own screens name only the user's
-  tool and the apps the user picks for the chain; the ADR settles whether `<queries>` entries are
-  enough for that or Watch needs package visibility, since a `<queries>` entry once missed a VPN app
-  (spike, "Who owns a local proxy port").
+- **The network part's permissions,** in an ADR of their own, as ADR 0014 did for v0.1: each permission,
+  why, and what fails without it, read for every Android version from 10 to 17. The network part needs
+  `INTERNET` and, on Android 17, `ACCESS_LOCAL_NETWORK` (spike, finding 7). The log records the app's UID
+  only, and the audit, which already holds package visibility and usage access (ADR 0014), turns UIDs
+  into apps and flow times into foreground or background. The network part's own screens name only the
+  user's tool and the apps the user picks for the chain; the ADR settles whether `<queries>` entries are
+  enough for that or the network part needs package visibility, since a `<queries>` entry once missed a
+  VPN app (spike, "Who owns a local proxy port").
 - **The IP-to-organisation dataset,** under ADR 0015: candidates (among them iptoasn.com's table, DB-IP's
   IP to ASN Lite, and tables built from RIPE RIS or RouteViews data) are compared for licence,
   coverage and freshness before one is chosen. It ships like the other datasets, with LICENSE, SOURCE
@@ -351,77 +350,73 @@ M1 to M5, which the ADRs cite.
   its maintained forks are the candidates) against Go's wireguard-go, which would bring back the Go
   toolchain ADR 0012 kept out. Licence, upkeep and audit history decide.
 
-Status of the items before W1, 2026-11-09: Watch's permissions in [ADR 0034](decisions/0034-network-permissions.md),
-WireGuard in [ADR 0035](decisions/0035-wireguard-upstream.md) and the dataset in
-[ADR 0036](decisions/0036-ip-to-organisation-dataset.md), all three accepted by the maintainer on
-2026-11-09; the table of tools in `data/tools/` ([notes](spikes/2026-11-table-of-tools.md)). Before W6,
-one question needs a closer look: Android keeps one DNS cache for all apps of a VPN network, so an app
-sent through the tool or WireGuard may be given an answer the network's resolver gave another app,
-possibly a censored one (ADR 0035, open question 4). A spike on 2026-11-11 settled it on the emulators
-with Android 11, 15 and 17 ([notes](spikes/2026-11-shared-dns-cache.md)): the cache is shared, for
-answers and negative answers alike; Android names the app that asked as the owner of each lookup; and an
-answer whose time to live Watch sets to 0 is not kept. While any app is chained, Watch therefore gives
-the apps every answer with a time to live of 0, answers each lookup from the app's own route, and keeps
-a cache of its own per route.
+Status of the items before W1, 2026-11-09: the network part's permissions in [ADR
+0034](decisions/0034-network-permissions.md), WireGuard in [ADR 0035](decisions/0035-wireguard-upstream.md) and the
+dataset in [ADR 0036](decisions/0036-ip-to-organisation-dataset.md), all three accepted by the maintainer on
+2026-11-09; the table of tools in `data/tools/` ([notes](spikes/2026-11-table-of-tools.md)). Before W6, one question
+needs a closer look: Android keeps one DNS cache for all apps of a VPN network, so an app sent through the tool or
+WireGuard may be given an answer the network's resolver gave another app, possibly a censored one (ADR 0035, open
+question 4). A spike on 2026-11-11 settled it on the emulators with Android 11, 15 and 17
+([notes](spikes/2026-11-shared-dns-cache.md)): the cache is shared, for answers and negative answers alike; Android
+names the app that asked as the owner of each lookup; and an answer whose time to live the engine sets to 0 is not
+kept. While any app is chained, the engine therefore gives the apps every answer with a time to live of 0, answers
+each lookup from the app's own route, and keeps a cache of its own per route.
 
 Status of W1 and W2, 2026-11-09, on the branches `watch-w1` and `watch-w2`. W1 is built: its CI run
-passed. W2 is built and passes `scripts/smoke-watch.sh` and `scripts/verify-watch.sh` on the emulators
+passed. W2 is built and passes `scripts/smoke-network.sh` and `scripts/verify-network.sh` on the emulators
 with Android 11, 15 and 17 and on the A40 (Android 11), where the engine's CPU for the spike's workload
-was 37.8 and 38.8 s against the spike's 42.4 and 41.4 s, back to back (`scripts/watch-lab/measure.sh`).
+was 37.8 and 38.8 s against the spike's 42.4 and 41.4 s, back to back (`scripts/network-lab/measure.sh`).
 The release library is 533 KB on arm64. Still open for W2: the emulators with Android 10, 12, 13, 14
 and 16, and IPv6 end to end on a network that has it (this one has none). Known for W4: the byte
-counters count a connection only when it ends cleanly, and Watch's memory (96 MB PSS with its screen,
-against the spike's 29 MB) needs a look.
+counters count a connection only when it ends cleanly, and the network part's memory (96 MB PSS with its
+screen, against the spike's 29 MB) needs a look.
 
-W3, on `watch-w3`, 2026-11-09: flows are named from the DNS answers Watch passes on (the name the app
-asked for, through CNAME chains), from the TLS server name of the app's first bytes, and last from the
-organisation table of [ADR 0036](decisions/0036-ip-to-organisation-dataset.md), 2.71 MB in compressed
-blocks, read in place; each name says where it came from (since 2026-11-18 the server name comes before the DNS
-answer, which stays beside it where the two differ: W5, part 1, below). Decided on 2026-11-09: when Private DNS is on
-"automatic" and the network's resolver speaks DNS over TLS, Android's queries pass through Watch still
-encrypted, so their names come from TLS or QUIC; W8 brings a TLS client into the engine anyway (the user's
-DoH or DoT resolver), and with it Watch answers Android's DNS over TLS itself and keeps both the
-encryption upstream and the names, within 0.2.0. `scripts/verify-watch.sh` checks all three. Decided
-later that day: the QUIC server name is read in versions 1 and 2 from a `ClientHello` put together
-across packets and out-of-order CRYPTO frames (Chrome's post-quantum `ClientHello` spans two packets,
-and Chrome scatters its frames on purpose), checked against the RFCs' sample packets; a name that is
-only a provider's public name under Encrypted Client Hello is never shown as the destination; the
-monthly table goes in a data repository of its own (ADR 0036); and the ten-app comparison is measured
-against a record independent of both tools (row W3). The apps come from the Play Store on an emulator
-image with Play, signed in by the maintainer with an account kept for tests; such images have no root,
-so the same APKs are installed on an image with root for the owner check.
+W3, on `watch-w3`, 2026-11-09: flows are named from the TLS server name of the app's first bytes, from the DNS answers
+the engine passes on (the name the app asked for, through CNAME chains), kept beside the server name where the two
+differ, and last from the organisation table of [ADR 0036](decisions/0036-ip-to-organisation-dataset.md), 2.71 MB in
+compressed blocks, read in place; each name says where it came from (the order is W5 part 1's, below). When Private
+DNS is on "automatic" and the network's resolver speaks DNS over TLS, the engine refuses port 853 at its DNS address,
+so Android's lookups come to port 53, where they are named and encrypted upstream (W8, part 1, below).
+`scripts/verify-network.sh` checks all three ways a flow is named. Decided on 2026-11-09: the QUIC server name is read
+in versions 1 and 2 from a `ClientHello` put together across packets and out-of-order CRYPTO frames (Chrome's
+post-quantum `ClientHello` spans two packets, and Chrome scatters its frames on purpose), checked against the RFCs'
+sample packets; a name that is only a provider's public name under Encrypted Client Hello is never shown as the
+destination; the monthly table goes in a data repository of its own (ADR 0036); and the ten-app comparison is measured
+against a record independent of both tools (row W3). The apps come from the Play Store on an emulator image with Play,
+signed in by the maintainer with an account kept for tests; such images have no root, so the same APKs are installed
+on an image with root for the owner check.
 
-The QUIC server name is built the same evening. Watch reads versions 1 and 2, puts the `ClientHello`
+The QUIC server name is built the same evening. The engine reads versions 1 and 2, puts the `ClientHello`
 together by offset across up to eight datagrams, and does not check the AEAD tag, since anyone can
 compute the Initial keys; the keys and payloads match RFC 9001's and RFC 9369's samples, and
-`scripts/verify-watch.sh` sends a two-datagram `ClientHello` with its frames out of order, protected
-with Python's HMAC and OpenSSL's AES rather than Watch's code. The DNS answers' HTTPS records give the
+`scripts/verify-network.sh` sends a two-datagram `ClientHello` with its frames out of order, protected
+with Python's HMAC and OpenSSL's AES rather than the engine's code. The DNS answers' HTTPS records give the
 public names of ECH configurations, and a hello that offers ECH under one of them leaves the flow's name
 as it was and marks it hidden; a hello that offers ECH under any other name names the flow and is
 marked as offering ECH, since a real ECH and GREASE cannot be told apart when the app looked its names
-up past Watch (ADR 0036 records that limit). Two crates came in for it, `aes` and `sha2` from RustCrypto (MIT or Apache-2.0),
+up past the tunnel's resolver (ADR 0036 records that limit). Two crates came in for it, `aes` and `sha2` from RustCrypto (MIT or Apache-2.0),
 about 27 KB per ABI. Counters without destinations, readable on any phone, count the names read from
 TLS and QUIC, the QUIC flows whose name could not be read, and the hellos that offered ECH or hid the
 name. On the Android 17 emulator, Chrome opening Google over QUIC gave six QUIC names and no QUIC flow
 left unread, every hello offering ECH as Chrome's GREASE does.
 
-Private DNS, the same evening. On the Android 17 emulator, Android applies strict Private DNS to Watch's
+Private DNS, the same evening. On the Android 17 emulator, Android applies strict Private DNS to the VPN's
 network as to any other: the resolver (UID 1051) sends every app's lookups to the provider over DNS over
-TLS, through the tunnel but past Watch's resolver, and Watch names those connections only by the
-provider. Watch reads the setting from its own network's link properties and, while it is on, says on
-its screen what this hides and what it still names; it does not ask the user to turn Private DNS off,
+TLS, through the tunnel but past the tunnel's resolver, and Advanced names those connections only by the
+provider. The network part reads the setting from its own network's link properties and, while it is on,
+says on the network screen what this hides and what it still names; it does not ask the user to turn Private DNS off,
 since that would show the lookups to the network as well (W9's onboarding guides the choice). The note
 also covers "automatic" on a network whose DNS server encrypts, which the emulator cannot show: its
 network's server has no DNS over TLS. The four strings were translated into the seven languages with
 Android's own names for the setting, read from the emulator's Settings app, and reviewed by two other
-models; one finding was settled. `scripts/verify-watch.sh` turns strict mode on and off on the emulator
-and checks that Watch reads both.
+models; one finding was settled. `scripts/verify-network.sh` turns strict mode on and off on the emulator
+and checks that the network part reads both.
 
 An app's own DNS, the same evening (ADR 0045, decision 11). A flow is marked as the app's own DNS when it is plain
-DNS on port 53 to another server than Watch's, DNS over TLS or QUIC on port 853, or DNS over HTTPS on
+DNS on port 53 to another server than the tunnel's, DNS over TLS or QUIC on port 853, or DNS over HTTPS on
 port 443 to a known resolver's address or host name (from DNS, TLS or QUIC). The known resolvers are a
 new CC0 table, `data/resolvers`, every host and address from its operator's own page, compiled into the
-engine and kept out of the audit app: 60 services of 18 operators, from Google, Cloudflare and Quad9
+engine, which Basic does not carry: 60 services of 18 operators, from Google, Cloudflare and Quad9
 to Alibaba, Tencent's DNSPod, Yandex and Shecan, each checked again by two other models; Mullvad's was
 left out, since its page says it closed on 2026-11-02. The answers an app gets from a resolver of its
 own name that app's later flows, and only that app's: the app chose that resolver and must not rename
@@ -433,91 +428,89 @@ maps 39 AS numbers to 17 companies of `entities.tsv`, which grew by eleven, each
 RDAP record and linked to its company by the company's own page or the record's contacts; one model
 compiled it, two others checked it alone. A network is marked as hosting other companies' servers
 unless a page of the company names it as its own: only Meta's two and Netflix's main AS are marked as
-their own, and Watch names the others "a server on <company>'s network". Twitter's three AS numbers
+their own, and Advanced names the others "a server on <company>'s network". Twitter's three AS numbers
 were left out: only one contact's e-mail address linked them to X Corp. A flow named by its network
 now carries the AS number and that mark, and shows Meta Platforms, Inc., not the registry's "Facebook,
 Inc.". Still to build: the ten-app comparison. One run of
-`scripts/verify-watch.sh` saw Watch still read strict Private DNS 20 s after the setting was restored,
+`scripts/verify-network.sh` saw the network part still read strict Private DNS 20 s after the setting was restored,
 right after a network switch; three tries could not repeat it, so the check now waits 60 s and, if it
 fails, prints what Android itself reports for each network.
 
 W4, on `watch-w4`, 2026-11-09: the connection log as [ADR 0037](decisions/0037-connection-log-storage.md)
 decides. The engine counts each flow's bytes as they pass and hands the log a record when a flow ends,
-a segment of every open flow at each quarter hour, each app's lookups to Watch's own DNS address, and
-what is open when the tunnel stops; Watch seals each record under its day's key in SQLite. The screen
+a segment of every open flow at each quarter hour, each app's lookups to the tunnel's DNS address, and
+what is open when the tunnel stops; the network part seals each record under its day's key in SQLite. The screen
 offers retention of none, 1, 7 or 30 days and deletes the log in one tap, in eight languages, reviewed
 by two models and settled by a third. `scripts/verify-log.sh` passes on the Android 17 emulator: flows
-with their bytes, no destination in the files or in Watch's logcat, an earlier day shut while the screen
+with their bytes, no destination in the files or in the network part's logcat, an earlier day shut while the screen
 is locked and open once it is unlocked, and a wipe that leaves no file and no key. How Android counts
 traffic through a VPN, the open check of ADR 0022: it keeps each app's traffic on the VPN's network
 under that network, with its own entry per app (type 17, transport VPN, in `dumpsys netstats`), counted
 as IP packets on the tunnel, headers included, while the log counts what the apps sent and received.
 So the engine now also counts each flow's IP packets as the tunnel carries them, and each app's lookups
-to Watch's DNS address with their answers. Over a scripted session (6 MB down, 1 MB up, small UDP
+to the tunnel's DNS address with their answers. Over a scripted session (6 MB down, 1 MB up, small UDP
 flows, lookups) the shell's bytes in the log and Android's own count were 0.02 % and 0.00 % apart on
 Android 15, 0.03 % and 0.00 % on Android 17, and 0.03 % and 0.00 % on Android 11, against M4's 5 %;
 `scripts/verify-log.sh` checks it, and passes in full on all three. Android 11 prints that network as
 "type=VPN" and also repeats the same traffic under the network beneath, so summing every network counts
-it twice. An open check for ADR 0022 and W5: the audit app asks Android for Wi-Fi and mobile traffic
-only, so with Watch on, an app's traffic may be missing from those totals from Android 12, and present
-before; the audit app must say so or read the VPN's network too. Still to do in W4: the log on the A40
+it twice. An open check for ADR 0022 and W5: the audit asks Android for Wi-Fi and mobile traffic
+only, so with Advanced's tunnel on, an app's traffic may be missing from those totals from Android 12, and
+present before; the audit must say so or read the VPN's network too. Still to do in W4: the log on the A40
 (verify-log.sh sets a PIN, so it runs on emulators only) and on an Android 10 emulator, whose system
-image is not on this computer; Watch's memory (96 MB PSS with its screen).
+image is not on this computer; the network part's memory (96 MB PSS with its screen).
 
-W4, 2026-11-10: expiry no longer waits for traffic. It ran only when a record was written or retention
-changed, so a log kept for 7 days by someone who then turned Watch off kept its old days in the file for as
-long as Watch stayed off. Now it also runs when Watch's process starts, when the tunnel starts, when the
-screen opens, before every read and count, and from a job about every six hours, and a day past retention is
-never read back or written, even before expiry has run. Android limits the job: it decides when the job
-runs, and the job does not survive a restart of the phone, since that would need the permission to start at
-boot, which ADR 0034 does not give Watch; the next start of Watch's process then expires the log. Three more
-defects of the same store are fixed. A batch that failed after its day key was made left that key's number
-in memory without its row, so the rest of the day failed to write. A failure on the log's thread could end
-Watch's process, and the tunnel with it; each one is now counted, without any destination. And yesterday's
-key stayed in memory until the next write, not only until midnight. A model-based test (`LogModel`, debug
-builds) runs inside Watch on the emulator, against Android's own SQLite and the Keystore. It draws random
-sequences of writes, reads, the clock moving on and back, time zones, restarts, locking, changes of
-retention, wipes, the expiry job, a full or failing database and a failing Keystore, and after each step
-checks what must and must not be read back; `scripts/verify-log.sh` runs 300 steps of it, with a fresh seed
-that it prints. On the code as it is, 50 seeds of 1500 steps each pass on Android 15; with each of the four
-defects above put back in turn, it fails for 20, 18, 20 and 20 of 20 seeds. It also found a fifth defect:
-with retention none and a failing Keystore, a read answered "cannot be opened" instead of "nothing". While
-checking this, verify-log.sh's byte comparison failed on Android 15 (8.9 % apart). The engine wrote a TCP
-flow's last segment as soon as its relay ended, but Android's stack still sends what it holds for the app
-through the tunnel in the 30 s the rewriting stays, and those packets were counted after that segment: 10 of
-20 downloads of 2 MB lost 5 to 26 % of their packets in the log. The last segment is now written when the
-rewriting goes, and ends at the flow's last packet. All 20 downloads then carry 1.037 times their payload on
-the tunnel, and over the scripted session the log and Android's count match to the byte. The 0.03 % of the
-day before came from runs in which that loss did not happen; verify-log.sh now checks each download on its
-own. Both scripts pass in full on Android 11, 15 and 17; the log and Android's count were 0.05 % and 0.01 %
-apart on Android 11, and equal to the byte on 15 and 17. On the first run after a fresh boot of the Android
-17 emulator, verify-watch.sh once found Watch's engine started over, with no crash logged; two runs after it
-passed, and both scripts now print how Watch's process last ended when they fail.
+W4, 2026-11-10: expiry does not wait for traffic. Run only when a record was written or retention changed, it left a
+log kept for 7 days by someone who then turned the tunnel off with its old days in the file for as long as the tunnel
+stayed off. So it also runs when the network part's process (`:network`) starts, when the tunnel starts, when the
+screen opens, before every read and count, and from a job about every six hours, and a day past retention is never
+read back or written, even before expiry has run. Android limits the job: it decides when the job runs, and the job
+does not survive a restart of the phone, since that would need the permission to start at boot, which ADR 0034 does
+not give the network part; the next start of its process then expires the log. Three more defects of the same store
+are fixed. A batch that failed after its day key was made left that key's number in memory without its row, so the
+rest of the day failed to write. A failure on the log's thread could end the network part's process, and the tunnel
+with it; each one is now counted, without any destination. And yesterday's key stayed in memory until the next write,
+not only until midnight. A model-based test (`LogModel`, debug builds) runs inside the network part on the emulator,
+against Android's own SQLite and the Keystore. It draws random sequences of writes, reads, the clock moving on and
+back, time zones, restarts, locking, changes of retention, wipes, the expiry job, a full or failing database and a
+failing Keystore, and after each step checks what must and must not be read back; `scripts/verify-log.sh` runs 300
+steps of it, with a fresh seed that it prints. On the code as it is, 50 seeds of 1500 steps each pass on Android 15;
+with each of the four defects above put back in turn, it fails for 20, 18, 20 and 20 of 20 seeds. It also found a
+fifth defect: with retention none and a failing Keystore, a read answered "cannot be opened" instead of "nothing".
+While checking this, verify-log.sh's byte comparison failed on Android 15 (8.9 % apart). The engine wrote a TCP flow's
+last segment as soon as its relay ended, but Android's stack still sends what it holds for the app through the tunnel
+in the 30 s the rewriting stays, and those packets were counted after that segment: 10 of 20 downloads of 2 MB lost 5
+to 26 % of their packets in the log. The last segment is now written when the rewriting goes, and ends at the flow's
+last packet. All 20 downloads then carry 1.037 times their payload on the tunnel, and over the scripted session the
+log and Android's count match to the byte. The 0.03 % of the day before came from runs in which that loss did not
+happen; verify-log.sh now checks each download on its own. Both scripts pass in full on Android 11, 15 and 17; the log
+and Android's count were 0.05 % and 0.01 % apart on Android 11, and equal to the byte on 15 and 17. On the first run
+after a fresh boot of the Android 17 emulator, verify-network.sh once found the engine started over, with no crash
+logged; two runs after it passed, and both scripts now print how the network part's process last ended when they fail.
 
 The engine, the same day: its listener, on the tunnel's own address, took any connection that reached it and
 matched it to a waiting upstream connection by the source port alone. Any app can reach that address
 directly and pick its port, so one that hit the next fake port in the few milliseconds before the real
 connection arrived would have taken another app's connection, with its bytes in the log under that app; once
-Watch blocks or routes by app (W6 to W8), it would have been a way around the rule. Now the listener takes
+the engine blocks or routes by app (W6 to W8), it would have been a way around the rule. Now the listener takes
 only a connection from the fake address the engine rewrites the apps' connections to come from, which no app
 can bind; anything else is closed at once and counted (a 19th counter). Fake ports are drawn at random
 instead of in order, and a freed port waits 60 s before it is handed out again, so that a new SYN does not
 meet the old connection in Android's TIME_WAIT. A connection whose rewriting was forgotten before Android
 handed it over now ends its flow in the log at once. A unit test plays both connections on the loopback, and
-`scripts/verify-watch.sh` connects the shell straight to the listener, found in `/proc/net/tcp`, and sees it
+`scripts/verify-network.sh` connects the shell straight to the listener, found in `/proc/net/tcp`, and sees it
 closed and counted. Both scripts pass in full with it on Android 11, 15 and 17.
-Watch's screen, the same day, says of earlier days only what holds on the phone. It said always that they
+The network screen, the same day, says of earlier days only what holds on the phone. It said always that they
 open only while the phone is unlocked, which is false on a phone with no screen lock, and on one that
 refused a key tied to the lock. Now it says that once the log's key pair exists, tied to the lock, on a
 phone with a screen lock; on a phone with none, that they can be opened at any time and would open only
 while it is unlocked with one; where the phone refused, that they can be opened at any time; before the key
-pair exists, nothing; and with retention none, only that Watch keeps no record. The screen lock is read each
+pair exists, nothing; and with retention none, only that Datapavan keeps no record. The screen lock is read each
 time the screen opens; adding one later also shuts records already kept, which verify-log.sh shows on
 Android 11, 15 and 17. "Screen lock" is Android's own term in each language, from the Settings app of the
 Android 17 emulator. The three new sentences were translated into seven languages, reviewed alone by two
 models and settled by a third. `scripts/verify-log.sh` reads the screen: without a PIN it must not say "only
 while the phone is unlocked", and with one it must.
-Watch's memory, the same day. The 96 MB of W2 was the debug build with its screen: its code is not shrunk,
+The network part's memory, the same day. The 96 MB of W2 was the debug build with its screen: its code is not shrunk,
 its Rust library not optimised, and it runs under the JIT. On the Android 15 emulator the debug build used
 69 to 70 MB PSS, and the release build 23 MB, with its screen open and with the service alone (24 and 22 MB
 on Android 17, 30 and 28 MB on Android 11); the emulator draws in software, so a phone adds its screen's
@@ -527,8 +520,8 @@ it did not work at all: R8 had renamed the three methods the Rust library calls 
 socket, to ask a flow's app, to hand the log its records), so no connection passed, no flow had its app, and
 the log stayed empty. Every check until then ran the debug build, and none ran the release build.
 `proguard-rules.pro` now keeps them, the build fails if the APK's code lacks any of them (verifyApkRelease),
-and `scripts/verify-watch-release.sh`, in CI, signs the release build with a key made for the run, turns
-Watch on from its screen, and checks traffic, each flow's app, the log and a memory budget of 48 MB; it
+and `scripts/verify-network-release.sh`, in CI, signs the release build with a key made for the run, turns
+the tunnel on from the network screen, and checks traffic, each flow's app, the log and a memory budget of 48 MB; it
 passes on Android 11, 15 and 17. Still to do: the release build's memory on the A40, with a real screen.
 
 Before W6, 2026-11-10, after W3 and W4 were merged into `main`: each new UDP flow, so each lookup, was
@@ -539,7 +532,7 @@ in its entry of the table, at most 32, and leave in the order the app sent them 
 the app is still known before the first one leaves, as the rules of W6 to W8 need. A test plays two flows
 through a fake tunnel while Android takes 600 ms to name one: the other flow's answer comes back at once,
 and the slow flow's two datagrams then leave in order. Before the change the same test failed, the answer of
-the other flow coming only after the slow flow's. verify-watch.sh, verify-log.sh and verify-watch-release.sh
+the other flow coming only after the slow flow's. verify-network.sh, verify-log.sh and verify-network-release.sh
 pass with it on Android 11, 15 and 17.
 The same day: the engine forgot a TCP connection after 600 s without a packet, open or not, while its relay
 lived on, so the next line from the server was dropped and the app's own was answered with a reset. Apps
@@ -561,10 +554,10 @@ line wrapping changed.
 The end-to-end check after a network switch failed on CI in four runs of five that day, and the reasons lay
 in the check, not in the engine. CI's emulator has Wi-Fi as its default network and brought mobile data up
 only once Wi-Fi was gone, at times not within 40 s, so Android had no network ("Active default network:
-none") and nothing could pass, with Watch or without; the emulators on this computer had no Wi-Fi at all, so
+none") and nothing could pass, with the tunnel or without; the emulators on this computer had no Wi-Fi at all, so
 their switch had changed nothing. And seven checks ran `flows | grep -qE` under `pipefail`: a `grep -q` that
 found its line early stopped reading, the command before it failed on SIGPIPE, and a flow in the list looked
-missing. `scripts/verify-watch.sh` now keeps mobile data up beside Wi-Fi during the switch, as most phones
+missing. `scripts/verify-network.sh` now keeps mobile data up beside Wi-Fi during the switch, as most phones
 do, waits for Android to have another default network, prints Android's networks before and after, and reads
 lists whole before searching them, again for a few seconds while Android names a flow's app. On this
 computer's Android 15 emulator with Wi-Fi as its default, the switch now really happens, and the check
@@ -574,12 +567,12 @@ W6, on `watch-w6`, 2026-11-11, after the maintainer kept 0.2.0's whole scope (W5
 spike above: the apps' shared cache is kept out of the way with answers whose time to live is 0. Then the
 SOCKS5 client, `core/net/src/socks5.rs` (RFC 1928, with RFC 1929's password): `CONNECT` to an address or a
 name, which the tool then resolves, and `UDP ASSOCIATE` with its datagrams; `BIND` has no command at all.
-Watch offers the password method only when it has credentials, so a tool that takes no password still
+The client offers the password method only when it has credentials, so a tool that takes no password still
 answers, and a password never shows in a `Debug` output. The parsers take any bytes and are fuzzed (target
 `socks5`); `core/net/tests/socks5.rs` runs the client against a small proxy in the same process, whose
 bytes are written by hand from the RFCs, for an address, a name, the password asked for, refused or not
 offered, the proxy's failures, something that is not a proxy, and a UDP relay, announced or as 0.0.0.0.
-The engine does not use it yet: routing by app comes next. How chained apps' lookups are answered is
+How chained apps' lookups are answered is
 [ADR 0038](decisions/0038-dns-of-chained-apps.md), accepted the same day: stand-in addresses from
 198.18.0.0/15 for A questions, the name sent to the tool, no stand-in for AAAA, other record types through
 the tool to Quad9 without blocking, ECH kept.
@@ -590,62 +583,61 @@ apps (or every app but the tool), and off. While it is on, a flow's route waits 
 so that a chained app's connection never starts directly. Chained apps' TCP goes through `CONNECT`, their
 UDP through a `UDP ASSOCIATE` whose connection stays open for the flow, by the name behind a stand-in
 (`core/net/src/standins.rs`) or by address; a tool without UDP sends their UDP nowhere. Their lookups are
-answered by Watch (`core/net/src/answers.rs`): a stand-in for A, no data for AAAA, the name for a reverse
+answered by the engine (`core/net/src/answers.rs`): a stand-in for A, no data for AAAA, the name for a reverse
 lookup of a stand-in, and any other question from Quad9 through the tool, rebuilt without address hints.
 The tool's own traffic and the other apps' go directly; a flow whose app Android cannot name goes nowhere,
 since it could be either. A stopped tool gets the app an ICMP error, and nothing leaves directly. Chained
 flows reach the log with their app and bytes but no destination, unless the user asks for them. Every
 answer has a time to live of 0 while a chain is on, and direct apps' repeated lookups are answered from
-Watch's own cache (`core/net/src/dnscache.rs`), so the network's resolver is asked no more often than
+the engine's own cache (`core/net/src/dnscache.rs`), so the network's resolver is asked no more often than
 before. `core/net/tests/chain.rs` runs the whole engine on a pair of datagram sockets with an in-process
 proxy for UDP and lookups; TCP through the tool needs Android's stack and is checked on the emulator
-(W6's CI test, next). Not yet: Watch's screens and the finding of the tool (Kotlin), and the lab's
-measurements of ADR 0038.
+(W6's CI test, below).
 
-W6's side in Watch, the same day (`android/watch/.../chain/`, `ui/ChainSection.kt`). The build copies the table
-of tools into Watch's assets, and Watch declares the one launcher `<queries>` entry of ADR 0034. Watch looks
-for the installed tools of the table that have a proxy mode, greets only their known SOCKS5 ports (also
-shifted by the Android user's number), and asks Android who owns each answering port; a port another app
-holds is not the tool's. Its screen says which tool it found and on which port, or that none is installed,
-or that the tools installed have their proxy off; it has the switch that sends every app, or the apps the
-user picks, through the tool; a user name and a password Watch made for the tool's proxy, kept encrypted
-under a Keystore key and copied as sensitive, so that other apps on the phone cannot use the proxy; notes
-when the tool carries no UDP or strict Private DNS sends lookups past Watch; and the switch for chained
-destinations in the log, off by default. With the chain on and the tool silent, it says the apps wait and
-nothing of theirs goes out directly. The service hands the chain to the engine before any traffic, from the
-proxy where the tool last answered, then looks again in the background. The 18 strings are in eight
-languages, with Android's own terms from the Settings app, reviewed under ADR 0030's process. Checked by
-hand on the Android 15 emulator with `scripts/watch-lab/socks5.py` on this computer standing in for the
-tool: TCP by address and by stand-in name, UDP through the relay, and a stopped proxy.
+W6's side in the network part, the same day (`android/network/.../chain/`, `ui/ChainSection.kt`). The build copies the
+table of tools into the network part's assets, and Advanced declares the one launcher `<queries>` entry of ADR 0034.
+The network part looks for the installed tools of the table that have a proxy mode, greets only their known SOCKS5
+ports (also shifted by the Android user's number), and asks Android who owns each answering port; a port another app
+holds is not the tool's. The network screen says which tool it found and on which port, or that none is installed, or
+that the tools installed have their proxy off; it has the switch that sends every app, or the apps the user picks,
+through the tool; a user name and a password Datapavan made for the tool's proxy, kept encrypted under a Keystore key
+and copied as sensitive, so that other apps on the phone cannot use the proxy; notes when the tool carries no UDP or
+strict Private DNS sends lookups past the tunnel's resolver; and the switch for chained destinations in the log, off
+by default. With the chain on and the tool silent, it says the apps wait and nothing of theirs goes out directly. The
+service hands the chain to the engine before any traffic, from the proxy where the tool last answered, then looks
+again in the background. The 18 strings are in eight languages, with Android's own terms from the Settings app,
+reviewed under ADR 0030's process. Checked by hand on the Android 15 emulator with `scripts/network-lab/socks5.py` on
+this computer standing in for the tool: TCP by address and by stand-in name, UDP through the relay, and a stopped
+proxy.
 
 W6's check in CI, the same day: `scripts/verify-chain.sh` with a test tool on the phone (`scripts/test-tool`,
-a SOCKS5 proxy with a password on the loopback, in a foreground service), which debug builds of Watch know
-from `src/debug/assets/tools-test.tsv`. Watch must find it by itself, with Android naming it as the port's
+a SOCKS5 proxy with a password on the loopback, in a foreground service), which debug builds of the network
+part know from `src/debug/assets/tools-test.tsv`. Advanced must find it by itself, with Android naming it as the port's
 owner and the password it wants; with adb's shell chained through it, TCP reaches the test server by address
 and by a name only the tool resolves, through a stand-in, UDP goes through its relay, the tool's own
 connections go directly under its own UID, and a wrong password is refused. Then the tool stops: the shell's
 TCP and UDP fail, and a sentinel on the computer, outside Android, sees none of them, while it does see a
-control connection from Watch's own UID, which goes directly. The emulator's own capture (`network capture`
+control connection from Advanced's own UID, which goes directly. The emulator's own capture (`network capture`
 in its console) was the first idea, but it does not see what goes over the emulator's Wi-Fi. Passes on the
 emulators with Android 11, 15 and 17. Two faults the test found: Android's loopback address of choice is
 `::1`, so a tool listening "on the loopback" in Java may not be on 127.0.0.1 where the table says; and a
-proxy that refuses Watch's greeting closes the connection before Android can name its owner, so the owner is
+proxy that refuses the network part's greeting closes the connection before Android can name its owner, so the owner is
 now asked as soon as the connection is made.
 
 W6's real tools, the same day, on the emulator with Android 15 ([notes](spikes/2026-11-real-tools.md)): v2rayNG
 2.3.15, NekoBox 1.4.2 and Orbot 17.9.7, each from its developer's release and signed with the key in
-`data/app-signers`, in proxy mode. Watch found each by itself, with Android naming it as the owner of its port, and
-the chain was turned on from Watch's screen with no port typed; TCP went through each, UDP through v2rayNG and
+`data/app-signers`, in proxy mode. Advanced found each by itself, with Android naming it as the owner of its port,
+and the chain was turned on from the network screen with no port typed; TCP went through each, UDP through v2rayNG and
 NekoBox and nowhere with Orbot, which carries none; a lookup through Orbot got a stand-in and Tor resolved the name.
 The log kept the chained flows without destination. Found on the way: v2rayNG's sniffing and its direct route for
 private addresses, and NekoBox dropping an answer after the app's half-close. Hiddify 5.5.5 did not start its
-core on the emulator, before Watch was involved. On the A40 (Android 11), with only the test apps inside the
-tunnel, Watch found the test tool, Orbot, v2rayNG and NekoBox, each with its owner confirmed, and the shell
+core on the emulator, before Advanced was involved. On the A40 (Android 11), with only the test apps inside the
+tunnel, Advanced found the test tool, Orbot, v2rayNG and NekoBox, each with its owner confirmed, and the shell
 reached Android's own check address through each by a stand-in name, and Quad9 over UDP through v2rayNG and
 NekoBox. NekoBox's own lookups went to Alibaba's public DNS over HTTPS, shown under its UID. ADR 0038's lab, the same day
-([notes](spikes/2026-11-chain-lab.md)): a stand-in answers in about 10 ms; other questions through the tool took
-half a second each until the tool's route got the cache the ADR promises (now about 10 ms after the first), and
-a new name costs about 60 to 90 ms now that Watch keeps a connection to each resolver open through the tool.
+([notes](spikes/2026-11-chain-lab.md)): a stand-in answers in about 10 ms; other questions through the tool take about 10 ms after the first, from
+the cache the ADR promises for the tool's route (half a second each without it), and a new name costs about 60 to
+90 ms, since the engine keeps a connection to each resolver open through the tool.
 Questions share it without waiting for earlier answers, each under an ID of the connection's own, and each
 answer is matched by ID and by the question it repeats (RFC 7766). It closes after 10 s with no question, when
 the resolver or the tool ends it, or when the chain changes. So the resolver can tie together chained apps'
@@ -667,7 +659,7 @@ Gate 2 of 0.2.0, the review's findings 18 to 21 (D25), began on 2026-11-12 with 
 - **Counters, appended after the nineteen before them:**
   - IP fragments, now counted apart from the other skipped packets;
   - hellos read on flows a DNS answer had named, and of those, how many named another server. A day on the phone
-    tells how much finding 20 matters before the log carries both names.
+    tells how much finding 20 matters.
 - **The lock:** `nativeStop` and `nativeStart` take the engine out of its lock before joining its thread.
 - **Protect:** `protect()` hands Kotlin an owned duplicate of the socket's descriptor, so a caller that times out
   cannot leave a number the kernel gives to another socket.
@@ -688,18 +680,16 @@ listener as Android's does, in an ordinary `cargo test`, without an emulator. Th
 plainly that they did not run. CI lifts Ubuntu's AppArmor restriction on such namespaces for its runner.
 
 Resets, the same day (finding 21). A relayed connection whose one direction fails, as when the server or the app
-resets it, now ends both sides with a reset, and is counted. Before, the app got a clean close, and could not tell
-a cut-off answer from a finished one. A clean close still closes with a FIN, direction by direction. Three lab tests
+resets it, ends both sides with a reset, and is counted, so that the app can tell a cut-off answer from a
+finished one. A clean close still closes with a FIN, direction by direction. Three lab tests
 cover it: the server's reset, the app's reset, and a clean close.
 
 The waiting cap, the same day (finding 18, first step). At most so many TCP connections wait for their servers at
-once, for every app together: an eighth of what the process may open after a reserve for Watch, at most 4,096 (112
-for a process limited to 1,024 files). A SYN beyond the cap is dropped, as by a full queue, and counted. Its port is
-freed at once, as is the port of a connection that failed, since neither reached Android's stack. A lab test sends
-six connections to a server that never answers, with a cap of four: two are dropped while four wait, all fail, and
-another app's connection then opens at once.
-
-Two names in the log wait for the phone's counters to say how often the names differ (ADR 0044, decision 4).
+once, for every app together: an eighth of what the process may open after a reserve for the network part, at most
+4,096 (112 for a process limited to 1,024 files). A SYN beyond the cap is dropped, as by a full queue, and counted.
+Its port is freed at once, as is the port of a connection that failed, since neither reached Android's stack. A lab
+test sends six connections to a server that never answers, with a cap of four: two are dropped while four wait, all
+fail, and another app's connection then opens at once.
 
 The mapping, the same day (findings 18 and 19), built by a fresh agent from a written brief and reviewed before it
 was committed.
@@ -723,17 +713,17 @@ was committed.
   Each was made to fail by breaking the code it guards.
 
 The chain's mappings, 2026-11-13 (finding 19, ADR 0044 decision 2), built by a fresh agent from a written brief.
-A chained app's UDP socket now sends to every destination over one `UDP ASSOCIATE`, each datagram with a header
-naming its destination. Each answer goes to the destination its header names, with the direct path's filter;
-before, anything the tool's relay sent reached the app as if from the flow's destination. A stand-in is bound to the
-first answer from the port the app asked. A mapping now also ends when the chain is set again and sends its app
-another way. W6's done-when changes its wording to match. An independent review the same day found five faults, fixed
+A chained app's UDP socket sends to every destination over one `UDP ASSOCIATE`, each datagram with a header
+naming its destination. Each answer goes to the destination its header names, with the direct path's filter, not
+as if from the flow's destination whatever the tool's relay sent. A stand-in is bound to the first answer from the
+port the app asked. A mapping also ends when the chain is set again and sends its app another way. An independent
+review the same day found five faults, fixed
 before the merge: a second name at a bound address answered as the first; any sender on the port could take a
 waiting stand-in; forged headers could grow a mapping without end; a datagram sent just as the chain took its app
 could leave directly; and a relay elsewhere than on the phone was used. A second review found five more, also
 fixed: one name asked on two ports got no answer on the second; a newly chained app's lookups could still reach the
 network's resolver; a port Android handed to a chained app could leave the old app's direct way, and an unnamed
-app's way was guessed; a flow that came in from a port 53 could teach Watch names; and a relay at the phone's own
+app's way was guessed; a flow that came in from a port 53 could teach the engine names; and a relay at the phone's own
 Wi-Fi address was refused. A third found the lookups to the tunnel's DNS address still kept a port's old app,
 directly or through the chain, and a reused port was logged under its old app without a chain; Android is now asked
 again for both, with or without a chain, and an app it cannot name is never guessed. A fourth found that a flow
@@ -789,87 +779,86 @@ logged. Android is now asked first wherever the share could refuse a connection,
 never dropped. How it is built: [ADR 0044](decisions/0044-udp-mapping-and-budgets.md), "How it is built".
 
 Ping, 2026-11-15 (finding 21b, ADR 0044 decision 5), built by a fresh agent from a written brief. An app's ping now
-passes the tunnel through a ping socket of Watch's own, at most 32, each ending after ten idle seconds, when the
-network moves or when a chain comes on; the reply comes back with the app's own id. While any app is chained, every
-ping is refused at once with "administratively prohibited", since Android cannot say whose a ping is. Where Android
-gives Watch no ping socket, echo is dropped and counted, as before. An independent review found no fault in safety
-and two majors, fixed: requests that waited for a new socket could leave after a chain came on, and the claims that
-matter most had no test; a narrow review of the fixes found none left. On the Android 15 emulator the shell's ping
-passed through Watch's own socket and its replies came back. How it is built: [ADR 0044](decisions/0044-udp-mapping-and-budgets.md),
-"How it is built".
+passes the tunnel through a ping socket of the network part's own, at most 32, each ending after ten idle seconds,
+when the network moves or when a chain comes on; the reply comes back with the app's own id. While any app is chained,
+every ping is refused at once with "administratively prohibited", since Android cannot say whose a ping is. Where
+Android gives the network part no ping socket, echo is dropped and counted. An independent review found no fault in
+safety and two majors, fixed: requests that waited for a new socket could leave after a chain came on, and the claims
+that matter most had no test; a narrow review of the fixes found none left. On the Android 15 emulator the shell's
+ping passed through the network part's own socket and its replies came back. How it is built: [ADR
+0044](decisions/0044-udp-mapping-and-budgets.md), "How it is built".
 
-Fragments and the MTU, 2026-11-15 (finding 21b, ADR 0044 decision 5 as amended and revised), built by a fresh agent
-from a written brief. The engine now puts the apps' IPv4 and IPv6 fragments together again, within bounds of 64
-datagrams, 1 MiB and five seconds that every app shares, where the datagram heard from longest ago gives way; it
-drops a datagram whose fragments overlap, and its later ones, or whose first fragment lacks its header. The tunnel's
-MTU now follows the network beneath: Watch reads the first hop's MTU from the phone's kernel, through a socket bound
-to that network, gives the tunnel the smaller of IPv4's and IPv6's within 1,280 and 1,500, and sets the tunnel up
-again when a new network brings another value, or the same network a lower one, or a higher one ten minutes after the
-last setup. Each app's own kernel then meets that hop as without Watch, fragmenting a datagram or refusing it by its
-socket's setting; Android gives a tunnel one MTU, so where IPv4's and IPv6's hops differ, the wider version meets the
-narrower MTU. The tunnel is set up again make-before-break, for a new MTU, an address clash or a change of the apps
-left out: the new tunnel is established while the old engine still runs, which Android's `Vpn.establish`, as AOSP's
-code for Android 10, 11 and today reads, hands over with no moment in which apps go out directly; and the old engine
-hands the new one its chain, resolver, stand-ins, names and counters before the new one reads a packet, so that a
-chained app's traffic does not leave outside the tunnel meanwhile. What routers beyond it answer, "fragmentation
-needed" or "packet too big", reaches the app with their MTU. A first version answered "too large" from the engine
-itself; an independent review found that it cost a connected default socket a datagram, and an IPv6 socket set to
-ignore path MTU every one, and it was taken back; two later rounds of review fixed the rest, setting the tunnel up
-again make-before-break with the chain carried over among it. On the Android 15 emulator the tunnel's MTU and a ping
-larger than it passed, before those last changes; phones in unit 11b. How it is built:
-[ADR 0044](decisions/0044-udp-mapping-and-budgets.md), "How it is built".
+Fragments and the MTU, 2026-11-15 (finding 21b, ADR 0044, decision 5), built by a fresh agent from a written brief.
+The engine puts the apps' IPv4 and IPv6 fragments together again, within bounds of 64 datagrams, 1 MiB and five
+seconds that every app shares, where the datagram heard from longest ago gives way; it drops a datagram whose
+fragments overlap, and its later ones, or whose first fragment lacks its header. The tunnel's MTU follows the network
+beneath: the network part reads the first hop's MTU from the phone's kernel, through a socket bound to that network,
+gives the tunnel the smaller of IPv4's and IPv6's within 1,280 and 1,500, and sets the tunnel up again when a new
+network brings another value, or the same network a lower one, or a higher one ten minutes after the last setup. Each
+app's own kernel then meets that hop as without Advanced, fragmenting a datagram or refusing it by its socket's
+setting; Android gives a tunnel one MTU, so where IPv4's and IPv6's hops differ, the wider version meets the narrower
+MTU. The tunnel is set up again make-before-break, for a new MTU, an address clash or a change of the apps left out:
+the new tunnel is established while the old engine still runs, which Android's `Vpn.establish`, as AOSP's code for
+Android 10, 11 and today reads, hands over with no moment in which apps go out directly; and the old engine hands the
+new one its chain, resolver, stand-ins, names and counters before the new one reads a packet, so that a chained app's
+traffic does not leave outside the tunnel meanwhile. What routers beyond it answer, "fragmentation needed" or "packet
+too big", reaches the app with their MTU. The engine does not answer "too large" itself: an independent review found
+that it would cost a connected default socket a datagram, and an IPv6 socket set to ignore path MTU every one. On the
+Android 15 emulator the tunnel's MTU and a ping larger than it passed, before two later rounds of review brought the
+make-before-break setup with the chain carried over among it; phones in unit 11b. How it is built: [ADR
+0044](decisions/0044-udp-mapping-and-budgets.md), "How it is built".
 
-The tunnel set up again keeps the flows, 2026-11-16 (unit 12b, ADR 0044), built by a fresh agent from a written
-brief. When Watch sets its tunnel up again for a new MTU, Android keeps the VPN network, and Watch hands the new tunnel
-to the running engine, which goes on with it and keeps everything: every app's TCP connections and UDP mappings, the
-ping sockets, the chain, names, stand-ins and counters. The engine first handles what was still queued on the old
-tunnel, then closes it, and what it writes in the moment between Android's reset of the old interface and the swap
-waits up to 200 ms for the new tunnel rather than being lost. Android keeps the network only when the apps Watch hands it are the same ordered list as
-before, so Watch now hands them in sorted order. When they differ, as when the apps left out change, Android brings up
-a new network, whose connections the old network's marks would leave routing nowhere, and when the addresses differ,
-for a network that clashes with them (ADR 0041), the apps' connections are bound to the old ones: in both cases, and
-when a swap fails, a new engine starts, which goes on with the old one's chain, names and counters while the
-connections start anew. An independent review found that case, which the first version swapped too, and the emulator
-showed it. At its first start Watch now sets the chain before the tunnel and the engine, so that a chained app's first
-packet goes through the tool. In the network lab, a second tun device and Android's in-place update played with `ip`
-show a TCP connection, IPv4 and IPv6, a mapping's port and peers, a ping's socket and a chained app's way through the
-tool going on across the swap, and a model of Android's network marks shows why a new network takes a new engine; on
-the Android 15 emulator, a connection kept open passed a setup with nothing changed, and the whole Watch check
-passed. How it is
-built: [ADR 0044](decisions/0044-udp-mapping-and-budgets.md), "How it is built".
+The tunnel set up again keeps the flows, 2026-11-16 (unit 12b, ADR 0044), built by a fresh agent from a written brief.
+When the network part sets its tunnel up again for a new MTU, Android keeps the VPN network, and the network part
+hands the new tunnel to the running engine, which goes on with it and keeps everything: every app's TCP connections
+and UDP mappings, the ping sockets, the chain, names, stand-ins and counters. The engine first handles what was still
+queued on the old tunnel, then closes it, and what it writes in the moment between Android's reset of the old
+interface and the swap waits up to 200 ms for the new tunnel rather than being lost. Android keeps the network only
+when the apps it is handed are the same ordered list as before, so the network part hands them in sorted order. When
+they differ, as when the apps left out change, Android brings up a new network, whose connections the old network's
+marks would leave routing nowhere, and when the addresses differ, for a network that clashes with them (ADR 0041), the
+apps' connections are bound to the old ones: in both cases, and when a swap fails, a new engine starts, which goes on
+with the old one's chain, names and counters while the connections start anew. An independent review found that case,
+and the emulator showed it. At its first start the network part sets the chain before the tunnel and the engine, so
+that a chained app's first packet goes through the tool. In the network lab, a second tun device and Android's
+in-place update played with `ip` show a TCP connection, IPv4 and IPv6, a mapping's port and peers, a ping's socket and
+a chained app's way through the tool going on across the swap, and a model of Android's network marks shows why a new
+network takes a new engine; on the Android 15 emulator, a connection kept open passed a setup with nothing changed,
+and the whole network check passed. How it is built: [ADR 0044](decisions/0044-udp-mapping-and-budgets.md), "How it is
+built".
 
 When netd destroys the sockets on the tunnel's address, 2026-11-16 (unit 12b, ADR 0044). On the Android 15 emulator,
 after the tunnel had been set up again with the same addresses seven times, Android's netd destroyed every TCP socket
 on the tunnel's address, as it does for an address it believes was removed: its bookkeeping of which interfaces hold
-the address raced the in-place update. The connections through Watch ended with them, which no VPN can prevent, and so
-did the engine's listener, whose accept loop ended at its first error: every connection after was refused. The loop
-now never ends: a listener that no longer listens is bound anew on a new port, which the engine then rewrites new
-connections to; one that still listens accepts again, at once after an error of one
-connection, and after a pause of 10 ms to a second after a moment without descriptors or memory. Any app may bind a
-port no listener holds, so only the connections the relay already holds go on through an old listener's port: one not
-yet handed over is reset rather than rewritten there again, and while no listener can be bound a new connection is
-refused (the review's second round). An upstream connection whose connection Android's stack reset before the listener
-handed it over is reset too, rather than held for ten minutes. In the network lab, `ss -K` destroys the sockets as
-netd does, IPv4 and IPv6, another app takes the old port the moment the listener stops, and a test runs the engine
-out of descriptors; `verify-watch.sh` tells a destroy by netd, from Android's log, from a stall, requires a new
-connection to pass either way, and a destroy to come with the running engine having taken the tunnel. On the Android
-15 emulator, in 40 swaps, netd destroyed the sockets in 11, and a new connection passed after each. How it is built:
-[ADR 0044](decisions/0044-udp-mapping-and-budgets.md), "How it is built".
+the address raced the in-place update. The connections through the tunnel ended with them, which no VPN can prevent,
+and so did the engine's listener, whose accept loop ended at its first error: every connection after was refused. The
+loop never ends: a listener that no longer listens is bound anew on a new port, which the engine then rewrites new
+connections to; one that still listens accepts again, at once after an error of one connection, and after a pause of
+10 ms to a second after a moment without descriptors or memory. Any app may bind a port no listener holds, so only the
+connections the relay already holds go on through an old listener's port: one not yet handed over is reset rather than
+rewritten there again, and while no listener can be bound a new connection is refused (the review's second round). An
+upstream connection whose connection Android's stack reset before the listener handed it over is reset too, rather
+than held for ten minutes. In the network lab, `ss -K` destroys the sockets as netd does, IPv4 and IPv6, another app
+takes the old port the moment the listener stops, and a test runs the engine out of descriptors; `verify-network.sh`
+tells a destroy by netd, from Android's log, from a stall, requires a new connection to pass either way, and a destroy
+to come with the running engine having taken the tunnel. On the Android 15 emulator, in 40 swaps, netd destroyed the
+sockets in 11, and a new connection passed after each. How it is built: [ADR
+0044](decisions/0044-udp-mapping-and-budgets.md), "How it is built".
 
-Traceroute through Watch, 2026-11-16 (unit 11b, ADR 0044 decision 5), built by a fresh agent from a written brief.
-Watch is no longer a hop: an app's ping, and its UDP datagram on the direct path, leave with the app's own time to
+Traceroute through Advanced, 2026-11-16 (unit 11b, ADR 0044 decision 5), built by a fresh agent from a written brief.
+Advanced is not a hop: an app's ping, and its UDP datagram on the direct path, leave with the app's own time to
 live or hop limit, what comes back reaches the app with the one it arrived with, and the errors the path sends, a
 router's "time exceeded" and "destination unreachable" with its code among them, reach the app from the router or
-host that sent them. So `ping -t` and a traceroute through Watch see the path, where before they saw the destination
-at every hop, and a ping that met an error waited for its timeout. A ping's error quotes the app's own request, by
+host that sent them. So `ping -t` and a traceroute through Advanced see the path, not the destination at every
+hop, and a ping that meets an error does not wait for its timeout. A ping's error quotes the app's own request, by
 which its kernel and `ping` match it. At most one error passes for each request or datagram the app sent, so that one
 forged for a destination never sent to is dropped and counted; an error the phone's own kernel sends from its address
-still comes as if from the destination, which the app's kernel takes. Echo's bytes are now in the engine's byte
+still comes as if from the destination, which the app's kernel takes. Echo's bytes are in the engine's byte
 counters. In the network lab, a router's errors are injected from an address the namespace does not hold, and the
 hop limits read on both sides, IPv4 and IPv6; the emulator check pings with a time to live of 1 and reports a network
-that sends no such error. On the Galaxy A40 the first router's "time exceeded" reached the shell as without Watch,
+that sends no such error. On the Galaxy A40 the first router's "time exceeded" reached the shell as without Advanced,
 and an independent review's lab with a real router showed `ping -t` and Linux traceroute in its three modes, IPv4 and
-IPv6, matching what they show without Watch. Its second and third rounds: one-shot pings, which Android's traceroute
+IPv6, matching what they show without Advanced. Its second and third rounds: one-shot pings, which Android's traceroute
 apps run for each probe, now make room at the cap of 32 ping sockets, by ending first a socket whose requests have
 all been answered and that has stopped, then one that has waited two seconds for an answer that has not come, so that
 a ping that runs keeps its socket; a UDP datagram that finds its socket's buffer, or the network's queue, full is
@@ -882,16 +871,15 @@ by a fresh agent from a written brief, before Advanced's first release as the ma
 tool's relay answers a stand-in from the address it reached, which the app never saw, so unit 9 could tell its
 answers only by the port: on ports other than 53, whoever reached the relay first took a waiting stand-in, two
 stand-ins asked at once on one port got no answer, and a second name cut a bound one's answers for five seconds.
-Watch now reads what the app's own datagram asked the answer to carry, by a strict parse: a STUN request's
+The engine reads what the app's own datagram asked the answer to carry, by a strict parse: a STUN request's
 transaction ID, a QUIC Initial's connection IDs and the keys that derive from them, a DNS query's ID and question on
 any port whose answers repeat it (not the NetBIOS name service on 137, nor Multicast DNS from port 5353 to 5353, whose
 responses hold no question), an NTP request's timestamp on port 123. A stand-in that sent one is bound only by an answer that carries
 it, several on one port each take their own, and the bound one's address goes on answering the first name while the
 second waits. For QUIC, the server's first answer is opened with the keys of the app's connection ID, its AES-GCM
-tag checked, which rules out a chance match, not a sender who saw the app's packet: at first by GHASH written out in
-the engine with no new dependency, which gave way to RustCrypto's aes-gcm in the first fix round, and its keys
-derived by RustCrypto's hkdf since the second, in place of the HMAC and HKDF written there since W3. A stand-in that sends nothing of the kind, beside another waiting on its port, leaves by a
-`UDP ASSOCIATE` of its own, at most 8 for each app and 32 for the engine (8 for each app socket until a fifth round), each a place in its app's share;
+tag checked, which rules out a chance match, not a sender who saw the app's packet: by RustCrypto's aes-gcm, its
+keys derived by RustCrypto's hkdf. A stand-in that sends nothing of the kind, beside another waiting on its port, leaves by a
+`UDP ASSOCIATE` of its own, at most 8 for each app and 32 for the engine, each a place in its app's share;
 beyond them the stand-in waits beside the other and what could be either's is dropped and counted. Where two names
 reach one address and port, each STUN response, QUIC packet to a client's own connection ID of 4 bytes or more, DNS
 answer or NTP reply reaches its own name, and what carries none goes to the first, as before. An association of its
@@ -904,35 +892,34 @@ every answer from its first destination's address with that name gave another st
 identifiers now outrank the label; identical identifiers of two stand-ins left both unanswered and now get an
 association of their own; the tool closing an idle association ended a live one beside it; QUIC answers cost tens of
 milliseconds under the engine's lock and now cost microseconds; compatible version negotiation was not understood;
-the hand-written GHASH gave way to RustCrypto's aes-gcm; the fuzz target's missing seeds kept seven targets from
+the fuzz target's missing seeds kept seven targets from
 CI's fuzzing; and the emulator step passed without reaching the new code, which it now must. Two fresh reviews of
 that round found more, fixed in a second: a server known by its address, or a resolver already answered, sent the
 same NTP timestamp or DNS query as a new name could have its answer moved to that name, so every peer through the
-tool now keeps the fingerprints of the last 64 identifiers the app sent it (in the order last sent, since the
-third round), and an identifier two peers were sent
+tool now keeps the fingerprints of the last 64 identifiers the app sent it (in the order last sent), and an identifier two peers were sent
 moves no answer from where either answers; a name bound beside another's label now gets what comes under it once
-the other ends (by a hand-over at first, which the third round made a hint resolved among the live peers, so that the
-label is the other's again when the app asks it again); an association of a stand-in's own no longer needs the
+the other ends (a hint resolved among the live peers, so that the label is the other's again when the app asks it
+again); an association of a stand-in's own no longer needs the
 mapping's reopened after a pause, outlives its
 stand-in while a flow that came in through it lives, and fails nothing that became a peer meanwhile; the packets an
 answer may open are shared among the stand-ins round by round, so that a newer one is not starved; a QUIC Retry in
 another version than the app's, and what a client discards or treats as a connection error (reserved bits set, no
 frame, a server's Initial with a token, a Retry without one or from the client's own ID, a Version Negotiation listing
-the client's version), binds nothing, an Initial or a Retry being opened since the third round whatever the client's
+the client's version), binds nothing, an Initial or a Retry being opened whatever the client's
 source ID; the hello's reader
 reads no further than 16 packets of a datagram; the fuzz target asserts what must not carry; two network lab
 tests that misread Linux's ping table when other tests ran beside them were made to read it as the kernel lists
-it (in a third round: the first fix still took other sockets listed anew); and the emulator step sends its STUN
+it; and the emulator step sends its STUN
 requests again
-as clients do and tells an engine started afresh from a result. A fourth round, after a fault in the reading of a
-relay's name in each round before, reads a name a relay puts on an answer as what it is, the address that name
+as clients do and tells an engine started afresh from a result. A fourth round reads a name a
+relay puts on an answer as what it is, the address that name
 resolved to at the answer's port, by the rules an address is read by, so that a name's answers stay with the stand-in
 bound beside it on that port while the name's own peer is gone, and go back to that peer when the app asks it again;
-it also bounds STUN's reading to 1,500 bytes, keeps the hello's reader to one key set for each QUIC version, and fuzzes
+it also keeps the hello's reader to one key set for each QUIC version, and fuzzes
 what every datagram through the tool is now read with. A fifth round found no major fault in that reading: it finds
 the one peer an identifier was sent without a walk of every peer, holds a label its own stand-in holds under the same
 five-second contest as an address, spares what the holder itself was sent, gives each app a quarter of the tool's
-relays of a stand-in's own, reads a STUN message larger than 1,500 bytes again (its attributes walked over 1,500), and
+relays of a stand-in's own, reads a STUN message larger than 1,500 bytes (its attributes walked over 1,500), and
 keeps the hello's reader's keys off every peer that sends no QUIC. A sixth and last round, again with no major fault,
 spares in the contest a holder's QUIC answers by its client's source ID, which they carry in the clear, ends many
 stand-ins' records without a walk for each, keeps a model check of the fingerprint index as a test, and gathers the
@@ -942,7 +929,7 @@ accepted limits into one list. How it is built: [ADR
 W5, part 1, on `watch-w5a`, 2026-11-18, before anything reads the log: the two fixes an independent review of
 2026-11-09 asked for first (findings 4 and 20). The log's quarter hours followed a timer that stands still while the
 phone sleeps, so a connection open across a night became one segment from the evening, filed under its day. The
-engine now reads the wall clock, through a clock it is handed and tests move, before it counts any byte or lookup,
+engine reads the wall clock, through a clock it is handed and tests move, before it counts any byte or lookup,
 opens a flow or ends one, and first cuts every open segment at the quarter hours passed, either way: no byte is in
 another quarter hour, and no record spans a change of the local date, since in every zone every such change has
 fallen on a quarter hour of UTC since 2011, by the zone's offsets and by the instants it changes them alike; the
@@ -956,34 +943,34 @@ another thread deterministic; let the debug flush wait for nothing when no logge
 clock, measured at a third of the fine one's cost. A third let a flush asked as the engine stops go only after its
 last records, bounded the apps' own tables of names, and made the emulator checks find the ports of this computer
 their test servers take free before they start (`scripts/host-ports.sh`), after a program on 127.0.0.1:8791 made
-verify-watch.sh's "refused" step fail as if Watch were at fault. A fourth made the test server hold every one of
+verify-network.sh's "refused" step fail as if Advanced were at fault. A fourth made the test server hold every one of
 those ports from before the check starts to its end, the refused one bound but not listening, so that no other
 program can take one in between; stopped a phone's check rather than move it to ports the computer's firewall was
 not opened for; and gave the memory of the names' tables with names at their longest. The caches of
-DNS answers kept while a chain is on now run on the time since the phone started, sleep included, and ADR 0044 lists
-every clock the engine reads, with what a sleep or a jump of the clock does to each. A flow is now named by the
+DNS answers kept while a chain is on run on the time since the phone started, sleep included, and ADR 0044 lists
+every clock the engine reads, with what a sleep or a jump of the clock does to each. A flow is named by the
 server name its connection sent, before the DNS answer, whose name stays beside it where the two differ; the log's
-records are version 2, with that name and whether a flow came in, and Watch's Kotlin side reads them from a fixture
-the engine writes, so that the two cannot drift apart. ADR 0037, 0036, 0044 and 0046 carry dated notes. The
-emulator's checks run after the review.
+records are version 2, with that name and whether a flow came in, and the network part's Kotlin side reads them from
+a fixture the engine writes, so that the two cannot drift apart. ADR 0037, 0036, 0044 and 0046 state what it
+builds for each. The emulator's checks run after the review.
 
-W5, part 2, on `watch-w5b`, 2026-11-18: the data the view "Now" and each app's history read (ADR 0046, decision
-1 and decision 2 (d)). The engine holds each flow's bytes second by second, a mark at the first count of each
-second, until Watch's Kotlin side tells it the apps' states from Android's usage events: in use while an activity
-of the app, or of a package sharing its UID, is resumed or visible, or the user interacted with it, and for 30
-seconds after; with its notification while a foreground service runs; in the background otherwise; or no state,
-with why, without usage access or before the first unlock. Each second is placed in its app's state, a flow's log
-segment is cut where the state changes, back in time for as long as the seconds are held (120 for each flow), and
-the log's records carry the state (format version 3). The live counters keep each app's bytes by state over the
-last 10 minutes, the last hour and since the screen came on, and the destinations it reached, a chained app's only
-when the user logs them, in memory and bounded; one JNI call hands them to the screens as a versioned snapshot.
-The tracker reads incrementally, when a flow opens or bytes wait, at most every 5 seconds with the screen on and
-once a minute with it off, an ask that comes sooner waiting for its turn; once when the screen turns off; and at
-once when the screen comes on, the clock is set, and Watch starts and stops, so such a reading can come within 5
-seconds of the one before. No alarm wakes the phone. A count costs no more than before within a second; the
-emulator's watch shard checks an app's background bytes within 5 % of what it sent, the app on screen in use, a
-foreground service with its notification, a chained app's destinations kept out, and no state without usage
-access. How it is built: ADR 0046, "How it is built"; ADR 0037 and 0044 carry dated notes.
+W5, part 2, on `watch-w5b`, 2026-11-18: the data the view "Now" and each app's history read (ADR 0046, decision 1 and
+decision 2 (d)). The engine holds each flow's bytes second by second, a mark at the first count of each second, until
+the network part's Kotlin side tells it the apps' states from Android's usage events: in use while an activity of the
+app, or of a package sharing its UID, is resumed or visible, or the user interacted with it, and for 30 seconds after;
+with its notification while a foreground service runs; in the background otherwise; or no state, with why, without
+usage access or before the first unlock. Each second is placed in its app's state, a flow's log segment is cut where
+the state changes, back in time for as long as the seconds are held (120 for each flow), and the log's records carry
+the state (format version 3). The live counters keep each app's bytes by state over the last 10 minutes, the last hour
+and since the screen came on, and the destinations it reached, a chained app's only when the user logs them, in memory
+and bounded; one JNI call hands them to the screens as a versioned snapshot. The tracker reads incrementally, when a
+flow opens or bytes wait, at most every 5 seconds with the screen on and once a minute with it off, an ask that comes
+sooner waiting for its turn; once when the screen turns off; and at once when the screen comes on, the clock is set,
+and the network part starts and stops, so such a reading can come within 5 seconds of the one before. No alarm wakes
+the phone. A count costs no more than before within a second; the emulator's `network` shard checks an app's
+background bytes within 5 % of what it sent, the app on screen in use, a foreground service with its notification, a
+chained app's destinations kept out, and no state without usage access. How it is built: ADR 0046, "How it is built";
+ADR 0037 and 0044 state what it changes for each.
 
 W5, part 2, fix round 1, 2026-11-18, after two reviews: turning "Log where these apps connect" off drops the chained
 apps' destinations from "Now" at once; each app has a share of the seconds and segments that wait for their states,
@@ -992,7 +979,7 @@ every byte counted after a placing in its second or after a clock set back (a se
 later than the new clock's, with their bytes), and looks organisations up out of the engine's locks; a second
 instance of one screen, or Back to the first, keeps its app in use; before the first unlock the tracker says so
 rather than "in the background"; a reading that leaves seconds waiting asks for the next. Datapavan Advanced's own
-texts say that it reads which app was on screen and when (ADR 0022 as amended). A model test checks every byte's
+texts say that it reads which app was on screen and when (ADR 0022 and ADR 0046). A model test checks every byte's
 state against a true timeline in `cargo test`.
 
 W5, part 2, fix round 2, 2026-11-18, after two more reviews: past its share an app gives up only its oldest
@@ -1012,27 +999,27 @@ the view is open, and at the end what the view cannot see. A tap opens the app's
 time, with each lock state said plainly. The audit's page of an app opens "Now" for that app in Advanced. The engine
 adds the window while the screen was off, which W9's summary reads, bytes in no state by why for each app, and a call
 that clears the live view's memory for ADR 0047's profile; the snapshot and the readings are version 2. The data
-pack's code moves to `android/shared`, so that Watch reads the table of trackers from the pack the audit verifies.
+pack's code is in `android/shared`, so that the network part reads the table of trackers from the pack the audit verifies.
 The activity check, reading "Now" from the screen too, passed on the emulators of Android 10, 11, 15 and 17, and the
-watch shard whole on Android 15; the new screens passed the accessibility check in English and both pseudo-locales,
+`network` shard whole on Android 15; the new screens passed the accessibility check in English and both pseudo-locales,
 and wait for their translations. How it is built: ADR 0046, "How it is built".
 
 W5, part 3, fix round, 2026-11-19, after two reviews and the maintainer's decisions of that day: an app's group in
-"Now" is decided by the bytes it sent in each state, above a floor the lab run sets (0 until then), and apps that
-only received come last; a destination whose tracker belongs to the app's own company group (ADR 0020) is told as
-the same company, not as a tracker, and several trackers of one company that one broad signature names make one
-mark; the user's tool shows its servers, in "Now", the history and the log, only while "Log where these apps
-connect" is on. "Now" keeps its window, order and scroll across an app's history and a rotation; a chained app's
-history says where it connected was not logged, not "0.0.0.0"; on some phones the feed left of the home screen may
-count in the background, measured in use on one launcher ([spike](spikes/2026-11-feed-left-of-home.md)). The engine
-keeps counting after a clear and a clock set back, and the model test now covers the screen, a clear and runs past
-the hour. Watch reads the data pack without ever deleting it. A release of an edition is refused while one of its
-modules has strings waiting for their translations.
+"Now" is decided by the bytes it sent in each state, above a floor the lab run sets (0 until then), and apps that only
+received come last; a destination whose tracker belongs to the app's own company group (ADR 0020) is told as the same
+company, not as a tracker, and several trackers of one company that one broad signature names make one mark; the
+user's tool shows its servers, in "Now", the history and the log, only while "Log where these apps connect" is on.
+"Now" keeps its window, order and scroll across an app's history and a rotation; a chained app's history says where it
+connected was not logged, not "0.0.0.0"; on some phones the feed left of the home screen may count in the background,
+measured in use on one launcher ([spike](spikes/2026-11-feed-left-of-home.md)). The engine keeps counting after a
+clear and a clock set back, and the model test now covers the screen, a clear and runs past the hour. The network part
+reads the data pack without ever deleting it. A release of an edition is refused while one of its modules has strings
+waiting for their translations.
 
-W7, part 1, on `watch-w7a`, 2026-11-19: WireGuard in Watch's engine and its JNI bridge (ADR 0035, "How it is
+W7, part 1, on `watch-w7a`, 2026-11-19: WireGuard in the engine and its JNI bridge (ADR 0035, "How it is
 built"). GotaTun 0.10.3 with `aws-lc-rs` sits behind a trait of its own in `core/net/src/wireguard/core.rs`; the
 licences it brings are in `core/deny.toml` and `NOTICE`, the texts of every native crate in `licences/` and in
-every APK, and Watch's library is 1.60 MiB on arm64, within the 2 MB gate. A `wg-quick` parser, fuzzed, takes one interface and one peer with a DNS server the tunnel reaches and
+every APK, and the network part's library is 1.60 MiB on arm64, within the 2 MB gate. A `wg-quick` parser, fuzzed, takes one interface and one peer with a DNS server the tunnel reaches and
 refuses anything else with a reason the screens can show, its keys zeroed on drop and never shown. Several
 configurations run at once, each app routed directly, through the tool or through one of them, decided where W6
 decides; flows of no app and every echo take the first set while any app goes through one. A chosen app's own
@@ -1044,15 +1031,15 @@ tick only while a session or a handshake lives; a tunnel that does not answer ho
 network change makes its socket anew and tells the server at once; a route to a tunnel whose configuration is
 not set holds its apps too. The log's record (version 4) and "Now"'s snapshot (version 3) say each flow's route;
 "Now"'s screen shows it in part 2. The bridge sets, routes and reads the tunnels, and debug builds'
-dump sets one from a file in Watch's private storage. Checked through the whole engine against GotaTun's own
+dump sets one from a file in the network part's private storage. Checked through the whole engine against GotaTun's own
 core, against the Linux kernel's WireGuard through the engine itself (`scripts/check.sh wglab`, two peers,
 both IP versions, a preshared key, the MTU's clamp and errors), and on the emulator (`scripts/verify-wireguard.sh`,
-in the watch shard; since part 3a in a shard of its own). A fix round after two reviews (ADR 0035, "Fix round of part 1") closed eight majors: the
+in the `wireguard` shard). A fix round after two reviews (ADR 0035, "Fix round of part 1") closed eight majors: the
 route to a tunnel not set, a name asked per packet, a lock order that could freeze the engine, two emulator steps
 that could not fail, the licence texts, and the MTU's evidence.
 W7, part 2, on `watch-w7b`, 2026-11-20: the way in (ADR 0035, "How it is built (W7, part 2)"). A configuration
-comes from a file on Android's documents screen or a QR code, in a photo the phone's own camera takes for Watch or
-a picked picture, read with ZXing's core in an isolated process (`:qr`) within bounds; Watch never holds `CAMERA`,
+comes from a file on Android's documents screen or a QR code, in a photo the phone's own camera takes for Datapavan or
+a picked picture, read with ZXing's core in an isolated process (`:qr`) within bounds; Advanced never holds `CAMERA`,
 and the camera's photo is deleted once read. The confirmation shows what the configuration does, never a key, and
 the apps a file names as a proposed choice; a refusal says why in plain words, every code held by a test. At most
 eight configurations, each one's text and name wrapped with AES-256-GCM under a Keystore key in
@@ -1076,7 +1063,7 @@ which CI had skipped for want of the module. The cargo lab runs against two refe
 address and no session for a wrong preshared key or a wrong key for the peer; a weekly run adds a rekey at 120 s,
 keepalives both ways and a cookie reply under a flood of initiations, all through the engine. wireguard-go at its last
 commit answered IPv6 handshakes at a wrong address once it had sent over IPv4; the lab builds it with the fix open
-upstream. The emulator checks move to a `wireguard` shard; CI runs both where the WireGuard code or its checks
+upstream. The emulator checks run in a `wireguard` shard; CI runs both where the WireGuard code or its checks
 changed and every week, and fails a check that cannot find its peer (`WGLAB_REQUIRED=1`). Part 3b brings the A40's
 measurements and the check from outside with a provider.
 W8, part 3a, on `watch-w8c`, 2026-11-21: tracker blocking with a one-tap undo ([ADR 0053](decisions/0053-tracker-blocking.md),
@@ -1092,7 +1079,7 @@ port unreachable) before a byte of its payload leaves; a chained app's stand-in 
 an address is blocked by itself only where an answer tied it to blocked names alone, outside clouds and CDNs; a flow
 blocked again is reset at its next byte. Browsers are left out unless included; the user's tool's connections never,
 its lookups by an option. One tap in "Now" and the history allows an app for an hour, one blocks it again, each row
-has its own allow, and a ten-minute pause sits on Watch's screen (the tile is W9's). Checked by unit tests, fuzzing,
+has its own allow, and a ten-minute pause sits on the network screen (the tile is W9's). Checked by unit tests, fuzzing,
 hand mutants and the emulator's `blocking` shard (`scripts/verify-blocking.sh`, the lab `scripts/blocklab.py` as the
 witness), which CI runs with `BLOCKING_REQUIRED=1`. Breakage on real apps, the error of code-dependent grades and the
 words with real users wait for the maintainer.
@@ -1130,42 +1117,44 @@ Its fix round, on `watch-w8b-fix`, 2026-11-21, after one review round of two rev
 decisions written into ADR 0052: a SOCKS or `CONNECT` proxy is named only once the server's reply confirms it, and a
 plain request keeps its own names; the trackers' marks are taken in the engine from every name before anything is
 left out; a name taken back is taken back whole, in the log too; a hello is tied from the name's side, and counts only
-where Watch sees the app's lookups; Signal's fronting counts as direct and its third parties are listed from its
-source; the screens say how Watch knows whatever the switch says, and the one switch, now "Log where apps connect
+where the engine sees the app's lookups; Signal's fronting counts as direct and its third parties are listed from its
+source; the screens say how Datapavan knows whatever the switch says, and the one switch, "Log where apps connect
 through your tool, WireGuard or a proxy", is drawn wherever a row points to it.
 
 W8, part 1, on `watch-w8a`, 2026-11-20 ([ADR 0042](decisions/0042-dns-of-apps-that-go-directly.md), "How it is
-built"): direct apps' names go by Oblivious DoH by default, sealed in the engine (its own HPKE and framing since
-the fix round, over the crates the library already held) and carried
-by Watch's Kotlin side over Android's own TLS (OkHttp 5 for DoH and ODoH, DoT on Android's sockets), through two
-default pairs of different operators, jurisdictions and networks (Numa to Cloudflare, crypto.sx on Fastly to
-dnscry.pt), hedged after 400 ms; the user's own DoH or DoT resolver or a preset instead, each preset with its card;
-an order of privacy down to the network's resolver, which only answers outside the strict setting and is shown
-while it does; holds of 5 to 60 s after a timeout, 360 s after a reset and until a new key after a 401, none behind
-a captive portal, all cleared on a change of network; local names to the network's resolver in either setting, and
-a name under the network's own search domain only when the internet does not know it; queries padded and
-without the apps' client subnet; port 853 at Watch's DNS address refused and DNS over TCP the same way; chained
-apps' other record types and W7's endpoint names by the encrypted ways. The W3 decision of 2026-11-09 that Watch
-would answer Android's DNS over TLS itself is replaced: refusing port 853 brings Android's lookups to port 53,
-where Watch encrypts them upstream, and there is nothing to gain by encrypting the hop inside the phone. Checked
-by unit tests, RFC 9180's vectors, an ODoH oracle of its own and `odoh-rs`, three fuzz targets, hand mutants, the
-DNS lab (`scripts/dnslab.sh`) and `scripts/verify-dns.sh`, which CI runs in a shard of its own with the lab since
-the fix round. The native library is within its 2 MB gate on every ABI, x86_64 by 164 KB, since the data packs'
+built"): direct apps' names go by Oblivious DoH by default, sealed in the engine (its own HPKE and framing, over the
+crates the library already held) and carried by the network part's Kotlin side over Android's own TLS (OkHttp 5 for
+DoH and ODoH, DoT on Android's sockets), through two default pairs of different operators, jurisdictions and networks
+(Numa to Cloudflare, crypto.sx on Fastly to dnscry.pt), hedged after 400 ms; the user's own DoH or DoT resolver or a
+preset instead, each preset with its card; an order of privacy down to the network's resolver, which only answers
+outside the strict setting and is shown while it does; holds of 5 to 60 s after a timeout, 360 s after a reset and
+until a new key after a 401, none behind a captive portal, all cleared on a change of network; local names to the
+network's resolver in either setting, and a name under the network's own search domain only when the internet does not
+know it; queries padded and without the apps' client subnet; port 853 at the tunnel's DNS address refused and DNS over
+TCP the same way; chained apps' other record types and W7's endpoint names by the encrypted ways. Refusing port 853
+brings Android's lookups to port 53, where the engine encrypts them upstream: there is nothing to gain by encrypting
+the hop inside the phone. Checked by unit tests, RFC 9180's vectors, an ODoH oracle of its own and `odoh-rs`, three
+fuzz targets, hand mutants, the DNS lab (`scripts/dnslab.sh`) and `scripts/verify-dns.sh`, which CI runs in a shard of
+its own with the lab. The native library is within its 2 MB gate on every ABI, x86_64 by 164 KB, since the data packs'
 Ed25519 check is built for size (ADR 0042, "The fix round").
 
 | # | Milestone | Done when |
 |---|---|---|
-| W1 | Watch's skeleton | A second Gradle module, `:watch`, package `org.visadahyu.datapavan.watch`, signed with the same key. Both APKs come from one build, CI is green, and each is reproducible on its own. The build fails if the audit app gains `INTERNET`, as now, or if Watch's manifest holds anything outside its permissions ADR. Watch opens on the emulator and the A40 with strings in all eight languages, RTL and pseudo-locales from the start, and an icon from the brand marks. Its tunnel starts and stops. Since ADR 0045, `:watch` is a library that only Datapavan Advanced includes; Advanced is built from `:app` with `-Pdatapavan.edition=advanced`, and the package `org.visadahyu.datapavan.watch` is dropped before its first release. |
-| W2 | The packet engine in the product | The system-stack forwarder moves from the spike into `core/`, with `unsafe` forbidden (ADR 0006) and every parser fuzzed in CI. It holds each app's SYN until the owner lookup and the protected upstream connection are done; UDP goes through a NAT table with idle timeouts; a segment of an unknown connection gets a reset; unreachable destinations get ICMP and ICMPv6 answers; a network switch re-binds the upstream sockets without dropping the tunnel. An end-to-end test in CI, grown from the spike's workload app, carries TCP and UDP through Watch and finds the owner of every flow, connect-and-close and refused connections included. It passes on emulators with Android 10 and 12 to 17 and on the A40, and IPv6 is checked end to end on a network that has it. The engine adds at most 1 MB per ABI ([VPN.md](VPN.md)). On the A40, its CPU time for the spike's download stays at or below the spike's system engine, so that a regression shows while the work goes on, not at the battery test. |
-| W3 | A name for every flow | Watch's resolver answers inside the tunnel and asks the network's resolver through a protected socket. Watch never lowers what the phone had: where Android spoke DNS over TLS to the network's resolver (Private DNS on "automatic"), Watch's upstream does too, and strict Private DNS is detected and explained. Each flow is named, in this order, from the DNS answers Watch served, the TLS server name, the QUIC Initial server name (QUIC versions 1 and 2, the `ClientHello` put together from several packets and from CRYPTO frames out of order), or the organisation in the offline dataset, and otherwise shown as "unknown". (Amended 2026-11-18, in W5's first part: the TLS or QUIC server name the connection itself sent now comes first, then the DNS answer, whose name is kept beside it where the two differ, then the organisation; a DNS answer is tied to a flow by its address alone, and either name can be wrong. ADR 0044, decision 4.) A server name that is only a provider's public name under Encrypted Client Hello is never shown as the destination when Watch saw that name in an ECH configuration of a DNS answer: Watch says the real name is hidden. When the app looked its names up elsewhere, a real ECH and Chrome's GREASE look the same by design, and the name is shown with a note that ECH was offered. Apps' own encrypted DNS to known resolvers, and plain DNS sent past the network's resolver, are recognised and named (ADR 0045, decision 11). On the emulator, a fixture app's flows are named by each of the four routes. A scripted session of ten popular apps on an emulator, from their first start without signing in, runs three times under Watch and three times under PCAPdroid, the usual tool for logging connections without root. Both are measured against a record independent of either: the emulator's own capture of what leaves it, for destinations and names, and, on an image with root, the kernel's owner of each socket, since both tools ask Android the same question for owners. Watch names at least as large a share of flows correctly as PCAPdroid, and gives every flow the owner the kernel recorded. Sessions after signing in follow once test accounts exist. |
-| W4 | The connection log | Each flow is stored with the app's UID, the name and where it came from (since 2026-11-18 with the DNS name beside the connection's own where they differ: ADR 0037, amended), IP and port, protocol, organisation, bytes each way, and start and end time. Flows chained through a tool are counted, but their destinations are recorded only if the user turns that on ([VPN.md](VPN.md)). The store is app-private SQLite whose records are sealed one by one under a key for their day, held in the Android Keystore ([ADR 0037](decisions/0037-connection-log-storage.md)). Retention is none, 1, 7 or 30 days (no default: chosen at onboarding, none until then; §6.4 and ADR 0040), with a one-tap wipe. Tests show that the database cannot be read without the key, that no destination reaches logcat, and that the wipe leaves nothing behind. Over a scripted emulator session, each app's bytes in the log are within 5 % of Android's own count for that app, the bar of M4, once ADR 0022's open check says how Android counts traffic that passes a VPN. |
-| W5 | The audit app reads the log | Watch offers the log through a read-only, versioned interface that only an app signed with the same key may use, and takes nothing from the audit app. The audit app names the apps behind the UIDs, where a flow older than the app that now holds its UID belongs to "an app since removed", and marks each flow foreground or background from usage access when it has it. Each app's page answers "who did this app talk to?" as a timeline, with tracker destinations flagged from the εxodus network signatures. Tests: an app signed with another key gets nothing; the audit app works unchanged without Watch; where the log would answer a question, the audit app offers Watch with the same fingerprint check as for itself. The new screens pass the accessibility check in all eight languages (`scripts/screenshots.sh`). Dropped by ADR 0045: Advanced reads its own log. How the gate is met in Advanced, with a live view of what apps sent while the user was not using them, is decided in [ADR 0046](decisions/0046-live-activity.md) (accepted 2026-11-15). Its data is built: each flow's bytes held second by second until its app's state is told, from Android's usage events read by Watch, the log's segments cut where the state changes and carrying it, and the live counters of "Now" in memory, read in one call (W5's second part). Its screens are built (W5's third part): "Now", one row per app with its state, its bytes by state, why bytes have no state, and its destinations with tracker destinations marked from the εxodus network signatures of the pack the audit verifies, apps in the background first; each app's history from the log, a day at a time, where a record older than the app that now holds its UID belongs to "an app since removed"; ways in from Watch's screen and the audit's page of an app; the strings in English until ADR 0030's translations. The summary, the tile and Watch's own lock come with W9. |
-| W6 | Chaining through the tool's proxy | Watch finds the user's tool by itself: the installed tools from the signed list and table, a SOCKS5 greeting on their known ports only, and the port's owner asked from Android. Chained apps' TCP goes through SOCKS5 `CONNECT` and their UDP through `UDP ASSOCIATE`, or not at all; their DNS goes to the tool, never to the network. When the tool stops, chained apps wait and Watch says so; nothing goes out directly. The tool's own traffic is forwarded directly and attributed to it; nothing comes in from an address a local app did not send to, or, for a name the tool resolves, from any but the first address that answers at the port the app asked with what the app's own datagram asked it to carry, where the protocol carries it (a DNS query's ID and question on port 53 and elsewhere, a STUN transaction ID, a QUIC connection ID or Initial keys, an NTP timestamp; ADR 0044, unit 9b), and `BIND` is never used. Watch offers a generated password where the tool supports one, opens no port of its own, and never logs SOCKS credentials. The user chooses which apps go through the tool. In CI, a test proxy with `UDP ASSOCIATE` and a password carries a workload app's TCP, UDP and DNS; with the proxy stopped, a capture on the emulator's host shows no packet of a chained app leaving directly; checks that the chain works use only the address Android itself checks connectivity with. On the A40 and the emulators, v2rayNG, NekoBox, Hiddify and Orbot in proxy mode are each found and chained without the user typing a port. |
-| W7 | A WireGuard upstream | A provider's WireGuard configuration, from a file or a QR code, becomes Watch's upstream for the apps the user picks, so one VPN does both; several configurations run at once, each app routed directly, through the tool or through one of them (ADR 0035, routes). Its private key is encrypted with a Keystore key and never logged. With a Proton VPN free configuration, every chosen app's traffic leaves through the tunnel, IPv4, IPv6 and DNS, as a check from outside shows; a dropped tunnel holds the chosen apps back instead of sending them directly; the extra battery and CPU against W2's engine alone are measured on the A40. |
+| W1 | The network part's skeleton | A second Gradle module, `:network` (`android/network`, package `org.visadahyu.datapavan.network`), a library that only Datapavan Advanced includes (ADR 0045, decision 10); Advanced is built from `:app` with `-Pdatapavan.edition=advanced`, as `org.visadahyu.datapavan.advanced`, and signed with its edition's key (ADR 0049). Both editions' APKs come from one build, CI is green, and each is reproducible on its own. The build fails if Basic gains `INTERNET`, as now, or if Advanced's manifest holds anything outside its permissions ADR (ADR 0034; one allowlist per edition, ADR 0045, decision 9). The network screen opens on the emulator and the A40 with strings in all eight languages, RTL and pseudo-locales from the start, and an icon from the brand marks. Its tunnel starts and stops. |
+| W2 | The packet engine in the product | The system-stack forwarder moves from the spike into `core/`, with `unsafe` forbidden (ADR 0006) and every parser fuzzed in CI. It holds each app's SYN until the owner lookup and the protected upstream connection are done; UDP goes through a NAT table with idle timeouts; a segment of an unknown connection gets a reset; unreachable destinations get ICMP and ICMPv6 answers; a network switch re-binds the upstream sockets without dropping the tunnel. An end-to-end test in CI, grown from the spike's workload app, carries TCP and UDP through the tunnel and finds the owner of every flow, connect-and-close and refused connections included. It passes on emulators with Android 10 and 12 to 17 and on the A40, and IPv6 is checked end to end on a network that has it. The engine adds at most 1 MB per ABI ([VPN.md](VPN.md)). On the A40, its CPU time for the spike's download stays at or below the spike's system engine, so that a regression shows while the work goes on, not at the battery test. |
+| W3 | A name for every flow | The network part's resolver answers inside the tunnel and asks upstream through a protected socket, in the order of [ADR 0042](decisions/0042-dns-of-apps-that-go-directly.md) (W8), where the network's resolver is only the fallback. Advanced never lowers what the phone had: where Android spoke DNS over TLS to the network's resolver (Private DNS on "automatic"), Advanced's upstream is encrypted too, and strict Private DNS is detected and explained. Each flow is named, in this order, from the TLS or QUIC server name the connection itself sent (the QUIC Initial server name in QUIC versions 1 and 2, the `ClientHello` put together from several packets and from CRYPTO frames out of order), then from the DNS answer Advanced served, whose name is kept beside it where the two differ, then from the organisation in the offline dataset, and otherwise shown as "unknown"; a DNS answer is tied to a flow by its address alone, and either name can be wrong (ADR 0044, decision 4). A server name that is only a provider's public name under Encrypted Client Hello is never shown as the destination when Advanced saw that name in an ECH configuration of a DNS answer: Advanced says the real name is hidden. When the app looked its names up elsewhere, a real ECH and Chrome's GREASE look the same by design, and the name is shown with a note that ECH was offered. Apps' own encrypted DNS to known resolvers, and plain DNS sent past the network's resolver, are recognised and named (ADR 0045, decision 11). On the emulator, a fixture app's flows are named by each of the four routes. A scripted session of ten popular apps on an emulator, from their first start without signing in, runs three times under Advanced and three times under PCAPdroid, the usual tool for logging connections without root. Both are measured against a record independent of either: the emulator's own capture of what leaves it, for destinations and names, and, on an image with root, the kernel's owner of each socket, since both tools ask Android the same question for owners. Advanced names at least as large a share of flows correctly as PCAPdroid, and gives every flow the owner the kernel recorded. Sessions after signing in follow once test accounts exist. |
+| W4 | The connection log | Each flow is stored with the app's UID, the name and where it came from (with the DNS name beside the connection's own where they differ: ADR 0037), IP and port, protocol, organisation, bytes each way, and start and end time. Flows chained through a tool are counted, but their destinations are recorded only if the user turns that on ([VPN.md](VPN.md)). The store is app-private SQLite whose records are sealed one by one under a key for their day, held in the Android Keystore ([ADR 0037](decisions/0037-connection-log-storage.md)). Retention is none, 1, 7 or 30 days (no default: chosen at onboarding, none until then; §6.4 and ADR 0040), with a one-tap wipe. Tests show that the database cannot be read without the key, that no destination reaches logcat, and that the wipe leaves nothing behind. Over a scripted emulator session, each app's bytes in the log are within 5 % of Android's own count for that app, the bar of M4, once ADR 0022's open check says how Android counts traffic that passes a VPN. |
+| W5 | Advanced reads its own log | Advanced reads its own connection log (ADR 0045, decision 10). It names the apps behind the UIDs, where a flow older than the app that now holds its UID belongs to "an app since removed", and marks each flow foreground or background from usage access when it has it. Each app's page answers "who did this app talk to?" as a timeline, with tracker destinations flagged from the εxodus network signatures. The new screens pass the accessibility check in all eight languages (`scripts/screenshots.sh`). How the gate is met, with a live view of what apps sent while the user was not using them, is decided in [ADR 0046](decisions/0046-live-activity.md) (accepted 2026-11-15). Its data is built: each flow's bytes held second by second until its app's state is told, from Android's usage events read by the network part, the log's segments cut where the state changes and carrying it, and the live counters of "Now" in memory, read in one call (W5's second part). Its screens are built (W5's third part): "Now", one row per app with its state, its bytes by state, why bytes have no state, and its destinations with tracker destinations marked from the εxodus network signatures of the pack the audit verifies, apps in the background first; each app's history from the log, a day at a time, where a record older than the app that now holds its UID belongs to "an app since removed"; ways in from the network screen and the audit's page of an app; the strings in English until ADR 0030's translations. The summary, the tile and Advanced's own lock come with W9. |
+| W6 | Chaining through the tool's proxy | Advanced finds the user's tool by itself: the installed tools from the signed list and table, a SOCKS5 greeting on their known ports only, and the port's owner asked from Android. Chained apps' TCP goes through SOCKS5 `CONNECT` and their UDP through `UDP ASSOCIATE`, or not at all; their DNS goes to the tool, never to the network. When the tool stops, chained apps wait and Advanced says so; nothing goes out directly. The tool's own traffic is forwarded directly and attributed to it; nothing comes in from an address a local app did not send to, or, for a name the tool resolves, from any but the first address that answers at the port the app asked with what the app's own datagram asked it to carry, where the protocol carries it (a DNS query's ID and question on port 53 and elsewhere, a STUN transaction ID, a QUIC connection ID or Initial keys, an NTP timestamp; ADR 0044, unit 9b), and `BIND` is never used. Advanced offers a generated password where the tool supports one, opens no port of its own, and never logs SOCKS credentials. The user chooses which apps go through the tool. In CI, a test proxy with `UDP ASSOCIATE` and a password carries a workload app's TCP, UDP and DNS; with the proxy stopped, a capture on the emulator's host shows no packet of a chained app leaving directly; checks that the chain works use only the address Android itself checks connectivity with. On the A40 and the emulators, v2rayNG, NekoBox, Hiddify and Orbot in proxy mode are each found and chained without the user typing a port. |
+| W7 | A WireGuard upstream | A provider's WireGuard configuration, from a file or a QR code, becomes Advanced's upstream for the apps the user picks, so one VPN does both; several configurations run at once, each app routed directly, through the tool or through one of them (ADR 0035, routes). Its private key is encrypted with a Keystore key and never logged. With a Proton VPN free configuration, every chosen app's traffic leaves through the tunnel, IPv4, IPv6 and DNS, as a check from outside shows; a dropped tunnel holds the chosen apps back instead of sending them directly; the extra battery and CPU against W2's engine alone are measured on the A40. |
 | W8 | DNS of the user's choice, flags and guides | Oblivious DoH by default for apps that go directly, with relays and targets in several jurisdictions, and the network's resolver only as a fallback outside the strict setting ([ADR 0042](decisions/0042-dns-of-apps-that-go-directly.md)). A DoH or DoT resolver of the user's choice, and a strict setting that never falls back to the network's resolver (VPN.md; recommended in restricted regions). Apps' built-in proxies are named, with their operator when it is not the app's maker, Telegram's MTProto and SOCKS5 proxies first. Proxy-like behaviour (many destinations in a short time, sustained upload, activity with the screen off) is flagged as what was seen, with thresholds from a lab run recorded in `docs/spikes/`, counted in memory so that chained destinations stay unrecorded. Tracker blocking stays off until the user turns it on, and is undone in one tap. Per-tool guides for proxy mode. Tests: strict DNS sends nothing to the network's resolver while the chosen one is down; a fixture app with a Telegram-style proxy setting is named; every flag on W3's ten-app session is explained in the lab notes; blocking and its undo work. The guides are translated and reviewed in eight languages (ADR 0030). |
-| W9 | Onboarding and the 0.2.0 release | Onboarding covers the VPN consent, Android 17's local-network permission, strict Private DNS, the always-on VPN with "block connections without VPN" ([VPN.md](VPN.md)), the kind of tool Watch found and the next step for it, with the guide of each tool installed (W8, part 3b: `GuideActivity.intent`), and battery managers, Samsung's first, with guides for other vendors. A Quick Settings tile turns Watch on and off. Battery is tested on the Galaxy A56 with the signed release candidate (ADR 0011 allows only stable builds on it), in windows of six to seven hours of ordinary use at similar times of day: one without Watch or any VPN, one with Watch alone, one with Watch carrying a Proton VPN free configuration, and one with Proton VPN's own app alone. Each window is read over adb from Android's battery statistics: Watch's own share, and the total drain per hour with the screen on and off, scaled to 24 hours. Only Watch's line and the totals are read; no other app's name is recorded. Watch alone costs at most 3 % of a day's battery over the window without a VPN, and Watch with Proton's configuration at most 3 % over Proton's own app. If the candidate passes, the same APK is published. The sentence of ADR 0045, decision 4, is taught in the self-check, the store texts, RELEASE.md and the website. Store texts and changelog are translated and reviewed in eight languages (ADR 0030); both apps are in `data/app-signers` with their fingerprints; a review against the threat model (§8) covers what Watch adds. 0.2.0 is published on GitHub with both APKs, on the website and through Obtainium. F-Droid follows [CHANNELS.md](CHANNELS.md); Google Play gets only Basic (ADR 0031, ADR 0045). Before 0.2.0 ships, Basic's page "Is this copy genuine?" and its store text take ADR 0045 decision 4's two-edition sentence (the maintainer, 2026-11-18): the string `own_teach` in the eight languages, and line 17 of `fastlane/metadata/android/*/full_description.txt` in the eight languages, which carry the old one; Basic's check line `own_internet_none` stays. With it, Basic's page may take the comparison with its allowlist that Advanced's has (`own_permissions_extra`, W5's second part, fix round 3). The profile for phones that may be searched (ADR 0047) reaches apps' own proxies (ADR 0052, decision 8), a must: under the profile, no proxy kind, flag or counter is recorded or shown, in the log, "Now", the dump or the engine's counters, and the substitution's memory is cleared with the live view's. It reaches tracker blocking too (ADR 0053, decision 8), a must: under the profile nothing of blocking is recorded (no blocked flow in the log, which does not run; its counts in memory only, cleared with the live view's), and its allowances are kept behind Watch's lock and wiped by a wipe (`BlockingSettings.wipe`), as the apps left out of the tunnel are. The tile carries blocking's ten-minute pause, naming no app (ADR 0053, decision 6). |
+| W9 | Onboarding and the 0.2.0 release | Onboarding covers the VPN consent, Android 17's local-network permission, strict Private DNS, the always-on VPN with "block connections without VPN" ([VPN.md](VPN.md)), the kind of tool Advanced found and the next step for it, with the guide of each tool installed (W8, part 3b: `GuideActivity.intent`), and battery managers, Samsung's first, with guides for other vendors. A Quick Settings tile turns Advanced's tunnel on and off. Battery is tested on the Galaxy A56 with the signed release candidate (ADR 0011 allows only stable builds on it), in windows of six to seven hours of ordinary use at similar times of day: one without Advanced or any VPN, one with Advanced alone, one with Advanced carrying a Proton VPN free configuration, and one with Proton VPN's own app alone. Each window is read over adb from Android's battery statistics: Advanced's own share, and the total drain per hour with the screen on and off, scaled to 24 hours. Only Advanced's line and the totals are read; no other app's name is recorded. Advanced alone costs at most 3 % of a day's battery over the window without a VPN, and Advanced with Proton's configuration at most 3 % over Proton's own app. If the candidate passes, the same APK is published. The sentence of ADR 0045, decision 4, is taught in the self-check, the store texts, RELEASE.md and the website. Store texts and changelog are translated and reviewed in eight languages (ADR 0030); both editions are in `data/app-signers` with their fingerprints; a review against the threat model (§8) covers what Advanced adds. 0.2.0 is published on GitHub with both APKs, on the website and through Obtainium. F-Droid follows [CHANNELS.md](CHANNELS.md); Google Play gets only Basic (ADR 0031, ADR 0045). Before 0.2.0 ships, Basic's page "Is this copy genuine?" and its store text take ADR 0045 decision 4's two-edition sentence (the maintainer, 2026-11-18): the string `own_teach` in the eight languages, and line 17 of `fastlane/metadata/android/*/full_description.txt` in the eight languages, which carry the old one; Basic's check line `own_internet_none` stays. With it, Basic's page may take the comparison with its allowlist that Advanced's has (`own_permissions_extra`, W5's second part, fix round 3). The profile for phones that may be searched (ADR 0047) reaches apps' own proxies (ADR 0052, decision 8), a must: under the profile, no proxy kind, flag or counter is recorded or shown, in the log, "Now", the dump or the engine's counters, and the substitution's memory is cleared with the live view's. It reaches tracker blocking too (ADR 0053, decision 8), a must: under the profile nothing of blocking is recorded (no blocked flow in the log, which does not run; its counts in memory only, cleared with the live view's), and its allowances are kept behind Advanced's lock and wiped by a wipe (`BlockingSettings.wipe`), as the apps left out of the tunnel are. The tile carries blocking's ten-minute pause, naming no app (ADR 0053, decision 6). |
 
-Besides each milestone's "done when", Datapavan Advanced 0.2.0 passes the release gates of [ADR 0039](decisions/0039-release-gates.md), among them what other apps see of Watch and the compatibility matrix ([ADR 0041](decisions/0041-visibility-and-coexistence.md)) and Watch's own safety ([ADR 0040](decisions/0040-own-safety-in-an-untrusted-environment.md)). Before an independent review, a build of Datapavan Advanced goes only to identified testers.
+Besides each milestone's "done when", Datapavan Advanced 0.2.0 passes the release gates of [ADR
+0039](decisions/0039-release-gates.md), among them what other apps see of Datapavan Advanced and the compatibility
+matrix ([ADR 0041](decisions/0041-visibility-and-coexistence.md)) and Datapavan's own safety ([ADR
+0040](decisions/0040-own-safety-in-an-untrusted-environment.md)). Before an independent review, a build of Datapavan
+Advanced goes only to identified testers.
 
 The order: W1 and W2 first. W3, W4 and W6 then run side by side, since each needs only the engine;
 W5 follows W4, W7 follows W6, and W8 follows W3 and W6. W9 comes last. Tests on the A40 use the
@@ -1189,7 +1178,7 @@ Each decision is recorded in full, with context and consequences, as an ADR in
 | [0001](decisions/0001-apache-2-licence.md) | Apache-2.0 licence | Accepted |
 | 0002 | Not used | – |
 | [0003](decisions/0003-minimum-android-10.md) | Minimum Android version 10 (API 29) | Accepted |
-| [0004](decisions/0004-ui-languages-and-rtl.md) | Languages at launch, changed by ADR 0030; RTL from the first commit | Accepted |
+| [0004](decisions/0004-ui-languages-and-rtl.md) | UI languages, eight with ADR 0030; RTL from the first commit | Accepted |
 | [0005](decisions/0005-english-documentation.md) | Documentation in English only | Accepted |
 | [0006](decisions/0006-rust-engine-unsafe-forbidden.md) | Rust engine with `unsafe` forbidden; separate JNI crate | Accepted |
 | [0007](decisions/0007-direct-jni-over-uniffi.md) | Direct JNI instead of UniFFI | Accepted |
