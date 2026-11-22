@@ -461,6 +461,13 @@ jobs:
           sudo apt-get install -y --no-install-recommends dnsutils python3-cryptography
           scripts/dnslab.sh up
 
+      # Datapavan's own ODoH relay as Caddy configuration (server/, ADR 0055): its test in the relay lab, Debian 13's
+      # Caddy beside stand-ins for its two targets (scripts/relaylab.sh), before the emulator starts.
+      - name: The ODoH relay's Caddy configuration
+        if: matrix.shard == 'dns'
+        timeout-minutes: 10
+        run: scripts/relaylab.sh
+
       # The proxies shard's lab image, built from pinned sources (scripts/proxylab/Dockerfile) and kept in the Actions
       # cache, as the WireGuard peers' is: tried twice, a minute apart.
       - name: Docker Buildx for the proxy lab's image
