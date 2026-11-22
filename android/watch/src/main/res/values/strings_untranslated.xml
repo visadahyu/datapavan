@@ -1,0 +1,21 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+    ADR 0054 (Android's own labels, read from the phone): the sentences of Advanced's network monitoring that quote a
+    label of Android's own screens, which the label now fills as Android names it on this phone, and the lines around
+    them. In English only. They are translated into the seven other languages by ADR 0030's process before the merge,
+    and then move into strings.xml, where scripts/check-translations.py holds them to every language; until then this
+    file is held to the plain-language gate (scripts/check.sh), and lint's check for missing translations is lifted for
+    it alone. A release needs it empty (RELEASE.md). The sentences they replace stay readable, with their translations,
+    at b382014. Where a sentence needs a subject, it is Datapavan.
+
+    For the translators: each label placeholder is a label of Android's own screens, read from the phone in its own
+    language, or Android's text in Datapavan's language where the phone gives none (android_label_* in strings.xml,
+    which are copied from AOSP, never translated). It is always in the language's quotes, as this file's \"…\", and
+    always after a noun (the setting, the switch), so that no word around it depends on its gender, number or case:
+    Russian and German keep it in the nominative, Arabic adds no ال to it, and Persian puts no ezafe on it.
+-->
+<resources xmlns:tools="http://schemas.android.com/tools" tools:ignore="MissingTranslation">
+    <!-- A label read in the phone's language (%1$s), then the same label in Datapavan's language (%2$s), where the two
+         differ: Android's labels and the tools' in the per-tool guides. Chinese takes full-width brackets. -->
+    <string name="label_with_own">%1$s (%2$s)</string>
+</resources>

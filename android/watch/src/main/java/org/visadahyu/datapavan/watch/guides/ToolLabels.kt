@@ -1,12 +1,8 @@
 package org.visadahyu.datapavan.watch.guides
 
-import android.annotation.SuppressLint
 import android.content.Context
-import android.content.pm.PackageManager
-import android.content.res.Configuration
-import android.content.res.Resources
-import android.os.LocaleList
 import java.util.Locale
+import org.visadahyu.datapavan.labels.OtherAppResources
 
 /**
  * A tool's labels as the guide quotes them (ADR 0041, "How the per-tool guides are built"). A tool speaks the phone's
@@ -16,7 +12,8 @@ import java.util.Locale
  * chose a language for Datapavan has likely chosen it for the tool too. A label the tool does not keep as an Android
  * resource (Flutter's i18n files, text written in code), or that the installed version no longer has, is the data's,
  * in the first of those languages the source has, else in English. Nothing of the tool is decompiled, and no code of it
- * runs: Android reads its resource table, as a launcher reads an app's name.
+ * runs: Android reads its resource table, as a launcher reads an app's name. The reading itself is the shared
+ * module's [OtherAppResources] since ADR 0054, which reads Android's own labels the same way.
  */
 class ToolLabels(
     private val book: GuideBook,
@@ -26,12 +23,6 @@ class ToolLabels(
     /** The phone's languages, and Datapavan's own, first first. */
     private val phone: List<Locale>,
     private val own: List<Locale>,
-    /**
-     * Whether the installed tool has its own words in a language. Android gives a tool's default words, often English,
-     * for a language it lacks, and a tool installed from Google Play in language splits has only the phone's languages:
-     * Datapavan's language is added beside the phone's only where the tool has it.
-     */
-    private val hasLanguage: (Locale) -> Boolean = { true },
 ) {
     /** One label as shown: [text] first, and [also] in Datapavan's language when the tool's differs. */
     data class Shown(val text: String, val also: String?, val fromTool: Boolean)
@@ -48,7 +39,7 @@ class ToolLabels(
             if (first != null) {
                 anyFromTool = true
                 val ownFirst = own.firstOrNull()
-                val second = if (ownFirst != null && ownFirst.language != phone.firstOrNull()?.language && hasLanguage(ownFirst)) {
+                val second = if (ownFirst != null && !OtherAppResources.sameWords(ownFirst, phone.firstOrNull()) && hasLanguage(resource, ownFirst)) {
                     read(resource, own)?.let(::clean)
                 } else {
                     null
@@ -61,90 +52,42 @@ class ToolLabels(
         return Shown(clean(first), second?.let(::clean), fromTool = false)
     }
 
+    /**
+     * Whether the installed tool has its own words for [resource] in [locale]'s language. Android gives a tool's default
+     * words, often English, for a language it lacks, and a tool installed from Google Play in language splits has only
+     * the phone's languages. So a language is there when the label read in it differs from the tool's default words, the
+     * ones read for a language no app has; English is taken as there, since it is most tools' default. (W8, part 3b,
+     * asked Android which languages the tool's APKs hold, which also counts the framework's, so every language looked
+     * present: ADR 0054's audit, M4.)
+     */
+    private fun hasLanguage(resource: Resource, locale: Locale): Boolean =
+        locale.language == "en" || read(resource, listOf(locale)) != read(resource, listOf(NO_LANGUAGE))
+
     private fun recorded(rows: List<ToolLabel>, locales: List<Locale>): String? =
         locales.asSequence().mapNotNull { locale -> rows.firstOrNull { it.lang == language(locale) }?.text }.firstOrNull()
 
     companion object {
         /** The longest label shown; a longer one is cut, so that no tool's resource can fill the screen. */
-        const val MAX = 80
+        const val MAX = OtherAppResources.MAX
+
+        /** A language no app has words in, for which Android gives an app's default words. */
+        val NO_LANGUAGE: Locale = Locale.forLanguageTag("zz")
 
         /** The data's language code for [locale]: its language, with Chinese only in its simplified script. */
-        fun language(locale: Locale): String? {
-            val traditional = locale.script == "Hant" || locale.country in setOf("TW", "HK", "MO")
-            return when {
-                locale.language == "zh" && traditional -> null
-                else -> locale.language.takeIf { it.isNotEmpty() }
-            }
+        fun language(locale: Locale): String? = when {
+            OtherAppResources.traditionalChinese(locale) -> null
+            else -> locale.language.takeIf { it.isNotEmpty() }
         }
 
-        /**
-         * A label fit to quote: one line, no control or direction-override characters (which could turn the sentence
-         * around it), at most [MAX] characters. The screen isolates it in the sentence's direction.
-         */
-        fun clean(text: String): String {
-            val flat = text.filterNot { Character.getType(it) == Character.CONTROL.toInt() || it in OVERRIDES }
-                .replace(Regex("\\s+"), " ").trim()
-            return if (flat.length <= MAX) flat else flat.take(MAX - 1).trimEnd() + "…"
-        }
-
-        private val OVERRIDES = setOf('‎', '‏', '‪', '‫', '‬', '‭', '‮', '⁦', '⁧', '⁨', '⁩', '؜')
+        /** As [OtherAppResources.clean]: one line, no direction overrides, at most [MAX] characters. */
+        fun clean(text: String): String = OtherAppResources.clean(text)
 
         /**
          * Reads labels from the installed [packageName]: its resources opened for the locales asked, without its code.
          * Null when the package is not installed or Android cannot open it. Advanced sees every app (the audit's
          * QUERY_ALL_PACKAGES, ADR 0014), and Watch's own launcher query (ADR 0034) covers any tool a user can open.
          */
-        @SuppressLint("AppBundleLocaleChanges") // Watch reads another app's resources for a locale; its own stays as it is.
-        fun reader(context: Context, packageName: String): ((Resource, List<Locale>) -> String?)? {
-            val tool = try {
-                context.createPackageContext(packageName, 0)
-            } catch (e: PackageManager.NameNotFoundException) {
-                return null
-            } catch (e: SecurityException) {
-                return null
-            }
-            val cache = HashMap<List<Locale>, Resources>()
-            return { resource, locales ->
-                val resources = cache.getOrPut(locales) {
-                    val configuration = Configuration(tool.resources.configuration).apply { setLocales(LocaleList(*locales.toTypedArray())) }
-                    tool.createConfigurationContext(configuration).resources
-                }
-                read(resources, packageName, resource)
-            }
-        }
-
-        /** The languages [packageName]'s resources have words in, as its installed APKs hold them; null when it cannot be read. */
-        fun languages(context: Context, packageName: String): Set<String>? = try {
-            context.createPackageContext(packageName, 0).assets.locales.mapNotNull { tag ->
-                Locale.forLanguageTag(tag.replace('_', '-')).language.takeIf { it.isNotEmpty() }
-            }.toSet()
-        } catch (e: PackageManager.NameNotFoundException) {
-            null
-        } catch (e: SecurityException) {
-            null
-        }
-
-        /**
-         * One label of another app's [resources] by its name. The name is all Watch has of the tool's resources, so the
-         * lookup is by name: Android's own launchers read app labels so too. An array item comes through a typed
-         * array, which also reads a plain `<array>` of strings.
-         */
-        @SuppressLint("DiscouragedApi")
-        fun read(resources: Resources, packageName: String, resource: Resource): String? = try {
-            val id = resources.getIdentifier(resource.name, resource.type, packageName)
-            when {
-                id == 0 -> null
-                resource.type == "string" -> resources.getString(id)
-                else -> resources.obtainTypedArray(id).let { items ->
-                    try {
-                        resource.index?.takeIf { it in 0 until items.length() }?.let { items.getString(it) }
-                    } finally {
-                        items.recycle()
-                    }
-                }
-            }?.takeIf { it.isNotBlank() }
-        } catch (e: Resources.NotFoundException) {
-            null
-        }
+        fun reader(context: Context, packageName: String): ((Resource, List<Locale>) -> String?)? =
+            OtherAppResources.reader(context, packageName)?.let { read -> { resource, locales -> read(resource.type, resource.name, resource.index, locales) } }
     }
 }

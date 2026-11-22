@@ -4,7 +4,6 @@ import android.content.Context
 import android.content.Intent
 import android.content.pm.ApplicationInfo
 import android.content.res.Configuration
-import android.content.res.Resources
 import android.graphics.Color
 import android.os.Bundle
 import androidx.activity.ComponentActivity
@@ -12,7 +11,7 @@ import androidx.activity.SystemBarStyle
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
 import androidx.compose.runtime.mutableStateOf
-import java.util.Locale
+import org.visadahyu.datapavan.labels.PhoneLocales
 import org.visadahyu.datapavan.safety.ScreenProtection
 import org.visadahyu.datapavan.watch.chain.Tools
 import org.visadahyu.datapavan.watch.guides.GuideView
@@ -50,20 +49,13 @@ class GuideActivity : ComponentActivity() {
             val tool = packageName?.takeIf { it in guide.packages } ?: guide.packages.first()
             val name = Tools.table(this).firstOrNull { it.packageName == tool }?.name ?: tool
             val read = ToolLabels.reader(this, tool) ?: { _, _ -> null }
-            val languages = ToolLabels.languages(this, tool)
-            val labels = ToolLabels(
-                book, guide, read,
-                phone = locales(Resources.getSystem().configuration),
-                own = locales(resources.configuration),
-                hasLanguage = { locale -> languages == null || locale.language in languages },
-            )
-            val shown = GuideView.of(book, guide, name, labels)
+            // The phone's languages from LocaleManager from Android 13, where Resources.getSystem() follows
+            // Datapavan's own language in its process (ADR 0054, the audit's M1).
+            val labels = ToolLabels(book, guide, read, phone = PhoneLocales.of(this), own = PhoneLocales.own(this))
+            val shown = GuideView.of(book, guide, name, labels) { first, second -> getString(R.string.label_with_own, first, second) }
             runOnUiThread { view.value = shown }
         }.apply { name = "watch-guide" }.start()
     }
-
-    private fun locales(configuration: Configuration): List<Locale> =
-        configuration.locales.let { list -> (0 until list.size()).map { list[it] } }
 
     companion object {
         const val EXTRA_GUIDE = "guide"

@@ -43,10 +43,15 @@ class ToolLabelsTest {
         // A phone in Persian gets the tool's Persian; Datapavan in English adds the tool's English beside it.
         val both = ToolLabels(book, guide, ::fixture, phone = persian, own = english).shown("proxy_switch")
         assertEquals(ToolLabels.Shown("کلید پروکسی ابزار آزمایشی", "Proxy switch of the test tool", fromTool = true), both)
-        // A tool without Datapavan's language (a Google Play install with the phone's languages only) would answer with its
-        // default words: nothing is added beside the phone's.
-        val lacking = ToolLabels(book, guide, ::fixture, phone = english, own = persian, hasLanguage = { it.language != "fa" })
+        // A tool without Datapavan's language (a Google Play install with the phone's languages only) answers with its
+        // default words, the same as for a language no app has: nothing is added beside the phone's (ADR 0054's audit,
+        // M4: asking Android which languages the APKs hold also counts the framework's, so every one looked present).
+        val withoutPersian: (Resource, List<Locale>) -> String? = { resource, locales -> fixture(resource, locales.filter { it.language != "fa" }) }
+        val lacking = ToolLabels(book, guide, withoutPersian, phone = english, own = persian)
         assertEquals(ToolLabels.Shown("Proxy switch of the test tool", null, fromTool = true), lacking.shown("proxy_switch"))
+        // The test tool's default words are English, so English counts as there.
+        val inEnglish = ToolLabels(book, guide, ::fixture, phone = persian, own = english).shown("proxy_switch")
+        assertEquals("Proxy switch of the test tool", inEnglish.also)
         assertEquals("کلید پروکسی ابزار آزمایشی", ToolLabels(book, guide, ::fixture, english, persian).shown("proxy_switch").also)
     }
 
