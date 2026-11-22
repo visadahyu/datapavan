@@ -3,7 +3,7 @@
 Datapavan is a security product. Reports of vulnerabilities are welcome and taken seriously.
 
 > **Releases.** The current release is Datapavan Basic 0.1.2, of 2026-11-07. Datapavan Advanced, the
-> edition with the network monitoring (ADR 0045), has not been released yet; its first release is 0.2.0. Private reports go through GitHub's private vulnerability reporting, or by
+> edition with the network part (ADR 0045), has not been released yet; its first release is 0.2.0. Private reports go through GitHub's private vulnerability reporting, or by
 > e-mail to security@datapavan.org. That address has no OpenPGP key, so mail to it is not end-to-end
 > encrypted: send a first contact without the details, and we will agree on a private channel.
 

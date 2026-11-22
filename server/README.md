@@ -115,6 +115,6 @@ CI runs it on the `dns` shard with a Caddyfile of its own around these files. It
 `odoh-relay.sh` on it, its failures included; that repository is private, so this mode runs on the maintainer's
 computer only.
 
-`scripts/dnslab.sh` with `DNSLAB_RELAY=caddy` puts the same relay into the DNS lab. Advanced's network monitoring
+`scripts/dnslab.sh` with `DNSLAB_RELAY=caddy` puts the same relay into the DNS lab. Advanced's network part
 then reaches the lab's targets through it on an emulator (`scripts/verify-dns.sh`, `DNSLAB_ONLY=odoh` for the
 ODoH steps alone).

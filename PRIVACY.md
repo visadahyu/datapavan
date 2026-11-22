@@ -92,12 +92,12 @@ uses Oblivious DoH: each question is encrypted on the phone for a resolver (the 
 run by another operator in another country. The relay sees your address but not the question; the target sees the
 question but not your address. The default relays and targets are Numa's relay in Germany with Cloudflare's target
 in the United States, and crypto.sx's relay on Fastly with dnscry.pt's target in Germany; you can see and change
-them in Watch. When the first pair is slow to answer, Datapavan asks the second too, so both targets may see that
+them in Datapavan Advanced. When the first pair is slow to answer, Datapavan asks the second too, so both targets may see that
 name. Instead, you can choose an encrypted resolver from a list, each with its operator, country, what it says it
 logs and what it blocks, or give your own, which Datapavan tests with one question before it keeps it; that
 resolver then sees your address and the names. When the resolver you chose does not answer, Datapavan uses Oblivious
 DoH and then the others, unless you turned on "Only this resolver". When none of these answers on your network,
-Datapavan uses your network's DNS resolver, which can see the names; Watch says so while it lasts, and with
+Datapavan uses your network's DNS resolver, which can see the names; Datapavan says so while it lasts, and with
 "Strict" on it never does. Names of your own network (a printer, a router) always go to your network's resolver, and
 a name under your network's own domain goes there only when the internet does not know it. Datapavan keeps no list
 of the names apps look up, apart from the connection log, if you keep one; it keeps answers in memory for up to a

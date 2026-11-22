@@ -15,14 +15,14 @@ Status legend: ✅ done · 🔄 in progress · ⏳ planned.
 2026-11-13), so that each person installs one app:
 - **Datapavan Basic:** the audit, with no internet, ever. It is today's app, and gains every later feature that needs
   no network.
-- **Datapavan Advanced:** all that stage 1 adds, with internet only for the user's own traffic: Watch's tunnel (v0.2),
+- **Datapavan Advanced:** all that stage 1 adds, with internet only for the user's own traffic: the network part's local VPN (v0.2),
   blocking (v0.3), reports (v0.4) and the expert tool.
 - **Datapavan Enterprise:** stage 2.
 
 Basic and Advanced are free for everyone. A person at risk can keep Basic alone, or beside Advanced, which Basic
 checks from outside. The two share one version line (the maintainer, 2026-11-14): the release out is Datapavan
 Basic 0.1.2, and the first release of Advanced is Datapavan Advanced 0.2.0, built from the same commit as Datapavan
-Basic 0.2.0. The milestones keep their numbers: v0.1, the audit, is Basic; v0.2's network monitoring, v0.3's
+Basic 0.2.0. The milestones keep their numbers: v0.1, the audit, is Basic; v0.2's network part, v0.3's
 blocking and v0.4's reports land in Advanced, and what of them needs no network comes to Basic as well.
 
 ---
@@ -115,7 +115,7 @@ Checks left from M4 (ADR 0022):
   emulator and on a Galaxy A56, and the allowance survives an update installed the same way.
 - The units of other vendors' data-usage screens, Android 10, and mobile data on a Samsung phone.
 
-### v0.2, network monitoring, in Datapavan Advanced: local VPN, observe only
+### v0.2, the network part, in Datapavan Advanced: local VPN, observe only
 
 A **local** VPN: no server is involved and the user's IP address does not change. It is the network part of
 Datapavan Advanced, while Datapavan Basic keeps the audit with no internet
@@ -123,12 +123,11 @@ Datapavan Advanced, while Datapavan Basic keeps the audit with no internet
 name and recognises apps' own encrypted DNS (ADR 0045, decision 11). Before this version
 starts, a spike picked the packet engine on 2026-11-07: Android's own TCP stack reached through rewritten addresses, in Rust ([ADR 0012](docs/decisions/0012-packet-engine.md)). Design: [docs/VPN.md](docs/VPN.md).
 
-Two releases, each of use on its own (the maintainer, 2026-11-09, in place of the three agreed on
-2026-11-07: the connection log alone would leave out everyone who already runs a VPN or a
-circumvention tool, since Android allows one VPN at a time, and every release costs an offline
-signing session and texts reviewed in eight languages):
+Two releases, each of use on its own (the maintainer, 2026-11-09: a release with the connection log alone
+would leave out everyone who already runs a VPN or a circumvention tool, since Android allows one VPN at a
+time, and every release costs an offline signing session and texts reviewed in eight languages):
 
-1. **Datapavan Advanced 0.2.0, the connection log, next to circumvention tools:** the Watch service with its packet engine. It keeps
+1. **Datapavan Advanced 0.2.0, the connection log, next to circumvention tools:** the local VPN service with its packet engine. It keeps
    a connection log per app: domain, IP, organisation, bytes, time, foreground or background. Names
    come from DNS, the TLS and QUIC server names, and apps' own encrypted DNS is recognised. The audit
    reads the log inside Advanced (ADR 0045).
@@ -150,8 +149,8 @@ The milestones of 0.2.0, W1 to W9, with what each must show before it counts as 
 Where it stands on 2026-11-22: the four items before W1 are drafted (ADRs
 [0034](docs/decisions/0034-network-permissions.md), [0035](docs/decisions/0035-wireguard-upstream.md) and
 [0036](docs/decisions/0036-ip-to-organisation-dataset.md), accepted; the table of tools in `data/tools/`).
-W1, Watch's skeleton, and W2, the packet engine in the product, are in `main`: every app's traffic passes
-through Watch on the Android 11, 15 and 17 emulators and the A40, each flow with its app, at less CPU than the
+W1, the network part's skeleton, and W2, the packet engine in the product, are in `main`: every app's traffic passes
+through the network part on the Android 11, 15 and 17 emulators and the A40, each flow with its app, at less CPU than the
 spike's engine. W3, a name for every flow, and W4, the connection log
 ([ADR 0037](docs/decisions/0037-connection-log-storage.md)), are in `main` too, but for W3's ten-app
 comparison, which needs a test account, and W4's runs on the A40 and an Android 10 emulator. W6, chaining
@@ -226,7 +225,7 @@ through ADB or Shizuku) are made for experts and rank apps by the risk of breaki
 what they send. Datapavan builds its own expert tool rather than sending people to them, as a part of
 Datapavan Advanced (ADR 0045) that turns system apps off through Android's own wireless
 debugging on the phone, records every change in a journal with undo, and ranks apps by what the lab
-and Advanced's network monitoring measured them sending. The audit app leads to it only for the apps that Settings cannot
+and Advanced's network part measured them sending. The audit app leads to it only for the apps that Settings cannot
 handle, after what Settings can do (permissions, background data, special access) and, from v0.3,
 Advanced's blocking.
 

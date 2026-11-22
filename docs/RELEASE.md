@@ -73,11 +73,11 @@ The steps stay here for the day a key must be replaced. Step 4 was done on the s
    `scripts/release-rehearsal.sh --install` runs steps 5 and 6 for Basic with throwaway keys and puts the signed
    release build, the only one R8 shrinks, through the smoke test and the shortcut check on the
    emulator; `scripts/release-rehearsal.sh advanced` runs steps 5 and 6 for Advanced, whose
-   release build `scripts/verify-watch-release.sh` runs on the emulator. CI's emulator cannot run 32-bit ARM code, so the 32-bit build is tried by hand on the
-   Android 11 emulator (`dp-api30`), which translates ARM code: `INSTALL_ABI=armeabi-v7a scripts/smoke.sh`,
-   then `verify-audit.sh`, `verify-plan.sh` and `verify-shortcuts.sh`. The data pack scripts stay on
+   release build `scripts/verify-network-release.sh` runs on the emulator. CI's emulator cannot run 32-bit ARM
+   code, so the 32-bit build is tried by hand on the Android 11 emulator (`dp-api30`), which translates ARM code:
+   `INSTALL_ABI=armeabi-v7a scripts/smoke.sh`, then `verify-audit.sh`, `verify-plan.sh` and `verify-shortcuts.sh`. The data pack scripts stay on
    CI's image: Android 11's file picker there would not pick a file that adb had put in Downloads
-   (2026-11-07, with the 64-bit build too). For a release that carries Watch, `python3 -I scripts/dns-latency.py`
+   (2026-11-07, with the 64-bit build too). For a release of Datapavan Advanced, `python3 -I scripts/dns-latency.py`
    on a residential network measures the names of direct apps against plain DNS and fails when the default ODoH pair
    is over the speed budget of [ADR 0039](decisions/0039-release-gates.md) or does not answer; its output goes into
    the release notes' record. CI must be green on the release commit. A CI check that failed
@@ -126,7 +126,7 @@ The steps stay here for the day a key must be replaced. Step 4 was done on the s
    pack, that the notes name the release commit, its version, the APK's hash and certificate and the
    pack's fingerprint, and that the pack holds the data the APK carries. Then
    `scripts/verify-signed-release.sh <directory>` runs Basic's signed APK on CI's emulator image (Advanced's
-   check is still to build; `scripts/verify-watch-release.sh` runs its release build): it must
+   check is still to build; `scripts/verify-network-release.sh` runs its release build): it must
    know itself genuine and refuse a damaged copy of the pack. On `dp-api30`, put the signed APK
    through `INSTALL_ABI=armeabi-v7a scripts/smoke.sh <apk>` and `verify-shortcuts.sh`.
 8. **Publish** the signed APK, the notes and their signature on GitHub Releases and under `download/` on the

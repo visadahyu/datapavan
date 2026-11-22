@@ -3,7 +3,7 @@ Copyright the Datapavan authors. Licensed under the Apache License, Version 2.0 
 
 This product includes software developed by others, under the licences named here. `core/Cargo.lock` pins
 every version. The licence texts of every crate inside the native libraries are in licences/: native-core.txt
-(libdatapavan.so) and native-watch.txt (libdatapavan_watch.so), each crate's texts as its package on crates.io
+(libdatapavan.so) and native-network.txt (libdatapavan_network.so), each crate's texts as its package on crates.io
 carries them (written by scripts/licences.py, which scripts/check.sh holds current). GotaTun's package carries
 none: licences/MPL-2.0.txt and licences/gotatun-BSD-3-Clause.txt are its texts. Every APK carries this file,
 LICENSE and those texts as assets, under licences/.
@@ -14,12 +14,12 @@ from Settings, SettingsLib and the permission controller at the tags their comme
 text is LICENSE. Source: https://android.googlesource.com. The dataset data/android-labels holds resource names only,
 under CC0 1.0.
 
-Datapavan Advanced's Watch, WireGuard upstream (W7, docs/decisions/0035-wireguard-upstream.md):
+Datapavan Advanced's network part, WireGuard upstream (W7, docs/decisions/0035-wireguard-upstream.md):
 
 - GotaTun 0.10.3, Mullvad VPN AB, and Cloudflare, Inc. for the BoringTun code it began as.
   Mozilla Public License 2.0 (MPL-2.0); code from before 2026-03-05 also BSD-3-Clause.
   Source: https://github.com/mullvad/gotatun and https://crates.io/crates/gotatun/0.10.3
-  Watch uses GotaTun unmodified. Its source is available at those addresses, as MPL-2.0, section 3.2,
+  Datapavan Advanced uses GotaTun unmodified. Its source is available at those addresses, as MPL-2.0, section 3.2,
   asks; a change to one of GotaTun's own files would be published under MPL-2.0.
 - x25519-dalek, curve25519-dalek, subtle (the dalek-cryptography authors): BSD-3-Clause.
 - ip_network, ip_network_table (Jakub Onderka): BSD-2-Clause.
@@ -30,31 +30,31 @@ Datapavan Advanced's Watch, WireGuard upstream (W7, docs/decisions/0035-wireguar
 - untrusted (Brian Smith): ISC.
 - ip_network_table-deps-treebitmap (Hroi Sigurdsson's treebitmap, forked by Jakub Onderka): MIT.
 
-Datapavan Advanced's Watch, Oblivious DoH for the apps that go directly (W8, part 1,
+Datapavan Advanced's network part, Oblivious DoH for the apps that go directly (W8, part 1,
 docs/decisions/0042-dns-of-apps-that-go-directly.md):
 
 - The ICANN section of the public suffix list (https://publicsuffix.org): MPL-2.0, whose text is
-  licences/MPL-2.0.txt, in data/public-suffix with its source. Watch ignores a network's search domain that is
+  licences/MPL-2.0.txt, in data/public-suffix with its source. Advanced ignores a network's search domain that is
   one of its suffixes.
 - Oblivious DoH's framing and HPKE are Datapavan's own code (core/net/src/odoh.rs, hpke.rs), over crates the
-  library already carries: x25519-dalek (above) and RustCrypto's hkdf, sha2 and aes-gcm (licences/native-watch.txt).
+  library already carries: x25519-dalek (above) and RustCrypto's hkdf, sha2 and aes-gcm (licences/native-network.txt).
 - OkHttp 5.5.1 (com.squareup.okhttp3:okhttp) and Okio 3.18.1 (com.squareup.okio:okio), Square, Inc. and the OkHttp
   and Okio authors: Apache-2.0, whose text is LICENSE. Source: https://github.com/square/okhttp and Maven Central.
-  They carry DoH and Oblivious DoH over Android's own TLS from Watch's Kotlin side.
+  They carry DoH and Oblivious DoH over Android's own TLS from the network part's Kotlin side.
 
-Datapavan Advanced's Watch, tracker blocking (W8, part 3a, docs/decisions/0053-tracker-blocking.md):
+Datapavan Advanced's network part, tracker blocking (W8, part 3a, docs/decisions/0053-tracker-blocking.md):
 
 - data/blocking is Datapavan's own table, under CC0 1.0: the hosts tracker SDKs send to and what each does, as facts
   read in the SDKs' own documentation and source code at pinned commits, in Tweasel's tracker wiki
   (https://trackers.tweasel.org, whose data is under CC0 1.0) and on the vendors' own firewall pages. No text or code
   of theirs is copied, and no blocklist's row (DuckDuckGo's, Disconnect's and EasyPrivacy's lists are not used).
 
-Datapavan Advanced's Watch, the QR code of a WireGuard configuration (W7, part 2):
+Datapavan Advanced's network part, the QR code of a WireGuard configuration (W7, part 2):
 
 - ZXing core 3.5.4 (com.google.zxing:core), the ZXing authors: Apache-2.0, whose text is LICENSE.
   Source: https://github.com/zxing/zxing and Maven Central. It reads a picture's QR code in an isolated
-  process of Watch's own. licences/jvm-components.tsv lists every Java and Kotlin library in the APKs,
-  and the build holds it to each edition's classpath.
+  process of the network part's own (`:qr`). licences/jvm-components.tsv lists every Java and Kotlin library in
+  the APKs, and the build holds it to each edition's classpath.
 
 "WireGuard" is a registered trademark of Jason A. Donenfeld.
 
