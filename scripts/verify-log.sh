@@ -83,8 +83,9 @@ lock_sentence() {
     scroll_to "Watch keeps a record of each connection" >/dev/null || true
     swipe_up
     dump_screen >/dev/null
-    adb shell cat "$DUMP" | grep -o 'text="[^"]*"' | sed 's/^text="//; s/"$//' |
-        grep -E '^(Records of earlier days|This phone has no screen lock|This phone did not let Watch)' | head -1 | grep . || echo none
+    # A text that holds a double quote is written in single quotes from Android 16, and with &quot; before.
+    adb shell cat "$DUMP" | grep -oE "text=(\"[^\"]*\"|'[^']*')" | sed "s/^text=.//; s/.\$//; s/&quot;/\"/g; s/&apos;/'/g" |
+        grep -E '^(Records of earlier days|This phone has no PIN, pattern or password|This phone did not let Watch)' | head -1 | grep . || echo none
 }
 
 start_watch() {
@@ -190,7 +191,8 @@ echo "ok: the log holds the shell's TCP flow and its UDP flow so far, with their
 if [ -n "$english" ]; then
     adb shell wm dismiss-keyguard
     said=$(lock_sentence)
-    case "$said" in "This phone has no screen lock"*) ;; *) fail "with no screen lock, the screen said: $said" ;; esac
+    # The setting's name is Android's, read from the phone (ADR 0054).
+    case "$said" in "This phone has no PIN, pattern or password set under the \""*) ;; *) fail "with no screen lock, the screen said: $said" ;; esac
     echo "ok: with no screen lock, the screen says that earlier days can be opened at any time"
 else
     echo "skipped: the screen checks, as the phone's language is not English"

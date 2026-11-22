@@ -5,15 +5,11 @@
     <string name="status_off">Watch 已关闭。</string>
     <string name="turn_on">开启</string>
     <string name="turn_off">关闭</string>
-    <string name="consent_refused">Android 未允许 Watch 启动。如果另一个 VPN 应用设置为始终开启，请先关闭该设置。</string>
-    <string name="private_dns">专用 DNS</string>
-    <string name="private_dns_strict">您手机的专用 DNS 已设置为 %1$s。Android 会将应用查询的名称加密后发送到那里。这能防止您的网络看到这些名称，但 Watch 也无法读取它们。</string>
     <string name="private_dns_network">您所在网络的 DNS 服务器支持加密，Android 会用它来处理应用查询的名称。这能保护这些名称，但 Watch 无法读取它们。</string>
     <string name="private_dns_still_named">Watch 仍会根据每个应用发送的内容，或根据其所连接网络的运营方，为大多数连接标注名称。</string>
     <string name="log_title">连接日志</string>
     <string name="log_encrypted">Watch 会在这部手机上以加密形式记录每一次连接。</string>
     <string name="log_locked">只有在手机解锁时，才能打开今天之前的记录。</string>
-    <string name="log_no_screen_lock">这部手机未设置屏锁，因此今天之前的记录随时都能打开。设置屏锁后，只有在手机解锁时才能打开这些记录。</string>
     <string name="log_lock_refused">这部手机不允许 Watch 将记录与屏锁绑定，因此今天之前的记录随时都能打开。</string>
     <string name="log_not_kept">Watch 不保留任何连接记录。</string>
     <string name="log_keep">记录保留时长</string>
@@ -39,8 +35,6 @@
     <string name="chain_proxy_closed">%1$s 的代理需要密码，因此这部手机上的其他应用无法使用它。但它们仍能看到这个代理存在。</string>
     <string name="chain_udp">也让 UDP 通过 %1$s 传输</string>
     <string name="chain_udp_note">除非您开启，否则保持关闭。目前没有已知的绕过网络限制工具会检查是哪个应用向其代理发送 UDP：当 %1$s 为 Watch 传输 UDP 时，这部手机上的其他应用也可能通过它发送 UDP，即使设置了密码也是如此。关闭时，在您设置为通过 %1$s 连接的应用中，通话和部分游戏无法使用。网页仍能正常加载。</string>
-    <string name="chain_private_dns">专用 DNS 已设置为 %1$s。这时，Android 会自行将应用查询的名称加密后发送到 %1$s，绕过 Watch 和 %2$s。您的网络无法读取这些名称，但可以看到这部手机在使用 %1$s。而 %1$s 会看到这些名称，以及您在互联网上的真实地址。对于您设置为通过 %2$s 连接的应用，请将专用 DNS 设置为“自动”或“关闭”。</string>
-    <string name="chain_private_dns_where">请在打开的设置中查找“专用 DNS”。在某些手机上，需要再进入一层才能找到。</string>
     <string name="chain_private_dns_open">打开网络设置</string>
     <string name="chain_password">为防止这部手机上的其他应用使用 %1$s 的代理，请在 %1$s 中设置这个用户名和密码。</string>
     <string name="chain_password_where">在 %1$s 中，请到其本地代理的设置里查找，这类设置常被称为 inbound、SOCKS 或本地端口。</string>
@@ -273,7 +267,6 @@
     <string name="import_replace_note">它的应用和开关保持不变。</string>
     <!-- %1$s: the server's address or name; %2$d: its port. -->
     <string name="import_server">服务器：%1$s，端口 %2$d。</string>
-    <string name="import_server_name">Watch 会在隧道启动之前通过您的网络查询这个名称。如果未开启专用 DNS，您的网络可能会看到它。</string>
     <!-- %1$s: the addresses, comma separated. -->
     <string name="import_addresses">这部手机在其中的地址：%1$s。</string>
     <string name="import_no_ipv6">它没有 IPv6 地址。您所选应用的 IPv6 连接会被拒绝，因此它们会使用 IPv4。</string>
@@ -407,8 +400,6 @@
     <string name="dns_now_to">名称现在以加密方式发送到 %1$s。它能看到您的地址和这些名称。</string>
     <!-- %1$s: an operator; %2$s: its countries, by commas. -->
     <string name="dns_party">%1$s（%2$s）</string>
-    <!-- %1$s: the host name of Android's Private DNS provider. -->
-    <string name="dns_private_dns_strict">Android 的专用 DNS 会绕过 Watch，将每个应用查询的名称发送到 %1$s。只有在专用 DNS 关闭或设为自动时，您在这里的选择才会生效。</string>
     <string name="dns_choice">名称的去向：</string>
     <string name="dns_odoh">Oblivious DoH（推荐）</string>
     <string name="dns_odoh_detail">位于不同国家的两个运营方各看到一半：一个看到您的地址，另一个看到名称。</string>
@@ -451,7 +442,6 @@
     <string name="dns_local_names">本地名称（例如您的打印机或路由器）仍会发送到您网络自己的 DNS 服务器。</string>
     <!-- %1$s: the network's own domains, by commas. -->
     <string name="dns_search">这个网络表示这些域是它自己的：%1$s。对于这些域下的名称，Watch 会先通过加密方式查询。只有在互联网上查不到该名称时，它才会向这个网络查询。</string>
-    <string name="dns_strict_limits">严格模式并不涵盖所有情况。Android 会自行检查连接，绕过 Watch。有些应用使用自己的加密 DNS。您排除在 Watch 之外的应用不受涵盖。此外，在 Watch 重启期间，或者在 Android 停止了 Watch 且“始终开启的 VPN”处于关闭状态时，应用会使用网络的 DNS 服务器。</string>
     <string name="dns_notify">名称发送到网络的 DNS 服务器时通知我</string>
     <string name="dns_notify_refused">Android 不允许 Watch 显示通知，因此此项保持关闭。请在 Android 设置中允许 Watch 显示通知，然后再次开启此项。</string>
     <string name="dns_pairs">Oblivious DoH 配对，每对由位于两个不同国家的两个不同运营方组成：</string>
@@ -708,4 +698,18 @@
     <string name="blocking_kept_code">未拦截：在此应用中，此主机也用于登录或分享。</string>
     <string name="blocking_kept_unread">未拦截：此主机可能也用于登录或分享，而 Datapavan 尚未读取此应用的代码。</string>
     <string name="blocking_kept_own">未拦截：此应用将此主机用于自己的工作。</string>
+    <!-- Android's own label: SettingsLib's select_private_dns_configuration_title at android-15.0.0_r36. -->
+    <string name="android_label_private_dns">专用 DNS</string>
+    <!-- Android's own label: SettingsLib's private_dns_mode_off at android-15.0.0_r36. -->
+    <string name="android_label_private_dns_off">关闭</string>
+    <!-- Android's own label: SettingsLib's private_dns_mode_opportunistic at android-15.0.0_r36. -->
+    <string name="android_label_private_dns_automatic">自动</string>
+    <!-- Android's own label: Settings' vpn_menu_lockdown at android-15.0.0_r36. -->
+    <string name="android_label_always_on_vpn">始终开启的 VPN</string>
+    <!-- Android's own label: Settings' unlock_set_unlock_launch_picker_title at android-15.0.0_r36. -->
+    <string name="android_label_screen_lock">屏幕锁定</string>
+    <!-- Android's own label: Settings' unlock_set_unlock_launch_picker_title at android-16.0.0_r4. -->
+    <string name="android_label_screen_lock_api36">屏锁</string>
+    <!-- Android's own label: Settings' unlock_set_unlock_launch_picker_title at android-17.0.0_r1. -->
+    <string name="android_label_screen_lock_api37">屏锁</string>
 </resources>

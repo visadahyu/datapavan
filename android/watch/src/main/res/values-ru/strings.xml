@@ -5,15 +5,11 @@
     <string name="status_off">Watch выключен.</string>
     <string name="turn_on">Включить</string>
     <string name="turn_off">Выключить</string>
-    <string name="consent_refused">Android не дал запустить Watch. Если другое VPN-приложение настроено на постоянную работу, сначала отключите эту настройку.</string>
-    <string name="private_dns">Частный DNS-сервер</string>
-    <string name="private_dns_strict">На вашем телефоне частный DNS-сервер настроен на %1$s. Android отправляет туда в зашифрованном виде имена, которые ищут приложения. Так они скрыты от вашей сети, но Watch не может их прочитать.</string>
     <string name="private_dns_network">DNS-сервер вашей сети поддерживает шифрование, и Android использует его для имён, которые ищут приложения. Так они остаются скрытыми, но Watch не может их прочитать.</string>
     <string name="private_dns_still_named">Watch всё равно определяет большинство подключений по тому, что отправляет каждое приложение, или по тому, кто управляет сетью, куда ведут эти подключения.</string>
     <string name="log_title">Журнал подключений</string>
     <string name="log_encrypted">Watch записывает каждое подключение на этом телефоне в зашифрованном виде.</string>
     <string name="log_locked">Записи за прошлые дни можно открыть, только пока телефон разблокирован.</string>
-    <string name="log_no_screen_lock">На этом телефоне не настроена блокировка экрана, поэтому записи за прошлые дни можно открыть в любое время. С блокировкой экрана их можно открыть, только пока телефон разблокирован.</string>
     <string name="log_lock_refused">Этот телефон не позволил Watch привязать записи к блокировке экрана, поэтому записи за прошлые дни можно открыть в любое время.</string>
     <string name="log_not_kept">Watch не записывает подключения.</string>
     <string name="log_keep">Хранить записи</string>
@@ -42,8 +38,6 @@
     <string name="chain_proxy_closed">Прокси %1$s требует пароль, поэтому другие приложения на этом телефоне не могут им пользоваться. Но они всё равно могут увидеть, что он есть.</string>
     <string name="chain_udp">Также направлять UDP-трафик через %1$s</string>
     <string name="chain_udp_note">Выключено, пока вы это не включите. Неизвестно ни одного инструмента обхода блокировок, который проверял бы, какое приложение отправляет UDP на его прокси: пока %1$s передаёт UDP для Watch, другие приложения на этом телефоне тоже могут отправлять через него UDP, даже при заданном пароле. Пока это выключено, звонки и некоторые игры не работают в приложениях, которые вы направляете через %1$s. Веб-страницы открываются как обычно.</string>
-    <string name="chain_private_dns">Частный DNS-сервер настроен на %1$s. В этом случае Android сам отправляет имена, которые ищут приложения, на %1$s в зашифрованном виде, в обход Watch и %2$s. Ваша сеть не может прочитать эти имена, но она может видеть, что этот телефон использует %1$s. А %1$s видит эти имена и ваш настоящий адрес в интернете. Для приложений, которые вы направляете через %2$s, установите для частного DNS-сервера значение «Автоматически» или «Отключен».</string>
-    <string name="chain_private_dns_where">Найдите «Частный DNS-сервер» в открывшихся настройках. На некоторых телефонах этот пункт находится на один экран глубже.</string>
     <string name="chain_private_dns_open">Открыть настройки сети</string>
     <string name="chain_password">Чтобы другие приложения на этом телефоне не могли пользоваться прокси %1$s, укажите это имя пользователя и пароль в %1$s.</string>
     <string name="chain_password_where">В %1$s ищите их в настройках локального прокси, который часто называется inbound, SOCKS или локальный порт.</string>
@@ -306,7 +300,6 @@
     <string name="import_replace_note">Её приложения и её переключатели останутся как есть.</string>
     <!-- %1$s: the server's address or name; %2$d: its port. -->
     <string name="import_server">Сервер: %1$s, порт %2$d.</string>
-    <string name="import_server_name">Watch ищет это имя через вашу сеть до запуска туннеля. Если частный DNS-сервер не включён, ваша сеть может его увидеть.</string>
     <!-- %1$s: the addresses, comma separated. -->
     <string name="import_addresses">Адрес этого телефона в ней: %1$s.</string>
     <string name="import_no_ipv6">В ней нет адреса IPv6. IPv6-подключения выбранных вами приложений отклоняются, поэтому они используют IPv4.</string>
@@ -451,8 +444,6 @@
     <string name="dns_now_to">Сейчас имена отправляются в зашифрованном виде на %1$s. Он видит ваш адрес и имена.</string>
     <!-- %1$s: an operator; %2$s: its countries, by commas. -->
     <string name="dns_party">%1$s (%2$s)</string>
-    <!-- %1$s: the host name of Android's Private DNS provider. -->
-    <string name="dns_private_dns_strict">Частный DNS-сервер Android отправляет имена всех приложений на %1$s, в обход Watch. Ваш выбор здесь действует, только пока частный DNS-сервер отключён или в режиме «Автоматически».</string>
     <string name="dns_choice">Куда отправляются имена:</string>
     <string name="dns_odoh">Oblivious DoH (рекомендуется)</string>
     <string name="dns_odoh_detail">Два оператора в разных странах видят каждый по половине: один видит ваш адрес, другой — имена.</string>
@@ -495,7 +486,6 @@
     <string name="dns_local_names">Локальные имена, например вашего принтера или роутера, по-прежнему отправляются на собственный DNS-сервер вашей сети.</string>
     <!-- %1$s: the network's own domains, by commas. -->
     <string name="dns_search">Эта сеть сообщает, что эти домены — её собственные: %1$s. Для имени в этих доменах Watch сначала спрашивает зашифрованным способом. Эту сеть он спрашивает, только если интернет не знает это имя.</string>
-    <string name="dns_strict_limits">Строгий режим охватывает не всё. Android сам проверяет подключение, в обход Watch. Некоторые приложения используют собственный зашифрованный DNS. Приложения, которые вы исключили из Watch, не охвачены. А пока Watch перезапускается или если Android его останавливает при выключенной функции «Постоянная VPN», приложения используют DNS-сервер сети.</string>
     <string name="dns_notify">Уведомлять, пока имена отправляются на DNS-сервер сети</string>
     <string name="dns_notify_refused">Android не разрешает Watch показывать уведомления, поэтому этот параметр остаётся выключенным. Разрешите уведомления для Watch в настройках Android, затем снова включите его.</string>
     <string name="dns_pairs">Пары Oblivious DoH, в каждой два разных оператора из разных стран:</string>
@@ -758,4 +748,18 @@
     <string name="blocking_kept_code">Не блокируется: в этом приложении этот хост также обслуживает вход в аккаунт или возможность поделиться.</string>
     <string name="blocking_kept_unread">Не блокируется: этот хост, возможно, также обслуживает вход в аккаунт или возможность поделиться, а Datapavan ещё не прочитал код этого приложения.</string>
     <string name="blocking_kept_own">Не блокируется: это приложение использует этот хост для своей работы.</string>
+    <!-- Android's own label: SettingsLib's select_private_dns_configuration_title at android-15.0.0_r36. -->
+    <string name="android_label_private_dns">Частный DNS-сервер</string>
+    <!-- Android's own label: SettingsLib's private_dns_mode_off at android-15.0.0_r36. -->
+    <string name="android_label_private_dns_off">Отключен</string>
+    <!-- Android's own label: SettingsLib's private_dns_mode_opportunistic at android-15.0.0_r36. -->
+    <string name="android_label_private_dns_automatic">Автоматически</string>
+    <!-- Android's own label: Settings' vpn_menu_lockdown at android-15.0.0_r36. -->
+    <string name="android_label_always_on_vpn">Постоянная VPN</string>
+    <!-- Android's own label: Settings' unlock_set_unlock_launch_picker_title at android-15.0.0_r36. -->
+    <string name="android_label_screen_lock">Блокировка экрана</string>
+    <!-- Android's own label: Settings' unlock_set_unlock_launch_picker_title at android-16.0.0_r4. -->
+    <string name="android_label_screen_lock_api36">Блокировка экрана</string>
+    <!-- Android's own label: Settings' unlock_set_unlock_launch_picker_title at android-17.0.0_r1. -->
+    <string name="android_label_screen_lock_api37">Способ разблокировки экрана</string>
 </resources>

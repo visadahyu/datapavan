@@ -439,7 +439,10 @@ internal fun ImportConfirmation(
                 modifier = Modifier.fillMaxWidth().testTag("tunnel-name"),
             )
             Text(stringResource(R.string.import_server, isolateLtr(d.host), d.port), style = body)
-            if (d.host.any { it.isLetter() } && ':' !in d.host) Text(stringResource(R.string.import_server_name), style = body)
+            if (d.host.any { it.isLetter() } && ':' !in d.host) {
+                Text(stringResource(R.string.import_server_name_quoted, quotedLabel("private_dns")), style = body)
+                AndroidLabelsNote("private_dns")
+            }
             Text(stringResource(R.string.import_addresses, d.addresses.joinToString(", ") { isolateLtr(it) }), style = body)
             if (!d.ipv6) Text(stringResource(R.string.import_no_ipv6), style = body)
             Text(stringResource(R.string.import_dns, d.dns.joinToString(", ") { isolateLtr(it) }), style = body)

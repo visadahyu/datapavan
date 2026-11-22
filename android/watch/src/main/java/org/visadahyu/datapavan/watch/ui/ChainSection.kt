@@ -174,12 +174,17 @@ private fun Answering(
     }
     if (privateDns is PrivateDns.Strict) {
         // What leaves past the tool, to whom, and what the network sees; then where to change it.
+        // The setting and its choices as Android names them on this phone (ADR 0054).
         Text(
-            stringResource(R.string.chain_private_dns, BidiFormatter.getInstance().unicodeWrap(privateDns.host), tool),
+            stringResource(
+                R.string.chain_private_dns_quoted, BidiFormatter.getInstance().unicodeWrap(privateDns.host), tool,
+                quotedLabel("private_dns"), quotedLabel("private_dns_automatic"), quotedLabel("private_dns_off"),
+            ),
             style = MaterialTheme.typography.bodyMedium,
             color = MaterialTheme.colorScheme.error,
         )
-        Text(stringResource(R.string.chain_private_dns_where), style = MaterialTheme.typography.bodyMedium)
+        Text(stringResource(R.string.chain_private_dns_where_quoted, quotedLabel("private_dns")), style = MaterialTheme.typography.bodyMedium)
+        AndroidLabelsNote("private_dns", "private_dns_automatic", "private_dns_off")
         OutlinedButton(onClick = actions.onPrivateDnsSettings) { Text(stringResource(R.string.chain_private_dns_open)) }
     }
     Column(Modifier.selectableGroup()) {

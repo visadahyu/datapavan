@@ -5,15 +5,11 @@
     <string name="status_off">خدمة Watch متوقفة.</string>
     <string name="turn_on">تشغيل</string>
     <string name="turn_off">إيقاف</string>
-    <string name="consent_refused">لم يسمح Android بتشغيل Watch. إذا كان تطبيق VPN آخر مضبوطًا ليبقى قيد التشغيل دائمًا، فأوقف هذا الإعداد أولًا.</string>
-    <string name="private_dns">نظام أسماء النطاقات الخاص</string>
-    <string name="private_dns_strict">تم ضبط «نظام أسماء النطاقات الخاص» في هاتفك على %1$s. يرسل Android إليه الأسماء التي تبحث عنها التطبيقات مشفّرةً. هذا يحميها من شبكتك، لكن Watch لا يستطيع قراءتها.</string>
     <string name="private_dns_network">يدعم خادم DNS في شبكتك التشفير، ويستخدمه Android للأسماء التي تبحث عنها التطبيقات. هذا يحميها، لكن Watch لا يستطيع قراءتها.</string>
     <string name="private_dns_still_named">مع ذلك، يسمّي Watch معظم الاتصالات بحسب ما يرسله كل تطبيق، أو بحسب الجهة التي تدير الشبكة التي تصل إليها.</string>
     <string name="log_title">سجل الاتصالات</string>
     <string name="log_encrypted">يحتفظ Watch بسجل مشفّر لكل اتصال على هذا الهاتف.</string>
     <string name="log_locked">لا يمكن فتح سجلات الأيام السابقة إلا والهاتف غير مقفل.</string>
-    <string name="log_no_screen_lock">لا يوجد قفل شاشة على هذا الهاتف، لذا يمكن فتح سجلات الأيام السابقة في أي وقت. مع قفل الشاشة، لا تُفتح إلا والهاتف غير مقفل.</string>
     <string name="log_lock_refused">لم يسمح هذا الهاتف لـ Watch بربط السجلات بقفل الشاشة، لذا يمكن فتح سجلات الأيام السابقة في أي وقت.</string>
     <string name="log_not_kept">لا يحتفظ Watch بأي سجل للاتصالات.</string>
     <string name="log_keep">الاحتفاظ بالسجلات لمدة</string>
@@ -44,8 +40,6 @@
     <string name="chain_proxy_closed">الخادم الوكيل في %1$s يطلب كلمة مرور، لذا لا تستطيع التطبيقات الأخرى على هذا الهاتف استخدامه. لكنها تستطيع أن ترى أنه موجود.</string>
     <string name="chain_udp">تمرير بيانات UDP أيضًا عبر %1$s</string>
     <string name="chain_udp_note">متوقف ما لم تشغّله. لا يُعرف أن أي أداة لتجاوز الحجب تتحقق من التطبيق الذي يرسل بيانات UDP إلى خادمها الوكيل: فما دام %1$s ينقل بيانات UDP لـ Watch، قد ترسل تطبيقات أخرى على هذا الهاتف بيانات UDP عبره أيضًا، حتى مع وجود كلمة مرور. وما دام هذا الخيار متوقفًا، لا تعمل المكالمات وبعض الألعاب في التطبيقات التي تمرّرها عبر %1$s. لكن صفحات الويب تُفتح كالمعتاد.</string>
-    <string name="chain_private_dns">تم ضبط «نظام أسماء النطاقات الخاص» على %1$s. عندها يرسل Android بنفسه الأسماء التي تبحث عنها التطبيقات إلى %1$s مشفّرةً، دون المرور عبر Watch أو %2$s. لا تستطيع شبكتك قراءة هذه الأسماء، لكنها تستطيع أن ترى أن هذا الهاتف يستخدم %1$s. أما %1$s فيرى الأسماء وعنوانك الحقيقي على الإنترنت. من أجل التطبيقات التي تمرّرها عبر %2$s، اضبط «نظام أسماء النطاقات الخاص» على «تلقائي» أو «غير مفعّل».</string>
-    <string name="chain_private_dns_where">ابحث عن «نظام أسماء النطاقات الخاص» في الإعدادات التي ستُفتح. في بعض الهواتف ستجده بعد خطوة واحدة إضافية.</string>
     <string name="chain_private_dns_open">فتح إعدادات الشبكة</string>
     <string name="chain_password">لمنع التطبيقات الأخرى على هذا الهاتف من استخدام الخادم الوكيل في %1$s، أدخل اسم المستخدم وكلمة المرور هذين في %1$s.</string>
     <string name="chain_password_where">ابحث عنهما في %1$s ضمن إعدادات الخادم الوكيل المحلي، الذي يُسمّى غالبًا inbound أو SOCKS أو المنفذ المحلي.</string>
@@ -328,7 +322,6 @@
     <string name="import_replace_note">تبقى تطبيقاته وخياراته كما هي.</string>
     <!-- %1$s: the server's address or name; %2$d: its port. -->
     <string name="import_server">الخادم: %1$s، المنفذ %2$d.</string>
-    <string name="import_server_name">يبحث Watch عن هذا الاسم عبر شبكتك قبل أن يبدأ النفق. إذا لم يكن «نظام أسماء النطاقات الخاص» مفعّلًا، فقد تراه شبكتك.</string>
     <!-- %1$s: the addresses, comma separated. -->
     <string name="import_addresses">عنوان هذا الهاتف فيه: %1$s.</string>
     <string name="import_no_ipv6">ليس فيه عنوان IPv6. تُرفض اتصالات IPv6 من التطبيقات التي اخترتها، لذا تستخدم IPv4.</string>
@@ -481,8 +474,6 @@
     <string name="dns_now_to">تذهب الأسماء الآن مشفّرةً إلى %1$s. وهو يرى عنوانك والأسماء.</string>
     <!-- %1$s: an operator; %2$s: its countries, by commas. -->
     <string name="dns_party">%1$s (%2$s)</string>
-    <!-- %1$s: the host name of Android's Private DNS provider. -->
-    <string name="dns_private_dns_strict">يرسل «نظام أسماء النطاقات الخاص» في Android الأسماء التي يبحث عنها كل تطبيق إلى %1$s، دون المرور عبر Watch. لا ينطبق اختيارك هنا إلا ما دام «نظام أسماء النطاقات الخاص» غير مفعّل أو مضبوطًا على «تلقائي».</string>
     <string name="dns_choice">أين تذهب الأسماء:</string>
     <string name="dns_odoh">Oblivious DoH (يُنصح به)</string>
     <string name="dns_odoh_detail">جهتان مشغّلتان في بلدين مختلفين، ترى كل منهما نصفًا: إحداهما ترى عنوانك، والأخرى ترى الأسماء.</string>
@@ -525,7 +516,6 @@
     <string name="dns_local_names">الأسماء المحلية، مثل الطابعة أو جهاز التوجيه لديك، تظل تذهب إلى خادم DNS في شبكتك نفسها.</string>
     <!-- %1$s: the network's own domains, by commas. -->
     <string name="dns_search">تقول هذه الشبكة إن هذه النطاقات تخصّها: %1$s. لأي اسم ضمنها، يسأل Watch الطريقة المشفّرة أولًا. ولا يسأل هذه الشبكة إلا عندما لا يعرف الإنترنت هذا الاسم.</string>
-    <string name="dns_strict_limits">الوضع الصارم لا يشمل كل شيء. يتحقق Android من الاتصال بنفسه، دون المرور عبر Watch. بعض التطبيقات تستخدم DNS مشفّرًا خاصًا بها. والتطبيقات التي استثنيتها من Watch غير مشمولة. وأثناء إعادة تشغيل Watch، أو إذا أوقفه Android وكانت «شبكة VPN دائمة التشغيل» غير مفعّلة، تستخدم التطبيقات خادم DNS في الشبكة.</string>
     <string name="dns_notify">إرسال إشعار إليّ ما دامت الأسماء تذهب إلى خادم DNS في الشبكة</string>
     <string name="dns_notify_refused">لا يسمح Android لـ Watch بعرض الإشعارات، لذا يبقى هذا الخيار متوقفًا. اسمح بها لـ Watch في إعدادات Android، ثم شغّل هذا الخيار مرة أخرى.</string>
     <string name="dns_pairs">أزواج Oblivious DoH، كل زوج منها من جهتين مشغّلتين مختلفتين في بلدين مختلفين:</string>
@@ -792,4 +782,18 @@
     <string name="blocking_kept_code">غير محظور: في هذا التطبيق، يخدم هذا الخادم تسجيل الدخول أو المشاركة أيضًا.</string>
     <string name="blocking_kept_unread">غير محظور: قد يخدم هذا الخادم تسجيل الدخول أو المشاركة أيضًا، ولم يقرأ Datapavan بعد الرمز البرمجي لهذا التطبيق.</string>
     <string name="blocking_kept_own">غير محظور: يستخدم هذا التطبيق هذا الخادم لعمله الخاص.</string>
+    <!-- Android's own label: SettingsLib's select_private_dns_configuration_title at android-15.0.0_r36. -->
+    <string name="android_label_private_dns">نظام أسماء النطاقات الخاص</string>
+    <!-- Android's own label: SettingsLib's private_dns_mode_off at android-15.0.0_r36. -->
+    <string name="android_label_private_dns_off">غير مفعّل</string>
+    <!-- Android's own label: SettingsLib's private_dns_mode_opportunistic at android-15.0.0_r36. -->
+    <string name="android_label_private_dns_automatic">تلقائي</string>
+    <!-- Android's own label: Settings' vpn_menu_lockdown at android-15.0.0_r36. -->
+    <string name="android_label_always_on_vpn">شبكة VPN قيد التشغيل دائمًا</string>
+    <!-- Android's own label: Settings' unlock_set_unlock_launch_picker_title at android-15.0.0_r36. -->
+    <string name="android_label_screen_lock">قفل الشاشة</string>
+    <!-- Android's own label: Settings' unlock_set_unlock_launch_picker_title at android-16.0.0_r4. -->
+    <string name="android_label_screen_lock_api36">قفل الشاشة</string>
+    <!-- Android's own label: Settings' unlock_set_unlock_launch_picker_title at android-17.0.0_r1. -->
+    <string name="android_label_screen_lock_api37">قفل الشاشة</string>
 </resources>

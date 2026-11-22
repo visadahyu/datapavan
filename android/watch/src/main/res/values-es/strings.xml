@@ -5,15 +5,11 @@
     <string name="status_off">Watch está desactivado.</string>
     <string name="turn_on">Activar</string>
     <string name="turn_off">Desactivar</string>
-    <string name="consent_refused">Android no dejó que Watch se iniciara. Si otra app de VPN está configurada para estar siempre activa, desactiva primero ese ajuste.</string>
-    <string name="private_dns">DNS privado</string>
-    <string name="private_dns_strict">El DNS privado de tu teléfono está configurado como %1$s. Android envía allí, cifrados, los nombres que buscan las apps. Así quedan protegidos de tu red, pero Watch no puede leerlos.</string>
     <string name="private_dns_network">El servidor DNS de tu red admite cifrado, y Android lo usa para los nombres que buscan las apps. Así quedan protegidos, pero Watch no puede leerlos.</string>
     <string name="private_dns_still_named">Aun así, Watch identifica la mayoría de las conexiones por lo que envía cada app, o por quién gestiona la red a la que llegan.</string>
     <string name="log_title">Registro de conexiones</string>
     <string name="log_encrypted">Watch guarda en este teléfono un registro cifrado de cada conexión.</string>
     <string name="log_locked">Los registros de días anteriores solo se pueden abrir mientras el teléfono está desbloqueado.</string>
-    <string name="log_no_screen_lock">Este teléfono no tiene bloqueo de pantalla, así que los registros de días anteriores se pueden abrir en cualquier momento. Con un bloqueo de pantalla, solo se abren mientras el teléfono está desbloqueado.</string>
     <string name="log_lock_refused">Este teléfono no permitió que Watch vinculara los registros a su bloqueo de pantalla, así que los registros de días anteriores se pueden abrir en cualquier momento.</string>
     <string name="log_not_kept">Watch no guarda ningún registro de las conexiones.</string>
     <string name="log_keep">Conservar los registros durante</string>
@@ -41,8 +37,6 @@
     <string name="chain_proxy_closed">El proxy de %1$s pide contraseña, así que otras apps de este teléfono no pueden usarlo. Aun así, pueden ver que está ahí.</string>
     <string name="chain_udp">Enviar también el tráfico UDP a través de %1$s</string>
     <string name="chain_udp_note">Desactivado, salvo que lo actives. No se conoce ninguna herramienta para eludir bloqueos que compruebe qué app envía tráfico UDP a su proxy: mientras %1$s transporta UDP para Watch, otras apps de este teléfono también pueden enviar UDP a través de ella, incluso con contraseña. Mientras esté desactivado, las llamadas y algunos juegos no funcionan en las apps que envías a través de %1$s. Las páginas web sí cargan.</string>
-    <string name="chain_private_dns">El DNS privado está configurado como %1$s. Entonces el propio Android envía a %1$s, cifrados, los nombres que buscan las apps, sin pasar por Watch ni por %2$s. Tu red no puede leer esos nombres, pero sí puede ver que este teléfono usa %1$s. Y %1$s ve esos nombres y tu dirección real en internet. Para las apps que envías a través de %2$s, configura el DNS privado como «Automático» o «Desactivado».</string>
-    <string name="chain_private_dns_where">Busca «DNS privado» en los ajustes que se abren. En algunos teléfonos está una pantalla más adentro.</string>
     <string name="chain_private_dns_open">Abrir ajustes de red</string>
     <string name="chain_password">Para que otras apps de este teléfono no usen el proxy de %1$s, configura este nombre de usuario y esta contraseña en %1$s.</string>
     <string name="chain_password_where">En %1$s, búscalos en los ajustes de su proxy local, que suele llamarse inbound, SOCKS o puerto local.</string>
@@ -295,7 +289,6 @@
     <string name="import_replace_note">Sus apps y sus interruptores siguen como están.</string>
     <!-- %1$s: the server's address or name; %2$d: its port. -->
     <string name="import_server">Servidor: %1$s, puerto %2$d.</string>
-    <string name="import_server_name">Watch busca este nombre a través de tu red antes de que se inicie el túnel. Si el DNS privado no está activado, tu red puede verlo.</string>
     <!-- %1$s: the addresses, comma separated. -->
     <string name="import_addresses">Dirección de este teléfono en ella: %1$s.</string>
     <string name="import_no_ipv6">No tiene dirección IPv6. Se rechazan las conexiones IPv6 de las apps que elegiste, así que usan IPv4.</string>
@@ -436,8 +429,6 @@
     <string name="dns_now_to">Ahora los nombres van cifrados a %1$s, que ve tu dirección y los nombres.</string>
     <!-- %1$s: an operator; %2$s: its countries, by commas. -->
     <string name="dns_party">%1$s (%2$s)</string>
-    <!-- %1$s: the host name of Android's Private DNS provider. -->
-    <string name="dns_private_dns_strict">El DNS privado de Android envía los nombres de todas las apps a %1$s, sin pasar por Watch. Lo que elijas aquí solo se aplica mientras el DNS privado esté desactivado o en automático.</string>
     <string name="dns_choice">Adónde van los nombres:</string>
     <string name="dns_odoh">Oblivious DoH (recomendado)</string>
     <string name="dns_odoh_detail">Dos operadores de países distintos ven cada uno la mitad: uno ve tu dirección y el otro, los nombres.</string>
@@ -480,7 +471,6 @@
     <string name="dns_local_names">Los nombres locales, como los de tu impresora o tu router, siguen yendo al servidor DNS propio de tu red.</string>
     <!-- %1$s: the network's own domains, by commas. -->
     <string name="dns_search">Esta red dice que estos dominios son suyos: %1$s. Para un nombre dentro de ellos, Watch pregunta primero por la vía cifrada. Solo pregunta a esta red cuando internet no conoce el nombre.</string>
-    <string name="dns_strict_limits">«Estricto» no lo cubre todo. Android comprueba la conexión por su cuenta, sin pasar por Watch. Algunas apps usan su propio DNS cifrado. Las apps que dejaste fuera de Watch no están cubiertas. Y mientras Watch se reinicia, o si Android lo detiene y «VPN siempre activada» está desactivada, las apps usan el servidor DNS de la red.</string>
     <string name="dns_notify">Notificarme mientras los nombres vayan al servidor DNS de la red</string>
     <string name="dns_notify_refused">Android no permite que Watch muestre notificaciones, así que esto sigue desactivado. Permítelas para Watch en los ajustes de Android y luego vuelve a activarlo.</string>
     <string name="dns_pairs">Pares de Oblivious DoH, cada uno de dos operadores y países distintos:</string>
@@ -741,4 +731,18 @@
     <string name="blocking_kept_code">No se bloquea: en esta app, este host también sirve para iniciar sesión o compartir.</string>
     <string name="blocking_kept_unread">No se bloquea: puede que este host también sirva para iniciar sesión o compartir, y Datapavan aún no ha leído el código de esta app.</string>
     <string name="blocking_kept_own">No se bloquea: esta app usa este host para sus propias funciones.</string>
+    <!-- Android's own label: SettingsLib's select_private_dns_configuration_title at android-15.0.0_r36. -->
+    <string name="android_label_private_dns">DNS privado</string>
+    <!-- Android's own label: SettingsLib's private_dns_mode_off at android-15.0.0_r36. -->
+    <string name="android_label_private_dns_off">Desactivado</string>
+    <!-- Android's own label: SettingsLib's private_dns_mode_opportunistic at android-15.0.0_r36. -->
+    <string name="android_label_private_dns_automatic">Automático</string>
+    <!-- Android's own label: Settings' vpn_menu_lockdown at android-15.0.0_r36. -->
+    <string name="android_label_always_on_vpn">VPN siempre activada</string>
+    <!-- Android's own label: Settings' unlock_set_unlock_launch_picker_title at android-15.0.0_r36. -->
+    <string name="android_label_screen_lock">Bloqueo de pantalla</string>
+    <!-- Android's own label: Settings' unlock_set_unlock_launch_picker_title at android-16.0.0_r4. -->
+    <string name="android_label_screen_lock_api36">Bloqueo de pantalla</string>
+    <!-- Android's own label: Settings' unlock_set_unlock_launch_picker_title at android-17.0.0_r1. -->
+    <string name="android_label_screen_lock_api37">Bloqueo de pantalla</string>
 </resources>

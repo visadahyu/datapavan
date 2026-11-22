@@ -8,12 +8,6 @@
     <string name="status_off">Watch is off.</string>
     <string name="turn_on">Turn on</string>
     <string name="turn_off">Turn off</string>
-    <!-- After Android refused the VPN consent, or another app's always-on VPN kept Watch from starting. -->
-    <string name="consent_refused">Android did not let Watch start. If another VPN app is set to stay always on, turn that setting off first.</string>
-    <!-- The heading of a note shown while Watch is on: Android's own name for the setting (Settings, Network and internet). -->
-    <string name="private_dns">Private DNS</string>
-    <!-- Private DNS set to a provider by name, %1$s (for example dns.google). Watch does not ask the user to change it. -->
-    <string name="private_dns_strict">Your phone\'s Private DNS is set to %1$s. Android sends the names that apps look up there, encrypted. This keeps them private from your network, but Watch cannot read them.</string>
     <!-- Private DNS on "Automatic", and the network's DNS server supports encryption, so Android uses it. -->
     <string name="private_dns_network">Your network\'s DNS server supports encryption, and Android uses it for the names that apps look up. This keeps them private, but Watch cannot read them.</string>
     <!-- Shown after either of the two above. -->
@@ -24,8 +18,6 @@
     <string name="log_encrypted">Watch keeps a record of each connection on this phone, in encrypted form.</string>
     <!-- The phone has a screen lock (a PIN, pattern or password), and the log's key works only while the phone is unlocked. -->
     <string name="log_locked">Records of earlier days can be opened only while the phone is unlocked.</string>
-    <!-- The phone has no screen lock. "Screen lock" is Android's own name for the setting (Settings, Security). -->
-    <string name="log_no_screen_lock">This phone has no screen lock, so records of earlier days can be opened at any time. With a screen lock, they open only while the phone is unlocked.</string>
     <!-- The phone did not allow a key that works only while it is unlocked, so the log's key works at any time. -->
     <string name="log_lock_refused">This phone did not let Watch tie the records to its screen lock, so records of earlier days can be opened at any time.</string>
     <!-- Under the heading, instead of the sentences above, when the user chose to keep no records. -->
@@ -71,10 +63,6 @@
     <string name="chain_udp">Send UDP through %1$s too</string>
     <!-- Under the switch above. %1$s: the tool's name. -->
     <string name="chain_udp_note">Off unless you turn it on. No circumvention tool is known to check which app sends UDP to its proxy: while %1$s carries UDP for Watch, other apps on this phone may send UDP through it too, even with a password. While this is off, calls and some games in the apps you send through %1$s do not work. Web pages still load.</string>
-    <!-- Shown when the phone's Private DNS is set to a provider's host name. %1$s: that host name, such as dns.google. %2$s: the tool's name. -->
-    <string name="chain_private_dns">Private DNS is set to %1$s. Android then sends the names that apps look up to %1$s itself, encrypted, past Watch and past %2$s. Your network cannot read those names, but it can see that this phone uses %1$s. And %1$s sees the names and your real address on the internet. For the apps you send through %2$s, set Private DNS to Automatic or Off.</string>
-    <!-- Under it, before a button that opens Android's network settings, which differ between phone makers. -->
-    <string name="chain_private_dns_where">Look for Private DNS in the settings that open. On some phones it is one step further in.</string>
     <!-- The button. -->
     <string name="chain_private_dns_open">Open network settings</string>
     <!-- %1$s: the tool's name. Watch offers a password for the tool's proxy. -->
@@ -323,7 +311,6 @@
     <string name="import_replace_note">Its apps and its switches stay as they are.</string>
     <!-- %1$s: the server's address or name; %2$d: its port. -->
     <string name="import_server">Server: %1$s, port %2$d.</string>
-    <string name="import_server_name">Watch looks up this name through your network before the tunnel starts. If Private DNS is not on, your network may see it.</string>
     <!-- %1$s: the addresses, comma separated. -->
     <string name="import_addresses">This phone\'s address in it: %1$s.</string>
     <string name="import_no_ipv6">It has no IPv6 address. Your chosen apps\' IPv6 connections are refused, so they use IPv4.</string>
@@ -460,8 +447,6 @@
     <string name="dns_now_to">Names now go encrypted to %1$s. It sees your address and the names.</string>
     <!-- %1$s: an operator; %2$s: its countries, by commas. -->
     <string name="dns_party">%1$s (%2$s)</string>
-    <!-- %1$s: the host name of Android's Private DNS provider. -->
-    <string name="dns_private_dns_strict">Android\'s Private DNS sends every app\'s names to %1$s, past Watch. Your choice here applies only while Private DNS is off or on automatic.</string>
     <string name="dns_choice">Where names go:</string>
     <string name="dns_odoh">Oblivious DoH (recommended)</string>
     <string name="dns_odoh_detail">Two operators in different countries each see half: one sees your address, the other sees the names.</string>
@@ -504,7 +489,6 @@
     <string name="dns_local_names">Local names, like your printer or router, still go to your network\'s own resolver.</string>
     <!-- %1$s: the network's own domains, by commas. -->
     <string name="dns_search">This network says these domains are its own: %1$s. For a name under them, Watch asks the encrypted way first. It asks this network only when the internet does not know the name.</string>
-    <string name="dns_strict_limits">Strict does not cover everything. Android checks the connection by itself, past Watch. Some apps use their own encrypted DNS. The apps you left out of Watch are not covered. And while Watch restarts, or if Android stops it and Always-on VPN is off, apps use the network\'s resolver.</string>
     <string name="dns_notify">Notify me while names go to the network\'s resolver</string>
     <string name="dns_notify_refused">Android does not let Watch show notifications, so this stays off. Allow them for Watch in Android\'s settings, then turn this on again.</string>
     <string name="dns_pairs">Oblivious DoH pairs, each of two different operators and countries:</string>
@@ -763,4 +747,23 @@
     <string name="blocking_kept_code">Not blocked: in this app, this host also serves sign-in or sharing.</string>
     <string name="blocking_kept_unread">Not blocked: this host may also serve sign-in or sharing, and Datapavan has not yet read this app\'s code.</string>
     <string name="blocking_kept_own">Not blocked: this app uses this host for its own work.</string>
+         from AOSP's own translation, never translated, for where the phone gives none. scripts/android-labels.py holds
+         them to AOSP; an _apiN string is the text from Android's API level N on. -->
+    <!-- Android's own labels (ADR 0054): AOSP's text at the release most phones run, each copied in every language
+         from AOSP's own translation, never translated, for where the phone gives none. scripts/android-labels.py holds
+         them to AOSP; an _apiN string is the text from Android's API level N on. -->
+    <!-- Android's own label: SettingsLib's select_private_dns_configuration_title at android-15.0.0_r36. -->
+    <string name="android_label_private_dns">Private DNS</string>
+    <!-- Android's own label: SettingsLib's private_dns_mode_off at android-15.0.0_r36. -->
+    <string name="android_label_private_dns_off">Off</string>
+    <!-- Android's own label: SettingsLib's private_dns_mode_opportunistic at android-15.0.0_r36. -->
+    <string name="android_label_private_dns_automatic">Automatic</string>
+    <!-- Android's own label: Settings' vpn_menu_lockdown at android-15.0.0_r36. -->
+    <string name="android_label_always_on_vpn">Always-on VPN</string>
+    <!-- Android's own label: Settings' unlock_set_unlock_launch_picker_title at android-15.0.0_r36. -->
+    <string name="android_label_screen_lock">Screen lock</string>
+    <!-- Android's own label: Settings' unlock_set_unlock_launch_picker_title at android-16.0.0_r4. -->
+    <string name="android_label_screen_lock_api36">Screen lock</string>
+    <!-- Android's own label: Settings' unlock_set_unlock_launch_picker_title at android-17.0.0_r1. -->
+    <string name="android_label_screen_lock_api37">Screen lock</string>
 </resources>

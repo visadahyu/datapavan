@@ -107,7 +107,14 @@ internal fun DnsSection(view: DnsView, privateDns: PrivateDns?, actions: DnsActi
         )
         if (privateDns is PrivateDns.Strict) {
             // Android sends every name past Watch: this note alone, not what Watch would do (review R-m5).
-            Text(stringResource(R.string.dns_private_dns_strict, bidi.unicodeWrap(privateDns.host)), style = MaterialTheme.typography.bodyMedium)
+            Text(
+                stringResource(
+                    R.string.dns_private_dns_strict_quoted, bidi.unicodeWrap(privateDns.host),
+                    quotedLabel("private_dns"), quotedLabel("private_dns_off"), quotedLabel("private_dns_automatic"),
+                ),
+                style = MaterialTheme.typography.bodyMedium,
+            )
+            AndroidLabelsNote("private_dns", "private_dns_off", "private_dns_automatic")
             Text(stringResource(R.string.private_dns_still_named), style = MaterialTheme.typography.bodyMedium)
         } else if (view.running) {
             Now(view, catalogue)
@@ -142,7 +149,9 @@ internal fun DnsSection(view: DnsView, privateDns: PrivateDns?, actions: DnsActi
                 style = MaterialTheme.typography.bodyMedium,
             )
         }
-        Text(stringResource(R.string.dns_strict_limits), style = MaterialTheme.typography.bodyMedium)
+        // Android's own name for its always-on switch (ADR 0054).
+        Text(stringResource(R.string.dns_strict_limits_quoted, quotedLabel("always_on_vpn")), style = MaterialTheme.typography.bodyMedium)
+        AndroidLabelsNote("always_on_vpn")
         Toggle(stringResource(R.string.dns_notify), view.notify, actions.onNotify)
         if (view.notifyRefused) {
             Text(

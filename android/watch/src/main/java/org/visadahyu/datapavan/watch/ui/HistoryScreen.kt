@@ -235,10 +235,12 @@ private fun LockFacts(view: HistoryView) {
         return
     }
     val shut = when {
-        view.lock == ConnectionLog.Lock.NO_KEY_YET -> R.string.history_nothing_yet
-        view.lock == ConnectionLog.Lock.ANY_TIME -> R.string.log_lock_refused
-        !view.screenLock -> R.string.log_no_screen_lock
-        else -> R.string.log_locked
+        view.lock == ConnectionLog.Lock.NO_KEY_YET -> stringResource(R.string.history_nothing_yet)
+        view.lock == ConnectionLog.Lock.ANY_TIME -> stringResource(R.string.log_lock_refused)
+        // Where the screen lock is set, as Android names the setting (ADR 0054).
+        !view.screenLock -> stringResource(R.string.log_no_screen_lock_quoted, quotedLabel("screen_lock"))
+        else -> stringResource(R.string.log_locked)
     }
-    Text(stringResource(shut), style = MaterialTheme.typography.bodyMedium)
+    Text(shut, style = MaterialTheme.typography.bodyMedium)
+    if (view.lock != ConnectionLog.Lock.NO_KEY_YET && view.lock != ConnectionLog.Lock.ANY_TIME && !view.screenLock) AndroidLabelsNote("screen_lock")
 }

@@ -146,10 +146,11 @@ internal fun WatchScreen(
             BlockingSection(blocking, blockingActions)
             if (refused && !running) {
                 Text(
-                    stringResource(R.string.consent_refused),
+                    stringResource(R.string.consent_refused_quoted, quotedLabel("always_on_vpn")),
                     style = MaterialTheme.typography.bodyMedium,
                     color = MaterialTheme.colorScheme.error,
                 )
+                AndroidLabelsNote("always_on_vpn")
             }
             // An app's tunnel wins over the chain's choice: the chain's list shows it so (W7, part 2); an app waiting
             // for a removed configuration is said to wait, never to go through one (fix round, screens review m1).
@@ -181,20 +182,24 @@ internal fun WatchScreen(
 @Composable
 private fun PrivateDnsNote(privateDns: PrivateDns) {
     Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+        // Android's own name for the setting, read from the phone (ADR 0054).
         Text(
-            stringResource(R.string.private_dns),
+            labelAlone("private_dns"),
             style = MaterialTheme.typography.titleSmall,
             modifier = Modifier.semantics { heading() },
         )
         Text(
             when (privateDns) {
                 // The provider's name keeps its own direction inside a right-to-left sentence.
-                is PrivateDns.Strict -> stringResource(R.string.private_dns_strict, BidiFormatter.getInstance().unicodeWrap(privateDns.host))
+                is PrivateDns.Strict -> stringResource(
+                    R.string.private_dns_strict_quoted, BidiFormatter.getInstance().unicodeWrap(privateDns.host), quotedLabel("private_dns"),
+                )
                 else -> stringResource(R.string.private_dns_network)
             },
             style = MaterialTheme.typography.bodyMedium,
         )
         Text(stringResource(R.string.private_dns_still_named), style = MaterialTheme.typography.bodyMedium)
+        AndroidLabelsNote("private_dns")
     }
 }
 
@@ -225,13 +230,16 @@ private fun LogSettings(
             Text(stringResource(R.string.log_not_kept), style = MaterialTheme.typography.bodyMedium)
         } else {
             Text(stringResource(R.string.log_encrypted), style = MaterialTheme.typography.bodyMedium)
-            val shut = when {
-                logLock == ConnectionLog.Lock.ANY_TIME -> R.string.log_lock_refused
-                !screenLock -> R.string.log_no_screen_lock
-                logLock == ConnectionLog.Lock.UNLOCKED_ONLY -> R.string.log_locked
-                else -> null
+            when {
+                logLock == ConnectionLog.Lock.ANY_TIME -> Text(stringResource(R.string.log_lock_refused), style = MaterialTheme.typography.bodyMedium)
+                // Where the screen lock is set, as Android names the setting (ADR 0054).
+                !screenLock -> {
+                    Text(stringResource(R.string.log_no_screen_lock_quoted, quotedLabel("screen_lock")), style = MaterialTheme.typography.bodyMedium)
+                    AndroidLabelsNote("screen_lock")
+                }
+                logLock == ConnectionLog.Lock.UNLOCKED_ONLY -> Text(stringResource(R.string.log_locked), style = MaterialTheme.typography.bodyMedium)
+                else -> Unit
             }
-            shut?.let { Text(stringResource(it), style = MaterialTheme.typography.bodyMedium) }
         }
         Text(stringResource(R.string.log_keep), style = MaterialTheme.typography.bodyMedium)
         Column(Modifier.selectableGroup()) {
