@@ -165,7 +165,7 @@ grow by it. Whether a non-exported receiver works with every launcher is a devic
 counts only while the phone is unlocked (the tile reads `isLocked()` when the panel opens), since Quick Settings can
 be pulled down on a locked phone.
 
-**(d) "Now", inside the app**, reached from the summary, the tile, the network page and each app's page:
+**(d) "Now", inside the app**, reached from the summary, the tile, the Data use tab and each app's page:
 - one row per app that used the network in the window (10 minutes, 1 hour, or since the screen came on), with its
   state, bytes up and down, and its destinations as W3 names them, each with where the name came from; each
   destination shows the name the connection itself sent and, where it differs, the DNS name beside it, in "Now"
@@ -977,7 +977,7 @@ decisions and two approvals of that day).** Each fix has a test or a check that 
   is the first, and the check then reads a real one (nit 8). One app's whys that do not add up still blank the
   view with no word (nit 10): the engine's promise, now held by the model test in every window, is what keeps
   it from happening, and a broken promise should not be drawn half. The flags of decision 4 beside the app wait
-  for the lab run that defines them, and the network page as a way into "Now" for W9 (nit 12). The company of a
+  for the lab run that defines them, and the Data use tab as a way into "Now" for W9 (nit 12). The company of a
   tracker is known only where the owners' table holds the company's own domain: 14 of 260 trackers today.
 - **Runs of the fix round** (2026-11-19, each emulator alone). The gates passed: `scripts/check.sh` rust (the
   engine's unit tests are 390), android, data (with the screen reader's self-test) and lab. The network shard

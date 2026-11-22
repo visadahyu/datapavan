@@ -137,7 +137,7 @@ log in a separate app that the Google Play build could not read.
 - **The network part is a library.** `:network` (`android/network`) is an Android library that only Advanced
   depends on. Its manifest sets no icon, label, theme or backup rules of its own: the application's apply. Its
   screen is not exported; debug builds export it for the emulator checks (`network/src/debug`). The audit opens it
-  from its network page, by class name, only in Advanced (`ui/NetworkEntry.kt`).
+  from its Data use tab, by class name, only in Advanced (`ui/NetworkEntry.kt`).
 - **Advanced's icon is study B:** the shield drawn as one clay outline around DA, on lapis, and the same in one
   colour for themed icons. Basic keeps DA alone.
 - **The network part runs in a process of its own,** `:network`: its screen, its tunnel and its log's expiry. The
@@ -163,8 +163,11 @@ log in a separate app that the Google Play build could not read.
 - **Words.** The About page says which edition this is and what the others are. In the app, the network part has
   no name of its own (the maintainer, 2026-11-22): the subject of a sentence is "Datapavan", the network screen's
   title is "Network", and a sentence that tells the editions apart names the features, as Basic's About does:
-  Advanced adds a log of every app's connections, tracker blocking and encrypted DNS. In documents, "Advanced's
-  network part" names it. The texts are translated and reviewed as ADR 0030 sets out.
+  Advanced adds a log of each app's connections, tracker blocking and encrypted DNS. So that no two screens share
+  the title, the audit's tab of each app's data use is "Data use", as Android's own "Data usage" (the maintainer,
+  2026-11-22: «برگه «مصرف داده» شود», "let the tab be 'Data use'"), and a sentence that sends the user to the
+  network screen names it as the Network screen, reached from that tab. In documents, "Advanced's network part"
+  names it. The texts are translated and reviewed as ADR 0030 sets out.
 - **The parsers of untrusted input run isolated,** in both editions (`audit/ParserService.kt`, process `:parser`):
   other apps' DEX files and ZIP directories, and the key-attestation extension. The audit opens each APK and
   passes it as a read-only file descriptor; the isolated process reads the ZIP directory itself, maps or inflates

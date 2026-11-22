@@ -30,8 +30,9 @@ destinations in a navigation bar at the bottom.
      apps it holds, since the user came here to browse; the Summary does not.
    - **Phone:** the phone's own findings with their screens, the integrity line and the security
      patch.
-   - **Network:** network use, the period, the apps not opened for a long time, and the usage access
-     prompt.
+   - **Data use:** each app's data use, the period, the apps not opened for a long time, and the usage
+     access prompt. (Its name is the maintainer's of 2026-11-22, so that it is not taken for Advanced's Network
+     screen, ADR 0045.)
 
    System back returns to Summary from another destination, then leaves the app. In right-to-left
    languages the bar mirrors.

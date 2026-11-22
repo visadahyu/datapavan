@@ -8,8 +8,8 @@ to the Android settings that limit it.** Who they send to, and blocking, are pla
 
 It comes as editions of one app ([ADR 0045](docs/decisions/0045-three-editions-of-one-app.md)): **Datapavan
 Basic**, the released app, which never has internet access, and **Datapavan Advanced**, whose first release,
-0.2.0, adds the network part. Both are free and share one version line. **Datapavan Enterprise** is the
-edition for organisations (stage 2).
+0.2.0, adds a local VPN that shows where each app connects, with tracker blocking and encrypted DNS. Both are free
+and share one version line. **Datapavan Enterprise** is the edition for organisations (stage 2).
 
 > Status: **pre-alpha.** Milestones M1 (the build skeleton), M2 (the app and permission audit), M3
 > (the code scanner and its data) and M4 (network use per app) are complete. M5, the first release, is
