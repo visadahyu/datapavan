@@ -17,8 +17,16 @@ timeZone = "UTC"
 [markup.goldmark.renderHooks.link]
 useEmbedded = "never"
 
+# llms.txt (llmstxt.org): a plain list of the site's pages for AI assistants. Hugo writes one per language; the
+# build keeps only the root one, which lists the others (scripts/build-site.sh).
+[outputFormats.llms]
+mediaType = "text/plain"
+baseName = "llms"
+isPlainText = true
+notAlternative = true
+
 [outputs]
-home = ["html"]
+home = ["html", "llms"]
 section = ["html", "rss"]
 page = ["html"]
 

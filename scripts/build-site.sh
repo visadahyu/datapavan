@@ -47,9 +47,10 @@ changes = {
 PY
 
 # Hugo also writes a sitemap per language. The one at the root (site/layouts/sitemapindex.xml) lists every page of
-# every language, and English's own would sit under /en/, where a sitemap may not list the root's pages.
+# every language, and English's own would sit under /en/, where a sitemap may not list the root's pages. llms.txt
+# is the same: the root one lists the other languages.
 prune() {
-    rm -f "$1"/*/sitemap.xml
+    rm -f "$1"/*/sitemap.xml "$1"/*/llms.txt
     rmdir "$1/en"
 }
 

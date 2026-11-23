@@ -1,0 +1,33 @@
+{{- /* llms.txt (llmstxt.org) for AI assistants: what Datapavan is, and the site's pages. Only English's, at the root,
+is kept (scripts/build-site.sh). It says nothing the main page and README do not. */ -}}
+{{- $t := index site.Data.text "en" -}}
+# Datapavan
+
+> {{ $t.tagline }} {{ $t.lead }}
+
+Datapavan is a free, open-source privacy app for Android phones, under the Apache License 2.0. It comes as editions of one app: Datapavan Basic, the released app, which never has internet access; Datapavan Advanced, not yet released, which adds a log of every app's connections, tracker blocking and encrypted DNS; and Datapavan Enterprise, for organisations, later. Everything runs on the phone, with no account and no root. Download it from this site or the repository's releases. A copy from anywhere is fine once its signing key matches the fingerprint the main page gives, and the app's "Is this copy genuine?" check tells.
+
+## The site
+
+- [Main page]({{ site.Home.Permalink }}): what Datapavan checks, what it cannot see, what you can do, questions, and the download with its signing fingerprint
+{{- range site.Home.Sections }}{{ if eq .Section "guides" }}
+- [{{ .Title }}]({{ .Permalink }}): how each circumvention tool can run beside Datapavan, read from the tool's own code
+{{- range .Pages }}
+  - [{{ .Title }}]({{ .Permalink }})
+{{- end }}{{ else if eq .Section "news" }}
+- [{{ .Title }}]({{ .Permalink }}): news about apps, phones and data, with where each was reported
+{{- end }}{{ end }}
+{{- range site.Home.RegularPages }}
+- [{{ .Title }}]({{ .Permalink }})
+{{- end }}
+
+## Other languages
+{{ range site.Home.Translations }}
+- [{{ .Language.Label }}]({{ .Permalink }})
+{{- end }}
+
+## Source
+
+- [Repository]({{ site.Params.repo }}): the code, the data and the design decisions (ADRs)
+- [Releases]({{ site.Params.repo }}/releases): signed APKs
+- [Security policy]({{ site.Params.repo }}/blob/main/SECURITY.md)

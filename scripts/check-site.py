@@ -1,8 +1,8 @@
 #!/usr/bin/env python3
 """Checks the built website in docs/site (site/README.md): no script, nothing from another server, about
 200 KB or less on a first load before images, and every link inside the site leads somewhere. For search engines
-(site/README.md, "Search engines"): robots.txt, one sitemap at the root that lists every page and nothing else, the
-IndexNow key file, and on every page one canonical address, matching its og:url, with a title no other page of its
+(site/README.md, "Search engines"): robots.txt, one sitemap at the root that lists every page and nothing else,
+llms.txt's links, the IndexNow key file, and on every page one canonical address, matching its og:url, with a title no other page of its
 language has."""
 import datetime
 import gzip
@@ -110,6 +110,13 @@ def search(pages):
             bad.append(f"{name}: same title as {titles[language, title[1]]}")
         else:
             titles[language, title[1]] = name
+    llms = SITE / "llms.txt"
+    if not llms.exists() or not llms.read_text(encoding="utf-8").startswith("# Datapavan\n"):
+        bad.append("llms.txt is missing or does not start with its title")
+    else:
+        for address in re.findall(r"\]\((https://datapavan\.org/[^)]*)\)", llms.read_text(encoding="utf-8")):
+            if address not in addresses:
+                bad.append(f"llms.txt links {address}, which is no page here")
     sitemap = SITE / "sitemap.xml"
     if not sitemap.exists():
         return bad + ["sitemap.xml is missing"]

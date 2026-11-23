@@ -34,6 +34,9 @@ this: the engines' own consoles report searches and clicks.
 - **Each page's head** (`layouts/baseof.html`): its own title (the main page adds its heading), a description (a
   guide's opening, else the tagline), one canonical address, matching `og:url`, its translations, and a link
   preview with the store icon (`static/images/icon-512.png`, from `scripts/store-images.sh icon`).
+- **`llms.txt`** (`layouts/home.llms.txt`, [llmstxt.org](https://llmstxt.org)): what Datapavan is and every page, in
+  plain text for AI assistants, written from the same data as the pages. No large engine has said it reads the file;
+  it costs nothing to keep. Only the root one is kept, and it links the other languages.
 - **schema.org data** (`layouts/home.html`): the site's name, with the names in other scripts, and the app as a
   SoftwareApplication, as microdata rather than JSON-LD, so that the site keeps no script tag at all.
 - **IndexNow:** the key file `static/<key>.txt`. After a deploy, `scripts/indexnow.py --send` tells Bing, Yandex,
@@ -41,5 +44,6 @@ this: the engines' own consoles report searches and clicks.
 - **The consoles:** Google Search Console holds datapavan.org as a domain property, verified by a TXT record in its
   DNS; Bing Webmaster Tools imports it from there. Both have the sitemap.
 
-`scripts/check-site.py` checks all of it: robots.txt, the sitemap against the pages, the key file, and on every page
+`scripts/check-site.py` checks all of it: robots.txt, the sitemap against the pages, llms.txt's links, the key file,
+and on every page
 one canonical address and a title no other page of its language has.
