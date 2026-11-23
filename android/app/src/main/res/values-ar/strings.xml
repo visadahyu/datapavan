@@ -85,7 +85,7 @@
     <string name="owner_same_group">من صنع مجموعة الشركات نفسها التي ينتمي إليها هذا التطبيق (%1$s): %2$s. يمكن لهذه المجموعة دمج هذه البيانات مع ما تجمعه تطبيقاتها وخدماتها الأخرى.</string>
     <string name="owner_shut_down">أُغلقت الخدمة التي تقف وراء %1$s في %2$s.</string>
     <!-- Network use and apps not opened, from usage access (ADR 0022). -->
-    <string name="usage_access_title">استخدام الشبكة والتطبيقات التي لا تفتحها</string>
+    <string name="usage_access_title">استخدام البيانات والتطبيقات التي لا تفتحها</string>
     <string name="usage_access_body">مع الوصول إلى بيانات الاستخدام، يمكن لتطبيق Datapavan أن يعرض مقدار البيانات التي استخدمها كل تطبيق، والتطبيقات التي لم تفتحها منذ مدة طويلة. والوصول نفسه من شأنه أن يتيح لأي تطبيق معرفة التطبيقات التي فتحتها ومتى فتحتها. لا يقرأ Datapavan إلا الإجماليات وتاريخ آخر استخدام لكل تطبيق، ولا يحتفظ بشيء من ذلك، ولا يمكنه إرساله إلى أي مكان لأنه لا يملك وصولًا إلى الشبكة. كل ما عدا ذلك يعمل من دون هذا الوصول.</string>
     <string name="usage_access_body_advanced">مع الوصول إلى بيانات الاستخدام، يمكن لتطبيق Datapavan أن يعرض مقدار البيانات التي استخدمها كل تطبيق، والتطبيقات التي لم تفتحها منذ مدة طويلة. والوصول نفسه يتيح لأي تطبيق معرفة التطبيقات التي فتحتها ومتى فتحتها. ويقرأ Datapavan Advanced أيضًا، منذ تشغيل الهاتف، أيّ تطبيق كان على الشاشة ومتى، وأيّ التطبيقات شغّلت خدمة في المقدّمة، وأيّها استخدمته بطرق أخرى، كالنقر على إشعاره، ومتى شُغّلت الشاشة أو أُطفئت، ومتى ظهرت شاشة القفل؛ وما إذا كان يُسمح لكل تطبيق بعرض الإشعارات. ومن ذلك يعرف لكل اتصال ما إذا كنت تستخدم تطبيقه. ولا يحتفظ بما يعرفه إلا في موضعين: في الذاكرة لعرض «Now»، وفي سجل الاتصالات إن احتفظت به، بوصفه حالةَ كل قيد، لمدة الأيام التي اخترتها. ولا يرسل شيئًا من ذلك إلى أي مكان. كل ما عدا ذلك يعمل من دون هذا الوصول.</string>
     <string name="usage_access_phone_warning">عند تفعيل هذا الوصول، تعرض بعض الهواتف تحذيرًا قويًا خاصًا بها، وأحيانًا مع عدّ تنازلي. وهي تعرضه لكل تطبيق يطلب الوصول إلى بيانات الاستخدام.</string>
@@ -98,8 +98,8 @@
     <string name="usage_access_step_allow">٢. انقر على «%1$s»، ثم على القائمة (⋮) في أعلى تلك الصفحة. اختر «%2$s»، وهو خيار لا يظهر هناك إلا بعد الخطوة ١، ثم أكِّد اختيارك. بعد ذلك انقر على «%3$s» مرة أخرى.</string>
     <string name="usage_access_app_info">فتح معلومات التطبيق</string>
     <string name="usage_reading">جارٍ قراءة سجلات Android…</string>
-    <string name="usage_missing">يحتاج استخدام الشبكة وآخر فتح للتطبيق إلى الوصول إلى بيانات الاستخدام، ويمكنك السماح به في شاشة «الملخّص».</string>
-    <string name="section_network">استخدام الشبكة</string>
+    <string name="usage_missing">يحتاج استخدام البيانات وآخر فتح للتطبيق إلى الوصول إلى بيانات الاستخدام، ويمكنك السماح به في علامة التبويب «استخدام البيانات».</string>
+    <string name="section_network">استخدام البيانات</string>
     <plurals name="network_period">
         <item quantity="zero">آخر %1$d يوم: من %2$s إلى %3$s</item>
         <item quantity="one">آخر يوم: من %2$s إلى %3$s</item>
@@ -118,7 +118,7 @@
     <string name="network_lag">من عدّاد Android نفسه. بيانات الجوّال تشمل كل شرائح SIM معًا. لا يحتفظ Datapavan بأيٍّ من هذه الأرقام.</string>
     <!-- Below the network list and the apps list. -->
     <string name="other_profiles">التطبيقات الموجودة في ملف شخصي آخر على هذا الهاتف، مثل ملف العمل أو المساحة الخاصة أو المجلد الآمن، غير مشمولة هنا. لا يعرض Android لتطبيق Datapavan إلا الملف الشخصي الذي ثُبِّت فيه.</string>
-    <string name="network_none">لا يوجد استخدام للشبكة في هذه الفترة.</string>
+    <string name="network_none">لا يوجد استخدام للبيانات في هذه الفترة.</string>
     <string name="network_mobile">بيانات الجوّال %1$s: تم استلام %2$s وإرسال %3$s، منها %4$s في الخلفية</string>
     <string name="network_wifi">شبكة Wi-Fi %1$s: تم استلام %2$s وإرسال %3$s، منها %4$s في الخلفية</string>
     <string name="network_mobile_foreground">بيانات الجوّال %1$s: تم استلام %2$s وإرسال %3$s، ولا شيء منها في الخلفية</string>
@@ -534,10 +534,10 @@
 
     <!-- Whether this copy is genuine (ADR 0024). -->
     <string name="own_title">هل هذه النسخة أصلية؟</string>
-    <string name="own_teach">لا يملك Datapavan الأصلي وصولًا إلى الإنترنت ولا يطلبه أبدًا. النسخة التي تطلبه ليست أصلية.</string>
+    <string name="own_teach">لا يملك Datapavan Basic الأصلي وصولًا إلى الإنترنت ولا يطلبه أبدًا. وأي نسخة من Basic تطلبه ليست أصلية.</string>
     <string name="own_teach_advanced">لا يملك Datapavan Basic الأصلي وصولًا إلى الإنترنت أبدًا. لا يستخدم Datapavan Advanced الأصلي الإنترنت إلا لحركة بيانات تطبيقاتك الخاصة وللخوادم التي تختارها. لا يطلب أبدًا الوصول إلى الكاميرا أو الميكروفون أو الموقع الجغرافي أو جهات الاتصال أو الرسائل أو سجل المكالمات. لا يطلب منك أي تطبيق من Datapavan مالًا أبدًا.</string>
     <string name="own_internet_none">لا تملك هذه النسخة وصولًا إلى الإنترنت.</string>
-    <string name="own_internet_present">تطلب هذه النسخة الوصول إلى الإنترنت، لذا فهي ليست Datapavan الأصلي. ألغِ تثبيتها وثبّت Datapavan من قناة تثق بها.</string>
+    <string name="own_internet_present">تطلب هذه النسخة الوصول إلى الإنترنت، لذا فهي ليست Datapavan Basic الأصلي. ألغِ تثبيتها وثبّت Datapavan من قناة تثق بها.</string>
     <string name="own_permissions_none_advanced">لا تطلب هذه النسخة أيًّا منها.</string>
     <string name="own_permissions_present_advanced">تطلب هذه النسخة واحدًا منها على الأقل، لذا فهي ليست Datapavan Advanced الأصلي. ألغِ تثبيتها وثبّت Datapavan من قناة تثق بها.</string>
     <string name="own_permissions_extra">تطلب هذه النسخة إذنًا لا يطلبه Datapavan الأصلي أبدًا، لذا فهي ليست Datapavan الأصلي. ألغِ تثبيتها وثبّت Datapavan من قناة تثق بها.</string>
@@ -554,7 +554,7 @@
     <string name="nav_summary">الملخّص</string>
     <string name="nav_apps">التطبيقات</string>
     <string name="nav_phone">الهاتف</string>
-    <string name="nav_network">الشبكة</string>
+    <string name="nav_network">استخدام البيانات</string>
     <string name="settings_title">الإعدادات</string>
     <string name="settings_appearance">المظهر</string>
     <string name="settings_theme_system">مثل النظام</string>
@@ -586,9 +586,9 @@
     <string name="about_open_website">فتح الموقع الإلكتروني</string>
     <!-- The editions (ADR 0045), in a few calm lines, with no prompt: the one this is, and the others. Datapavan Basic on Google Play is updated by Google Play. -->
     <string name="about_editions_title">الطبعات</string>
-    <string name="about_editions_basic">هذا هو Datapavan Basic، ويوقّعه مطوّره بمفتاح واحد يُحفَظ دون اتصال بالإنترنت. وهو لا يملك وصولًا إلى الإنترنت أبدًا. ويُجري Datapavan Basic الموجود على Google Play الفحوصات نفسها، وهو موقَّع من Google. أما Datapavan Advanced فيضيف Watch، الذي يُظهر إلى أين يتصل كل تطبيق.</string>
-    <string name="about_editions_play">هذا هو Datapavan Basic، من Google Play الذي يُبقيه محدَّثًا. وهو موقَّع من Google. ولا يملك وصولًا إلى الإنترنت أبدًا. أما Datapavan Basic الذي يوقّعه مطوّره بمفتاح واحد يُحفَظ دون اتصال بالإنترنت، وكذلك Datapavan Advanced الذي يضيف Watch، فموجودان على الموقع الإلكتروني.</string>
-    <string name="about_editions_advanced">هذا هو Datapavan Advanced، ويوقّعه مطوّره بمفتاح واحد يُحفَظ دون اتصال بالإنترنت. ولا يستخدم الإنترنت إلا لحركة بيانات تطبيقاتك الخاصة وللخوادم التي تختارها. أما Datapavan Basic فيُجري الفحوصات نفسها دون Watch، ولا يملك وصولًا إلى الإنترنت أبدًا، لذا يمكنه فحص هذا التطبيق من الخارج.</string>
+    <string name="about_editions_basic">هذا هو Datapavan Basic، ويوقّعه مطوّره بمفتاح واحد يُحفَظ دون اتصال بالإنترنت. وهو لا يملك وصولًا إلى الإنترنت أبدًا. ويُجري Datapavan Basic الموجود على Google Play الفحوصات نفسها، وهو موقَّع من Google. أما Datapavan Advanced فيضيف سجلًا لاتصالات كل تطبيق، وحظر أدوات التتبّع، وDNS مشفّرًا.</string>
+    <string name="about_editions_play">هذا هو Datapavan Basic، من Google Play الذي يُبقيه محدَّثًا. وهو موقَّع من Google. ولا يملك وصولًا إلى الإنترنت أبدًا. وعلى الموقع الإلكتروني يوجد Datapavan Basic الذي يوقّعه مطوّره بمفتاح واحد يُحفَظ دون اتصال بالإنترنت، وDatapavan Advanced. ويضيف Advanced سجلًا لاتصالات كل تطبيق، وحظر أدوات التتبّع، وDNS مشفّرًا.</string>
+    <string name="about_editions_advanced">هذا هو Datapavan Advanced، ويوقّعه مطوّره بمفتاح واحد يُحفَظ دون اتصال بالإنترنت. ولا يستخدم الإنترنت إلا لحركة بيانات تطبيقاتك الخاصة وللخوادم التي تختارها. أما Datapavan Basic فيُجري الفحوصات نفسها دون سجل الاتصالات أو حظر أدوات التتبّع أو DNS المشفّر. وهو لا يملك وصولًا إلى الإنترنت أبدًا، لذا يمكنه فحص هذا التطبيق من الخارج.</string>
     <!-- On the overview, about four months after this version's release. %1$s is a date in the user's format. -->
     <string name="version_old">يعود هذا الإصدار من Datapavan إلى %1$s. ربما صدر إصدار أحدث، ولا يستطيع Datapavan التحقق من ذلك نيابةً عنك.</string>
     <string name="version_old_button">من أين تحصل عليه</string>
@@ -666,12 +666,13 @@
     <string name="screenshots_allow">السماح بلقطات الشاشة لمدة دقيقة</string>
     <string name="screenshots_allowed">لقطات الشاشة مسموح بها الآن. ستُمنع مجددًا بعد دقيقة، أو بمجرد أن تغادر التطبيق.</string>
     <string name="screenshots_block">منع لقطات الشاشة الآن</string>
-    <!-- Datapavan Advanced only: the way from the network page to Watch (ui/WatchEntry.kt, ADR 0045). -->
-    <string name="network_entry_body">اعرف إلى أين يتصل كل تطبيق على هاتفك، لحظة بلحظة. يعمل Watch كشبكة VPN على هذا الهاتف. ولا يستخدم الإنترنت إلا لتمرير حركة بيانات كل تطبيق إلى وجهتها، ولا يرسل أي شيء إلى Datapavan.</string>
-    <string name="network_entry_open">فتح Watch</string>
+    <!-- Datapavan Advanced only: the card on the Data use tab that opens the Network screen (ui/NetworkEntry.kt, ADR 0045).
+         Its title is network_entry_title, at the end of this file. -->
+    <string name="network_entry_body">اعرف إلى أين يتصل كل تطبيق على هاتفك، لحظة بلحظة. لهذا الغرض، يعمل Datapavan كشبكة VPN على هذا الهاتف. ولا يستخدم الإنترنت إلا لتمرير حركة بيانات كل تطبيق إلى وجهتها، ولا يرسل أي شيء إلى مطوّره.</string>
+    <string name="network_entry_open">عرض الجهات التي تتصل بها التطبيقات</string>
 
-    <!-- W5, part 3 (ADR 0046): the way into Watch's "Now" from an app's page, Advanced only. -->
-    <!-- Datapavan Advanced, on an app's page: opens Watch's view "Now" for that app. -->
+    <!-- W5, part 3 (ADR 0046): the way into "Now" from an app's page, Advanced only. -->
+    <!-- Datapavan Advanced, on an app's page: opens the view "Now" of the Network screen for that app. -->
     <string name="network_now_open">عرض ما يرسله هذا التطبيق الآن</string>
 
     <!-- W7, part 2 (ADR 0035, release gate): the licence screen. -->
@@ -682,7 +683,7 @@
     <string name="licences_text_licence">ترخيص Apache License 2.0. يُنشر Datapavan بموجبه، وكذلك كثير من أجزائه.</string>
     <!-- %1$s: the name of a native library file, for example libdatapavan.so. -->
     <string name="licences_text_native">نصوص تراخيص حزم Rust الموجودة داخل %1$s.</string>
-    <string name="licences_text_mpl">ترخيص Mozilla Public License 2.0. يُنشر بموجبه GotaTun، وهو الرمز البرمجي لـ WireGuard في Watch.</string>
+    <string name="licences_text_mpl">ترخيص Mozilla Public License 2.0. يستخدمه GotaTun، وهو الرمز البرمجي لـ WireGuard في Datapavan Advanced.</string>
     <string name="licences_text_gotatun">ترخيص BSD 3-Clause License للأجزاء من GotaTun التي جاءت من BoringTun التابع لـ Cloudflare.</string>
     <!-- A file the screen has no description for: its name only. -->
     <string name="licences_text_other">نص ترخيص يحمله التطبيق.</string>
@@ -755,4 +756,48 @@
     <string name="android_label_unused_app_setting">إيقاف نشاط التطبيق مؤقتًا عند عدم استخدامه</string>
     <!-- Android's own label: Settings' app_restricted_settings_lockscreen_title at android-15.0.0_r36. -->
     <string name="android_label_restricted_settings">السماح بالإعدادات المحظورة</string>
+    <!-- Android's own labels (ADR 0054) and the Data use tab's card, moved from strings_untranslated.xml for ADR 0030's
+         round of 2026-11-23. For the translators: each label placeholder is a label of Android's own screens, read from
+         the phone in its own language, or Android's text in Datapavan's language where the phone gives none
+         (android_label_* in strings.xml, which are copied from AOSP, never translated). It is always in the language's
+         quotes, as this file's “…”, and after a noun (the page, the switch, the button) or a verb of naming ("call it",
+         "choose"), so that no word around it depends on its gender, number or case: Russian and German keep it in the
+         nominative, Arabic adds no ال to it, and Persian puts no ezafe on it. One placeholder may hold two labels, the
+         phone's then Datapavan's in brackets, as label_both sets them: put nothing of the sentence's grammar on it.
+         Persian's labels write VPN in Latin letters, as AOSP does, where Datapavan's own sentences write it in Persian
+         ones: keep both as they are. -->
+    <!-- An Android label read in the phone's language (%1$s), then the same label in Datapavan's language (%2$s), where
+         the two differ. Chinese takes full-width brackets. -->
+    <string name="label_both">%1$s (%2$s)</string>
+    <!-- Under a part that names Android's own pages, switches or buttons, where some of those names are Android's own
+         rather than this phone's: Datapavan has not seen this phone's maker show them, or the phone gave none. %1$s:
+         those names, each as label_named gives it, joined by list_separator. -->
+    <string name="android_labels_android">هذه أسماء Android نفسه، وقد يعرض هاتفك أسماء أخرى: %1$s.</string>
+    <!-- One name in the list of android_labels_android, in the language's quotes. -->
+    <string name="label_named">«%1$s»</string>
+    <!-- On the usage access card, after what usage access allows: Datapavan's name for the access is kept, and this line
+         gives the phone's own (the maintainer, 2026-11-22). %1$s: the page's name in this phone's Settings, "Usage access"
+         to Android 15 and "App usage data" from 16; %2$s: the switch on it. -->
+    <string name="usage_access_phone_name">تسمّيه إعدادات هذا الهاتف «%1$s»، مع مفتاح التبديل «%2$s».</string>
+    <!-- The plan's card for wireless debugging. %1$s: the developer options page, %2$s: the wireless debugging switch,
+         as Android names them. -->
+    <string name="plan_wireless_body_quoted">يمكن لجهاز كمبيوتر على الشبكة نفسها التحكم في الهاتف بعد إقرانه. أوقِف مفتاح التبديل «%2$s» في الصفحة «%1$s» إلا إذا كنت تستخدمه الآن.</string>
+    <!-- The plan's card for USB debugging. %1$s: the developer options page, %2$s: the USB debugging switch. -->
+    <string name="plan_usb_body_quoted">يمكن لجهاز كمبيوتر موصول بكابل التحكم في الهاتف بعد أن تسمح له. أوقِف مفتاح التبديل «%2$s» في الصفحة «%1$s» إلا إذا كنت تستخدمه الآن.</string>
+    <!-- The plan's card for a certificate authority the user installed. %1$s: Android's page of encryption and
+         credentials. -->
+    <string name="plan_authority_body_quoted">يمكن لمن يملك مفتاحه قراءة الاتصالات المشفَّرة للتطبيقات التي تثق به. أزِله في الصفحة «%1$s» إلا إذا كان عملك أو مدرستك يحتاج إليه.</string>
+    <!-- Under the button that opens the security settings. %1$s: the page of device admin apps, as Android names it. -->
+    <string name="plan_device_admins_note_quoted">ابحث عن الصفحة «%1$s» في إعدادات الأمان. تضعها بعض الهواتف ضمن إعدادات أمان أخرى.</string>
+    <!-- The plan's card for an app not opened for long that still holds sensitive access, where Android has a switch
+         that takes its permissions back while it is not used (Android 11 and later, and an app the plan offers it for).
+         %1$s: that switch. -->
+    <string name="plan_not_opened_sensitive_body_quoted">لا يزال لديه الوصول الموضَّح أدناه. أزِل ما لا تحتاج إليه، أو فعّل مفتاح التبديل «%1$s».</string>
+    <!-- The same card where Android has no such switch for the app, as on Android 10. -->
+    <string name="plan_not_opened_sensitive_body_plain">لا يزال لديه الوصول الموضَّح أدناه. أزِل ما لا تحتاج إليه.</string>
+    <!-- How to turn off a preinstalled app. %1$s: the button on the app's page, as Android names it. -->
+    <string name="guide_steps_quoted">١. افتح التطبيق في إعدادات النظام.\n٢. انقر على الزر «%1$s»، أو على الزر الذي يوقف التطبيق.\n٣. إذا كان الزر رماديًا، فإن الشركة المصنّعة للهاتف تمنع ذلك. من جهاز كمبيوتر مع تفعيل تصحيح أخطاء USB، يمكنك بدلًا من ذلك إزالة التطبيق لمستخدمك، ويمكن التراجع عن هذا.</string>
+    <!-- Datapavan Advanced only: the title of the card on the Data use tab that opens the Network screen, where each
+         app's connections show (ui/NetworkEntry.kt). -->
+    <string name="network_entry_title">اتصالات كل تطبيق</string>
 </resources>

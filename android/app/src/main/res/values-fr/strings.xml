@@ -85,7 +85,7 @@
     <string name="owner_same_group">Du même groupe d\'entreprises que cette appli (%1$s) : %2$s. Le groupe peut combiner ces données avec ce que collectent ses autres applis et services.</string>
     <string name="owner_shut_down">Le service derrière %1$s a fermé le %2$s.</string>
     <!-- Network use and apps not opened, from usage access (ADR 0022). -->
-    <string name="usage_access_title">Utilisation du réseau et applis que vous n\'ouvrez pas</string>
+    <string name="usage_access_title">Consommation des données et applis que vous n\'ouvrez pas</string>
     <string name="usage_access_body">Avec l\'accès aux données d\'utilisation, Datapavan peut montrer combien de données chaque appli a utilisées, et quelles applis vous n\'avez pas ouvertes depuis longtemps. Le même accès permettrait aussi à une appli de voir quelles applis vous avez ouvertes, et quand. Datapavan ne lit que des totaux et la date de dernière utilisation de chaque appli, n\'en garde rien et ne peut rien envoyer, car il n\'a pas d\'accès au réseau. Tout le reste fonctionne sans cet accès.</string>
     <string name="usage_access_body_advanced">Avec l\'accès aux données d\'utilisation, Datapavan peut montrer combien de données chaque appli a utilisées, et quelles applis vous n\'avez pas ouvertes depuis longtemps. Le même accès permet à une appli de voir quelles applis vous avez ouvertes, et quand. Datapavan Advanced lit aussi, depuis le démarrage du téléphone, quelle appli était à l\'écran et quand, quelles applis faisaient tourner un service de premier plan, lesquelles vous avez utilisées autrement, par exemple en touchant leur notification, et quand l\'écran s\'est allumé ou éteint et quand l\'écran de verrouillage s\'est affiché ; et si chaque appli peut afficher des notifications. Il en déduit, pour chaque connexion, si vous utilisiez son appli. Ce qu\'il en apprend, il ne le garde qu\'à deux endroits : en mémoire pour « Now » et, si vous tenez un journal des connexions, sous la forme de l\'état de chaque entrée, pendant les jours que vous avez choisis. Il n\'en envoie rien nulle part. Tout le reste fonctionne sans cet accès.</string>
     <string name="usage_access_phone_warning">Quand vous activez cet accès, certains téléphones affichent un avertissement sévère qui leur est propre, parfois avec un compte à rebours. Ils l\'affichent pour toutes les applis qui demandent l\'accès aux données d\'utilisation.</string>
@@ -98,8 +98,8 @@
     <string name="usage_access_step_allow">2. Touchez « %1$s », puis le menu (⋮) en haut de la page qui s\'ouvre. Choisissez « %2$s », qui n\'y apparaît qu\'après l\'étape 1, et confirmez. Touchez ensuite à nouveau « %3$s ».</string>
     <string name="usage_access_app_info">Ouvrir les infos sur l\'appli</string>
     <string name="usage_reading">Lecture des relevés d\'Android…</string>
-    <string name="usage_missing">L\'utilisation du réseau et la dernière ouverture nécessitent l\'accès aux données d\'utilisation, que vous pouvez autoriser dans la vue d\'ensemble.</string>
-    <string name="section_network">Utilisation du réseau</string>
+    <string name="usage_missing">La consommation des données et la dernière ouverture nécessitent l\'accès aux données d\'utilisation, que vous pouvez autoriser dans l\'onglet Données.</string>
+    <string name="section_network">Consommation des données</string>
     <plurals name="network_period">
         <item quantity="one">%1$d dernier jour : du %2$s au %3$s</item>
         <item quantity="many">%1$d derniers jours : du %2$s au %3$s</item>
@@ -115,7 +115,7 @@
     <string name="network_lag">D\'après le décompte d\'Android. Les données mobiles regroupent toutes les cartes SIM. Datapavan ne garde aucun de ces chiffres.</string>
     <!-- Below the network list and the apps list. -->
     <string name="other_profiles">Les applis d\'un autre profil sur ce téléphone, comme un profil professionnel, un espace privé ou un dossier sécurisé, ne sont pas incluses ici. Android ne montre à Datapavan que le profil où il est installé.</string>
-    <string name="network_none">Aucune utilisation du réseau sur cette période.</string>
+    <string name="network_none">Aucune consommation de données sur cette période.</string>
     <string name="network_mobile">Données mobiles %1$s : %2$s reçus, %3$s envoyés, dont %4$s en arrière-plan</string>
     <string name="network_wifi">Wi-Fi %1$s : %2$s reçus, %3$s envoyés, dont %4$s en arrière-plan</string>
     <string name="network_mobile_foreground">Données mobiles %1$s : %2$s reçus, %3$s envoyés, rien en arrière-plan</string>
@@ -515,10 +515,10 @@
 
     <!-- Whether this copy is genuine (ADR 0024). -->
     <string name="own_title">Cette copie est-elle authentique ?</string>
-    <string name="own_teach">Datapavan authentique n\'a pas accès à Internet et ne le demande jamais. Une copie qui le demande n\'est pas authentique.</string>
+    <string name="own_teach">Datapavan Basic authentique n\'a pas accès à Internet et ne le demande jamais. Une copie de Basic qui le demande n\'est pas authentique.</string>
     <string name="own_teach_advanced">Datapavan Basic authentique n\'a jamais accès à Internet. Datapavan Advanced authentique ne l\'utilise que pour le trafic de vos propres applis et pour les serveurs que vous choisissez. Il ne demande jamais l\'accès à votre appareil photo, à votre micro, à votre position, à vos contacts, à vos messages ni à votre journal d\'appels. Aucune appli Datapavan ne vous demande jamais d\'argent.</string>
     <string name="own_internet_none">Cette copie n\'a pas accès à Internet.</string>
-    <string name="own_internet_present">Cette copie demande l\'accès à Internet, ce n\'est donc pas Datapavan authentique. Désinstallez-la et installez Datapavan depuis une source de confiance.</string>
+    <string name="own_internet_present">Cette copie demande l\'accès à Internet, ce n\'est donc pas Datapavan Basic authentique. Désinstallez-la et installez Datapavan depuis une source de confiance.</string>
     <string name="own_permissions_none_advanced">Cette copie n\'en demande aucun.</string>
     <string name="own_permissions_present_advanced">Cette copie en demande au moins un, ce n\'est donc pas Datapavan Advanced authentique. Désinstallez-la et installez Datapavan depuis une source de confiance.</string>
     <string name="own_permissions_extra">Cette copie demande une autorisation que Datapavan authentique ne demande jamais, ce n\'est donc pas Datapavan authentique. Désinstallez-la et installez Datapavan depuis une source de confiance.</string>
@@ -535,7 +535,7 @@
     <string name="nav_summary">Résumé</string>
     <string name="nav_apps">Applis</string>
     <string name="nav_phone">Téléphone</string>
-    <string name="nav_network">Réseau</string>
+    <string name="nav_network">Données</string>
     <string name="settings_title">Paramètres</string>
     <string name="settings_appearance">Apparence</string>
     <string name="settings_theme_system">Comme le système</string>
@@ -567,9 +567,9 @@
     <string name="about_open_website">Ouvrir le site web</string>
     <!-- The editions (ADR 0045), in a few calm lines, with no prompt: the one this is, and the others. Datapavan Basic on Google Play is updated by Google Play. -->
     <string name="about_editions_title">Éditions</string>
-    <string name="about_editions_basic">Il s\'agit de Datapavan Basic, signé par son développeur avec une seule clé conservée hors ligne. Il n\'a jamais accès à Internet. Sur Google Play, Datapavan Basic fait les mêmes vérifications, et c\'est Google qui le signe. Datapavan Advanced ajoute Watch, qui montre où se connecte chaque appli.</string>
-    <string name="about_editions_play">Il s\'agit de Datapavan Basic, qui vient de Google Play et que Google Play tient à jour. C\'est Google qui le signe. Il n\'a jamais accès à Internet. Sur le site web se trouvent Datapavan Basic signé par son développeur avec une seule clé conservée hors ligne, et Datapavan Advanced, qui ajoute Watch.</string>
-    <string name="about_editions_advanced">Il s\'agit de Datapavan Advanced, signé par son développeur avec une seule clé conservée hors ligne. Il n\'utilise Internet que pour le trafic de vos propres applis et pour les serveurs que vous choisissez. Datapavan Basic fait les mêmes vérifications sans Watch et n\'a jamais accès à Internet : il peut donc vérifier cette appli de l\'extérieur.</string>
+    <string name="about_editions_basic">Il s\'agit de Datapavan Basic, signé par son développeur avec une seule clé conservée hors ligne. Il n\'a jamais accès à Internet. Sur Google Play, Datapavan Basic fait les mêmes vérifications, et c\'est Google qui le signe. Datapavan Advanced ajoute un journal des connexions de chaque appli, le blocage des traceurs et un DNS chiffré.</string>
+    <string name="about_editions_play">Il s\'agit de Datapavan Basic, qui vient de Google Play et que Google Play tient à jour. C\'est Google qui le signe. Il n\'a jamais accès à Internet. Sur le site web se trouvent Datapavan Basic signé par son développeur avec une seule clé conservée hors ligne, et Datapavan Advanced. Advanced ajoute un journal des connexions de chaque appli, le blocage des traceurs et un DNS chiffré.</string>
+    <string name="about_editions_advanced">Il s\'agit de Datapavan Advanced, signé par son développeur avec une seule clé conservée hors ligne. Il n\'utilise Internet que pour le trafic de vos propres applis et pour les serveurs que vous choisissez. Datapavan Basic fait les mêmes vérifications, sans le journal des connexions, le blocage des traceurs ni le DNS chiffré. Il n\'a jamais accès à Internet : il peut donc vérifier cette appli de l\'extérieur.</string>
     <!-- On the overview, about four months after this version's release. %1$s is a date in the user's format. -->
     <string name="version_old">Cette version de Datapavan date du %1$s. Une version plus récente est peut-être sortie, et Datapavan ne peut pas le vérifier pour vous.</string>
     <string name="version_old_button">Où l\'obtenir</string>
@@ -638,12 +638,13 @@
     <string name="screenshots_allow">Autoriser les captures d\'écran pendant une minute</string>
     <string name="screenshots_allowed">Les captures d\'écran sont autorisées. Elles seront de nouveau bloquées après une minute, ou dès que vous quitterez l\'appli.</string>
     <string name="screenshots_block">Bloquer les captures d\'écran maintenant</string>
-    <!-- Datapavan Advanced only: the way from the network page to Watch (ui/WatchEntry.kt, ADR 0045). -->
-    <string name="network_entry_body">Voyez où se connecte chaque appli de votre téléphone, en temps réel. Watch fonctionne en tant que VPN sur ce téléphone. Il n\'utilise Internet que pour acheminer le trafic de chaque appli, et n\'envoie rien à Datapavan.</string>
-    <string name="network_entry_open">Ouvrir Watch</string>
+    <!-- Datapavan Advanced only: the card on the Data use tab that opens the Network screen (ui/NetworkEntry.kt, ADR 0045).
+         Its title is network_entry_title, at the end of this file. -->
+    <string name="network_entry_body">Voyez où se connecte chaque appli de votre téléphone, en temps réel. Pour cela, Datapavan fonctionne en tant que VPN sur ce téléphone. Il n\'utilise Internet que pour acheminer le trafic de chaque appli, et n\'envoie rien à son développeur.</string>
+    <string name="network_entry_open">Voir où se connectent les applis</string>
 
-    <!-- W5, part 3 (ADR 0046): the way into Watch's "Now" from an app's page, Advanced only. -->
-    <!-- Datapavan Advanced, on an app's page: opens Watch's view "Now" for that app. -->
+    <!-- W5, part 3 (ADR 0046): the way into "Now" from an app's page, Advanced only. -->
+    <!-- Datapavan Advanced, on an app's page: opens the view "Now" of the Network screen for that app. -->
     <string name="network_now_open">Voir ce que cette appli envoie maintenant</string>
 
     <!-- W7, part 2 (ADR 0035, release gate): the licence screen. -->
@@ -654,7 +655,7 @@
     <string name="licences_text_licence">L\'Apache License 2.0. Datapavan est publié sous cette licence, ainsi que beaucoup de ses composants.</string>
     <!-- %1$s: the name of a native library file, for example libdatapavan.so. -->
     <string name="licences_text_native">Les textes des licences des paquets Rust contenus dans %1$s.</string>
-    <string name="licences_text_mpl">La Mozilla Public License 2.0. GotaTun, le code WireGuard de Watch, est publié sous cette licence.</string>
+    <string name="licences_text_mpl">La Mozilla Public License 2.0. GotaTun, le code WireGuard de Datapavan Advanced, utilise cette licence.</string>
     <string name="licences_text_gotatun">La BSD 3-Clause License des composants de GotaTun issus de BoringTun, de Cloudflare.</string>
     <!-- A file the screen has no description for: its name only. -->
     <string name="licences_text_other">Un texte de licence inclus dans l\'appli.</string>
@@ -727,4 +728,49 @@
     <string name="android_label_unused_app_setting">Suspendre l\'activité si inutilisée</string>
     <!-- Android's own label: Settings' app_restricted_settings_lockscreen_title at android-15.0.0_r36. -->
     <string name="android_label_restricted_settings">Autoriser les paramètres restreints</string>
+
+    <!-- Android's own labels (ADR 0054) and the Data use tab's card, moved from strings_untranslated.xml for ADR 0030's
+         round of 2026-11-23. For the translators: each label placeholder is a label of Android's own screens, read from
+         the phone in its own language, or Android's text in Datapavan's language where the phone gives none
+         (android_label_* in strings.xml, which are copied from AOSP, never translated). It is always in the language's
+         quotes, as this file's “…”, and after a noun (the page, the switch, the button) or a verb of naming ("call it",
+         "choose"), so that no word around it depends on its gender, number or case: Russian and German keep it in the
+         nominative, Arabic adds no ال to it, and Persian puts no ezafe on it. One placeholder may hold two labels, the
+         phone's then Datapavan's in brackets, as label_both sets them: put nothing of the sentence's grammar on it.
+         Persian's labels write VPN in Latin letters, as AOSP does, where Datapavan's own sentences write it in Persian
+         ones: keep both as they are. -->
+    <!-- An Android label read in the phone's language (%1$s), then the same label in Datapavan's language (%2$s), where
+         the two differ. Chinese takes full-width brackets. -->
+    <string name="label_both">%1$s (%2$s)</string>
+    <!-- Under a part that names Android's own pages, switches or buttons, where some of those names are Android's own
+         rather than this phone's: Datapavan has not seen this phone's maker show them, or the phone gave none. %1$s:
+         those names, each as label_named gives it, joined by list_separator. -->
+    <string name="android_labels_android">Ce sont les noms qu\'utilise Android lui-même, et votre téléphone peut en afficher d\'autres : %1$s.</string>
+    <!-- One name in the list of android_labels_android, in the language's quotes. -->
+    <string name="label_named">« %1$s »</string>
+    <!-- On the usage access card, after what usage access allows: Datapavan's name for the access is kept, and this line
+         gives the phone's own (the maintainer, 2026-11-22). %1$s: the page's name in this phone's Settings, "Usage access"
+         to Android 15 and "App usage data" from 16; %2$s: the switch on it. -->
+    <string name="usage_access_phone_name">Dans les paramètres de ce téléphone, cet accès s\'appelle « %1$s », avec l\'interrupteur « %2$s ».</string>
+    <!-- The plan's card for wireless debugging. %1$s: the developer options page, %2$s: the wireless debugging switch,
+         as Android names them. -->
+    <string name="plan_wireless_body_quoted">Un ordinateur connecté au même réseau peut contrôler le téléphone une fois qu\'il est associé. Sauf si vous l\'utilisez en ce moment, désactivez l\'interrupteur « %2$s » sur la page « %1$s ».</string>
+    <!-- The plan's card for USB debugging. %1$s: the developer options page, %2$s: the USB debugging switch. -->
+    <string name="plan_usb_body_quoted">Un ordinateur relié par câble peut contrôler le téléphone une fois que vous l\'avez autorisé. Sauf si vous l\'utilisez en ce moment, désactivez l\'interrupteur « %2$s » sur la page « %1$s ».</string>
+    <!-- The plan's card for a certificate authority the user installed. %1$s: Android's page of encryption and
+         credentials. -->
+    <string name="plan_authority_body_quoted">Quiconque détient sa clé peut lire les connexions chiffrées des applis qui lui font confiance. Sauf si votre travail ou votre école en a besoin, supprimez-la sur la page « %1$s ».</string>
+    <!-- Under the button that opens the security settings. %1$s: the page of device admin apps, as Android names it. -->
+    <string name="plan_device_admins_note_quoted">Cherchez la page « %1$s » dans les paramètres de sécurité. Certains téléphones la placent sous d\'autres paramètres de sécurité.</string>
+    <!-- The plan's card for an app not opened for long that still holds sensitive access, where Android has a switch
+         that takes its permissions back while it is not used (Android 11 and later, and an app the plan offers it for).
+         %1$s: that switch. -->
+    <string name="plan_not_opened_sensitive_body_quoted">Elle détient encore les accès ci-dessous. Retirez ce dont vous n\'avez pas besoin, ou activez l\'interrupteur « %1$s ».</string>
+    <!-- The same card where Android has no such switch for the app, as on Android 10. -->
+    <string name="plan_not_opened_sensitive_body_plain">Elle détient encore les accès ci-dessous. Retirez ce dont vous n\'avez pas besoin.</string>
+    <!-- How to turn off a preinstalled app. %1$s: the button on the app's page, as Android names it. -->
+    <string name="guide_steps_quoted">1. Ouvrez l\'appli dans les paramètres du système.\n2. Touchez le bouton « %1$s », ou celui qui désactive l\'appli.\n3. Si le bouton est grisé, c\'est le fabricant du téléphone qui le bloque. Depuis un ordinateur avec le débogage USB, vous pouvez plutôt supprimer l\'appli pour votre utilisateur ; cela peut être annulé.</string>
+    <!-- Datapavan Advanced only: the title of the card on the Data use tab that opens the Network screen, where each
+         app's connections show (ui/NetworkEntry.kt). -->
+    <string name="network_entry_title">Connexions de chaque appli</string>
 </resources>

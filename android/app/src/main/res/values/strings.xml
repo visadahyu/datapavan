@@ -109,7 +109,7 @@
     <string name="usage_access_step_allow">2. Tap “%1$s”, then the menu (⋮) at the top of that page. Choose “%2$s”, which shows there only after step 1, and confirm. Then tap “%3$s” again.</string>
     <string name="usage_access_app_info">Open app info</string>
     <string name="usage_reading">Reading Android\'s records…</string>
-    <string name="usage_missing">Data use and the last opening need usage access, which you can allow on the overview.</string>
+    <string name="usage_missing">Data use and the last opening need usage access, which you can allow on the Data use tab.</string>
     <string name="section_network">Data use</string>
     <!-- %1$d is a number of days; %2$s and %3$s are localised dates. -->
     <plurals name="network_period">

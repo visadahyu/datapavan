@@ -1,17 +1,17 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources xmlns:tools="http://schemas.android.com/tools">
     <string name="network_tagline">Voyez où se connecte chaque appli de votre téléphone.</string>
-    <string name="status_on">Watch est activé.</string>
-    <string name="status_off">Watch est désactivé.</string>
+    <string name="status_on">Le VPN de Datapavan est activé.</string>
+    <string name="status_off">Le VPN de Datapavan est désactivé.</string>
     <string name="turn_on">Activer</string>
     <string name="turn_off">Désactiver</string>
-    <string name="private_dns_network">Le serveur DNS de votre réseau prend en charge le chiffrement, et Android l\'utilise pour les noms que les applis recherchent. Ils restent ainsi privés, mais Watch ne peut pas les lire.</string>
-    <string name="private_dns_still_named">Watch nomme quand même la plupart des connexions d\'après ce que chaque appli envoie, ou d\'après qui gère le réseau qu\'elles atteignent.</string>
+    <string name="private_dns_network">Le serveur DNS de votre réseau prend en charge le chiffrement, et Android l\'utilise pour les noms que les applis recherchent. Ils restent ainsi privés, mais Datapavan ne peut pas les lire.</string>
+    <string name="private_dns_still_named">Datapavan nomme quand même la plupart des connexions d\'après ce que chaque appli envoie, ou d\'après qui gère le réseau qu\'elles atteignent.</string>
     <string name="log_title">Journal des connexions</string>
-    <string name="log_encrypted">Watch tient un journal de chaque connexion sur ce téléphone, sous forme chiffrée.</string>
+    <string name="log_encrypted">Datapavan conserve une entrée pour chaque connexion sur ce téléphone, sous forme chiffrée.</string>
     <string name="log_locked">Le journal des jours précédents ne s\'ouvre que lorsque le téléphone est déverrouillé.</string>
-    <string name="log_lock_refused">Ce téléphone n\'a pas permis à Watch de lier le journal à son verrouillage de l\'écran, donc le journal des jours précédents peut s\'ouvrir à tout moment.</string>
-    <string name="log_not_kept">Watch ne tient aucun journal des connexions.</string>
+    <string name="log_lock_refused">Ce téléphone n\'a pas permis à Datapavan de lier les entrées à son verrouillage de l\'écran, donc les entrées des jours précédents peuvent s\'ouvrir à tout moment.</string>
+    <string name="log_not_kept">Datapavan ne conserve aucune entrée des connexions.</string>
     <string name="log_keep">Conserver le journal</string>
     <string name="log_keep_none">Ne rien conserver</string>
     <plurals name="log_keep_days">
@@ -23,7 +23,7 @@
     <string name="log_deleted">Le journal est supprimé.</string>
     <string name="chain_title">Votre outil de contournement</string>
     <string name="chain_searching">Recherche d\'un outil de contournement en mode proxy…</string>
-    <string name="chain_none">Aucun outil de contournement avec un mode proxy n\'est installé. Android ne fait tourner qu\'un seul VPN à la fois, donc Watch ne peut fonctionner à côté d\'un tel outil que par son mode proxy.</string>
+    <string name="chain_none">Aucun outil de contournement avec un mode proxy n\'est installé. Android ne fait tourner qu\'un seul VPN à la fois, donc le VPN de Datapavan ne peut fonctionner à côté d\'un tel outil que par le mode proxy de l\'outil.</string>
     <string name="chain_not_answering">Outils installés : %1$s. Aucun proxy ne répond. Lancez l\'outil en mode proxy plutôt qu\'en mode VPN, puis cherchez à nouveau.</string>
     <string name="chain_waiting">%1$s ne répond pas. Les applis que vous faites passer par cet outil attendent, et rien de ce qu\'elles envoient ne sort directement.</string>
     <string name="chain_search_again">Chercher à nouveau</string>
@@ -33,10 +33,10 @@
     <string name="chain_some_apps">Seulement les applis que je choisis</string>
     <string name="chain_no_udp">%1$s ne peut pas transporter le trafic UDP. Les appels et certains jeux ne fonctionneront pas dans les applis que vous faites passer par cet outil. Les pages web se chargent quand même.</string>
     <string name="chain_proxy_open">Le proxy de l\'outil %1$s ne demande aucun mot de passe, donc toute appli de ce téléphone peut l\'utiliser. Une telle appli peut découvrir que vous utilisez %1$s et quelle est l\'adresse de son serveur, et faire passer son propre trafic par cet outil.</string>
-    <string name="chain_proxy_no_password">%1$s ne permet pas de définir de mot de passe, donc son proxy reste ouvert tant que l\'outil fonctionne en mode proxy. Watch fait quand même passer par lui les applis que vous choisissez.</string>
+    <string name="chain_proxy_no_password">%1$s ne permet pas de définir de mot de passe, donc son proxy reste ouvert tant que l\'outil fonctionne en mode proxy. Datapavan fait quand même passer par lui les applis que vous choisissez.</string>
     <string name="chain_proxy_closed">Le proxy de l\'outil %1$s demande un mot de passe, donc les autres applis de ce téléphone ne peuvent pas l\'utiliser. Elles peuvent quand même voir qu\'il est là.</string>
     <string name="chain_udp">Faire aussi passer l\'UDP par %1$s</string>
-    <string name="chain_udp_note">Désactivé, sauf si vous l\'activez. On ne connaît aucun outil de contournement qui vérifie quelle appli envoie de l\'UDP à son proxy. Tant que %1$s transporte l\'UDP pour Watch, d\'autres applis de ce téléphone peuvent elles aussi faire passer de l\'UDP par cet outil, même avec un mot de passe. Tant que ce réglage est désactivé, les appels et certains jeux ne fonctionnent pas dans les applis que vous faites passer par %1$s. Les pages web se chargent quand même.</string>
+    <string name="chain_udp_note">Désactivé, sauf si vous l\'activez. On ne connaît aucun outil de contournement qui vérifie quelle appli envoie de l\'UDP à son proxy : tant que %1$s transporte l\'UDP pour Datapavan, d\'autres applis de ce téléphone peuvent elles aussi faire passer de l\'UDP par cet outil, même avec un mot de passe. Tant que ce réglage est désactivé, les appels et certains jeux ne fonctionnent pas dans les applis que vous faites passer par %1$s. Les pages web se chargent quand même.</string>
     <string name="chain_private_dns_open">Ouvrir les paramètres réseau</string>
     <string name="chain_password">Pour empêcher les autres applis de ce téléphone d\'utiliser le proxy de l\'outil %1$s, saisissez ce nom d\'utilisateur et ce mot de passe dans %1$s.</string>
     <string name="chain_password_where">Dans %1$s, cherchez-les dans les réglages de son proxy local, souvent appelé inbound, SOCKS ou port local.</string>
@@ -61,8 +61,8 @@
 
     <!-- Apps and the VPN (ADR 0041) -->
     <string name="left_out_title">Les applis et le VPN</string>
-    <string name="vpn_seen">Android indique à chaque appli qu\'un VPN est activé, et Watch ne peut pas le cacher. Certaines applis le signalent, et certaines refusent de fonctionner tant qu\'un VPN est activé.</string>
-    <string name="left_out_body">Si une appli ne fonctionne pas avec Watch, laissez-la de côté. Elle accède alors à Internet sans passer par Watch : Watch ne voit pas ses connexions et n\'en tient aucun journal, et elle ne passe pas par votre outil de contournement. Android n\'indique plus à cette appli que son réseau est un VPN, mais elle peut encore voir que le téléphone a une interface VPN. Quand Watch est activé, une modification prend un instant, car Watch reconfigure son tunnel.</string>
+    <string name="vpn_seen">Android indique à chaque appli qu\'un VPN est activé, et Datapavan ne peut pas le cacher. Certaines applis le signalent, et certaines refusent de fonctionner tant qu\'un VPN est activé.</string>
+    <string name="left_out_body">Si une appli ne fonctionne pas avec le VPN de Datapavan, laissez-la de côté. Elle accède alors à Internet sans passer par Datapavan : Datapavan ne voit pas ses connexions et ne les enregistre pas, et elle ne passe pas par votre outil de contournement. Android n\'indique plus à cette appli que son réseau est un VPN, mais elle peut encore découvrir que le téléphone a une interface VPN. Quand le VPN est activé, une modification prend un instant, car Datapavan reconfigure son tunnel.</string>
     <string name="left_out_none">Aucune appli n\'est laissée de côté.</string>
     <plurals name="left_out_count">
         <item quantity="one">%d appli est laissée de côté.</item>
@@ -73,13 +73,13 @@
     <string name="left_out_done">Terminé</string>
 
     <!-- W5, part 3 (ADR 0046): "Now" and each app's history. -->
-    <!-- Watch's screen: the way into "Now". -->
+    <!-- the Network screen: the way into "Now". -->
     <string name="now_open">Voir ce que les applis envoient maintenant</string>
 
     <string name="now_title">Now</string>
     <string name="now_intro">Les applis qui ont utilisé le réseau, et si vous les utilisiez à ce moment-là.</string>
-    <string name="now_network_off">Watch est désactivé, il ne voit donc aucun trafic. Activez-le sur l\'écran de Watch.</string>
-    <string name="now_no_access">Watch ne peut pas savoir quelle appli vous utilisez, car il n\'a pas accès aux données d\'utilisation. Les applis s\'affichent sans état.</string>
+    <string name="now_network_off">Le VPN de Datapavan est désactivé, donc Datapavan ne voit aucun trafic. Activez-le sur l\'écran Réseau : dans l\'onglet Données, appuyez sur « Voir où se connectent les applis ».</string>
+    <string name="now_no_access">Datapavan ne peut pas savoir quelle appli vous utilisez, car il n\'a pas accès aux données d\'utilisation. Les applis s\'affichent sans état.</string>
     <string name="now_allow_access">Autoriser l\'accès aux données d\'utilisation</string>
     <string name="now_locked">L\'appli que vous utilisez s\'affiche après le premier déverrouillage depuis le démarrage du téléphone.</string>
     <string name="now_reading">Lecture des applis que vous utilisez.</string>
@@ -121,11 +121,11 @@
     <string name="now_bytes_in_use">%1$s envoyés et %2$s reçus pendant que vous l\'utilisiez.</string>
     <string name="now_bytes_none">%1$s envoyés et %2$s reçus, sans état. %3$s</string>
     <string name="now_bytes_not_yet">%1$s envoyés et %2$s reçus, état pas encore connu.</string>
-    <string name="now_why_no_access">Watch n\'avait pas accès aux données d\'utilisation.</string>
+    <string name="now_why_no_access">Datapavan n\'avait pas accès aux données d\'utilisation.</string>
     <string name="now_why_locked">Le téléphone n\'avait pas encore été déverrouillé depuis son démarrage.</string>
-    <string name="now_why_late">Watch a appris l\'état trop tard.</string>
+    <string name="now_why_late">Datapavan a appris l\'état trop tard.</string>
     <string name="now_why_no_app">Android n\'a pas indiqué de quelle appli il s\'agissait.</string>
-    <string name="now_why_not_told">Watch n\'avait pas encore lu l\'état, ou s\'était arrêté.</string>
+    <string name="now_why_not_told">Datapavan n\'avait pas encore lu l\'état, ou s\'était arrêté.</string>
     <string name="now_is_tool">Votre outil de contournement. Son trafic comprend celui des applis que vous faites passer par cet outil.</string>
     <string name="now_history">Voir son historique</string>
 
@@ -150,19 +150,19 @@
     <!-- What this view cannot see (ADR 0046, decision 5). -->
     <string name="cannot_see_title">Ce que cette vue ne voit pas</string>
     <string name="cannot_see_sender">Le trafic envoyé pour le compte d\'une appli s\'affiche sous l\'appli qui l\'a envoyé. Les messages push passent par les services Google Play, et les téléchargements par le gestionnaire de téléchargement d\'Android. Certaines applis envoient par l\'intermédiaire d\'une autre appli.</string>
-    <string name="cannot_see_content">Watch ne voit pas le contenu. Pour le trafic chiffré, il en voit la taille, l\'endroit et l\'heure, jamais ce qui a été envoyé.</string>
-    <string name="cannot_see_device">Watch ne voit pas ce qu\'une appli fait sur le téléphone, comme lire vos contacts, vos fichiers ou vos photos. Seul l\'envoi est visible.</string>
+    <string name="cannot_see_content">Datapavan ne voit pas le contenu. Pour le trafic chiffré, il en voit la taille, la destination et l\'heure, jamais ce qui a été envoyé.</string>
+    <string name="cannot_see_device">Datapavan ne voit pas ce qu\'une appli fait sur le téléphone, comme lire vos contacts, vos fichiers ou vos photos. Seul l\'envoi est visible.</string>
     <string name="cannot_see_together">Certaines applis ne peuvent pas être distinguées. Les applis qui partagent un numéro sont comptées ensemble. Un clavier compte comme en cours d\'utilisation tant que l\'écran est allumé, et en arrière-plan quand il est éteint. Les fonds d\'écran animés n\'ont pas d\'écran propre. Votre outil de contournement transporte le trafic des applis que vous faites passer par cet outil.</string>
-    <string name="cannot_see_gaps">Watch ne voit rien quand un autre VPN est activé, ni rien qui vienne des applis que vous avez laissées de côté, d\'un profil professionnel, d\'un espace privé ou d\'un autre utilisateur. Il ne voit rien non plus avant le premier déverrouillage après un redémarrage, ni quand le trafic contourne le VPN. Le trafic entre les applis du téléphone ne lui parvient jamais.</string>
-    <string name="cannot_see_sizes">Les tailles sont ce que les applis ont envoyé et reçu en passant par Watch. L\'écran de consommation des données d\'Android compte aussi les en-têtes et les données retransmises, il affiche donc un peu plus.</string>
+    <string name="cannot_see_gaps">Datapavan ne voit aucun trafic quand un autre VPN est activé, ni celui des applis que vous avez laissées de côté, ni celui d\'un profil professionnel, d\'un espace privé ou d\'un autre utilisateur. Il n\'en voit pas non plus avant le premier déverrouillage après un redémarrage, ni quand le trafic contourne le VPN. Le trafic entre les applis du téléphone ne lui parvient jamais.</string>
+    <string name="cannot_see_sizes">Les tailles sont ce que les applis ont envoyé et reçu en passant par Datapavan. L\'écran de consommation des données d\'Android compte aussi les en-têtes et les données retransmises, il affiche donc un peu plus.</string>
     <string name="cannot_see_notification">« Avec sa notification » signifie qu\'Android permet à l\'appli d\'en afficher une, pas que vous l\'avez vue. Une catégorie de notifications que vous avez désactivée compte quand même. Il en va de même d\'un téléphone qui masque certaines notifications et, jusqu\'à Android 12, d\'une appli dont vous avez désactivé les notifications. Un lecteur de musique non autorisé à afficher des notifications compte en arrière-plan pendant que sa notification s\'affiche. À partir d\'Android 12, un service qui s\'exécute moins de 10 secondes compte lui aussi en arrière-plan.</string>
     <string name="cannot_see_in_use">« En cours d\'utilisation » correspond à ce qu\'Android enregistre des écrans de chaque appli. Sur certains téléphones, le fil d\'actualité à gauche de l\'écran d\'accueil peut compter comme en arrière-plan. Une appli autorisée à ouvrir des écrans depuis l\'arrière-plan peut sembler en cours d\'utilisation.</string>
 
     <!-- Each app's history. -->
     <string name="history_title">Historique de %1$s</string>
     <string name="history_back">Retour à Now</string>
-    <string name="history_intro">Chaque connexion que Watch a conservée pour cette appli, de la plus récente à la plus ancienne, jour par jour.</string>
-    <string name="history_keep">Pour conserver un historique, choisissez sur l\'écran de Watch pendant combien de jours conserver les entrées.</string>
+    <string name="history_intro">Chaque connexion que Datapavan a conservée pour cette appli, de la plus récente à la plus ancienne, jour par jour.</string>
+    <string name="history_keep">Pour conserver un historique, ouvrez l\'écran Réseau et choisissez pendant combien de jours conserver les entrées. Dans l\'onglet Données, appuyez sur « Voir où se connectent les applis ».</string>
     <string name="history_nothing_yet">Rien n\'a encore été conservé.</string>
     <string name="history_closed">Ce jour ne peut pas être ouvert pour l\'instant.</string>
     <string name="history_empty">Aucune connexion ce jour-là.</string>
@@ -173,9 +173,9 @@
     <string name="history_state">État : %1$s</string>
     <string name="history_continues">La connexion s\'est poursuivie après cela.</string>
     <plurals name="history_lookups">
-        <item quantity="one">%d nom recherché via Watch.</item>
-        <item quantity="many">%d noms recherchés via Watch.</item>
-        <item quantity="other">%d noms recherchés via Watch.</item>
+        <item quantity="one">%d nom recherché via Datapavan.</item>
+        <item quantity="many">%d noms recherchés via Datapavan.</item>
+        <item quantity="other">%d noms recherchés via Datapavan.</item>
     </plurals>
     <plurals name="history_before_install">
         <item quantity="one">%d entrée sous le numéro de cette appli est plus ancienne que l\'appli. Elle appartient à une appli désinstallée depuis.</item>
@@ -184,9 +184,9 @@
     </plurals>
 
     <!-- W7, part 2 (ADR 0035): the WireGuard import, the configurations, each app's way and their states. -->
-    <!-- The heading of Watch's section for WireGuard configurations from the user's VPN provider. -->
+    <!-- The heading of the Network screen's section for WireGuard configurations from the user's VPN provider. -->
     <string name="tunnels_title">Configurations WireGuard</string>
-    <string name="tunnels_intro">Faites passer les applis que vous choisissez par un serveur WireGuard de votre fournisseur VPN. Watch conserve chaque configuration chiffrée sur ce téléphone.</string>
+    <string name="tunnels_intro">Faites passer les applis que vous choisissez par un serveur WireGuard de votre fournisseur VPN. Datapavan conserve chaque configuration chiffrée sur ce téléphone.</string>
     <!-- Where the key that encrypts the configurations is kept. -->
     <string name="tunnels_key_strongbox">La clé qui les chiffre se trouve dans la puce de sécurité séparée de ce téléphone (StrongBox).</string>
     <string name="tunnels_key_tee">La clé qui les chiffre se trouve dans la zone sécurisée de ce téléphone, à l\'écart d\'Android.</string>
@@ -199,11 +199,11 @@
     <string name="tunnels_add_picture">Choisir une image d\'un code QR</string>
     <!-- Shown under the two QR code buttons. -->
     <string name="tunnels_picture_note">Une image d\'un code QR contient la clé privée de la configuration. Après l\'ajout, vous voudrez peut-être supprimer l\'image.</string>
-    <!-- %d: the most configurations Watch keeps (8). -->
+    <!-- %d: the most configurations Datapavan keeps (8). -->
     <plurals name="tunnels_full">
-        <item quantity="one">Watch conserve au plus %d configuration. Supprimez-la pour en ajouter une autre.</item>
-        <item quantity="many">Watch conserve au plus %d configurations. Supprimez-en une pour en ajouter une autre.</item>
-        <item quantity="other">Watch conserve au plus %d configurations. Supprimez-en une pour en ajouter une autre.</item>
+        <item quantity="one">Datapavan conserve au plus %d configuration. Supprimez-la pour en ajouter une autre.</item>
+        <item quantity="many">Datapavan conserve au plus %d configurations. Supprimez-en une pour en ajouter une autre.</item>
+        <item quantity="other">Datapavan conserve au plus %d configurations. Supprimez-en une pour en ajouter une autre.</item>
     </plurals>
     <string name="tunnels_default">Par défaut</string>
     <string name="tunnels_default_note">La configuration par défaut transporte aussi le ping, et le trafic pour lequel Android ne nomme aucune appli. Elle le fait tant qu\'au moins une appli passe par une configuration. Tant que la configuration par défaut ne peut pas être ouverte, ce ping et ce trafic attendent.</string>
@@ -216,10 +216,10 @@
         <item quantity="other">%d applis attendent une configuration que vous avez supprimée, donc rien de ce qu\'elles envoient ne sort. Donnez-leur un autre chemin dans « Le chemin de chaque appli ».</item>
     </plurals>
     <!-- A change of the configurations that could not be saved; nothing was changed. -->
-    <string name="tunnels_not_saved_storage">Non enregistré. Watch n\'a pas pu écrire dans le stockage de ce téléphone, qui est peut-être plein. Vos configurations restent telles qu\'elles étaient.</string>
+    <string name="tunnels_not_saved_storage">Non enregistré. Datapavan n\'a pas pu écrire dans le stockage de ce téléphone, qui est peut-être plein. Vos configurations restent telles qu\'elles étaient.</string>
     <string name="tunnels_not_saved_keystore">Non enregistré. Le magasin de clés du téléphone n\'a pas répondu. Vos configurations restent telles qu\'elles étaient. Réessayez.</string>
     <string name="tunnels_not_saved_gone">Non enregistré. La configuration à remplacer a été supprimée entre-temps.</string>
-    <string name="tunnels_not_saved_other">Non enregistré. Un problème est survenu dans Watch. Vos configurations restent telles qu\'elles étaient.</string>
+    <string name="tunnels_not_saved_other">Non enregistré. Un problème est survenu dans Datapavan. Vos configurations restent telles qu\'elles étaient.</string>
     <string name="tunnels_make_default">Définir par défaut</string>
     <string name="tunnels_rename">Renommer</string>
     <string name="tunnels_replace">Remplacer</string>
@@ -243,18 +243,18 @@
     <string name="unlock_channel">En attente du déverrouillage</string>
     <string name="unlock_title">Déverrouillez votre téléphone pour rétablir la connexion</string>
     <string name="unlock_text">Certaines applis attendent une configuration VPN qui ne s\'ouvre que lorsque votre téléphone est déverrouillé. Rien de ce qu\'elles envoient ne sort d\'ici là.</string>
-    <!-- The notification while what Watch kept of its configurations can no longer be opened and every app is held.
-         It names no provider and no configuration, and opens Watch's screen. -->
-    <string name="lost_title">Watch met vos applis en attente</string>
-    <string name="lost_text">Watch ne peut plus ouvrir ce qu\'il a conservé de vos configurations VPN. Ouvrez Watch pour choisir ce que font vos applis.</string>
-    <!-- On Watch's screen, in place of the configurations, while they can no longer be opened. -->
+    <!-- The notification while what Datapavan kept of its configurations can no longer be opened and every app is held.
+         It names no provider and no configuration, and opens the Network screen. -->
+    <string name="lost_title">Datapavan met vos applis en attente</string>
+    <string name="lost_text">Datapavan ne peut plus ouvrir ce qu\'il a conservé de vos configurations VPN. Ouvrez Datapavan pour choisir ce que font vos applis.</string>
+    <!-- On the Network screen, in place of the configurations, while they can no longer be opened. -->
     <string name="tunnels_lost_title">Vos configurations ne peuvent plus être ouvertes</string>
-    <string name="tunnels_lost_body">Watch ne peut plus ouvrir ce qu\'il a conservé de vos configurations WireGuard, comme après une réinitialisation du magasin de clés du téléphone. Il ne sait pas quelles applis passaient par elles. Il met donc toutes les applis en attente, et rien ne sort, jusqu\'à ce que vous choisissiez.</string>
+    <string name="tunnels_lost_body">Datapavan ne peut plus ouvrir ce qu\'il a conservé de vos configurations WireGuard, comme après une réinitialisation du magasin de clés du téléphone. Il ne sait pas quelles applis passaient par elles. Il met donc toutes les applis en attente, et rien ne sort, jusqu\'à ce que vous choisissiez.</string>
     <string name="tunnels_lost_again">Ajouter à nouveau les configurations</string>
     <string name="tunnels_lost_let_go">Laisser les applis suivre leur chemin</string>
     <string name="tunnels_lost_note">Dans les deux cas, chaque appli passe ensuite directement, ou par votre outil de contournement si celui-ci la transporte. Ajoutez une configuration pour y faire passer de nouveau une appli.</string>
     <!-- A configuration's state, refreshed while the screen is shown. -->
-    <string name="tunnel_state_off">Inutilisée tant que Watch est désactivé.</string>
+    <string name="tunnel_state_off">Inutilisée tant que le VPN de Datapavan est désactivé.</string>
     <!-- Announced when it changes; the handshake's age below it is not, so that it is not announced every second. -->
     <string name="tunnel_state_connected">Connectée.</string>
     <plurals name="tunnel_handshake_seconds">
@@ -269,11 +269,11 @@
     </plurals>
     <string name="tunnel_state_idle">Pas encore connectée. Elle se connecte quand l\'une de ses applis envoie des données.</string>
     <string name="tunnel_state_not_answering">Le serveur ne répond pas. Ses applis attendent, et rien de ce qu\'elles envoient ne sort directement.</string>
-    <string name="tunnel_state_missing">Pas encore prête dans Watch. Ses applis attendent, et rien de ce qu\'elles envoient ne sort directement.</string>
+    <string name="tunnel_state_missing">Pas encore prête dans Datapavan. Ses applis attendent, et rien de ce qu\'elles envoient ne sort directement.</string>
     <string name="tunnel_state_locked">Elle ne peut pas être ouverte tant que le téléphone est verrouillé. Ses applis attendent que vous le déverrouilliez.</string>
-    <string name="tunnel_state_unavailable">Elle ne peut pas être ouverte pour l\'instant. Ses applis attendent, et Watch réessaie.</string>
+    <string name="tunnel_state_unavailable">Elle ne peut pas être ouverte pour l\'instant. Ses applis attendent, et Datapavan réessaie.</string>
     <string name="tunnel_state_lost">Elle ne peut plus être ouverte sur ce téléphone. Ses applis attendent. Remplacez-la en ajoutant de nouveau son fichier ou son code QR, ce qui conserve ses applis.</string>
-    <string name="tunnel_state_plain_dns">Watch n\'a trouvé l\'adresse du serveur que par un DNS non chiffré. Votre réseau peut voir quel fournisseur vous utilisez.</string>
+    <string name="tunnel_state_plain_dns">Datapavan n\'a trouvé l\'adresse du serveur que par un DNS non chiffré. Votre réseau peut voir quel fournisseur vous utilisez.</string>
 
     <!-- Removing a configuration: what its apps do then. %1$s: its name. -->
     <string name="tunnels_remove_title">Supprimer %1$s ?</string>
@@ -296,7 +296,7 @@
     <string name="import_dns">Les noms que recherchent les applis que vous avez choisies vont à %1$s, en passant par le serveur.</string>
     <string name="import_everything">Tout le trafic des applis que vous avez choisies passe par elle.</string>
     <!-- %1$s: the networks, comma separated. -->
-    <string name="import_narrower">Seules ces destinations passent par elle : %1$s. Watch refuse toute autre destination des applis que vous avez choisies, et n\'y envoie jamais leur trafic directement.</string>
+    <string name="import_narrower">Seules ces destinations passent par elle : %1$s. Datapavan refuse toute autre destination des applis que vous avez choisies, et n\'y envoie jamais leur trafic directement.</string>
     <string name="import_preshared">Elle a une clé prépartagée, un secret supplémentaire qui la protège contre les futurs ordinateurs quantiques.</string>
     <string name="import_no_preshared">Elle n\'a pas de clé prépartagée.</string>
     <!-- %1$d: seconds. -->
@@ -326,7 +326,7 @@
     <!-- %1$s: package names, comma separated. -->
     <string name="import_not_installed">Nommées dans le fichier, mais pas installées : %1$s.</string>
     <string name="import_not_choosable">Nommées dans le fichier, mais pas parmi les applis que vous pouvez choisir ici : %1$s.</string>
-    <string name="import_left_out">Nommées dans le fichier, mais laissées de côté par Watch, donc rien de leur trafic ne passe par Watch : %1$s.</string>
+    <string name="import_left_out">Nommées dans le fichier, mais laissées hors du VPN de Datapavan, donc rien de leur trafic ne passe par Datapavan : %1$s.</string>
     <string name="import_save">Enregistrer</string>
     <string name="import_apps_loading">Chargement de vos applis…</string>
 
@@ -336,45 +336,45 @@
     <string name="refused_not_text">Le fichier n\'est pas du texte, ce n\'est donc pas une configuration WireGuard.</string>
     <string name="refused_unreadable">Cette ligne ne peut pas être lue.</string>
     <string name="refused_outside_section">Un réglage figure avant toute section [Interface] ou [Peer].</string>
-    <string name="refused_unknown_section">Watch ne connaît que les sections [Interface] et [Peer].</string>
+    <string name="refused_unknown_section">Datapavan ne connaît que les sections [Interface] et [Peer].</string>
     <string name="refused_several_interfaces">Le fichier contient une deuxième section [Interface].</string>
-    <string name="refused_several_peers">Le fichier contient une deuxième section [Peer]. Watch prend un seul serveur par configuration.</string>
+    <string name="refused_several_peers">Le fichier contient une deuxième section [Peer]. Datapavan prend un seul serveur par configuration.</string>
     <!-- %1$s: the name of a setting, such as PostUp. -->
-    <string name="refused_unsupported">Watch n\'applique pas le réglage %1$s.</string>
-    <string name="refused_unsupported_unnamed">Watch n\'applique pas ce réglage.</string>
+    <string name="refused_unsupported">Datapavan n\'applique pas le réglage %1$s.</string>
+    <string name="refused_unsupported_unnamed">Datapavan n\'applique pas ce réglage.</string>
     <string name="refused_repeated">Le réglage %1$s est indiqué deux fois.</string>
     <string name="refused_bad_value">La valeur de %1$s ne peut pas être lue.</string>
-    <string name="refused_several_addresses">Le fichier indique deux adresses du même type. Watch prend une adresse IPv4 et une adresse IPv6.</string>
-    <string name="refused_search_domain">Le réglage DNS indique un domaine de recherche, que Watch ne peut pas utiliser.</string>
+    <string name="refused_several_addresses">Le fichier indique deux adresses du même type. Datapavan prend une adresse IPv4 et une adresse IPv6.</string>
+    <string name="refused_search_domain">Le réglage DNS indique un domaine de recherche, que Datapavan ne peut pas utiliser.</string>
     <string name="refused_no_interface">Le fichier ne contient aucune section [Interface].</string>
     <string name="refused_no_peer">Le fichier ne contient aucune section [Peer].</string>
     <string name="refused_no_private_key">Le fichier ne contient pas de clé privée (PrivateKey).</string>
     <string name="refused_no_address">Le fichier n\'indique aucune adresse (Address).</string>
-    <string name="refused_no_dns">Le fichier n\'indique aucun serveur DNS. Les noms que vos applis recherchent n\'auraient aucun endroit privé où aller, donc Watch ne l\'accepte pas.</string>
+    <string name="refused_no_dns">Le fichier n\'indique aucun serveur DNS. Les noms que vos applis recherchent n\'auraient aucun endroit privé où aller, donc Datapavan ne l\'accepte pas.</string>
     <string name="refused_dns_unreachable">Aucun des serveurs DNS du fichier ne peut être atteint en passant par son serveur.</string>
     <string name="refused_no_public_key">Le fichier ne contient pas de clé du serveur (PublicKey).</string>
     <string name="refused_no_endpoint">Le fichier n\'indique pas où se trouve le serveur (Endpoint).</string>
     <string name="refused_no_allowed_ips">Le fichier n\'indique pas quelles destinations passent par le serveur (AllowedIPs).</string>
-    <string name="refused_bad_mtu">Le MTU du fichier n\'est pas une valeur que Watch accepte : de 576 à 1500 octets, et au moins 1280 avec une adresse IPv6.</string>
+    <string name="refused_bad_mtu">Le MTU du fichier n\'est pas une valeur que Datapavan accepte : de 576 à 1500 octets, et au moins 1280 avec une adresse IPv6.</string>
     <string name="refused_both_application_lists">Le fichier indique des applis à inclure et des applis à exclure. Une seule des deux listes est permise.</string>
-    <!-- %d: the most configurations Watch keeps (8). -->
+    <!-- %d: the most configurations Datapavan keeps (8). -->
     <plurals name="refused_too_many">
-        <item quantity="one">Watch conserve au plus %d configuration. Supprimez-la pour en ajouter une autre.</item>
-        <item quantity="many">Watch conserve au plus %d configurations. Supprimez-en une pour en ajouter une autre.</item>
-        <item quantity="other">Watch conserve au plus %d configurations. Supprimez-en une pour en ajouter une autre.</item>
+        <item quantity="one">Datapavan conserve au plus %d configuration. Supprimez-la pour en ajouter une autre.</item>
+        <item quantity="many">Datapavan conserve au plus %d configurations. Supprimez-en une pour en ajouter une autre.</item>
+        <item quantity="other">Datapavan conserve au plus %d configurations. Supprimez-en une pour en ajouter une autre.</item>
     </plurals>
-    <string name="refused_unknown">Watch n\'a pas pu lire cette configuration.</string>
-    <string name="import_unreadable">Watch n\'a pas pu lire ce fichier.</string>
+    <string name="refused_unknown">Datapavan n\'a pas pu lire cette configuration.</string>
+    <string name="import_unreadable">Datapavan n\'a pas pu lire ce fichier.</string>
     <string name="import_too_slow">La lecture de ce fichier a pris trop de temps. S\'il est stocké en ligne, téléchargez-le d\'abord.</string>
 
     <!-- Reading a QR code from a picture. -->
-    <string name="qr_not_a_picture">Ce n\'est pas une image que Watch peut lire.</string>
+    <string name="qr_not_a_picture">Ce n\'est pas une image que Datapavan peut lire.</string>
     <string name="qr_too_large">Cette image est trop grande pour être lue.</string>
     <string name="qr_no_code">Aucun code QR n\'a pu être lu dans cette image. Essayez une photo nette qui contient le code entier.</string>
     <string name="qr_too_long">Ce code QR contient plus de texte qu\'une configuration WireGuard.</string>
     <string name="qr_too_slow">La lecture de cette image a pris trop de temps.</string>
-    <string name="qr_stopped">Le lecteur d\'images de Watch s\'est arrêté sur cette image.</string>
-    <string name="qr_no_camera">Ce téléphone n\'a aucune appli d\'appareil photo capable de prendre la photo pour Watch.</string>
+    <string name="qr_stopped">Le lecteur d\'images de Datapavan s\'est arrêté sur cette image.</string>
+    <string name="qr_no_camera">Ce téléphone n\'a aucune appli d\'appareil photo capable de prendre la photo pour Datapavan.</string>
     <string name="qr_reading">Lecture de l\'image…</string>
     <string name="qr_photo_deleted">La photo a été supprimée.</string>
 
@@ -390,8 +390,8 @@
     <!-- %1$s: a configuration's name. -->
     <string name="route_tunnel">Par %1$s</string>
     <string name="route_waiting">Attend une configuration qui a été supprimée. Rien de ce que l\'appli envoie ne sort.</string>
-    <string name="route_left_out">Laissée de côté : elle accède à Internet sans passer par Watch.</string>
-    <string name="routes_all_apps_note">Tant que votre outil transporte toutes les applis, une appli ne passe directement que si vous la laissez de côté.</string>
+    <string name="route_left_out">Laissée hors du VPN de Datapavan : elle accède à Internet sans passer par Datapavan.</string>
+    <string name="routes_all_apps_note">Tant que votre outil transporte toutes les applis, une appli ne passe directement que si vous la laissez hors du VPN de Datapavan.</string>
     <!-- The chain's choice of apps: an app with a configuration goes through it instead of the tool. %1$s: the configuration's name. -->
     <string name="chain_app_tunnel">Passe plutôt par %1$s. Modifiez ce choix dans « Le chemin de chaque appli ».</string>
     <!-- The chain's choice of apps: an app that waits for a removed configuration. -->
@@ -414,7 +414,7 @@
     <!-- W8, part 1 (ADR 0042), and its fix round: the names of apps that go directly. -->
     <string name="dns_title">Comment les applis qui passent directement recherchent les noms</string>
     <string name="dns_now_unknown">Aucune appli n\'a encore recherché de nom sur ce réseau.</string>
-    <string name="dns_now_none_odoh">Aucune appli n\'a encore recherché de nom sur ce réseau. Watch utilisera Oblivious DoH.</string>
+    <string name="dns_now_none_odoh">Aucune appli n\'a encore recherché de nom sur ce réseau. Datapavan utilisera Oblivious DoH.</string>
     <!-- The first sentence of the "now" line, read out when it changes; the details follow apart. -->
     <string name="dns_now_odoh">Les noms passent maintenant par Oblivious DoH.</string>
     <string name="dns_now_odoh_tool">Les noms passent maintenant par Oblivious DoH, via votre outil.</string>
@@ -453,7 +453,7 @@
     <string name="dns_audited_no">Personne de l\'extérieur n\'a vérifié ces affirmations.</string>
     <string name="dns_audited_firm">Un cabinet comptable a vérifié ces affirmations.</string>
     <string name="dns_policy">Sa politique de confidentialité</string>
-    <string name="dns_choice_fails">S\'il ne répond pas, Watch utilise Oblivious DoH, puis les autres méthodes chiffrées. Activez « Uniquement ce résolveur » pour l\'empêcher.</string>
+    <string name="dns_choice_fails">S\'il ne répond pas, Datapavan utilise Oblivious DoH, puis les autres méthodes chiffrées. Activez « Uniquement ce résolveur » pour l\'empêcher.</string>
     <string name="dns_only">Uniquement ce résolveur</string>
     <string name="dns_only_cost">Si votre résolveur ne répond pas, les applis qui passent directement ne peuvent pas rechercher de noms.</string>
     <string name="dns_custom">Votre propre résolveur</string>
@@ -461,37 +461,37 @@
     <string name="dns_custom_at">Adresse DoH ou serveur DoT</string>
     <string name="dns_custom_addresses">Adresses IP, séparées par des virgules</string>
     <string name="dns_custom_use">Le tester et l\'utiliser</string>
-    <string name="dns_custom_refused">Indiquez une adresse DoH qui commence par https://, ou un nom de serveur DoT, et au moins une adresse IP. Watch ne recherche jamais le nom d\'un résolveur sans chiffrement.</string>
+    <string name="dns_custom_refused">Indiquez une adresse DoH qui commence par https://, ou un nom de serveur DoT, et au moins une adresse IP. Datapavan ne recherche jamais le nom d\'un résolveur sans chiffrement.</string>
     <string name="dns_custom_testing">Demande d\'un nom à votre résolveur…</string>
     <!-- %1$d: milliseconds. -->
-    <string name="dns_custom_answered">Votre résolveur a répondu en %1$d ms. Watch l\'utilise maintenant.</string>
-    <string name="dns_custom_failed">Votre résolveur n\'a pas répondu, donc Watch ne l\'a pas enregistré. Vérifiez son adresse et ses adresses IP.</string>
-    <string name="dns_custom_tampered">La vérification du certificat de votre résolveur a échoué, ou la connexion a été coupée. Watch ne l\'a pas enregistré.</string>
+    <string name="dns_custom_answered">Votre résolveur a répondu en %1$d ms. Datapavan l\'utilise maintenant.</string>
+    <string name="dns_custom_failed">Votre résolveur n\'a pas répondu, donc Datapavan ne l\'a pas enregistré. Vérifiez son adresse et ses adresses IP.</string>
+    <string name="dns_custom_tampered">La vérification du certificat de votre résolveur a échoué, ou la connexion a été coupée. Datapavan ne l\'a pas enregistré.</string>
     <string name="dns_strict">Strict : jamais le résolveur du réseau</string>
     <string name="dns_strict_cost">Si aucune méthode chiffrée ne répond, les applis qui passent directement ne peuvent pas rechercher de noms. Utilisez ce mode là où le réseau est censuré ou surveillé.</string>
     <string name="dns_local_names">Les noms locaux, comme ceux de votre imprimante ou de votre routeur, vont quand même au résolveur propre à votre réseau.</string>
     <!-- %1$s: the network's own domains, by commas. -->
-    <string name="dns_search">Ce réseau indique que ces domaines sont les siens : %1$s. Pour un nom qui en fait partie, Watch demande d\'abord par la méthode chiffrée. Il ne demande à ce réseau que lorsque Internet ne connaît pas le nom.</string>
+    <string name="dns_search">Ce réseau indique que ces domaines sont les siens : %1$s. Pour un nom qui en fait partie, Datapavan demande d\'abord par la méthode chiffrée. Il ne demande à ce réseau que lorsque Internet ne connaît pas le nom.</string>
     <string name="dns_notify">M\'avertir tant que les noms vont au résolveur du réseau</string>
-    <string name="dns_notify_refused">Android ne permet pas à Watch d\'afficher des notifications, donc ce réglage reste désactivé. Autorisez-les pour Watch dans les paramètres d\'Android, puis réactivez ce réglage.</string>
+    <string name="dns_notify_refused">Android ne permet pas à Datapavan d\'afficher des notifications, donc ce réglage reste désactivé. Autorisez-les pour Datapavan Advanced dans les paramètres d\'Android, puis réactivez ce réglage.</string>
     <string name="dns_pairs">Paires Oblivious DoH, chacune formée de deux opérateurs différents et de deux pays différents :</string>
     <!-- %1$s: the relay's operator and its countries; %2$s: the target's. -->
     <string name="dns_pair">Relais : %1$s. Cible : %2$s.</string>
     <string name="dns_pairs_change">Changer de paires</string>
     <string name="dns_pairs_default">Utiliser les paires par défaut</string>
     <string name="dns_pairs_done">Terminé</string>
-    <string name="dns_not_kept">Watch ne conserve aucune liste des noms que les applis recherchent, en dehors du journal des connexions, si vous en conservez un. Il garde les réponses en mémoire jusqu\'à un jour, et les oublie quand le réseau change.</string>
+    <string name="dns_not_kept">Datapavan ne conserve aucune liste des noms que les applis recherchent, en dehors du journal des connexions, si vous en conservez un. Il garde les réponses en mémoire jusqu\'à un jour, et les oublie quand le réseau change.</string>
     <string name="dns_fallback_channel">Noms sans chiffrement</string>
     <string name="dns_fallback_title">Les noms vont au résolveur du réseau</string>
-    <string name="dns_fallback_text">Aucune méthode chiffrée ne répond sur ce réseau, donc les applis qui passent directement utilisent son résolveur pour l\'instant. Ouvrez Watch pour activer le mode strict.</string>
+    <string name="dns_fallback_text">Aucune méthode chiffrée ne répond sur ce réseau, donc les applis qui passent directement utilisent son résolveur pour l\'instant. Ouvrez Datapavan pour activer le mode strict.</string>
 
-    <!-- The one switch for what Watch leaves out of the log and "Now" (W6, W7 and W8): off unless the user turns it
+    <!-- The one switch for what Datapavan leaves out of the log and "Now" (W6, W7 and W8): off unless the user turns it
          on. It replaces "Log where these apps connect" (chain_log_destinations), which spoke of chained apps alone.
          The lines below that name it quote it word for word. -->
     <string name="log_switch">Noter où se connectent les applis passant par votre outil, WireGuard ou un proxy</string>
     <!-- Under the switch above. -->
-    <string name="log_switch_note">Désactivé, sauf si vous l\'activez. Ce réglage concerne les applis que vous faites passer par votre outil de contournement ou par une configuration WireGuard, et les propres serveurs de l\'outil. Il concerne aussi les applis qui se connectent par un proxy, comme un proxy Telegram. Watch compte quand même leurs connexions. Une liste de leurs destinations peut être utilisée contre vous si quelqu\'un fouille votre téléphone.</string>
-    <!-- A button under a row of "Now" or the history that the switch above leaves out: it opens Watch's screen at the
+    <string name="log_switch_note">Désactivé, sauf si vous l\'activez. Ce réglage concerne les applis que vous faites passer par votre outil de contournement ou par une configuration WireGuard, et les propres serveurs de l\'outil. Il concerne aussi les applis qui se connectent par un proxy, comme un proxy Telegram. Datapavan compte quand même leurs connexions. Une liste de leurs destinations peut être utilisée contre vous si quelqu\'un fouille votre téléphone.</string>
+    <!-- A button under a row of "Now" or the history that the switch above leaves out: it opens the Network screen at the
          switch. -->
     <string name="log_switch_open">Aller au réglage</string>
     <!-- "Now": an app sent through the user's tool, the tool's own servers, and an app sent through a WireGuard
@@ -500,7 +500,7 @@
     <string name="now_tool_servers_off">Ses destinations ne sont pas affichées, car « Noter où se connectent les applis passant par votre outil, WireGuard ou un proxy » est désactivé.</string>
     <string name="now_through_tunnel_off">Passe par %1$s. Ses destinations ne sont pas affichées, car « Noter où se connectent les applis passant par votre outil, WireGuard ou un proxy » est désactivé.</string>
     <!-- The same in an app's history, of a connection logged while the switch was off. history_left_out_off: the
-         tool's own servers, or a record written before Watch logged each connection's route. -->
+         tool's own servers, or a record written before Datapavan logged each connection's route. -->
     <string name="history_through_tool_off">Passée par votre outil de contournement. Sa destination n\'a pas été notée dans le journal, car « Noter où se connectent les applis passant par votre outil, WireGuard ou un proxy » était désactivé.</string>
     <string name="history_left_out_off">Sa destination n\'a pas été notée dans le journal, car « Noter où se connectent les applis passant par votre outil, WireGuard ou un proxy » était désactivé.</string>
     <string name="history_through_tunnel_off">Passée par %1$s. Sa destination n\'a pas été notée dans le journal, car « Noter où se connectent les applis passant par votre outil, WireGuard ou un proxy » était désactivé.</string>
@@ -520,13 +520,13 @@
     <string name="proxy_kind_signal">proxy Signal</string>
     <!-- A proxy the app's own bytes named and the proxy's reply confirmed: %1$s is its kind (above), %2$s where it is,
          as a name or an address with its port, %3$s the destination the app asked it for. "Read from the connection"
-         says how Watch knows. -->
+         says how Datapavan knows. -->
     <string name="proxy_asked">L\'appli a demandé %3$s au %1$s situé sur %2$s. Lu dans la connexion.</string>
     <!-- As above, where no destination asked for was read. -->
     <string name="proxy_declared">Par le %1$s situé sur %2$s. Lu dans la connexion.</string>
-    <!-- A messenger's proxy that Watch infers: %1$s its kind, %2$s where it is. -->
-    <string name="proxy_inferred">Par un %1$s situé sur %2$s. Déduit de la destination et de la forme de la connexion. Watch ne peut pas voir où la connexion va ensuite : cette partie est chiffrée.</string>
-    <!-- How Watch knows, on its own line where the sentence above is not shown (the switch off). -->
+    <!-- A messenger's proxy that Datapavan infers: %1$s its kind, %2$s where it is. -->
+    <string name="proxy_inferred">Par un %1$s situé sur %2$s. Déduit de la destination et de la forme de la connexion. Datapavan ne peut pas voir où la connexion va ensuite : cette partie est chiffrée.</string>
+    <!-- How Datapavan knows, on its own line where the sentence above is not shown (the switch off). -->
     <string name="proxy_how_read">Lu dans la connexion.</string>
     <string name="proxy_how_inferred">Déduit de la destination et de la forme de la connexion.</string>
     <!-- A plain HTTP request written in the form a proxy takes, which a web server takes too: the row names the server
@@ -534,25 +534,25 @@
     <string name="proxy_request_asked">L\'appli a envoyé à ce serveur une requête écrite pour un proxy HTTP, qui demandait %1$s. Lu dans la connexion.</string>
     <string name="now_proxy_request_hidden">L\'appli a envoyé à ce serveur une requête écrite pour un proxy HTTP. Ce qu\'elle demandait n\'est pas affiché, car « Noter où se connectent les applis passant par votre outil, WireGuard ou un proxy » est désactivé.</string>
     <string name="history_proxy_request_hidden">L\'appli a envoyé à ce serveur une requête écrite pour un proxy HTTP. Ce qu\'elle demandait n\'a pas été noté dans le journal, car « Noter où se connectent les applis passant par votre outil, WireGuard ou un proxy » était désactivé.</string>
-    <string name="proxy_request_password">La requête contenait un mot de passe de proxy, non chiffré. Watch ne l\'a pas conservé.</string>
+    <string name="proxy_request_password">La requête contenait un mot de passe de proxy, non chiffré. Datapavan ne l\'a pas conservé.</string>
     <!-- Where a proxy is, by its address alone: who runs it is not known. %1$s is the organisation whose network holds
          the address. -->
     <string name="proxy_network">Une adresse dans le réseau appartenant à %1$s. On ne sait pas qui gère ce proxy.</string>
     <!-- As above, and the network is not the app maker's own: %2$s is the app's maker, such as Telegram. -->
     <string name="proxy_network_not_maker">Une adresse dans le réseau appartenant à %1$s, et non à %2$s. On ne sait pas qui gère ce proxy.</string>
-    <string name="proxy_network_unknown">Watch ne peut pas nommer le réseau de cette adresse. On ne sait pas qui gère ce proxy.</string>
-    <!-- Where Watch cannot name the network, or does not show the address: %1$s is the app's maker, such as Telegram. -->
+    <string name="proxy_network_unknown">Datapavan ne peut pas nommer le réseau de cette adresse. On ne sait pas qui gère ce proxy.</string>
+    <!-- Where Datapavan cannot name the network, or does not show the address: %1$s is the app's maker, such as Telegram. -->
     <string name="proxy_not_maker">L\'adresse n\'est pas dans le réseau appartenant à %1$s.</string>
     <string name="proxy_local">Sur votre réseau local. On ne sait pas qui gère ce proxy.</string>
     <!-- The proxy set in Android's settings, which apps that follow those settings all use. -->
     <string name="proxy_setting">C\'est le proxy défini dans les paramètres d\'Android, que d\'autres applis peuvent aussi utiliser.</string>
-    <string name="proxy_password">Un mot de passe pour ce proxy a traversé le réseau sans chiffrement. Watch ne l\'a pas conservé.</string>
+    <string name="proxy_password">Un mot de passe pour ce proxy a traversé le réseau sans chiffrement. Datapavan ne l\'a pas conservé.</string>
     <!-- The server name an inferred proxy's connection sent, which no DNS answer gave its address: %1$s is that
          name. Facts only: nothing of why the app sent it. -->
-    <string name="proxy_cover">Sa connexion a envoyé le nom %1$s. Aucune réponse DNS transmise par Watch n\'a associé ce nom à cette adresse.</string>
+    <string name="proxy_cover">Sa connexion a envoyé le nom %1$s. Aucune réponse DNS transmise par Datapavan n\'a associé ce nom à cette adresse.</string>
     <!-- %1$s owns the name above, %2$s the network of the address. -->
     <string name="proxy_cover_owner">Ce nom appartient à %1$s, et le réseau à %2$s.</string>
-    <!-- A proxy while the switch above is off: %1$s is its kind. Then, on lines of their own, how Watch knows and the
+    <!-- A proxy while the switch above is off: %1$s is its kind. Then, on lines of their own, how Datapavan knows and the
          facts that name nothing. -->
     <string name="now_proxy_hidden">Par le %1$s. Sa destination n\'est pas affichée, car « Noter où se connectent les applis passant par votre outil, WireGuard ou un proxy » est désactivé.</string>
     <string name="history_proxy_hidden">Par le %1$s. Sa destination n\'a pas été notée dans le journal, car « Noter où se connectent les applis passant par votre outil, WireGuard ou un proxy » était désactivé.</string>
@@ -560,40 +560,40 @@
     <string name="now_proxy_setting_hidden">Par le %1$s défini dans les paramètres d\'Android, que d\'autres applis peuvent aussi utiliser. Sa destination n\'est pas affichée, car « Noter où se connectent les applis passant par votre outil, WireGuard ou un proxy » est désactivé.</string>
     <string name="history_proxy_setting_hidden">Par le %1$s défini dans les paramètres d\'Android, que d\'autres applis peuvent aussi utiliser. Sa destination n\'a pas été notée dans le journal, car « Noter où se connectent les applis passant par votre outil, WireGuard ou un proxy » était désactivé.</string>
     <!-- One more line of "What this view cannot see". -->
-    <string name="cannot_see_proxy">Pour un proxy qu\'une appli utilise, Watch ne peut pas voir qui le gère, ni si c\'est vous ou l\'appli qui l\'a choisi. Pour un proxy que Watch déduit, il ne peut pas voir où va le trafic après lui.</string>
+    <string name="cannot_see_proxy">Pour un proxy qu\'une appli utilise, Datapavan ne peut pas voir qui le gère, ni si c\'est vous ou l\'appli qui l\'a choisi. Pour un proxy que Datapavan déduit, il ne peut pas voir où va le trafic après lui.</string>
 
     <!--
-        W8, part 3b (ADR 0041, "How the per-tool guides are built"): the per-tool guides for proxy mode, in Watch and on the
+        W8, part 3b (ADR 0041, "How the per-tool guides are built"): the per-tool guides for proxy mode, in Advanced and on the
         website (scripts/guides.py writes docs/site/guides/ from these words and data/tools/guide*.tsv). A quoted %s is a
         tool's own label, read from the tool on this phone or from the data, never translated: only these sentences are.
         The guides name no tool as better than another and never point to a download.
     -->
     <!-- The chain section: one link per tool of the table installed here. %1$s: the tool's name. -->
-    <string name="chain_guides_title">Comment les outils de ce téléphone fonctionnent à côté de Watch :</string>
+    <string name="chain_guides_title">Comment les outils de ce téléphone fonctionnent à côté de Datapavan :</string>
     <string name="chain_guide_proxy">%1$s en mode proxy</string>
-    <string name="chain_guide_other">%1$s et Watch</string>
+    <string name="chain_guide_other">%1$s et Datapavan</string>
     <!-- A guide's screen and page. %1$s: the tool's name. -->
     <string name="guide_title_proxy">%1$s en mode proxy</string>
-    <string name="guide_title_other">%1$s et Watch</string>
-    <string name="guide_intro">Android ne fait tourner qu\'un seul VPN à la fois. En mode proxy, %1$s fonctionne sans VPN, et Watch peut faire passer vos applis par cet outil.</string>
+    <string name="guide_title_other">%1$s et Datapavan</string>
+    <string name="guide_intro">Android ne fait tourner qu\'un seul VPN à la fois. En mode proxy, %1$s fonctionne sans VPN, et Datapavan peut faire passer vos applis par cet outil.</string>
     <string name="guide_assumes">Ces étapes supposent que %1$s fonctionne déjà pour vous en tant que VPN.</string>
     <string name="guide_heading_on">Activer le mode proxy</string>
     <!-- %1$s: an address such as 127.0.0.1; %2$s: its port. -->
     <string name="guide_listener">Son proxy écoute alors sur ce téléphone à l\'adresse %1$s, port %2$s.</string>
-    <string name="guide_next">Revenez ensuite à Watch. Il trouve le proxy de lui-même et propose d\'y faire passer vos applis.</string>
+    <string name="guide_next">Revenez ensuite à Datapavan. Il trouve le proxy de lui-même et propose d\'y faire passer vos applis.</string>
     <string name="guide_heading_password">Un mot de passe pour son proxy</string>
-    <string name="guide_password_optional">Son proxy peut demander un nom d\'utilisateur et un mot de passe. Saisissez ceux que Watch affiche quand il trouve le proxy. Les autres applis de ce téléphone ne peuvent alors pas l\'utiliser.</string>
+    <string name="guide_password_optional">Son proxy peut demander un nom d\'utilisateur et un mot de passe. Saisissez ceux que Datapavan affiche quand il trouve le proxy. Les autres applis de ce téléphone ne peuvent alors pas l\'utiliser.</string>
     <string name="guide_password_none">Son proxy ne peut pas demander de mot de passe. Tant qu\'il fonctionne, toute appli de ce téléphone peut l\'utiliser.</string>
     <string name="guide_heading_asks">Ce qu\'il demande</string>
     <string name="guide_heading_back">Revenir au mode VPN</string>
-    <string name="guide_back_note">Quand %1$s fonctionne de nouveau comme VPN, Android désactive Watch : un seul VPN fonctionne à la fois.</string>
+    <string name="guide_back_note">Quand %1$s fonctionne de nouveau comme VPN, Android désactive le VPN de Datapavan : un seul VPN fonctionne à la fois.</string>
     <!-- %1$s: the tool's name; %2$s: its version. -->
     <string name="guide_read">Lu dans le code source de l\'outil %1$s, version %2$s.</string>
-    <string name="guide_checked">Cette version a été testée avec Watch.</string>
-    <string name="guide_not_checked">Pas encore testé avec Watch.</string>
+    <string name="guide_checked">Cette version a été testée avec Datapavan.</string>
+    <string name="guide_not_checked">Pas encore testé avec Datapavan.</string>
     <string name="guide_labels_tool">Les mots entre guillemets sont lus dans %1$s sur ce téléphone.</string>
     <string name="guide_labels_recorded">Les mots entre guillemets sont ceux qu\'affiche cette version.</string>
-    <string name="guide_audit">Le reste de Datapavan, sa vérification de vos applis, fonctionne sans Watch.</string>
+    <string name="guide_audit">La vérification de vos applis par Datapavan fonctionne aussi sans son VPN.</string>
     <!-- Steps. Each %s in quotes is one of the tool's labels. -->
     <string name="guide_step_drawer">Ouvrez le menu dans le coin supérieur de son écran et appuyez sur « %1$s ».</string>
     <string name="guide_step_overflow">Ouvrez le menu à trois points et appuyez sur « %1$s ».</string>
@@ -628,61 +628,61 @@
     <string name="guide_step_singbox_users">Dans cet inbound « mixed », ajoutez « users » avec un « username » et un « password ».</string>
     <string name="guide_step_singbox_back">Utilisez de nouveau un profil avec un inbound de type « tun », ou ajoutez-en un avec « %1$s ». Puis lancez-le.</string>
     <string name="guide_step_auth_entry">Sous « %1$s », appuyez sur « %2$s » et ajoutez une entrée : le nom d\'utilisateur, deux-points, puis le mot de passe.</string>
-    <string name="guide_step_secret">Appuyez sur « %1$s » et saisissez le mot de passe qu\'affiche Watch.</string>
+    <string name="guide_step_secret">Appuyez sur « %1$s » et saisissez le mot de passe qu\'affiche Datapavan.</string>
     <string name="guide_step_profile_card">Sur la carte de votre profil, appuyez sur « %1$s ».</string>
     <string name="guide_step_config_ssh">Modifiez votre configuration : réglez « %1$s » sur « %2$s », et remplissez « %3$s » et « %4$s ».</string>
     <string name="guide_step_save_use">Appuyez sur « %1$s », puis appuyez sur le nouveau profil de réglages pour l\'utiliser.</string>
     <!-- What a tool asks for in proxy mode, from its code. -->
     <string name="guide_asks_notifications">Il demande à afficher des notifications.</string>
-    <string name="guide_asks_local_network">Sous Android 17, il demande l\'autorisation d\'accès au réseau local. Watch n\'en a pas besoin pour son proxy, qui se trouve sur ce téléphone.</string>
+    <string name="guide_asks_local_network">Sous Android 17, il demande l\'autorisation d\'accès au réseau local. Datapavan n\'en a pas besoin pour son proxy, qui se trouve sur ce téléphone.</string>
     <string name="guide_asks_battery">Il demande à être exclu de l\'optimisation de la batterie.</string>
     <string name="guide_asks_alarms">En mode proxy, il demande l\'autorisation des alarmes avant de démarrer. Il dit ne définir aucune alarme : cette autorisation le maintient actif quand il n\'est pas un VPN.</string>
-    <string name="guide_asks_vpn_once">La première fois qu\'il se connecte, il demande à configurer un VPN, même dans ce mode. Si vous l\'autorisez, Android désactive Watch. Réactivez ensuite Watch.</string>
+    <string name="guide_asks_vpn_once">La première fois qu\'il se connecte, il demande à configurer un VPN, même dans ce mode. Si vous l\'autorisez, Android désactive le VPN de Datapavan. Réactivez-le ensuite.</string>
     <string name="guide_asks_none">Son code ne demande aucune autorisation dans ce mode.</string>
     <!-- Facts a user of one tool needs. %1$s in guide_note_named_port: a port. -->
-    <string name="guide_note_named_port">Watch ne cherche son proxy que sur le port %1$s : réglez donc ce port même si votre profil en indique un autre.</string>
-    <string name="guide_note_fixed_user">Son nom d\'utilisateur est toujours « %1$s ». Watch affiche celui-là.</string>
-    <string name="guide_note_user_port">Dans un profil professionnel ou pour un autre utilisateur de ce téléphone, son port est augmenté du numéro de cet utilisateur. Watch cherche là aussi.</string>
+    <string name="guide_note_named_port">Datapavan ne cherche son proxy que sur le port %1$s : réglez donc ce port même si votre profil en indique un autre.</string>
+    <string name="guide_note_fixed_user">Son nom d\'utilisateur est toujours « %1$s ». Datapavan affiche celui-là.</string>
+    <string name="guide_note_user_port">Dans un profil professionnel ou pour un autre utilisateur de ce téléphone, son port est augmenté du numéro de cet utilisateur. Datapavan cherche là aussi.</string>
     <string name="guide_note_stopped_first">Arrêtez-le d\'abord : il ne modifie ce réglage que lorsqu\'il n\'est pas connecté.</string>
     <string name="guide_note_no_server">Il n\'envoie pas votre trafic à un serveur. Il modifie l\'aspect du trafic et l\'envoie depuis ce téléphone. Les applis qu\'il transporte atteignent donc leurs destinations depuis votre propre adresse.</string>
-    <string name="guide_note_ssh_only">Seul le type de tunnel « %1$s » ouvre un proxy SOCKS5 sur ce téléphone. Avec « %2$s », Watch ne peut utiliser le port que si votre serveur fournit un proxy SOCKS5.</string>
+    <string name="guide_note_ssh_only">Seul le type de tunnel « %1$s » ouvre un proxy SOCKS5 sur ce téléphone. Avec « %2$s », Datapavan ne peut utiliser le port que si votre serveur fournit un proxy SOCKS5.</string>
     <string name="guide_note_remote_profile">Un profil distant n\'affiche que « %1$s » : son contenu vient de son adresse et ne peut pas être modifié ici. Créez plutôt un profil local.</string>
     <string name="guide_note_engines">Dans ce mode, les profils qui utilisent sing-box, OpenConnect, IKEv2 ou une chaîne lancent quand même un VPN.</string>
     <!-- The pages of tools that run only as a VPN, and of those whose steps wait. %1$s: the tool's name. -->
-    <string name="guide_vpn_only">%1$s fonctionne uniquement comme VPN. Android ne fait tourner qu\'un seul VPN à la fois, donc Watch ne peut pas fonctionner à côté de lui : quand l\'un démarre, Android arrête l\'autre.</string>
-    <string name="guide_wireguard_only">%1$s fonctionne uniquement comme VPN, donc Watch ne peut pas fonctionner à côté de lui. Mais Watch peut transporter lui-même une configuration WireGuard, et y faire passer les applis que vous choisissez.</string>
-    <!-- Quotes Watch's own heading, tunnels_title, as it reads. -->
-    <string name="guide_wireguard_add">Ajoutez-en une dans Watch, sous « Configurations WireGuard ».</string>
+    <string name="guide_vpn_only">%1$s fonctionne uniquement comme VPN. Android ne fait tourner qu\'un seul VPN à la fois, donc le VPN de Datapavan ne peut pas fonctionner à côté de lui : quand l\'un démarre, Android arrête l\'autre.</string>
+    <string name="guide_wireguard_only">%1$s fonctionne uniquement comme VPN, donc le VPN de Datapavan ne peut pas fonctionner à côté de lui. Mais Datapavan peut transporter lui-même une configuration WireGuard, et y faire passer les applis que vous choisissez.</string>
+    <!-- Quotes the Network screen's own heading, tunnels_title, as it reads. -->
+    <string name="guide_wireguard_add">Ajoutez-en une dans Datapavan, sous « Configurations WireGuard ».</string>
     <string name="guide_wireguard_proton">Le site web de Proton VPN crée ces fichiers, y compris avec l\'offre gratuite. Dans votre compte, ouvrez « Downloads », puis « WireGuard configuration ».</string>
     <string name="guide_wireguard_mullvad">Le site web de Mullvad crée ces fichiers pour un compte payant. Utilisez son générateur de configuration.</string>
     <string name="guide_wireguard_windscribe">Le site web de Windscribe crée ces fichiers pour les comptes payants. Utilisez son « Config Generator ».</string>
-    <string name="guide_wireguard_same">Le fichier de configuration ou le code QR que vous avez ajouté à WireGuard fonctionne aussi dans Watch.</string>
-    <string name="guide_note_amneziawg">AmneziaWG modifie l\'aspect des paquets de WireGuard. Watch ne lit pas encore cette modification, il ne peut donc pas transporter ces configurations.</string>
+    <string name="guide_wireguard_same">Le fichier de configuration ou le code QR que vous avez ajouté à WireGuard fonctionne aussi dans Datapavan.</string>
+    <string name="guide_note_amneziawg">AmneziaWG modifie l\'aspect des paquets de WireGuard. Datapavan ne lit pas encore cette modification, il ne peut donc pas transporter ces configurations.</string>
     <string name="guide_waiting_intro">Il n\'y a pas encore d\'étapes pour %1$s.</string>
-    <string name="guide_waiting_closed">Son code n\'est pas public, donc ses étapes attendent que l\'outil soit testé avec Watch.</string>
-    <string name="guide_waiting_partly">Une partie de son code n\'est pas publique, donc ses étapes attendent que l\'outil soit testé avec Watch.</string>
-    <string name="guide_note_tethering">Il a une fonction qu\'il appelle Proxy Tethering. On ne sait pas encore si elle fournit sur ce téléphone un proxy que Watch peut utiliser.</string>
-    <!-- The website's list of the guides (scripts/guides.py), which Watch does not show. -->
-    <string name="guide_index_title" tools:ignore="UnusedResources">Votre outil à côté de Watch</string>
-    <string name="guide_index_intro" tools:ignore="UnusedResources">Android ne fait tourner qu\'un seul VPN à la fois. Ces pages indiquent comment chaque outil de contournement peut fonctionner à côté de Watch, d\'après ce qu\'on a lu dans le code de l\'outil lui-même.</string>
+    <string name="guide_waiting_closed">Son code n\'est pas public, donc ses étapes attendent que l\'outil soit testé avec Datapavan.</string>
+    <string name="guide_waiting_partly">Une partie de son code n\'est pas publique, donc ses étapes attendent que l\'outil soit testé avec Datapavan.</string>
+    <string name="guide_note_tethering">Il a une fonction qu\'il appelle Proxy Tethering. On ne sait pas encore si elle fournit sur ce téléphone un proxy que Datapavan peut utiliser.</string>
+    <!-- The website's list of the guides (scripts/guides.py), which Datapavan does not show. -->
+    <string name="guide_index_title" tools:ignore="UnusedResources">Votre outil à côté de Datapavan Advanced</string>
+    <string name="guide_index_intro" tools:ignore="UnusedResources">Android ne fait tourner qu\'un seul VPN à la fois. Ces pages indiquent comment chaque outil de contournement peut fonctionner à côté du VPN de Datapavan Advanced, d\'après ce qu\'on a lu dans le code de l\'outil lui-même. Datapavan Basic n\'a pas de VPN, il fonctionne donc à côté de n\'importe lequel d\'entre eux.</string>
     <string name="guide_index_proxy" tools:ignore="UnusedResources">Outils avec un mode proxy</string>
     <string name="guide_index_wireguard" tools:ignore="UnusedResources">Outils qui fonctionnent uniquement comme VPN, avec des configurations WireGuard</string>
     <string name="guide_index_vpn" tools:ignore="UnusedResources">Outils qui fonctionnent uniquement comme VPN</string>
-    <string name="guide_index_waiting" tools:ignore="UnusedResources">Outils dont les étapes attendent qu\'ils soient testés avec Watch</string>
+    <string name="guide_index_waiting" tools:ignore="UnusedResources">Outils dont les étapes attendent qu\'ils soient testés avec Datapavan</string>
 
     <!-- W8, part 3a (ADR 0053): tracker blocking. Counts and sizes only inside the app: nothing of it reaches a
          notification, the summary or the widget (ADR 0046). ADR 0025's words hold (BlockingWordsTest), and "grade"
          never shows. The labels of the switches and buttons below are tapped by their text in the emulator check. -->
-    <!-- Watch's screen: the section, its switches and the global pause, which names no app. -->
+    <!-- the Network screen: the section, its switches and the global pause, which names no app. -->
     <string name="blocking_title">Blocage des traceurs</string>
     <string name="blocking_switch">Bloquer les traceurs</string>
-    <string name="blocking_note">Désactivé, sauf si vous l\'activez. Watch empêche les applis que vous avez installées d\'atteindre les hôtes des SDK de traceurs : leurs recherches de noms ne reçoivent aucune adresse, et leurs connexions sont refusées. Un hôte qui sert aussi l\'appli elle-même n\'est pas bloqué.</string>
+    <string name="blocking_note">Désactivé, sauf si vous l\'activez. Datapavan empêche les applis que vous avez installées d\'atteindre les hôtes des SDK de traceurs : leurs recherches de noms ne reçoivent aucune adresse, et leurs connexions sont refusées. Un hôte qui sert aussi l\'appli elle-même n\'est pas bloqué.</string>
     <string name="blocking_not_covered">Les applis préinstallées sur le téléphone, Android lui-même et les services Google Play ne sont pas couverts.</string>
     <string name="blocking_browsers">Bloquer aussi dans les navigateurs</string>
     <string name="blocking_browsers_note">Les navigateurs ne sont pas bloqués, sauf si vous les incluez : ils ouvrent n\'importe quel site web.</string>
     <!-- Only while the apps go through the user's circumvention tool. -->
     <string name="blocking_tool_dns">Bloquer aussi les recherches d\'hôtes de traceurs faites par votre outil lui-même</string>
-    <string name="blocking_tool_dns_note">Désactivé, sauf si vous l\'activez. Watch répond alors sans adresse aux recherches d\'hôtes de traceurs faites par votre outil lui-même. Il ne refuse jamais les connexions de l\'outil : les noms qu\'elles affichent peuvent être ceux de n\'importe quel site web populaire.</string>
+    <string name="blocking_tool_dns_note">Désactivé, sauf si vous l\'activez. Datapavan répond alors sans adresse aux recherches d\'hôtes de traceurs faites par votre outil lui-même. Il ne refuse jamais les connexions de l\'outil : les noms qu\'elles affichent peuvent être ceux de n\'importe quel site web populaire.</string>
     <string name="blocking_pause">Suspendre le blocage pendant 10 minutes</string>
     <!-- %1$s: when the pause ends, as the phone writes the time. -->
     <string name="blocking_paused">Suspendu jusqu\'à %1$s</string>
@@ -724,10 +724,10 @@
     <string name="blocking_entry_allowed">Autorisé dans cette appli jusqu\'à ce que vous le bloquiez de nouveau.</string>
     <!-- %1$s: what the host does, from Datapavan's table, in English. -->
     <string name="blocking_function">Son rôle : %1$s</string>
-    <!-- A connection of the history that Watch blocked: %1$s names the tracker, never the host where the switch "Log
+    <!-- A connection of the history that Datapavan blocked: %1$s names the tracker, never the host where the switch "Log
          where apps connect ..." left it out. -->
-    <string name="blocking_blocked">Bloqué par Watch : %1$s.</string>
-    <!-- A host the app reached that Watch does not block in it, and why. -->
+    <string name="blocking_blocked">Bloqué par Datapavan : %1$s.</string>
+    <!-- A host the app reached that Datapavan does not block in it, and why. -->
     <string name="blocking_kept">Non bloqué : cet hôte sert aussi l\'appli elle-même.</string>
     <string name="blocking_kept_code">Non bloqué : dans cette appli, cet hôte sert aussi à la connexion au compte ou au partage.</string>
     <string name="blocking_kept_unread">Non bloqué : cet hôte peut aussi servir à la connexion au compte ou au partage, et Datapavan n\'a pas encore lu le code de cette appli.</string>
@@ -750,4 +750,56 @@
     <string name="android_label_usage_access">Accès aux données d\'utilisation</string>
     <!-- Android's own label: Settings' usage_access at android-16.0.0_r4. -->
     <string name="android_label_usage_access_api36">Données d\'utilisation d\'applis</string>
+
+    <!-- Android's own labels (ADR 0054) and the Network screen's title, moved from strings_untranslated.xml for ADR
+         0030's round of 2026-11-23. For the translators: each label placeholder is a label of Android's own screens,
+         read from the phone in its own language, or Android's text in Datapavan's language where the phone gives none
+         (android_label_* in strings.xml, which are copied from AOSP, never translated). It is always in the language's
+         quotes, as this file's \"…\", and after a noun (the setting, the switch) or a verb of naming ("call it"), so
+         that no word around it depends on its gender, number or case: Russian and German keep it in the nominative,
+         Arabic adds no ال to it, and Persian puts no ezafe on it. Two exceptions: Private DNS's choices follow "to" and
+         "is" in chain_private_dns_quoted and dns_private_dns_strict_quoted, where Russian and Arabic may set "the
+         choice" before them. One placeholder may hold two labels, the phone's then Datapavan's in brackets, as
+         label_with_own sets them: put nothing of the sentence's grammar on it. Persian's labels write VPN in Latin
+         letters, as AOSP does, where Datapavan's own sentences write it in Persian ones: keep both as they are. -->
+    <!-- A label read in the phone's language (%1$s), then the same label in Datapavan's language (%2$s), where the two
+         differ: Android's labels and the tools' in the per-tool guides. Chinese takes full-width brackets. -->
+    <string name="label_with_own">%1$s (%2$s)</string>
+    <!-- Under a part that names Android's own settings or switches, where some of those names are Android's own rather
+         than this phone's: Datapavan has not seen this phone's maker show them, or the phone gave none. %1$s: those
+         names, each as label_named gives it, joined by labels_list_separator. -->
+    <string name="labels_android_note">Ce sont les noms qu\'utilise Android lui-même, et votre téléphone peut en afficher d\'autres : %1$s.</string>
+    <!-- One name in the list of labels_android_note, in the language's quotes. -->
+    <string name="label_named">« %1$s »</string>
+    <!-- Between the names in labels_android_note. -->
+    <string name="labels_list_separator">", "</string>
+    <!-- In "Now", under the line that Datapavan has no usage access, before the button that opens Android's page for it:
+         Datapavan's name for the access is kept, and this line gives the phone's own (the maintainer, 2026-11-22). %1$s:
+         the page's name in this phone's Settings, "Usage access" to Android 15 and "App usage data" from 16. -->
+    <string name="now_access_phone_name">Dans les paramètres de ce téléphone, cet accès s\'appelle « %1$s ».</string>
+    <!-- After Android refused the VPN consent, or another app's always-on VPN kept Datapavan's VPN from starting.
+         %1$s: Android's always-on switch on a VPN's settings page. -->
+    <string name="consent_refused_quoted">Android n\'a pas permis à Datapavan de démarrer son VPN. Si l\'interrupteur « %1$s » est activé pour une autre appli VPN, désactivez-le d\'abord.</string>
+    <!-- Private DNS set to a provider by name, %1$s (for example dns.google); %2$s: Android's name for the setting.
+         Datapavan does not ask the user to change it. -->
+    <string name="private_dns_strict_quoted">Le paramètre « %2$s » de ce téléphone pointe vers %1$s. Android y envoie, chiffrés, les noms que les applis recherchent. Ils restent ainsi privés vis-à-vis de votre réseau, mais Datapavan ne peut pas les lire.</string>
+    <!-- Shown when the phone's Private DNS is set to a provider's host name. %1$s: that host name, such as dns.google.
+         %2$s: the tool's name. %3$s: Android's name for the setting; %4$s and %5$s: its choices Automatic and Off. -->
+    <string name="chain_private_dns_quoted">Le paramètre « %3$s » de ce téléphone pointe vers %1$s. Android envoie alors les noms que les applis recherchent directement à %1$s, chiffrés, sans passer par Datapavan ni par %2$s. Votre réseau ne peut pas lire ces noms, mais il peut voir que ce téléphone utilise %1$s. Et %1$s voit les noms et votre adresse réelle sur Internet. Pour les applis que vous faites passer par %2$s, réglez le paramètre « %3$s » sur « %4$s » ou « %5$s ».</string>
+    <!-- Under it, before a button that opens Android's network settings, which differ between phone makers. %1$s:
+         Android's name for the setting. -->
+    <string name="chain_private_dns_where_quoted">Cherchez le paramètre « %1$s » dans les paramètres qui s\'ouvrent. Sur certains téléphones, il se trouve un niveau plus loin.</string>
+    <!-- %1$s: the host name of Android's Private DNS provider. %2$s: Android's name for the setting; %3$s and %4$s: its
+         choices Off and Automatic. -->
+    <string name="dns_private_dns_strict_quoted">Le paramètre « %2$s » d\'Android envoie les noms de toutes les applis à %1$s, sans passer par Datapavan. Votre choix ici ne s\'applique que tant que ce paramètre est réglé sur « %3$s » ou « %4$s ».</string>
+    <!-- %1$s: Android's always-on switch on a VPN's settings page. -->
+    <string name="dns_strict_limits_quoted">Le mode strict ne couvre pas tout. Android vérifie la connexion de lui-même, sans passer par Datapavan. Certaines applis utilisent leur propre DNS chiffré. Les applis que vous avez laissées de côté ne sont pas couvertes. Et pendant que Datapavan redémarre son VPN, ou si Android l\'arrête quand son interrupteur « %1$s » est désactivé, les applis utilisent le résolveur du réseau.</string>
+    <!-- A configuration's server given by name. %1$s: Android's name for the Private DNS setting. -->
+    <string name="import_server_name_quoted">Datapavan recherche ce nom par votre réseau avant que le tunnel démarre. Si le paramètre « %1$s » est désactivé, votre réseau peut le voir.</string>
+    <!-- The phone has no screen lock (a PIN, pattern or password). %1$s: Android's name for the setting (Settings,
+         Security). -->
+    <string name="log_no_screen_lock_quoted">Aucun code PIN, schéma ou mot de passe n\'est défini sur ce téléphone sous le paramètre « %1$s », donc les entrées des jours précédents peuvent s\'ouvrir à tout moment. Avec l\'un d\'eux, elles ne s\'ouvrent que lorsque le téléphone est déverrouillé.</string>
+    <!-- The title of Datapavan Advanced's screen for its network part: the VPN, the connection log, the user's tool,
+         WireGuard, DNS and tracker blocking (the maintainer, 2026-11-22: the part has no name of its own). -->
+    <string name="network_title">Réseau</string>
 </resources>

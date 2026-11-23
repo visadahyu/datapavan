@@ -1,17 +1,17 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources xmlns:tools="http://schemas.android.com/tools">
     <string name="network_tagline">ببینید هر برنامه روی گوشی شما به کجا وصل می‌شود.</string>
-    <string name="status_on">سرویس Watch روشن است.</string>
-    <string name="status_off">سرویس Watch خاموش است.</string>
+    <string name="status_on">وی‌پی‌ان Datapavan روشن است.</string>
+    <string name="status_off">وی‌پی‌ان Datapavan خاموش است.</string>
     <string name="turn_on">روشن کردن</string>
     <string name="turn_off">خاموش کردن</string>
-    <string name="private_dns_network">سرور DNS شبکه شما از رمزگذاری پشتیبانی می‌کند و اندروید برای نام‌هایی که برنامه‌ها جست‌وجو می‌کنند از آن استفاده می‌کند. این کار آن‌ها را پنهان نگه می‌دارد، اما Watch نمی‌تواند آن‌ها را بخواند.</string>
-    <string name="private_dns_still_named">سرویس Watch همچنان بیشتر اتصال‌ها را از روی آنچه هر برنامه می‌فرستد، یا از روی اینکه چه کسی شبکه مقصد را اداره می‌کند، نام‌گذاری می‌کند.</string>
+    <string name="private_dns_network">سرور DNS شبکه شما از رمزگذاری پشتیبانی می‌کند و اندروید برای نام‌هایی که برنامه‌ها جست‌وجو می‌کنند از آن استفاده می‌کند. این کار آن‌ها را خصوصی نگه می‌دارد، اما Datapavan نمی‌تواند آن‌ها را بخواند.</string>
+    <string name="private_dns_still_named">Datapavan همچنان بیشتر اتصال‌ها را از روی آنچه هر برنامه می‌فرستد، یا از روی اینکه چه کسی شبکهٔ مقصد را اداره می‌کند، نام‌گذاری می‌کند.</string>
     <string name="log_title">سابقهٔ اتصال‌ها</string>
-    <string name="log_encrypted">سرویس Watch از هر اتصال روی این گوشی سابقه‌ای رمزگذاری‌شده نگه می‌دارد.</string>
+    <string name="log_encrypted">Datapavan از هر اتصال روی این گوشی سابقه‌ای رمزگذاری‌شده نگه می‌دارد.</string>
     <string name="log_locked">سابقهٔ روزهای قبل فقط وقتی باز می‌شود که قفل گوشی باز باشد.</string>
-    <string name="log_lock_refused">این گوشی اجازه نداد Watch سابقه‌ها را به قفل صفحه‌اش وابسته کند، پس سابقهٔ روزهای قبل در هر زمانی باز می‌شود.</string>
-    <string name="log_not_kept">سرویس Watch هیچ سابقه‌ای از اتصال‌ها نگه نمی‌دارد.</string>
+    <string name="log_lock_refused">این گوشی اجازه نداد Datapavan سابقه‌ها را به قفل صفحه‌اش وابسته کند، پس سابقهٔ روزهای قبل را در هر زمانی می‌توان باز کرد.</string>
+    <string name="log_not_kept">Datapavan هیچ سابقه‌ای از اتصال‌ها نگه نمی‌دارد.</string>
     <string name="log_keep">نگه داشتن سابقه برای</string>
     <string name="log_keep_none">نگه نداشتن هیچ سابقه‌ای</string>
     <plurals name="log_keep_days">
@@ -22,7 +22,7 @@
     <string name="log_deleted">سابقه پاک شد.</string>
     <string name="chain_title">فیلترشکن شما</string>
     <string name="chain_searching">در حال جست‌وجوی فیلترشکنی در حالت پروکسی…</string>
-    <string name="chain_none">هیچ فیلترشکنی که حالت پروکسی داشته باشد نصب نیست. اندروید هر بار فقط یک وی‌پی‌ان را اجرا می‌کند، پس Watch فقط از راه حالت پروکسی می‌تواند کنار چنین فیلترشکنی کار کند.</string>
+    <string name="chain_none">هیچ فیلترشکنی که حالت پروکسی داشته باشد نصب نیست. اندروید هر بار فقط یک وی‌پی‌ان را اجرا می‌کند، پس وی‌پی‌ان Datapavan فقط وقتی می‌تواند کنار چنین فیلترشکنی کار کند که آن فیلترشکن در حالت پروکسی باشد.</string>
     <string name="chain_not_answering">فیلترشکن‌های نصب‌شده: %1$s. هیچ پروکسی‌ای پاسخ نمی‌دهد. فیلترشکن را به‌جای حالت وی‌پی‌ان در حالت پروکسی اجرا کنید، بعد دوباره جست‌وجو کنید.</string>
     <string name="chain_waiting">فیلترشکن %1$s پاسخ نمی‌دهد. برنامه‌هایی که از آن عبور می‌دهید منتظر می‌مانند و هیچ داده‌ای از آن‌ها مستقیم بیرون نمی‌رود.</string>
     <string name="chain_search_again">جست‌وجوی دوباره</string>
@@ -32,10 +32,10 @@
     <string name="chain_some_apps">فقط برنامه‌هایی که انتخاب می‌کنم</string>
     <string name="chain_no_udp">فیلترشکن %1$s نمی‌تواند ترافیک UDP را جابه‌جا کند. تماس‌ها و بعضی بازی‌ها در برنامه‌هایی که از آن عبور می‌دهید کار نمی‌کنند. صفحه‌های وب همچنان باز می‌شوند.</string>
     <string name="chain_proxy_open">پروکسی فیلترشکن %1$s رمز عبور نمی‌خواهد، پس هر برنامه‌ای در این گوشی می‌تواند از آن استفاده کند. چنین برنامه‌ای می‌تواند بفهمد که شما از %1$s استفاده می‌کنید و نشانی سرور آن چیست، و ترافیک خودش را هم از آن عبور دهد.</string>
-    <string name="chain_proxy_no_password">فیلترشکن %1$s هیچ تنظیمی برای رمز عبور ندارد، پس تا وقتی در حالت پروکسی کار می‌کند، پروکسی آن باز می‌ماند. سرویس Watch همچنان برنامه‌هایی را که انتخاب می‌کنید از آن عبور می‌دهد.</string>
+    <string name="chain_proxy_no_password">فیلترشکن %1$s هیچ تنظیمی برای رمز عبور ندارد، پس تا وقتی در حالت پروکسی کار می‌کند، پروکسی آن باز می‌ماند. Datapavan همچنان برنامه‌هایی را که انتخاب می‌کنید از آن عبور می‌دهد.</string>
     <string name="chain_proxy_closed">پروکسی فیلترشکن %1$s رمز عبور می‌خواهد، پس برنامه‌های دیگر این گوشی نمی‌توانند از آن استفاده کنند. ولی همچنان می‌توانند ببینند که این پروکسی وجود دارد.</string>
     <string name="chain_udp">عبور دادن ترافیک UDP هم از %1$s</string>
-    <string name="chain_udp_note">تا آن را روشن نکنید، خاموش می‌ماند. هیچ فیلترشکنی شناخته نشده که بررسی کند کدام برنامه ترافیک UDP را به پروکسی آن می‌فرستد. تا وقتی %1$s ترافیک UDP را برای Watch جابه‌جا می‌کند، برنامه‌های دیگر این گوشی هم ممکن است ترافیک UDP را از آن عبور دهند، حتی با رمز عبور. تا وقتی این گزینه خاموش است، تماس‌ها و بعضی بازی‌ها در برنامه‌هایی که از %1$s عبور می‌دهید کار نمی‌کنند. صفحه‌های وب همچنان باز می‌شوند.</string>
+    <string name="chain_udp_note">تا آن را روشن نکنید، خاموش می‌ماند. هیچ فیلترشکنی شناخته نشده است که بررسی کند کدام برنامه ترافیک UDP را به پروکسی آن می‌فرستد. تا وقتی %1$s ترافیک UDP را برای Datapavan جابه‌جا می‌کند، برنامه‌های دیگر این گوشی هم ممکن است ترافیک UDP را از آن عبور دهند، حتی با رمز عبور. تا وقتی این گزینه خاموش است، تماس‌ها و بعضی بازی‌ها در برنامه‌هایی که از %1$s عبور می‌دهید کار نمی‌کنند. صفحه‌های وب همچنان باز می‌شوند.</string>
     <string name="chain_private_dns_open">باز کردن تنظیمات شبکه</string>
     <string name="chain_password">برای اینکه برنامه‌های دیگر این گوشی نتوانند از پروکسی %1$s استفاده کنند، این نام کاربری و رمز عبور را در %1$s وارد کنید.</string>
     <string name="chain_password_where">در فیلترشکن %1$s، آن‌ها را در تنظیمات پروکسی محلی‌اش پیدا کنید که اغلب inbound، SOCKS یا درگاه محلی نام دارد.</string>
@@ -60,8 +60,8 @@
 
     <!-- Apps and the VPN (ADR 0041) -->
     <string name="left_out_title">برنامه‌ها و وی‌پی‌ان</string>
-    <string name="vpn_seen">اندروید به هر برنامه می‌گوید که وی‌پی‌ان روشن است، و Watch نمی‌تواند این را پنهان کند. بعضی برنامه‌ها آن را گزارش می‌دهند و بعضی تا وقتی وی‌پی‌ان روشن است از کار کردن خودداری می‌کنند.</string>
-    <string name="left_out_body">اگر برنامه‌ای با Watch کار نمی‌کند، آن را کنار بگذارید. آن برنامه بدون Watch به اینترنت وصل می‌شود: Watch اتصال‌هایش را نمی‌بیند و سابقه‌ای از آن‌ها نگه نمی‌دارد، و آن برنامه از فیلترشکن شما هم نمی‌گذرد. اندروید دیگر به آن برنامه نمی‌گوید که شبکه‌اش وی‌پی‌ان است، ولی آن برنامه هنوز ممکن است بفهمد که گوشی یک رابط وی‌پی‌ان دارد. وقتی Watch روشن است، هر تغییر کمی طول می‌کشد، چون Watch تونلش را دوباره راه می‌اندازد.</string>
+    <string name="vpn_seen">اندروید به هر برنامه می‌گوید که وی‌پی‌ان روشن است، و Datapavan نمی‌تواند این را پنهان کند. بعضی برنامه‌ها آن را گزارش می‌دهند و بعضی تا وقتی وی‌پی‌ان روشن است از کار کردن خودداری می‌کنند.</string>
+    <string name="left_out_body">اگر برنامه‌ای با وی‌پی‌ان Datapavan کار نمی‌کند، آن را کنار بگذارید. آن برنامه از آن پس بدون Datapavan به اینترنت می‌رود: Datapavan اتصال‌هایش را نمی‌بیند و سابقه‌ای از آن‌ها نگه نمی‌دارد، و آن برنامه از فیلترشکن شما هم نمی‌گذرد. اندروید دیگر به آن برنامه نمی‌گوید که شبکه‌اش وی‌پی‌ان است، ولی آن برنامه هنوز ممکن است بفهمد که گوشی یک رابط وی‌پی‌ان دارد. وقتی وی‌پی‌ان روشن است، هر تغییر کمی طول می‌کشد، چون Datapavan تونلش را دوباره راه می‌اندازد.</string>
     <string name="left_out_none">هیچ برنامه‌ای کنار گذاشته نشده است.</string>
     <plurals name="left_out_count">
         <item quantity="one">%d برنامه کنار گذاشته شده است.</item>
@@ -71,13 +71,13 @@
     <string name="left_out_done">تمام</string>
 
     <!-- W5, part 3 (ADR 0046): "Now" and each app's history. -->
-    <!-- Watch's screen: the way into "Now". -->
+    <!-- the Network screen: the way into "Now". -->
     <string name="now_open">ببینید برنامه‌ها الان چه می‌فرستند</string>
 
     <string name="now_title">Now</string>
     <string name="now_intro">برنامه‌هایی که از شبکه استفاده کردند، و اینکه آن موقع از آن‌ها استفاده می‌کردید یا نه.</string>
-    <string name="now_network_off">سرویس Watch خاموش است، پس هیچ ترافیکی نمی‌بیند. آن را در صفحهٔ Watch روشن کنید.</string>
-    <string name="now_no_access">سرویس Watch نمی‌تواند بفهمد از کدام برنامه استفاده می‌کنید، چون دسترسی به داده‌های مصرف ندارد. برنامه‌ها بدون وضعیت نشان داده می‌شوند.</string>
+    <string name="now_network_off">وی‌پی‌ان Datapavan خاموش است، پس هیچ ترافیکی نمی‌بیند. آن را در صفحهٔ «شبکه» روشن کنید: در زبانهٔ «مصرف داده»، روی «ببینید برنامه‌ها به کجا وصل می‌شوند» بزنید.</string>
+    <string name="now_no_access">Datapavan نمی‌تواند بفهمد از کدام برنامه استفاده می‌کنید، چون دسترسی به داده‌های مصرف ندارد. برنامه‌ها بدون وضعیت نشان داده می‌شوند.</string>
     <string name="now_allow_access">اجازه دسترسی به داده‌های مصرف</string>
     <string name="now_locked">پس از اولین باز کردن قفل گوشی بعد از روشن شدنش، نشان داده می‌شود که از کدام برنامه استفاده می‌کنید.</string>
     <string name="now_reading">در حال خواندن اینکه از کدام برنامه‌ها استفاده می‌کنید.</string>
@@ -118,11 +118,11 @@
     <string name="now_bytes_in_use">در زمانی که از آن استفاده می‌کردید، %1$s فرستاد و %2$s دریافت کرد.</string>
     <string name="now_bytes_none">بدون وضعیت، %1$s فرستاد و %2$s دریافت کرد. %3$s</string>
     <string name="now_bytes_not_yet">%1$s فرستاد و %2$s دریافت کرد؛ وضعیتش هنوز معلوم نیست.</string>
-    <string name="now_why_no_access">سرویس Watch دسترسی به داده‌های مصرف نداشت.</string>
+    <string name="now_why_no_access">Datapavan دسترسی به داده‌های مصرف نداشت.</string>
     <string name="now_why_locked">قفل گوشی پس از روشن شدنش هنوز باز نشده بود.</string>
-    <string name="now_why_late">سرویس Watch وضعیت را خیلی دیر فهمید.</string>
+    <string name="now_why_late">Datapavan وضعیت را خیلی دیر فهمید.</string>
     <string name="now_why_no_app">اندروید نگفت کدام برنامه بود.</string>
-    <string name="now_why_not_told">سرویس Watch هنوز وضعیت را نخوانده بود، یا متوقف شده بود.</string>
+    <string name="now_why_not_told">Datapavan هنوز وضعیت را نخوانده بود، یا متوقف شده بود.</string>
     <string name="now_is_tool">فیلترشکن شما. ترافیکش شامل ترافیک برنامه‌هایی است که از آن عبور می‌دهید.</string>
     <string name="now_history">دیدن تاریخچه‌اش</string>
 
@@ -146,19 +146,19 @@
     <!-- What this view cannot see (ADR 0046, decision 5). -->
     <string name="cannot_see_title">آنچه این صفحه نمی‌تواند ببیند</string>
     <string name="cannot_see_sender">ترافیکی که برای یک برنامه فرستاده می‌شود، زیر برنامه‌ای نشان داده می‌شود که آن را فرستاده است. پیام‌های پوش از راه سرویس‌های گوگل پلی می‌آیند، و دانلودها از راه مدیر دانلود اندروید. بعضی برنامه‌ها از راه برنامهٔ دیگری می‌فرستند.</string>
-    <string name="cannot_see_content">سرویس Watch محتوا را نمی‌بیند. از ترافیک رمزگذاری‌شده، اندازه، مقصد و زمان را می‌بیند، ولی هرگز نمی‌بیند چه چیزی فرستاده شده است.</string>
-    <string name="cannot_see_device">سرویس Watch نمی‌بیند یک برنامه روی گوشی چه می‌کند، مثلاً خواندن مخاطبان، فایل‌ها یا عکس‌های شما. فقط فرستادن دیده می‌شود.</string>
+    <string name="cannot_see_content">Datapavan محتوا را نمی‌بیند. از ترافیک رمزگذاری‌شده، اندازه، مقصد و زمان را می‌بیند، ولی هرگز نمی‌بیند چه چیزی فرستاده شده است.</string>
+    <string name="cannot_see_device">Datapavan نمی‌بیند یک برنامه روی گوشی چه می‌کند، مثلاً خواندن مخاطبان، فایل‌ها یا عکس‌های شما. فقط فرستادن دیده می‌شود.</string>
     <string name="cannot_see_together">بعضی برنامه‌ها را نمی‌شود از هم جدا کرد. برنامه‌هایی که یک شماره مشترک دارند، با هم شمرده می‌شوند. صفحه‌کلید تا وقتی صفحه روشن است در حال استفاده شمرده می‌شود، و وقتی خاموش است در پس‌زمینه. کاغذدیواری‌های زنده صفحه‌ای از خودشان ندارند. فیلترشکن شما ترافیک برنامه‌هایی را که از آن عبور می‌دهید جابه‌جا می‌کند.</string>
-    <string name="cannot_see_gaps">سرویس Watch وقتی وی‌پی‌ان دیگری روشن است هیچ چیز نمی‌بیند، همین‌طور از برنامه‌هایی که کنار گذاشته‌اید، یا از نمایهٔ کاری، فضای خصوصی یا کاربر دیگر. پیش از اولین باز کردن قفل پس از راه‌اندازی دوباره، یا وقتی ترافیک بدون عبور از وی‌پی‌ان می‌رود، هم هیچ چیز نمی‌بیند. ترافیک میان برنامه‌های روی گوشی هرگز به آن نمی‌رسد.</string>
-    <string name="cannot_see_sizes">اندازه‌ها همان چیزی است که برنامه‌ها از راه Watch فرستادند و دریافت کردند. صفحهٔ مصرف داده اندروید سرآیندها و داده‌های دوباره‌فرستاده‌شده را هم می‌شمارد، پس کمی بیشتر نشان می‌دهد.</string>
+    <string name="cannot_see_gaps">Datapavan وقتی وی‌پی‌ان دیگری روشن است هیچ ترافیکی نمی‌بیند، همین‌طور از برنامه‌هایی که کنار گذاشته‌اید، یا از نمایهٔ کاری، فضای خصوصی یا کاربر دیگر. پیش از اولین باز کردن قفل پس از راه‌اندازی دوباره، یا وقتی ترافیک بدون عبور از وی‌پی‌ان می‌رود، هم هیچ ترافیکی نمی‌بیند. ترافیک میان برنامه‌های روی گوشی هرگز به آن نمی‌رسد.</string>
+    <string name="cannot_see_sizes">اندازه‌ها همان چیزی است که برنامه‌ها از راه Datapavan فرستادند و دریافت کردند. صفحهٔ مصرف داده در اندروید سرآیندها و داده‌هایی را که دوباره فرستاده شده‌اند هم می‌شمارد، پس کمی بیشتر نشان می‌دهد.</string>
     <string name="cannot_see_notification">«با اعلانش» یعنی اندروید به برنامه اجازه می‌دهد اعلانی نشان دهد، نه اینکه شما آن را دیده‌اید. کانال اعلانی که خاموش کرده‌اید باز هم شمرده می‌شود. همین‌طور است برای گوشی‌ای که بعضی اعلان‌ها را پنهان می‌کند، و در اندروید ۱۲ و پیش از آن، برای برنامه‌ای که اعلان‌هایش را خاموش کرده‌اید. پخش‌کنندهٔ موسیقی‌ای که اجازهٔ اعلان ندارد، تا وقتی اعلانش نشان داده می‌شود، در پس‌زمینه شمرده می‌شود. از اندروید ۱۲ به بعد، سرویسی که کمتر از ۱۰ ثانیه کار کند هم در پس‌زمینه شمرده می‌شود.</string>
     <string name="cannot_see_in_use">«در حال استفاده» همان چیزی است که اندروید از صفحه‌های هر برنامه ثبت می‌کند. در بعضی گوشی‌ها، فید سمت چپ صفحهٔ اصلی ممکن است در پس‌زمینه شمرده شود. برنامه‌ای که اجازه دارد از پس‌زمینه صفحه باز کند، می‌تواند در حال استفاده به نظر برسد.</string>
 
     <!-- Each app's history. -->
     <string name="history_title">تاریخچهٔ %1$s</string>
     <string name="history_back">بازگشت به «Now»</string>
-    <string name="history_intro">هر اتصالی که Watch برای این برنامه نگه داشته است، از تازه‌ترین به قدیمی‌ترین، هر بار یک روز.</string>
-    <string name="history_keep">برای داشتن تاریخچه، در صفحهٔ Watch انتخاب کنید سابقه برای چند روز نگه داشته شود.</string>
+    <string name="history_intro">هر اتصالی که Datapavan برای این برنامه نگه داشته است، از تازه‌ترین به قدیمی‌ترین، هر بار یک روز.</string>
+    <string name="history_keep">برای داشتن تاریخچه، صفحهٔ «شبکه» را باز کنید و انتخاب کنید سابقه برای چند روز نگه داشته شود. در زبانهٔ «مصرف داده»، روی «ببینید برنامه‌ها به کجا وصل می‌شوند» بزنید.</string>
     <string name="history_nothing_yet">هنوز چیزی نگه داشته نشده است.</string>
     <string name="history_closed">این روز الان باز نمی‌شود.</string>
     <string name="history_empty">در این روز هیچ اتصالی نبود.</string>
@@ -169,8 +169,8 @@
     <string name="history_state">وضعیت: %1$s</string>
     <string name="history_continues">این اتصال پس از این هم ادامه داشت.</string>
     <plurals name="history_lookups">
-        <item quantity="one">%d نام را از راه Watch جست‌وجو کرد.</item>
-        <item quantity="other">%d نام را از راه Watch جست‌وجو کرد.</item>
+        <item quantity="one">%d نام را از راه Datapavan جست‌وجو کرد.</item>
+        <item quantity="other">%d نام را از راه Datapavan جست‌وجو کرد.</item>
     </plurals>
     <plurals name="history_before_install">
         <item quantity="one">%d رکورد زیر شمارهٔ این برنامه از خود برنامه قدیمی‌تر است. این رکورد به برنامه‌ای تعلق دارد که بعداً حذف شده است.</item>
@@ -178,9 +178,9 @@
     </plurals>
 
     <!-- W7, part 2 (ADR 0035): the WireGuard import, the configurations, each app's way and their states. -->
-    <!-- The heading of Watch's section for WireGuard configurations from the user's VPN provider. -->
+    <!-- The heading of the Network screen's section for WireGuard configurations from the user's VPN provider. -->
     <string name="tunnels_title">پیکربندی‌های WireGuard</string>
-    <string name="tunnels_intro">برنامه‌هایی را که انتخاب می‌کنید از یک سرور WireGuard ارائه‌دهندهٔ وی‌پی‌ان خود عبور دهید. سرویس Watch هر پیکربندی را رمزگذاری‌شده روی این گوشی نگه می‌دارد.</string>
+    <string name="tunnels_intro">برنامه‌هایی را که انتخاب می‌کنید از یک سرور WireGuard ارائه‌دهندهٔ وی‌پی‌ان خود عبور دهید. Datapavan هر پیکربندی را رمزگذاری‌شده روی این گوشی نگه می‌دارد.</string>
     <!-- Where the key that encrypts the configurations is kept. -->
     <string name="tunnels_key_strongbox">کلیدی که آن‌ها را رمزگذاری می‌کند در تراشهٔ امنیتی جداگانهٔ این گوشی (StrongBox) است.</string>
     <string name="tunnels_key_tee">کلیدی که آن‌ها را رمزگذاری می‌کند در بخش امن این گوشی است، جدا از اندروید.</string>
@@ -193,10 +193,10 @@
     <string name="tunnels_add_picture">انتخاب تصویر کد QR</string>
     <!-- Shown under the two QR code buttons. -->
     <string name="tunnels_picture_note">تصویر یک کد QR، کلید خصوصی پیکربندی را در خود دارد. پس از افزودن آن، شاید بخواهید تصویر را پاک کنید.</string>
-    <!-- %d: the most configurations Watch keeps (8). -->
+    <!-- %d: the most configurations Datapavan keeps (8). -->
     <plurals name="tunnels_full">
-        <item quantity="one">سرویس Watch حداکثر %d پیکربندی نگه می‌دارد. برای افزودن پیکربندی دیگر، آن را حذف کنید.</item>
-        <item quantity="other">سرویس Watch حداکثر %d پیکربندی نگه می‌دارد. برای افزودن پیکربندی دیگر، یکی را حذف کنید.</item>
+        <item quantity="one">Datapavan حداکثر %d پیکربندی نگه می‌دارد. برای افزودن پیکربندی دیگر، آن را حذف کنید.</item>
+        <item quantity="other">Datapavan حداکثر %d پیکربندی نگه می‌دارد. برای افزودن پیکربندی دیگر، یکی را حذف کنید.</item>
     </plurals>
     <string name="tunnels_default">پیش‌فرض</string>
     <string name="tunnels_default_note">پیکربندی پیش‌فرض، پینگ و ترافیکی را هم که اندروید نمی‌گوید از کدام برنامه است جابه‌جا می‌کند. این کار را تا وقتی می‌کند که دست‌کم یک برنامه از یکی از پیکربندی‌ها عبور می‌کند. تا وقتی پیکربندی پیش‌فرض باز نمی‌شود، پینگ و آن ترافیک منتظر می‌مانند.</string>
@@ -208,10 +208,10 @@
         <item quantity="other">%d برنامه منتظر پیکربندی‌ای هستند که حذف کرده‌اید، پس هیچ داده‌ای از آن‌ها بیرون نمی‌رود. در «راه هر برنامه» راه دیگری به آن‌ها بدهید.</item>
     </plurals>
     <!-- A change of the configurations that could not be saved; nothing was changed. -->
-    <string name="tunnels_not_saved_storage">ذخیره نشد. سرویس Watch نتوانست در حافظهٔ این گوشی بنویسد؛ شاید حافظه پر باشد. پیکربندی‌های شما همان‌طور که بودند می‌مانند.</string>
+    <string name="tunnels_not_saved_storage">ذخیره نشد. Datapavan نتوانست در حافظهٔ این گوشی بنویسد؛ شاید حافظه پر باشد. پیکربندی‌های شما همان‌طور که بودند می‌مانند.</string>
     <string name="tunnels_not_saved_keystore">ذخیره نشد. مخزن کلید گوشی پاسخ نداد. پیکربندی‌های شما همان‌طور که بودند می‌مانند. دوباره امتحان کنید.</string>
     <string name="tunnels_not_saved_gone">ذخیره نشد. پیکربندی‌ای که قرار بود جایگزین شود، در این فاصله حذف شد.</string>
-    <string name="tunnels_not_saved_other">ذخیره نشد. در Watch مشکلی پیش آمد. پیکربندی‌های شما همان‌طور که بودند می‌مانند.</string>
+    <string name="tunnels_not_saved_other">ذخیره نشد. در Datapavan مشکلی پیش آمد. پیکربندی‌های شما همان‌طور که بودند می‌مانند.</string>
     <string name="tunnels_make_default">پیش‌فرض کردن</string>
     <string name="tunnels_rename">تغییر نام</string>
     <string name="tunnels_replace">جایگزین کردن</string>
@@ -234,18 +234,18 @@
     <string name="unlock_channel">در انتظار باز شدن قفل</string>
     <string name="unlock_title">برای وصل شدن دوباره، قفل گوشی را باز کنید</string>
     <string name="unlock_text">بعضی برنامه‌ها منتظر پیکربندی وی‌پی‌انی هستند که فقط وقتی گوشی قفل نیست باز می‌شود. تا آن موقع هیچ داده‌ای از آن‌ها بیرون نمی‌رود.</string>
-    <!-- The notification while what Watch kept of its configurations can no longer be opened and every app is held.
-         It names no provider and no configuration, and opens Watch's screen. -->
-    <string name="lost_title">سرویس Watch برنامه‌های شما را نگه داشته است</string>
-    <string name="lost_text">سرویس Watch دیگر نمی‌تواند آنچه را از پیکربندی‌های وی‌پی‌ان شما نگه داشته بود باز کند. Watch را باز کنید تا انتخاب کنید برنامه‌هایتان چه کنند.</string>
-    <!-- On Watch's screen, in place of the configurations, while they can no longer be opened. -->
+    <!-- The notification while what Datapavan kept of its configurations can no longer be opened and every app is held.
+         It names no provider and no configuration, and opens the Network screen. -->
+    <string name="lost_title">Datapavan برنامه‌های شما را در انتظار نگه داشته است</string>
+    <string name="lost_text">Datapavan دیگر نمی‌تواند آنچه را از پیکربندی‌های وی‌پی‌ان شما نگه داشته بود باز کند. Datapavan را باز کنید تا انتخاب کنید برنامه‌هایتان چه کنند.</string>
+    <!-- On the Network screen, in place of the configurations, while they can no longer be opened. -->
     <string name="tunnels_lost_title">پیکربندی‌های شما دیگر باز نمی‌شوند</string>
-    <string name="tunnels_lost_body">سرویس Watch دیگر نمی‌تواند آنچه را از پیکربندی‌های WireGuard شما نگه داشته بود باز کند، مثلاً پس از بازنشانی مخزن کلید گوشی. نمی‌داند کدام برنامه‌ها از آن‌ها عبور می‌کردند. پس همهٔ برنامه‌ها را نگه می‌دارد و هیچ داده‌ای بیرون نمی‌رود، تا وقتی که شما انتخاب کنید.</string>
+    <string name="tunnels_lost_body">Datapavan دیگر نمی‌تواند آنچه را از پیکربندی‌های WireGuard شما نگه داشته بود باز کند، مثلاً پس از بازنشانی مخزن کلید گوشی. نمی‌داند کدام برنامه‌ها از آن‌ها عبور می‌کردند. پس همهٔ برنامه‌ها را در انتظار نگه می‌دارد و هیچ داده‌ای بیرون نمی‌رود، تا وقتی که شما انتخاب کنید.</string>
     <string name="tunnels_lost_again">افزودن دوبارهٔ پیکربندی‌ها</string>
     <string name="tunnels_lost_let_go">رها کردن برنامه‌ها به راه خودشان</string>
     <string name="tunnels_lost_note">در هر دو صورت، هر برنامه از آن پس مستقیم می‌رود، یا اگر جزو برنامه‌هایی باشد که از فیلترشکن شما عبور می‌دهید، از راه آن. پیکربندی‌ای اضافه کنید تا برنامه‌ای را دوباره از آن عبور دهید.</string>
     <!-- A configuration's state, refreshed while the screen is shown. -->
-    <string name="tunnel_state_off">تا وقتی Watch خاموش است، به کار نمی‌رود.</string>
+    <string name="tunnel_state_off">تا وقتی وی‌پی‌ان Datapavan خاموش است، به کار نمی‌رود.</string>
     <!-- Announced when it changes; the handshake's age below it is not, so that it is not announced every second. -->
     <string name="tunnel_state_connected">وصل است.</string>
     <plurals name="tunnel_handshake_seconds">
@@ -258,11 +258,11 @@
     </plurals>
     <string name="tunnel_state_idle">هنوز وصل نشده است. وقتی یکی از برنامه‌هایش چیزی بفرستد، وصل می‌شود.</string>
     <string name="tunnel_state_not_answering">سرور پاسخ نمی‌دهد. برنامه‌هایش منتظر می‌مانند و هیچ داده‌ای از آن‌ها مستقیم بیرون نمی‌رود.</string>
-    <string name="tunnel_state_missing">هنوز در Watch آماده نیست. برنامه‌هایش منتظر می‌مانند و هیچ داده‌ای از آن‌ها مستقیم بیرون نمی‌رود.</string>
+    <string name="tunnel_state_missing">هنوز در Datapavan آماده نیست. برنامه‌هایش منتظر می‌مانند و هیچ داده‌ای از آن‌ها مستقیم بیرون نمی‌رود.</string>
     <string name="tunnel_state_locked">تا وقتی گوشی قفل است، باز نمی‌شود. برنامه‌هایش منتظر می‌مانند تا قفل گوشی را باز کنید.</string>
-    <string name="tunnel_state_unavailable">الان باز نمی‌شود. برنامه‌هایش منتظر می‌مانند و Watch دوباره تلاش می‌کند.</string>
+    <string name="tunnel_state_unavailable">الان باز نمی‌شود. برنامه‌هایش منتظر می‌مانند و Datapavan دوباره تلاش می‌کند.</string>
     <string name="tunnel_state_lost">دیگر روی این گوشی باز نمی‌شود. برنامه‌هایش منتظر می‌مانند. آن را دوباره با فایل یا کد QR خودش جایگزین کنید؛ برنامه‌هایش با آن می‌مانند.</string>
-    <string name="tunnel_state_plain_dns">سرویس Watch نشانی سرور را فقط از راه DNS رمزگذاری‌نشده پیدا کرد. شبکهٔ شما ممکن است ببیند از کدام ارائه‌دهنده استفاده می‌کنید.</string>
+    <string name="tunnel_state_plain_dns">Datapavan نشانی سرور را فقط از راه DNS رمزگذاری‌نشده پیدا کرد. شبکهٔ شما ممکن است ببیند از کدام ارائه‌دهنده استفاده می‌کنید.</string>
 
     <!-- Removing a configuration: what its apps do then. %1$s: its name. -->
     <string name="tunnels_remove_title">حذف %1$s؟</string>
@@ -285,7 +285,7 @@
     <string name="import_dns">نام‌هایی که برنامه‌های انتخابی شما جست‌وجو می‌کنند، از راه سرور به %1$s می‌روند.</string>
     <string name="import_everything">همهٔ ترافیک برنامه‌های انتخابی شما از آن عبور می‌کند.</string>
     <!-- %1$s: the networks, comma separated. -->
-    <string name="import_narrower">فقط این مقصدها از آن عبور می‌کنند: %1$s. سرویس Watch هر مقصد دیگر برنامه‌های انتخابی شما را نمی‌پذیرد و هرگز آن را مستقیم نمی‌فرستد.</string>
+    <string name="import_narrower">فقط این مقصدها از آن عبور می‌کنند: %1$s. Datapavan هر مقصد دیگر برنامه‌های انتخابی شما را نمی‌پذیرد و هرگز آن را مستقیم نمی‌فرستد.</string>
     <string name="import_preshared">یک کلید از پیش مشترک دارد، رمزی اضافه که از آن در برابر رایانه‌های کوانتومی آینده محافظت می‌کند.</string>
     <string name="import_no_preshared">کلید از پیش مشترک ندارد.</string>
     <!-- %1$d: seconds. -->
@@ -313,7 +313,7 @@
     <!-- %1$s: package names, comma separated. -->
     <string name="import_not_installed">در فایل نام برده شده‌اند ولی نصب نشده‌اند: %1$s.</string>
     <string name="import_not_choosable">در فایل نام برده شده‌اند، ولی جزو برنامه‌هایی نیستند که اینجا می‌توانید انتخاب کنید: %1$s.</string>
-    <string name="import_left_out">در فایل نام برده شده‌اند، ولی از Watch کنار گذاشته شده‌اند، پس هیچ داده‌ای از آن‌ها از Watch نمی‌گذرد: %1$s.</string>
+    <string name="import_left_out">در فایل نام برده شده‌اند، ولی از وی‌پی‌ان Datapavan کنار گذاشته شده‌اند، پس هیچ داده‌ای از آن‌ها از Datapavan نمی‌گذرد: %1$s.</string>
     <string name="import_save">ذخیره</string>
     <string name="import_apps_loading">در حال بارگذاری برنامه‌های شما…</string>
 
@@ -323,44 +323,44 @@
     <string name="refused_not_text">فایل متنی نیست، پس پیکربندی WireGuard نیست.</string>
     <string name="refused_unreadable">این خط خوانده نمی‌شود.</string>
     <string name="refused_outside_section">یک تنظیم پیش از هر بخش [Interface] یا [Peer] آمده است.</string>
-    <string name="refused_unknown_section">سرویس Watch فقط بخش‌های [Interface] و [Peer] را می‌شناسد.</string>
+    <string name="refused_unknown_section">Datapavan فقط بخش‌های [Interface] و [Peer] را می‌شناسد.</string>
     <string name="refused_several_interfaces">فایل یک بخش [Interface] دوم دارد.</string>
-    <string name="refused_several_peers">فایل یک بخش [Peer] دوم دارد. سرویس Watch برای هر پیکربندی یک سرور می‌پذیرد.</string>
+    <string name="refused_several_peers">فایل یک بخش [Peer] دوم دارد. Datapavan برای هر پیکربندی یک سرور می‌پذیرد.</string>
     <!-- %1$s: the name of a setting, such as PostUp. -->
-    <string name="refused_unsupported">سرویس Watch تنظیم %1$s را اجرا نمی‌کند.</string>
-    <string name="refused_unsupported_unnamed">سرویس Watch این تنظیم را اجرا نمی‌کند.</string>
+    <string name="refused_unsupported">Datapavan تنظیم %1$s را اجرا نمی‌کند.</string>
+    <string name="refused_unsupported_unnamed">Datapavan این تنظیم را اجرا نمی‌کند.</string>
     <string name="refused_repeated">تنظیم %1$s دو بار آمده است.</string>
     <string name="refused_bad_value">مقدار %1$s خوانده نمی‌شود.</string>
-    <string name="refused_several_addresses">فایل دو نشانی از یک نوع دارد. سرویس Watch یک نشانی IPv4 و یک نشانی IPv6 می‌پذیرد.</string>
-    <string name="refused_search_domain">تنظیم DNS یک دامنهٔ جست‌وجو نام می‌برد که Watch نمی‌تواند از آن استفاده کند.</string>
+    <string name="refused_several_addresses">فایل دو نشانی از یک نوع دارد. Datapavan یک نشانی IPv4 و یک نشانی IPv6 می‌پذیرد.</string>
+    <string name="refused_search_domain">تنظیم DNS یک دامنهٔ جست‌وجو نام می‌برد که Datapavan نمی‌تواند از آن استفاده کند.</string>
     <string name="refused_no_interface">فایل بخش [Interface] ندارد.</string>
     <string name="refused_no_peer">فایل بخش [Peer] ندارد.</string>
     <string name="refused_no_private_key">فایل کلید خصوصی (PrivateKey) ندارد.</string>
     <string name="refused_no_address">فایل هیچ نشانی‌ای (Address) نمی‌دهد.</string>
-    <string name="refused_no_dns">فایل هیچ سرور DNS نام نمی‌برد. نام‌هایی که برنامه‌های شما جست‌وجو می‌کنند هیچ جای خصوصی‌ای برای رفتن نخواهند داشت، پس Watch آن را نمی‌پذیرد.</string>
+    <string name="refused_no_dns">فایل هیچ سرور DNS نام نمی‌برد. نام‌هایی که برنامه‌های شما جست‌وجو می‌کنند هیچ جای خصوصی‌ای برای رفتن نخواهند داشت، پس Datapavan آن را نمی‌پذیرد.</string>
     <string name="refused_dns_unreachable">هیچ‌کدام از سرورهای DNS فایل از راه سرور این پیکربندی در دسترس نیستند.</string>
     <string name="refused_no_public_key">فایل کلید سرور (PublicKey) را ندارد.</string>
     <string name="refused_no_endpoint">فایل نمی‌گوید سرور کجاست (Endpoint).</string>
     <string name="refused_no_allowed_ips">فایل نمی‌گوید کدام مقصدها از سرور عبور می‌کنند (AllowedIPs).</string>
-    <string name="refused_bad_mtu">مقدار MTU فایل از مقدارهایی نیست که Watch می‌پذیرد: ۵۷۶ تا ۱۵۰۰ بایت، و با نشانی IPv6 دست‌کم ۱۲۸۰.</string>
+    <string name="refused_bad_mtu">مقدار MTU فایل از مقدارهایی نیست که Datapavan می‌پذیرد: ۵۷۶ تا ۱۵۰۰ بایت، و با نشانی IPv6 دست‌کم ۱۲۸۰.</string>
     <string name="refused_both_application_lists">فایل هم برنامه‌هایی را برای شامل شدن نام می‌برد و هم برنامه‌هایی را برای مستثنا شدن. فقط یکی از این دو فهرست مجاز است.</string>
-    <!-- %d: the most configurations Watch keeps (8). -->
+    <!-- %d: the most configurations Datapavan keeps (8). -->
     <plurals name="refused_too_many">
-        <item quantity="one">سرویس Watch حداکثر %d پیکربندی نگه می‌دارد. برای افزودن پیکربندی دیگر، آن را حذف کنید.</item>
-        <item quantity="other">سرویس Watch حداکثر %d پیکربندی نگه می‌دارد. برای افزودن پیکربندی دیگر، یکی را حذف کنید.</item>
+        <item quantity="one">Datapavan حداکثر %d پیکربندی نگه می‌دارد. برای افزودن پیکربندی دیگر، آن را حذف کنید.</item>
+        <item quantity="other">Datapavan حداکثر %d پیکربندی نگه می‌دارد. برای افزودن پیکربندی دیگر، یکی را حذف کنید.</item>
     </plurals>
-    <string name="refused_unknown">سرویس Watch نتوانست این پیکربندی را بخواند.</string>
-    <string name="import_unreadable">سرویس Watch نتوانست این فایل را بخواند.</string>
+    <string name="refused_unknown">Datapavan نتوانست این پیکربندی را بخواند.</string>
+    <string name="import_unreadable">Datapavan نتوانست این فایل را بخواند.</string>
     <string name="import_too_slow">خواندن این فایل بیش از حد طول کشید. اگر آنلاین ذخیره شده است، اول آن را دانلود کنید.</string>
 
     <!-- Reading a QR code from a picture. -->
-    <string name="qr_not_a_picture">این تصویری نیست که Watch بتواند بخواند.</string>
+    <string name="qr_not_a_picture">این تصویری نیست که Datapavan بتواند بخواند.</string>
     <string name="qr_too_large">این تصویر بزرگ‌تر از آن است که خوانده شود.</string>
     <string name="qr_no_code">هیچ کد QR در این تصویر خوانده نشد. عکسی واضح امتحان کنید که کل کد در آن باشد.</string>
     <string name="qr_too_long">این کد QR متنی بیشتر از اندازهٔ یک پیکربندی WireGuard در خود دارد.</string>
     <string name="qr_too_slow">خواندن این تصویر بیش از حد طول کشید.</string>
-    <string name="qr_stopped">بخش خواندن تصویر در Watch روی این تصویر متوقف شد.</string>
-    <string name="qr_no_camera">این گوشی هیچ برنامهٔ دوربینی ندارد که بتواند عکس را برای Watch بگیرد.</string>
+    <string name="qr_stopped">بخش خواندن تصویر Datapavan روی این تصویر متوقف شد.</string>
+    <string name="qr_no_camera">این گوشی هیچ برنامهٔ دوربینی ندارد که بتواند عکس را برای Datapavan بگیرد.</string>
     <string name="qr_reading">در حال خواندن تصویر…</string>
     <string name="qr_photo_deleted">عکس پاک شد.</string>
 
@@ -376,8 +376,8 @@
     <!-- %1$s: a configuration's name. -->
     <string name="route_tunnel">از راه %1$s</string>
     <string name="route_waiting">منتظر پیکربندی‌ای است که حذف شده است. هیچ داده‌ای از آن بیرون نمی‌رود.</string>
-    <string name="route_left_out">از Watch کنار گذاشته شده است: بدون Watch به اینترنت می‌رود.</string>
-    <string name="routes_all_apps_note">تا وقتی همهٔ برنامه‌ها از فیلترشکن شما عبور می‌کنند، یک برنامه فقط وقتی مستقیم می‌رود که آن را از Watch کنار بگذارید.</string>
+    <string name="route_left_out">از وی‌پی‌ان Datapavan کنار گذاشته شده است: بدون Datapavan به اینترنت می‌رود.</string>
+    <string name="routes_all_apps_note">تا وقتی فیلترشکن شما همهٔ برنامه‌ها را از خود عبور می‌دهد، یک برنامه فقط وقتی مستقیم می‌رود که آن را از وی‌پی‌ان Datapavan کنار بگذارید.</string>
     <!-- The chain's choice of apps: an app with a configuration goes through it instead of the tool. %1$s: the configuration's name. -->
     <string name="chain_app_tunnel">به‌جای فیلترشکن از راه %1$s می‌رود. آن را در «راه هر برنامه» تغییر دهید.</string>
     <!-- The chain's choice of apps: an app that waits for a removed configuration. -->
@@ -398,7 +398,7 @@
     <!-- W8, part 1 (ADR 0042), and its fix round: the names of apps that go directly. -->
     <string name="dns_title">برنامه‌هایی که مستقیم می‌روند چطور نام‌ها را جست‌وجو می‌کنند</string>
     <string name="dns_now_unknown">هنوز هیچ برنامه‌ای در این شبکه نامی جست‌وجو نکرده است.</string>
-    <string name="dns_now_none_odoh">هنوز هیچ برنامه‌ای در این شبکه نامی جست‌وجو نکرده است. سرویس Watch از Oblivious DoH استفاده خواهد کرد.</string>
+    <string name="dns_now_none_odoh">هنوز هیچ برنامه‌ای در این شبکه نامی جست‌وجو نکرده است. Datapavan از Oblivious DoH استفاده خواهد کرد.</string>
     <!-- The first sentence of the "now" line, read out when it changes; the details follow apart. -->
     <string name="dns_now_odoh">نام‌ها اکنون با Oblivious DoH می‌روند.</string>
     <string name="dns_now_odoh_tool">نام‌ها اکنون با Oblivious DoH از راه فیلترشکن شما می‌روند.</string>
@@ -437,7 +437,7 @@
     <string name="dns_audited_no">هیچ کسی از بیرون این را بررسی نکرده است.</string>
     <string name="dns_audited_firm">یک شرکت حسابرسی این ادعاها را بررسی کرده است.</string>
     <string name="dns_policy">سیاست حریم خصوصی آن</string>
-    <string name="dns_choice_fails">اگر این سرور DNS پاسخ ندهد، Watch از Oblivious DoH و بعد از راه‌های رمزگذاری‌شدهٔ دیگر استفاده می‌کند. برای جلوگیری از این، «فقط همین سرور DNS» را روشن کنید.</string>
+    <string name="dns_choice_fails">اگر پاسخ ندهد، Datapavan از Oblivious DoH و بعد از راه‌های رمزگذاری‌شدهٔ دیگر استفاده می‌کند. برای جلوگیری از این، «فقط همین سرور DNS» را روشن کنید.</string>
     <string name="dns_only">فقط همین سرور DNS</string>
     <string name="dns_only_cost">اگر سرور DNS شما پاسخ ندهد، برنامه‌هایی که مستقیم می‌روند نمی‌توانند نامی جست‌وجو کنند.</string>
     <string name="dns_custom">سرور DNS خودتان</string>
@@ -445,37 +445,37 @@
     <string name="dns_custom_at">نشانی DoH یا سرور DoT</string>
     <string name="dns_custom_addresses">نشانی‌های IP، جدا با ویرگول</string>
     <string name="dns_custom_use">امتحان و استفاده</string>
-    <string name="dns_custom_refused">یک نشانی DoH که با https:// شروع شود، یا نام یک سرور DoT، و دست‌کم یک نشانی IP وارد کنید. Watch هرگز نام یک سرور DNS را بدون رمزگذاری جست‌وجو نمی‌کند.</string>
+    <string name="dns_custom_refused">یک نشانی DoH که با https:// شروع شود، یا نام یک سرور DoT، و دست‌کم یک نشانی IP وارد کنید. Datapavan هرگز نام یک سرور DNS را بدون رمزگذاری جست‌وجو نمی‌کند.</string>
     <string name="dns_custom_testing">در حال پرسیدن یک نام از سرور DNS شما…</string>
     <!-- %1$d: milliseconds. -->
-    <string name="dns_custom_answered">سرور DNS شما در %1$d میلی‌ثانیه پاسخ داد. Watch اکنون از آن استفاده می‌کند.</string>
-    <string name="dns_custom_failed">سرور DNS شما پاسخ نداد، پس Watch آن را ذخیره نکرد. نشانی آن و نشانی‌های IP آن را بررسی کنید.</string>
-    <string name="dns_custom_tampered">گواهی سرور DNS شما تأیید نشد، یا اتصال قطع شد. Watch آن را ذخیره نکرد.</string>
+    <string name="dns_custom_answered">سرور DNS شما در %1$d میلی‌ثانیه پاسخ داد. Datapavan اکنون از آن استفاده می‌کند.</string>
+    <string name="dns_custom_failed">سرور DNS شما پاسخ نداد، پس Datapavan آن را ذخیره نکرد. نشانی آن و نشانی‌های IP آن را بررسی کنید.</string>
+    <string name="dns_custom_tampered">گواهی سرور DNS شما تأیید نشد، یا اتصال قطع شد. Datapavan آن را ذخیره نکرد.</string>
     <string name="dns_strict">حالت سخت‌گیرانه: هرگز سرور DNS شبکه</string>
     <string name="dns_strict_cost">اگر هیچ راه رمزگذاری‌شده‌ای پاسخ ندهد، برنامه‌هایی که مستقیم می‌روند نمی‌توانند نامی جست‌وجو کنند. جایی از آن استفاده کنید که شبکه سانسور می‌شود یا زیر نظر است.</string>
     <string name="dns_local_names">نام‌های محلی، مثل چاپگر یا روتر شما، همچنان به سرور DNS خود شبکهٔ شما می‌روند.</string>
     <!-- %1$s: the network's own domains, by commas. -->
-    <string name="dns_search">این شبکه می‌گوید این دامنه‌ها متعلق به خودش است: %1$s. برای نامی زیر این دامنه‌ها، Watch اول از راه رمزگذاری‌شده می‌پرسد. فقط وقتی از این شبکه می‌پرسد که اینترنت آن نام را نشناسد.</string>
+    <string name="dns_search">این شبکه می‌گوید این دامنه‌ها متعلق به خودش است: %1$s. برای نامی زیر این دامنه‌ها، Datapavan اول از راه رمزگذاری‌شده می‌پرسد. فقط وقتی از این شبکه می‌پرسد که اینترنت آن نام را نشناسد.</string>
     <string name="dns_notify">اطلاع دادن به من در مدتی که نام‌ها به سرور DNS شبکه می‌روند</string>
-    <string name="dns_notify_refused">اندروید اجازه نمی‌دهد Watch اعلان نشان دهد، پس این گزینه خاموش می‌ماند. در تنظیمات اندروید اعلان‌ها را برای Watch مجاز کنید، بعد این گزینه را دوباره روشن کنید.</string>
+    <string name="dns_notify_refused">اندروید اجازه نمی‌دهد Datapavan اعلان نشان دهد، پس این گزینه خاموش می‌ماند. در تنظیمات اندروید اعلان‌ها را برای Datapavan Advanced مجاز کنید، بعد این گزینه را دوباره روشن کنید.</string>
     <string name="dns_pairs">جفت‌های Oblivious DoH، هر کدام از دو گردانندهٔ متفاوت در دو کشور متفاوت:</string>
     <!-- %1$s: the relay's operator and its countries; %2$s: the target's. -->
     <string name="dns_pair">واسطه: %1$s. هدف: %2$s.</string>
     <string name="dns_pairs_change">تغییر جفت‌ها</string>
     <string name="dns_pairs_default">استفاده از جفت‌های پیش‌فرض</string>
     <string name="dns_pairs_done">تمام</string>
-    <string name="dns_not_kept">سرویس Watch هیچ فهرستی از نام‌هایی که برنامه‌ها جست‌وجو می‌کنند نگه نمی‌دارد، جز سابقهٔ اتصال‌ها، اگر آن را نگه دارید. پاسخ‌ها را تا یک روز در حافظهٔ موقت نگه می‌دارد، و وقتی شبکه عوض شود، آن‌ها را فراموش می‌کند.</string>
+    <string name="dns_not_kept">Datapavan هیچ فهرستی از نام‌هایی که برنامه‌ها جست‌وجو می‌کنند نگه نمی‌دارد، جز سابقهٔ اتصال‌ها، اگر آن را نگه دارید. پاسخ‌ها را تا یک روز در حافظهٔ موقت نگه می‌دارد، و وقتی شبکه عوض شود، آن‌ها را فراموش می‌کند.</string>
     <string name="dns_fallback_channel">نام‌ها بدون رمزگذاری</string>
     <string name="dns_fallback_title">نام‌ها به سرور DNS شبکه می‌روند</string>
-    <string name="dns_fallback_text">هیچ راه رمزگذاری‌شده‌ای در این شبکه پاسخ نمی‌دهد، پس برنامه‌هایی که مستقیم می‌روند فعلاً از سرور DNS آن استفاده می‌کنند. برای روشن کردن حالت سخت‌گیرانه، Watch را باز کنید.</string>
+    <string name="dns_fallback_text">هیچ راه رمزگذاری‌شده‌ای در این شبکه پاسخ نمی‌دهد، پس برنامه‌هایی که مستقیم می‌روند فعلاً از سرور DNS آن استفاده می‌کنند. برای روشن کردن حالت سخت‌گیرانه، Datapavan را باز کنید.</string>
 
-    <!-- The one switch for what Watch leaves out of the log and "Now" (W6, W7 and W8): off unless the user turns it
+    <!-- The one switch for what Datapavan leaves out of the log and "Now" (W6, W7 and W8): off unless the user turns it
          on. It replaces "Log where these apps connect" (chain_log_destinations), which spoke of chained apps alone.
          The lines below that name it quote it word for word. -->
     <string name="log_switch">ثبت مقصد برنامه‌هایی که از فیلترشکن شما، WireGuard یا یک پروکسی می‌گذرند</string>
     <!-- Under the switch above. -->
-    <string name="log_switch_note">تا آن را روشن نکنید، خاموش می‌ماند. برنامه‌هایی را در بر می‌گیرد که از فیلترشکن شما یا یک پیکربندی WireGuard عبور می‌دهید، و سرورهای خود فیلترشکن را. برنامه‌هایی را هم که از راه یک پروکسی وصل می‌شوند در بر می‌گیرد، مثل پروکسی Telegram. سرویس Watch همچنان اتصال‌های آن‌ها را می‌شمارد. اگر کسی گوشی شما را بگردد، فهرستی از جاهایی که رفته‌اند می‌تواند علیه شما به کار رود.</string>
-    <!-- A button under a row of "Now" or the history that the switch above leaves out: it opens Watch's screen at the
+    <string name="log_switch_note">تا آن را روشن نکنید، خاموش می‌ماند. برنامه‌هایی را در بر می‌گیرد که از فیلترشکن شما یا یک پیکربندی WireGuard عبور می‌دهید، و سرورهای خود فیلترشکن را. برنامه‌هایی را هم که از راه یک پروکسی وصل می‌شوند در بر می‌گیرد، مثل پروکسی Telegram. Datapavan همچنان اتصال‌های آن‌ها را می‌شمارد. اگر کسی گوشی شما را بگردد، فهرستی از جاهایی که رفته‌اند می‌تواند علیه شما به کار رود.</string>
+    <!-- A button under a row of "Now" or the history that the switch above leaves out: it opens the Network screen at the
          switch. -->
     <string name="log_switch_open">رفتن به کلید</string>
     <!-- "Now": an app sent through the user's tool, the tool's own servers, and an app sent through a WireGuard
@@ -484,7 +484,7 @@
     <string name="now_tool_servers_off">اینکه به کجا وصل می‌شود نشان داده نمی‌شود، چون «ثبت مقصد برنامه‌هایی که از فیلترشکن شما، WireGuard یا یک پروکسی می‌گذرند» خاموش است.</string>
     <string name="now_through_tunnel_off">از راه %1$s فرستاده شد. اینکه به کجا وصل شد نشان داده نمی‌شود، چون «ثبت مقصد برنامه‌هایی که از فیلترشکن شما، WireGuard یا یک پروکسی می‌گذرند» خاموش است.</string>
     <!-- The same in an app's history, of a connection logged while the switch was off. history_left_out_off: the
-         tool's own servers, or a record written before Watch logged each connection's route. -->
+         tool's own servers, or a record written before Datapavan logged each connection's route. -->
     <string name="history_through_tool_off">از فیلترشکن شما عبور داده شد. اینکه به کجا وصل شد ثبت نشد، چون «ثبت مقصد برنامه‌هایی که از فیلترشکن شما، WireGuard یا یک پروکسی می‌گذرند» خاموش بود.</string>
     <string name="history_left_out_off">اینکه به کجا وصل شد ثبت نشد، چون «ثبت مقصد برنامه‌هایی که از فیلترشکن شما، WireGuard یا یک پروکسی می‌گذرند» خاموش بود.</string>
     <string name="history_through_tunnel_off">از راه %1$s فرستاده شد. اینکه به کجا وصل شد ثبت نشد، چون «ثبت مقصد برنامه‌هایی که از فیلترشکن شما، WireGuard یا یک پروکسی می‌گذرند» خاموش بود.</string>
@@ -504,13 +504,13 @@
     <string name="proxy_kind_signal">پروکسی Signal</string>
     <!-- A proxy the app's own bytes named and the proxy's reply confirmed: %1$s is its kind (above), %2$s where it is,
          as a name or an address with its port, %3$s the destination the app asked it for. "Read from the connection"
-         says how Watch knows. -->
+         says how Datapavan knows. -->
     <string name="proxy_asked">از %1$s در %2$s، مقصد %3$s را خواست. از خود اتصال خوانده شد.</string>
     <!-- As above, where no destination asked for was read. -->
     <string name="proxy_declared">از راه %1$s در %2$s. از خود اتصال خوانده شد.</string>
-    <!-- A messenger's proxy that Watch infers: %1$s its kind, %2$s where it is. -->
-    <string name="proxy_inferred">از راه یک %1$s در %2$s. از روی اینکه به کجا و چطور وصل می‌شود نتیجه گرفته شد. Watch نمی‌تواند ببیند از آنجا به کجا می‌رود: آن بخش رمزگذاری‌شده است.</string>
-    <!-- How Watch knows, on its own line where the sentence above is not shown (the switch off). -->
+    <!-- A messenger's proxy that Datapavan infers: %1$s its kind, %2$s where it is. -->
+    <string name="proxy_inferred">از راه یک %1$s در %2$s. از روی اینکه به کجا و چطور وصل می‌شود نتیجه گرفته شد. Datapavan نمی‌تواند ببیند از آنجا به کجا می‌رود: آن بخش رمزگذاری‌شده است.</string>
+    <!-- How Datapavan knows, on its own line where the sentence above is not shown (the switch off). -->
     <string name="proxy_how_read">از خود اتصال خوانده شد.</string>
     <string name="proxy_how_inferred">از روی اینکه به کجا و چطور وصل می‌شود نتیجه گرفته شد.</string>
     <!-- A plain HTTP request written in the form a proxy takes, which a web server takes too: the row names the server
@@ -518,25 +518,25 @@
     <string name="proxy_request_asked">به این سرور درخواستی فرستاد که برای یک پروکسی HTTP نوشته شده بود، و %1$s را خواست. از خود اتصال خوانده شد.</string>
     <string name="now_proxy_request_hidden">به این سرور درخواستی فرستاد که برای یک پروکسی HTTP نوشته شده بود. اینکه چه خواست نشان داده نمی‌شود، چون «ثبت مقصد برنامه‌هایی که از فیلترشکن شما، WireGuard یا یک پروکسی می‌گذرند» خاموش است.</string>
     <string name="history_proxy_request_hidden">به این سرور درخواستی فرستاد که برای یک پروکسی HTTP نوشته شده بود. اینکه چه خواست ثبت نشد، چون «ثبت مقصد برنامه‌هایی که از فیلترشکن شما، WireGuard یا یک پروکسی می‌گذرند» خاموش بود.</string>
-    <string name="proxy_request_password">این درخواست رمز عبوری برای یک پروکسی را بدون رمزگذاری با خود داشت. Watch آن را نگه نداشت.</string>
+    <string name="proxy_request_password">این درخواست رمز عبوری برای یک پروکسی را بدون رمزگذاری با خود داشت. Datapavan آن را نگه نداشت.</string>
     <!-- Where a proxy is, by its address alone: who runs it is not known. %1$s is the organisation whose network holds
          the address. -->
-    <string name="proxy_network">نشانی‌ای در شبکهٔ %1$s. اینکه چه کسی آن را اداره می‌کند معلوم نیست.</string>
+    <string name="proxy_network">نشانی‌ای در شبکهٔ %1$s. اینکه چه کسی این نشانی را اداره می‌کند معلوم نیست.</string>
     <!-- As above, and the network is not the app maker's own: %2$s is the app's maker, such as Telegram. -->
-    <string name="proxy_network_not_maker">نشانی‌ای در شبکهٔ %1$s، نه در شبکهٔ %2$s. اینکه چه کسی آن را اداره می‌کند معلوم نیست.</string>
-    <string name="proxy_network_unknown">سرویس Watch نمی‌تواند شبکهٔ این نشانی را نام ببرد. اینکه چه کسی آن را اداره می‌کند معلوم نیست.</string>
-    <!-- Where Watch cannot name the network, or does not show the address: %1$s is the app's maker, such as Telegram. -->
+    <string name="proxy_network_not_maker">نشانی‌ای در شبکهٔ %1$s، نه در شبکهٔ %2$s. اینکه چه کسی این نشانی را اداره می‌کند معلوم نیست.</string>
+    <string name="proxy_network_unknown">Datapavan نمی‌تواند شبکهٔ این نشانی را نام ببرد. اینکه چه کسی این نشانی را اداره می‌کند معلوم نیست.</string>
+    <!-- Where Datapavan cannot name the network, or does not show the address: %1$s is the app's maker, such as Telegram. -->
     <string name="proxy_not_maker">این نشانی در شبکهٔ %1$s نیست.</string>
     <string name="proxy_local">در شبکهٔ محلی شما. اینکه چه کسی آن را اداره می‌کند معلوم نیست.</string>
     <!-- The proxy set in Android's settings, which apps that follow those settings all use. -->
     <string name="proxy_setting">این همان پروکسی تنظیمات اندروید است که برنامه‌های دیگر هم می‌توانند از آن استفاده کنند.</string>
-    <string name="proxy_password">رمز عبوری برای این پروکسی بدون رمزگذاری از شبکه گذشت. Watch آن را نگه نداشت.</string>
+    <string name="proxy_password">رمز عبوری برای این پروکسی بدون رمزگذاری از شبکه گذشت. Datapavan آن را نگه نداشت.</string>
     <!-- The server name an inferred proxy's connection sent, which no DNS answer gave its address: %1$s is that
          name. Facts only: nothing of why the app sent it. -->
-    <string name="proxy_cover">اتصال آن نام %1$s را فرستاد. هیچ‌کدام از پاسخ‌های DNS که از Watch گذشتند، این نشانی را به آن نام نداده‌اند.</string>
+    <string name="proxy_cover">اتصال آن نام %1$s را فرستاد. هیچ‌کدام از پاسخ‌های DNS که از Datapavan گذشتند، این نشانی را به آن نام نداده‌اند.</string>
     <!-- %1$s owns the name above, %2$s the network of the address. -->
     <string name="proxy_cover_owner">آن نام متعلق به %1$s است، و شبکهٔ آن نشانی متعلق به %2$s.</string>
-    <!-- A proxy while the switch above is off: %1$s is its kind. Then, on lines of their own, how Watch knows and the
+    <!-- A proxy while the switch above is off: %1$s is its kind. Then, on lines of their own, how Datapavan knows and the
          facts that name nothing. -->
     <string name="now_proxy_hidden">از راه %1$s. اینکه به کجا وصل شد نشان داده نمی‌شود، چون «ثبت مقصد برنامه‌هایی که از فیلترشکن شما، WireGuard یا یک پروکسی می‌گذرند» خاموش است.</string>
     <string name="history_proxy_hidden">از راه %1$s. اینکه به کجا وصل شد ثبت نشد، چون «ثبت مقصد برنامه‌هایی که از فیلترشکن شما، WireGuard یا یک پروکسی می‌گذرند» خاموش بود.</string>
@@ -544,40 +544,40 @@
     <string name="now_proxy_setting_hidden">از راه %1$s در تنظیمات اندروید، که برنامه‌های دیگر هم می‌توانند از آن استفاده کنند. اینکه به کجا وصل شد نشان داده نمی‌شود، چون «ثبت مقصد برنامه‌هایی که از فیلترشکن شما، WireGuard یا یک پروکسی می‌گذرند» خاموش است.</string>
     <string name="history_proxy_setting_hidden">از راه %1$s در تنظیمات اندروید، که برنامه‌های دیگر هم می‌توانند از آن استفاده کنند. اینکه به کجا وصل شد ثبت نشد، چون «ثبت مقصد برنامه‌هایی که از فیلترشکن شما، WireGuard یا یک پروکسی می‌گذرند» خاموش بود.</string>
     <!-- One more line of "What this view cannot see". -->
-    <string name="cannot_see_proxy">برای پروکسی‌ای که یک برنامه از آن استفاده می‌کند، Watch نمی‌تواند ببیند چه کسی آن را اداره می‌کند، یا اینکه شما آن را انتخاب کرده‌اید یا خود برنامه. برای پروکسی‌ای که Watch وجودش را نتیجه می‌گیرد، نمی‌تواند ببیند ترافیک پس از آن به کجا می‌رود.</string>
+    <string name="cannot_see_proxy">برای پروکسی‌ای که یک برنامه از آن استفاده می‌کند، Datapavan نمی‌تواند ببیند چه کسی آن را اداره می‌کند، یا اینکه شما آن را انتخاب کرده‌اید یا خود برنامه. برای پروکسی‌ای که Datapavan وجودش را نتیجه می‌گیرد، نمی‌تواند ببیند ترافیک پس از آن به کجا می‌رود.</string>
 
     <!--
-        W8, part 3b (ADR 0041, "How the per-tool guides are built"): the per-tool guides for proxy mode, in Watch and on the
+        W8, part 3b (ADR 0041, "How the per-tool guides are built"): the per-tool guides for proxy mode, in Advanced and on the
         website (scripts/guides.py writes docs/site/guides/ from these words and data/tools/guide*.tsv). A quoted %s is a
         tool's own label, read from the tool on this phone or from the data, never translated: only these sentences are.
         The guides name no tool as better than another and never point to a download.
     -->
     <!-- The chain section: one link per tool of the table installed here. %1$s: the tool's name. -->
-    <string name="chain_guides_title">فیلترشکن‌های این گوشی چطور کنار Watch کار می‌کنند:</string>
+    <string name="chain_guides_title">فیلترشکن‌های این گوشی چطور کنار Datapavan کار می‌کنند:</string>
     <string name="chain_guide_proxy">فیلترشکن %1$s در حالت پروکسی</string>
-    <string name="chain_guide_other">فیلترشکن %1$s و Watch</string>
+    <string name="chain_guide_other">فیلترشکن %1$s و Datapavan</string>
     <!-- A guide's screen and page. %1$s: the tool's name. -->
     <string name="guide_title_proxy">فیلترشکن %1$s در حالت پروکسی</string>
-    <string name="guide_title_other">فیلترشکن %1$s و Watch</string>
-    <string name="guide_intro">اندروید هر بار فقط یک وی‌پی‌ان را اجرا می‌کند. فیلترشکن %1$s در حالت پروکسی‌اش بدون وی‌پی‌ان کار می‌کند، و Watch می‌تواند برنامه‌های شما را از آن عبور دهد.</string>
+    <string name="guide_title_other">فیلترشکن %1$s و Datapavan</string>
+    <string name="guide_intro">اندروید هر بار فقط یک وی‌پی‌ان را اجرا می‌کند. فیلترشکن %1$s در حالت پروکسی‌اش بدون وی‌پی‌ان کار می‌کند، و Datapavan می‌تواند برنامه‌های شما را از آن عبور دهد.</string>
     <string name="guide_assumes">این مراحل فرض می‌کنند که فیلترشکن %1$s از قبل به‌عنوان وی‌پی‌ان برای شما کار می‌کند.</string>
     <string name="guide_heading_on">روشن کردن حالت پروکسی</string>
     <!-- %1$s: an address such as 127.0.0.1; %2$s: its port. -->
     <string name="guide_listener">بعد پروکسی آن روی این گوشی در %1$s، درگاه %2$s، منتظر اتصال می‌ماند.</string>
-    <string name="guide_next">بعد به Watch برگردید. Watch خودش پروکسی را پیدا می‌کند و پیشنهاد می‌دهد برنامه‌هایتان را از آن عبور دهد.</string>
+    <string name="guide_next">بعد به Datapavan برگردید. Datapavan خودش پروکسی را پیدا می‌کند و پیشنهاد می‌دهد برنامه‌هایتان را از آن عبور دهد.</string>
     <string name="guide_heading_password">رمز عبور برای پروکسی آن</string>
-    <string name="guide_password_optional">پروکسی آن می‌تواند نام کاربری و رمز عبور بخواهد. همان‌هایی را بگذارید که Watch هنگام پیدا کردن پروکسی نشان می‌دهد. آن وقت برنامه‌های دیگر این گوشی نمی‌توانند از آن استفاده کنند.</string>
+    <string name="guide_password_optional">پروکسی آن می‌تواند نام کاربری و رمز عبور بخواهد. همان‌هایی را بگذارید که Datapavan هنگام پیدا کردن پروکسی نشان می‌دهد. آن وقت برنامه‌های دیگر این گوشی نمی‌توانند از آن استفاده کنند.</string>
     <string name="guide_password_none">پروکسی آن نمی‌تواند رمز عبور بخواهد. تا وقتی اجرا می‌شود، هر برنامه‌ای در این گوشی می‌تواند از آن استفاده کند.</string>
     <string name="guide_heading_asks">آنچه درخواست می‌کند</string>
     <string name="guide_heading_back">بازگشت به حالت وی‌پی‌ان</string>
-    <string name="guide_back_note">وقتی فیلترشکن %1$s دوباره به‌عنوان وی‌پی‌ان اجرا شود، اندروید Watch را خاموش می‌کند: هر بار فقط یک وی‌پی‌ان اجرا می‌شود.</string>
+    <string name="guide_back_note">وقتی فیلترشکن %1$s دوباره به‌عنوان وی‌پی‌ان اجرا شود، اندروید وی‌پی‌ان Datapavan را خاموش می‌کند: هر بار فقط یک وی‌پی‌ان اجرا می‌شود.</string>
     <!-- %1$s: the tool's name; %2$s: its version. -->
     <string name="guide_read">از کد منبع %1$s، نسخهٔ %2$s خوانده شده است.</string>
-    <string name="guide_checked">در همان نسخه با Watch امتحان شده است.</string>
-    <string name="guide_not_checked">هنوز با Watch امتحان نشده است.</string>
+    <string name="guide_checked">در همان نسخه با Datapavan امتحان شده است.</string>
+    <string name="guide_not_checked">هنوز با Datapavan امتحان نشده است.</string>
     <string name="guide_labels_tool">کلمه‌های داخل گیومه از خود %1$s روی این گوشی خوانده شده‌اند.</string>
     <string name="guide_labels_recorded">کلمه‌های داخل گیومه همان‌طورند که آن نسخه نشان می‌دهد.</string>
-    <string name="guide_audit">بقیهٔ Datapavan، یعنی بررسی برنامه‌های شما، بدون Watch کار می‌کند.</string>
+    <string name="guide_audit">Datapavan برنامه‌های شما را بدون وی‌پی‌انش هم بررسی می‌کند.</string>
     <!-- Steps. Each %s in quotes is one of the tool's labels. -->
     <string name="guide_step_drawer">منوی گوشهٔ بالای صفحهٔ آن را باز کنید و روی «%1$s» بزنید.</string>
     <string name="guide_step_overflow">منوی سه‌نقطه را باز کنید و روی «%1$s» بزنید.</string>
@@ -612,61 +612,61 @@
     <string name="guide_step_singbox_users">در همان inbound از نوع «mixed»، «users» را با یک «username» و یک «password» اضافه کنید.</string>
     <string name="guide_step_singbox_back">دوباره از پروفایلی با یک inbound از نوع «tun» استفاده کنید، یا یکی با «%1$s» اضافه کنید. بعد آن را شروع کنید.</string>
     <string name="guide_step_auth_entry">زیر «%1$s»، روی «%2$s» بزنید و یک مورد اضافه کنید: نام کاربری، یک دونقطه، و بعد رمز عبور.</string>
-    <string name="guide_step_secret">روی «%1$s» بزنید و رمز عبوری را که Watch نشان می‌دهد تایپ کنید.</string>
+    <string name="guide_step_secret">روی «%1$s» بزنید و رمز عبوری را که Datapavan نشان می‌دهد تایپ کنید.</string>
     <string name="guide_step_profile_card">روی کارت پروفایل خود، روی «%1$s» بزنید.</string>
     <string name="guide_step_config_ssh">پیکربندی خود را ویرایش کنید: «%1$s» را روی «%2$s» بگذارید، و خانه‌های «%3$s» و «%4$s» را پر کنید.</string>
     <string name="guide_step_save_use">روی «%1$s» بزنید، بعد روی پروفایل تنظیمات تازه بزنید تا از آن استفاده شود.</string>
     <!-- What a tool asks for in proxy mode, from its code. -->
     <string name="guide_asks_notifications">اجازهٔ نشان دادن اعلان را درخواست می‌کند.</string>
-    <string name="guide_asks_local_network">در اندروید ۱۷ مجوز شبکهٔ محلی را درخواست می‌کند. Watch برای پروکسی آن، که روی همین گوشی است، به این مجوز نیازی ندارد.</string>
+    <string name="guide_asks_local_network">در اندروید ۱۷ مجوز شبکهٔ محلی را درخواست می‌کند. Datapavan برای پروکسی آن، که روی همین گوشی است، به این مجوز نیازی ندارد.</string>
     <string name="guide_asks_battery">درخواست می‌کند از بهینه‌سازی مصرف باتری کنار گذاشته شود.</string>
     <string name="guide_asks_alarms">در حالت پروکسی، پیش از شروع، مجوز زنگ‌های هشدار را درخواست می‌کند. خودش می‌گوید هیچ زنگ هشداری تنظیم نمی‌کند: این مجوز آن را، وقتی به‌عنوان وی‌پی‌ان اجرا نمی‌شود، در حال اجرا نگه می‌دارد.</string>
-    <string name="guide_asks_vpn_once">اولین باری که وصل می‌شود، حتی در این حالت، اجازهٔ راه‌اندازی وی‌پی‌ان را می‌خواهد. اگر اجازه دهید، اندروید Watch را خاموش می‌کند. بعد از آن Watch را دوباره روشن کنید.</string>
+    <string name="guide_asks_vpn_once">اولین باری که وصل می‌شود، حتی در این حالت، اجازهٔ راه‌اندازی وی‌پی‌ان را می‌خواهد. اگر اجازه دهید، اندروید وی‌پی‌ان Datapavan را خاموش می‌کند. بعد از آن، وی‌پی‌ان Datapavan را دوباره روشن کنید.</string>
     <string name="guide_asks_none">کد آن در این حالت هیچ مجوزی درخواست نمی‌کند.</string>
     <!-- Facts a user of one tool needs. %1$s in guide_note_named_port: a port. -->
-    <string name="guide_note_named_port">سرویس Watch پروکسی آن را فقط در درگاه %1$s جست‌وجو می‌کند، پس همین درگاه را بگذارید، حتی اگر پروفایل شما درگاه دیگری نام ببرد.</string>
-    <string name="guide_note_fixed_user">نام کاربری آن همیشه «%1$s» است. Watch همان را نشان می‌دهد.</string>
-    <string name="guide_note_user_port">در نمایهٔ کاری یا کاربر دیگری روی این گوشی، درگاه آن به اندازهٔ شمارهٔ آن کاربر بیشتر است. Watch آنجا را هم جست‌وجو می‌کند.</string>
+    <string name="guide_note_named_port">Datapavan پروکسی آن را فقط در درگاه %1$s جست‌وجو می‌کند، پس همین درگاه را بگذارید، حتی اگر پروفایل شما درگاه دیگری نام ببرد.</string>
+    <string name="guide_note_fixed_user">نام کاربری آن همیشه «%1$s» است. Datapavan همان را نشان می‌دهد.</string>
+    <string name="guide_note_user_port">در نمایهٔ کاری یا کاربر دیگری روی این گوشی، درگاه آن به اندازهٔ شمارهٔ آن کاربر بیشتر است. Datapavan آنجا را هم جست‌وجو می‌کند.</string>
     <string name="guide_note_stopped_first">اول آن را متوقف کنید: این را فقط وقتی تغییر می‌دهد که وصل نباشد.</string>
     <string name="guide_note_no_server">ترافیک شما را به هیچ سروری نمی‌فرستد. شکل ترافیک را تغییر می‌دهد و آن را از همین گوشی به راهش می‌فرستد. پس برنامه‌هایی که از آن عبور می‌کنند، با نشانی خود شما به مقصدهایشان می‌رسند.</string>
-    <string name="guide_note_ssh_only">فقط نوع تونل «%1$s» یک پروکسی SOCKS5 روی این گوشی باز می‌کند. با «%2$s»، Watch فقط وقتی می‌تواند از این درگاه استفاده کند که سرور شما یک پروکسی SOCKS5 بدهد.</string>
+    <string name="guide_note_ssh_only">فقط نوع تونل «%1$s» یک پروکسی SOCKS5 روی این گوشی باز می‌کند. با «%2$s»، Datapavan فقط وقتی می‌تواند از این درگاه استفاده کند که سرور شما یک پروکسی SOCKS5 بدهد.</string>
     <string name="guide_note_remote_profile">یک پروفایل راه دور فقط «%1$s» را نشان می‌دهد: محتوای آن از نشانی‌اش می‌آید و اینجا نمی‌توان آن را تغییر داد. به‌جای آن یک پروفایل محلی بسازید.</string>
     <string name="guide_note_engines">در این حالت، پروفایل‌هایی که از sing-box، OpenConnect، IKEv2 یا یک زنجیره استفاده می‌کنند همچنان وی‌پی‌ان راه می‌اندازند.</string>
     <!-- The pages of tools that run only as a VPN, and of those whose steps wait. %1$s: the tool's name. -->
-    <string name="guide_vpn_only">فیلترشکن %1$s فقط به‌عنوان وی‌پی‌ان کار می‌کند. اندروید هر بار فقط یک وی‌پی‌ان را اجرا می‌کند، پس Watch نمی‌تواند کنار آن کار کند: وقتی یکی شروع شود، اندروید دیگری را متوقف می‌کند.</string>
-    <string name="guide_wireguard_only">فیلترشکن %1$s فقط به‌عنوان وی‌پی‌ان کار می‌کند، پس Watch نمی‌تواند کنار آن کار کند. ولی Watch خودش می‌تواند یک پیکربندی WireGuard را اجرا کند و برنامه‌هایی را که انتخاب می‌کنید از آن عبور دهد.</string>
-    <!-- Quotes Watch's own heading, tunnels_title, as it reads. -->
-    <string name="guide_wireguard_add">یکی را در Watch، زیر «پیکربندی‌های WireGuard»، اضافه کنید.</string>
+    <string name="guide_vpn_only">فیلترشکن %1$s فقط به‌عنوان وی‌پی‌ان کار می‌کند. اندروید هر بار فقط یک وی‌پی‌ان را اجرا می‌کند، پس وی‌پی‌ان Datapavan نمی‌تواند کنار آن کار کند: وقتی یکی شروع شود، اندروید دیگری را متوقف می‌کند.</string>
+    <string name="guide_wireguard_only">فیلترشکن %1$s فقط به‌عنوان وی‌پی‌ان کار می‌کند، پس وی‌پی‌ان Datapavan نمی‌تواند کنار آن کار کند. ولی Datapavan خودش می‌تواند یک پیکربندی WireGuard را اجرا کند و برنامه‌هایی را که انتخاب می‌کنید از آن عبور دهد.</string>
+    <!-- Quotes the Network screen's own heading, tunnels_title, as it reads. -->
+    <string name="guide_wireguard_add">یکی را در Datapavan، زیر «پیکربندی‌های WireGuard»، اضافه کنید.</string>
     <string name="guide_wireguard_proton">وب‌سایت Proton VPN این فایل‌ها را می‌سازد، در طرح رایگان هم. در حساب خود، «Downloads» و بعد «WireGuard configuration» را باز کنید.</string>
     <string name="guide_wireguard_mullvad">وب‌سایت Mullvad این فایل‌ها را برای حساب پولی می‌سازد. از سازندهٔ پیکربندی آن استفاده کنید.</string>
     <string name="guide_wireguard_windscribe">وب‌سایت Windscribe این فایل‌ها را برای حساب‌های پولی می‌سازد. از «Config Generator» آن استفاده کنید.</string>
-    <string name="guide_wireguard_same">فایل پیکربندی یا کد QR که به WireGuard اضافه کردید، در Watch هم کار می‌کند.</string>
-    <string name="guide_note_amneziawg">فیلترشکن AmneziaWG شکل بسته‌های WireGuard را تغییر می‌دهد. Watch هنوز این تغییر را نمی‌خواند، پس نمی‌تواند این پیکربندی‌ها را اجرا کند.</string>
+    <string name="guide_wireguard_same">فایل پیکربندی یا کد QR که به WireGuard اضافه کردید، در Datapavan هم کار می‌کند.</string>
+    <string name="guide_note_amneziawg">فیلترشکن AmneziaWG شکل بسته‌های WireGuard را تغییر می‌دهد. Datapavan هنوز این تغییر را نمی‌خواند، پس نمی‌تواند این پیکربندی‌ها را اجرا کند.</string>
     <string name="guide_waiting_intro">برای فیلترشکن %1$s هنوز هیچ مرحله‌ای نیست.</string>
-    <string name="guide_waiting_closed">کد آن عمومی نیست، پس مراحلش منتظر می‌مانند تا با Watch امتحان شود.</string>
-    <string name="guide_waiting_partly">بخشی از کد آن عمومی نیست، پس مراحلش منتظر می‌مانند تا با Watch امتحان شود.</string>
-    <string name="guide_note_tethering">قابلیتی دارد که خودش آن را Proxy Tethering می‌نامد. هنوز معلوم نیست که این قابلیت پروکسی‌ای روی این گوشی می‌دهد که Watch بتواند از آن استفاده کند یا نه.</string>
-    <!-- The website's list of the guides (scripts/guides.py), which Watch does not show. -->
-    <string name="guide_index_title" tools:ignore="UnusedResources">فیلترشکن شما کنار Watch</string>
-    <string name="guide_index_intro" tools:ignore="UnusedResources">اندروید هر بار فقط یک وی‌پی‌ان را اجرا می‌کند. این صفحه‌ها می‌گویند هر فیلترشکن چطور می‌تواند کنار Watch کار کند، بر اساس آنچه از کد خود آن فیلترشکن خوانده شده است.</string>
+    <string name="guide_waiting_closed">کد آن عمومی نیست، پس مراحلش منتظر می‌مانند تا با Datapavan امتحان شود.</string>
+    <string name="guide_waiting_partly">بخشی از کد آن عمومی نیست، پس مراحلش منتظر می‌مانند تا با Datapavan امتحان شود.</string>
+    <string name="guide_note_tethering">قابلیتی دارد که خودش آن را Proxy Tethering می‌نامد. هنوز معلوم نیست که این قابلیت پروکسی‌ای روی این گوشی می‌دهد که Datapavan بتواند از آن استفاده کند یا نه.</string>
+    <!-- The website's list of the guides (scripts/guides.py), which Datapavan does not show. -->
+    <string name="guide_index_title" tools:ignore="UnusedResources">فیلترشکن شما کنار Datapavan Advanced</string>
+    <string name="guide_index_intro" tools:ignore="UnusedResources">اندروید هر بار فقط یک وی‌پی‌ان را اجرا می‌کند. این صفحه‌ها می‌گویند هر فیلترشکن چطور می‌تواند کنار وی‌پی‌ان Datapavan Advanced کار کند، بر اساس آنچه از کد خود آن فیلترشکن خوانده شده است. Datapavan Basic وی‌پی‌ان ندارد، پس کنار هر یک از این فیلترشکن‌ها کار می‌کند.</string>
     <string name="guide_index_proxy" tools:ignore="UnusedResources">فیلترشکن‌هایی که حالت پروکسی دارند</string>
     <string name="guide_index_wireguard" tools:ignore="UnusedResources">فیلترشکن‌هایی که فقط به‌عنوان وی‌پی‌ان کار می‌کنند، با پیکربندی‌های WireGuard</string>
     <string name="guide_index_vpn" tools:ignore="UnusedResources">فیلترشکن‌هایی که فقط به‌عنوان وی‌پی‌ان کار می‌کنند</string>
-    <string name="guide_index_waiting" tools:ignore="UnusedResources">فیلترشکن‌هایی که مراحلشان منتظر می‌مانند تا با Watch امتحان شوند</string>
+    <string name="guide_index_waiting" tools:ignore="UnusedResources">فیلترشکن‌هایی که مراحلشان منتظر می‌مانند تا با Datapavan امتحان شوند</string>
 
     <!-- W8, part 3a (ADR 0053): tracker blocking. Counts and sizes only inside the app: nothing of it reaches a
          notification, the summary or the widget (ADR 0046). ADR 0025's words hold (BlockingWordsTest), and "grade"
          never shows. The labels of the switches and buttons below are tapped by their text in the emulator check. -->
-    <!-- Watch's screen: the section, its switches and the global pause, which names no app. -->
+    <!-- the Network screen: the section, its switches and the global pause, which names no app. -->
     <string name="blocking_title">مسدودسازی ردیاب‌ها</string>
     <string name="blocking_switch">مسدود کردن ردیاب‌ها</string>
-    <string name="blocking_note">تا آن را روشن نکنید، خاموش می‌ماند. سرویس Watch نمی‌گذارد برنامه‌هایی که نصب کرده‌اید به میزبان‌های ردیاب‌ها برسند: جست‌وجوهای نام آن‌ها هیچ نشانی‌ای دریافت نمی‌کنند، و اتصال‌هایشان رد می‌شود. میزبانی که به خود برنامه هم سرویس می‌دهد مسدود نمی‌شود.</string>
+    <string name="blocking_note">تا آن را روشن نکنید، خاموش می‌ماند. Datapavan نمی‌گذارد برنامه‌هایی که نصب کرده‌اید به میزبان‌های کیت‌های ردیاب برسند: جست‌وجوهای نام آن‌ها هیچ نشانی‌ای دریافت نمی‌کنند، و اتصال‌هایشان رد می‌شود. میزبانی که به خود برنامه هم سرویس می‌دهد مسدود نمی‌شود.</string>
     <string name="blocking_not_covered">برنامه‌هایی که همراه گوشی آمده‌اند، خود اندروید و سرویس‌های گوگل پلی در بر گرفته نمی‌شوند.</string>
     <string name="blocking_browsers">مسدود کردن در مرورگرها هم</string>
     <string name="blocking_browsers_note">مرورگرها مسدود نمی‌شوند مگر اینکه آن‌ها را شامل کنید: مرورگرها هر وب‌سایتی را باز می‌کنند.</string>
     <!-- Only while the apps go through the user's circumvention tool. -->
     <string name="blocking_tool_dns">مسدود کردن جست‌وجوهای خود فیلترشکن شما برای ردیاب‌ها هم</string>
-    <string name="blocking_tool_dns_note">تا آن را روشن نکنید، خاموش می‌ماند. سرویس Watch آن وقت به جست‌وجوهای خود فیلترشکن شما برای میزبان‌های ردیاب، پاسخی بدون نشانی می‌دهد. هرگز اتصال‌های فیلترشکن را رد نمی‌کند: نام‌هایی که این اتصال‌ها نشان می‌دهند می‌توانند نام هر وب‌سایت پرطرفداری باشند.</string>
+    <string name="blocking_tool_dns_note">تا آن را روشن نکنید، خاموش می‌ماند. Datapavan آن وقت به جست‌وجوهای خود فیلترشکن شما برای میزبان‌های ردیاب، پاسخی بدون نشانی می‌دهد. هرگز اتصال‌های فیلترشکن را رد نمی‌کند: نام‌هایی که این اتصال‌ها نشان می‌دهند می‌توانند نام هر وب‌سایت پرطرفداری باشند.</string>
     <string name="blocking_pause">توقف مسدودسازی برای ۱۰ دقیقه</string>
     <!-- %1$s: when the pause ends, as the phone writes the time. -->
     <string name="blocking_paused">متوقف تا %1$s</string>
@@ -706,10 +706,10 @@
     <string name="blocking_entry_allowed">در این برنامه مجاز است، تا وقتی دوباره مسدودش کنید.</string>
     <!-- %1$s: what the host does, from Datapavan's table, in English. -->
     <string name="blocking_function">کاری که انجام می‌دهد: %1$s</string>
-    <!-- A connection of the history that Watch blocked: %1$s names the tracker, never the host where the switch "Log
+    <!-- A connection of the history that Datapavan blocked: %1$s names the tracker, never the host where the switch "Log
          where apps connect ..." left it out. -->
-    <string name="blocking_blocked">مسدودشده به دست Watch: %1$s.</string>
-    <!-- A host the app reached that Watch does not block in it, and why. -->
+    <string name="blocking_blocked">مسدودشده به دست Datapavan: %1$s.</string>
+    <!-- A host the app reached that Datapavan does not block in it, and why. -->
     <string name="blocking_kept">مسدود نشده: این میزبان به خود برنامه هم سرویس می‌دهد.</string>
     <string name="blocking_kept_code">مسدود نشده: در این برنامه، این میزبان به ورود به حساب یا اشتراک‌گذاری هم سرویس می‌دهد.</string>
     <string name="blocking_kept_unread">مسدود نشده: این میزبان ممکن است به ورود به حساب یا اشتراک‌گذاری هم سرویس بدهد، و Datapavan هنوز کد این برنامه را نخوانده است.</string>
@@ -732,4 +732,55 @@
     <string name="android_label_usage_access">دسترسی به داده‌های مصرف</string>
     <!-- Android's own label: Settings' usage_access at android-16.0.0_r4. -->
     <string name="android_label_usage_access_api36">داده‌های مصرف برنامه</string>
+    <!-- Android's own labels (ADR 0054) and the Network screen's title, moved from strings_untranslated.xml for ADR
+         0030's round of 2026-11-23. For the translators: each label placeholder is a label of Android's own screens,
+         read from the phone in its own language, or Android's text in Datapavan's language where the phone gives none
+         (android_label_* in strings.xml, which are copied from AOSP, never translated). It is always in the language's
+         quotes, as this file's \"…\", and after a noun (the setting, the switch) or a verb of naming ("call it"), so
+         that no word around it depends on its gender, number or case: Russian and German keep it in the nominative,
+         Arabic adds no ال to it, and Persian puts no ezafe on it. Two exceptions: Private DNS's choices follow "to" and
+         "is" in chain_private_dns_quoted and dns_private_dns_strict_quoted, where Russian and Arabic may set "the
+         choice" before them. One placeholder may hold two labels, the phone's then Datapavan's in brackets, as
+         label_with_own sets them: put nothing of the sentence's grammar on it. Persian's labels write VPN in Latin
+         letters, as AOSP does, where Datapavan's own sentences write it in Persian ones: keep both as they are. -->
+    <!-- A label read in the phone's language (%1$s), then the same label in Datapavan's language (%2$s), where the two
+         differ: Android's labels and the tools' in the per-tool guides. Chinese takes full-width brackets. -->
+    <string name="label_with_own">%1$s (%2$s)</string>
+    <!-- Under a part that names Android's own settings or switches, where some of those names are Android's own rather
+         than this phone's: Datapavan has not seen this phone's maker show them, or the phone gave none. %1$s: those
+         names, each as label_named gives it, joined by labels_list_separator. -->
+    <string name="labels_android_note">این‌ها نام‌های خود اندروید هستند و گوشی شما ممکن است نام‌های دیگری نشان دهد: %1$s.</string>
+    <!-- One name in the list of labels_android_note, in the language's quotes. -->
+    <string name="label_named">«%1$s»</string>
+    <!-- Between the names in labels_android_note. -->
+    <string name="labels_list_separator">"، "</string>
+    <!-- In "Now", under the line that Datapavan has no usage access, before the button that opens Android's page for it:
+         Datapavan's name for the access is kept, and this line gives the phone's own (the maintainer, 2026-11-22). %1$s:
+         the page's name in this phone's Settings, "Usage access" to Android 15 and "App usage data" from 16. -->
+    <string name="now_access_phone_name">تنظیمات این گوشی آن را «%1$s» می‌نامد.</string>
+    <!-- After Android refused the VPN consent, or another app's always-on VPN kept Datapavan's VPN from starting.
+         %1$s: Android's always-on switch on a VPN's settings page. -->
+    <string name="consent_refused_quoted">اندروید اجازه نداد Datapavan وی‌پی‌انش را راه بیندازد. اگر کلید «%1$s» برای برنامهٔ وی‌پی‌ان دیگری روشن است، اول آن را خاموش کنید.</string>
+    <!-- Private DNS set to a provider by name, %1$s (for example dns.google); %2$s: Android's name for the setting.
+         Datapavan does not ask the user to change it. -->
+    <string name="private_dns_strict_quoted">تنظیم «%2$s» در این گوشی روی %1$s است. اندروید نام‌هایی را که برنامه‌ها جست‌وجو می‌کنند، رمزگذاری‌شده به آنجا می‌فرستد. این کار آن‌ها را در برابر شبکهٔ شما خصوصی نگه می‌دارد، اما Datapavan نمی‌تواند آن‌ها را بخواند.</string>
+    <!-- Shown when the phone's Private DNS is set to a provider's host name. %1$s: that host name, such as dns.google.
+         %2$s: the tool's name. %3$s: Android's name for the setting; %4$s and %5$s: its choices Automatic and Off. -->
+    <string name="chain_private_dns_quoted">تنظیم «%3$s» در این گوشی روی %1$s است. آن وقت اندروید نام‌هایی را که برنامه‌ها جست‌وجو می‌کنند، رمزگذاری‌شده و بدون گذر از Datapavan و %2$s، مستقیم به خود %1$s می‌فرستد. شبکهٔ شما نمی‌تواند این نام‌ها را بخواند، ولی می‌تواند ببیند که این گوشی از %1$s استفاده می‌کند. و %1$s نام‌ها و نشانی واقعی شما در اینترنت را می‌بیند. برای برنامه‌هایی که از %2$s عبور می‌دهید، تنظیم «%3$s» را به «%4$s» یا «%5$s» تغییر دهید.</string>
+    <!-- Under it, before a button that opens Android's network settings, which differ between phone makers. %1$s:
+         Android's name for the setting. -->
+    <string name="chain_private_dns_where_quoted">تنظیم «%1$s» را در تنظیماتی که باز می‌شود پیدا کنید. در بعضی گوشی‌ها یک مرحله جلوتر است.</string>
+    <!-- %1$s: the host name of Android's Private DNS provider. %2$s: Android's name for the setting; %3$s and %4$s: its
+         choices Off and Automatic. -->
+    <string name="dns_private_dns_strict_quoted">تنظیم «%2$s» در اندروید نام‌های همهٔ برنامه‌ها را بدون گذر از Datapavan به %1$s می‌فرستد. انتخاب شما در اینجا فقط تا وقتی اعمال می‌شود که آن تنظیم روی «%3$s» یا «%4$s» باشد.</string>
+    <!-- %1$s: Android's always-on switch on a VPN's settings page. -->
+    <string name="dns_strict_limits_quoted">حالت سخت‌گیرانه همه چیز را در بر نمی‌گیرد. اندروید اتصال را خودش و بدون گذر از Datapavan بررسی می‌کند. بعضی برنامه‌ها از DNS رمزگذاری‌شدهٔ خودشان استفاده می‌کنند. برنامه‌هایی که کنار گذاشته‌اید در بر گرفته نمی‌شوند. و وقتی Datapavan وی‌پی‌انش را دوباره راه می‌اندازد، یا اگر اندروید آن را متوقف کند در حالی که کلید «%1$s» برای آن خاموش است، برنامه‌ها از سرور DNS شبکه استفاده می‌کنند.</string>
+    <!-- A configuration's server given by name. %1$s: Android's name for the Private DNS setting. -->
+    <string name="import_server_name_quoted">Datapavan پیش از شروع تونل این نام را از راه شبکهٔ شما جست‌وجو می‌کند. اگر تنظیم «%1$s» خاموش باشد، شبکهٔ شما ممکن است آن را ببیند.</string>
+    <!-- The phone has no screen lock (a PIN, pattern or password). %1$s: Android's name for the setting (Settings,
+         Security). -->
+    <string name="log_no_screen_lock_quoted">روی این گوشی هیچ پین، الگو یا رمز عبوری زیر تنظیم «%1$s» گذاشته نشده است، پس سابقهٔ روزهای قبل را در هر زمانی می‌توان باز کرد. با داشتن یکی از آن‌ها، این سابقه‌ها فقط وقتی باز می‌شوند که قفل گوشی باز باشد.</string>
+    <!-- The title of Datapavan Advanced's screen for its network part: the VPN, the connection log, the user's tool,
+         WireGuard, DNS and tracker blocking (the maintainer, 2026-11-22: the part has no name of its own). -->
+    <string name="network_title">شبکه</string>
 </resources>

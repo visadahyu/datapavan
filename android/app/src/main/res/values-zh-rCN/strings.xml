@@ -82,7 +82,7 @@
     <string name="owners_heading">谁在运营这些服务</string>
     <string name="owner_same_group">由与此应用相同的公司集团（%1$s）制作：%2$s。该集团可以将这些数据与旗下其他应用和服务收集的数据合并。</string>
     <string name="owner_shut_down">%1$s 背后的服务已于 %2$s 关闭。</string>
-    <string name="usage_access_title">网络使用情况和您未打开的应用</string>
+    <string name="usage_access_title">流量使用和您未打开的应用</string>
     <string name="usage_access_body">有了使用情况访问权限，Datapavan 可以显示每个应用使用了多少数据，以及哪些应用您已很久没有打开。同样的权限也能让一个应用看到您打开过哪些应用以及打开的时间。Datapavan 只读取总量和每个应用上次使用的日期，不保留任何这些信息，也无法将其发送到任何地方，因为它没有网络访问权限。没有此权限，其他功能都能正常使用。</string>
     <string name="usage_access_body_advanced">有了使用情况访问权限，Datapavan 可以显示每个应用使用了多少数据，以及哪些应用您已很久没有打开。同样的权限也能让一个应用看到您打开过哪些应用以及打开的时间。Datapavan Advanced 还会读取自手机启动以来哪个应用在何时显示在屏幕上、哪些应用运行了前台服务、您以其他方式（例如点按其通知）使用了哪些应用，以及屏幕何时开启或关闭、锁屏何时出现；还会读取每个应用是否可以显示通知。据此，它针对每个连接判断您当时是否在使用该应用。它得知的内容只保存在两个地方：内存中，供“Now”使用；以及在您保留连接日志时，作为每条记录的状态，保存您所选的天数。它不会把这些内容发送到任何地方。没有此权限，其他功能都能正常使用。</string>
     <string name="usage_access_phone_warning">您开启此权限时，有些手机会显示自己的强烈警告，有时还带有倒计时。任何应用请求使用情况访问权限时，这些手机都会显示这一警告。</string>
@@ -95,8 +95,8 @@
     <string name="usage_access_step_allow">2. 点按“%1$s”，然后点按该页面顶部的菜单（⋮）。选择“%2$s”（完成第 1 步后才会显示在那里），然后确认。之后再次点按“%3$s”。</string>
     <string name="usage_access_app_info">打开应用信息</string>
     <string name="usage_reading">正在读取 Android 的记录…</string>
-    <string name="usage_missing">网络使用情况和上次打开时间需要使用情况访问权限，您可以在“概览”页面授予。</string>
-    <string name="section_network">网络使用情况</string>
+    <string name="usage_missing">流量使用和上次打开时间需要使用情况访问权限，您可以在“流量使用”标签页中授予。</string>
+    <string name="section_network">流量使用</string>
     <plurals name="network_period">
         <item quantity="other">过去 %1$d 天：%2$s 至 %3$s</item>
     </plurals>
@@ -110,7 +110,7 @@
     <string name="network_lag">数据来自 Android 自己的统计。移动数据是所有 SIM 卡的合计。Datapavan 不保留这些数字。</string>
     <!-- Below the network list and the apps list. -->
     <string name="other_profiles">此手机上其他个人资料（例如工作资料、私密空间或安全文件夹）中的应用未包含在此处。Android 只向 Datapavan 显示它所在的个人资料。</string>
-    <string name="network_none">此期间没有网络使用。</string>
+    <string name="network_none">此期间没有流量使用。</string>
     <string name="network_mobile">移动数据 %1$s：接收 %2$s，发送 %3$s，其中 %4$s 为后台数据</string>
     <string name="network_wifi">WLAN %1$s：接收 %2$s，发送 %3$s，其中 %4$s 为后台数据</string>
     <string name="network_mobile_foreground">移动数据 %1$s：接收 %2$s，发送 %3$s，其中没有后台数据</string>
@@ -501,10 +501,10 @@
 
     <!-- Whether this copy is genuine (ADR 0024). -->
     <string name="own_title">此副本是正版吗？</string>
-    <string name="own_teach">正版 Datapavan 没有互联网访问权限，也从不请求。请求此权限的副本不是正版。</string>
+    <string name="own_teach">正版 Datapavan Basic 没有互联网访问权限，也从不请求。请求此权限的 Basic 副本不是正版。</string>
     <string name="own_teach_advanced">正版 Datapavan Basic 始终没有互联网访问权限。正版 Datapavan Advanced 仅将互联网用于传输您自己的应用的流量，以及连接您选择的服务器。它从不请求访问您的相机、麦克风、位置信息、通讯录、短信或通话记录。任何 Datapavan 应用都从不向您索要钱款。</string>
     <string name="own_internet_none">此副本没有互联网访问权限。</string>
-    <string name="own_internet_present">此副本请求互联网访问权限，因此不是正版 Datapavan。请卸载它，然后从您信任的渠道安装 Datapavan。</string>
+    <string name="own_internet_present">此副本请求互联网访问权限，因此不是正版 Datapavan Basic。请卸载它，然后从您信任的渠道安装 Datapavan。</string>
     <string name="own_permissions_none_advanced">此副本没有请求其中任何一项。</string>
     <string name="own_permissions_present_advanced">此副本请求了其中至少一项，因此不是正版 Datapavan Advanced。请卸载它，然后从您信任的渠道安装 Datapavan。</string>
     <string name="own_permissions_extra">此副本请求了正版 Datapavan 从不请求的权限，因此不是正版 Datapavan。请卸载它，然后从您信任的渠道安装 Datapavan。</string>
@@ -521,7 +521,7 @@
     <string name="nav_summary">概览</string>
     <string name="nav_apps">应用</string>
     <string name="nav_phone">手机</string>
-    <string name="nav_network">网络</string>
+    <string name="nav_network">流量使用</string>
     <string name="settings_title">设置</string>
     <string name="settings_appearance">外观</string>
     <string name="settings_theme_system">跟随系统</string>
@@ -553,9 +553,9 @@
     <string name="about_open_website">打开网站</string>
     <!-- The editions (ADR 0045), in a few calm lines, with no prompt: the one this is, and the others. Datapavan Basic on Google Play is updated by Google Play. -->
     <string name="about_editions_title">各版本</string>
-    <string name="about_editions_basic">这是 Datapavan Basic，由其开发者使用一个离线保存的密钥签名。它始终没有互联网访问权限。Google Play 上的 Datapavan Basic 进行相同的检查，由 Google 签名。Datapavan Advanced 增加了 Watch，可显示每个应用连接到哪里。</string>
-    <string name="about_editions_play">这是来自 Google Play 的 Datapavan Basic，由 Google Play 保持更新。它由 Google 签名。它始终没有互联网访问权限。由其开发者使用一个离线保存的密钥签名的 Datapavan Basic，以及增加了 Watch 的 Datapavan Advanced，都发布在网站上。</string>
-    <string name="about_editions_advanced">这是 Datapavan Advanced，由其开发者使用一个离线保存的密钥签名。它仅将互联网用于传输您自己的应用的流量，以及连接您选择的服务器。Datapavan Basic 进行相同的检查，只是不含 Watch；它始终没有互联网访问权限，因此可以从外部检查此应用。</string>
+    <string name="about_editions_basic">这是 Datapavan Basic，由其开发者使用一个离线保存的密钥签名。它始终没有互联网访问权限。Google Play 上的 Datapavan Basic 进行相同的检查，由 Google 签名。Datapavan Advanced 增加了每个应用的连接日志、跟踪器拦截和加密 DNS。</string>
+    <string name="about_editions_play">这是来自 Google Play 的 Datapavan Basic，由 Google Play 保持更新。它由 Google 签名。它始终没有互联网访问权限。网站上提供由其开发者使用一个离线保存的密钥签名的 Datapavan Basic，以及 Datapavan Advanced。Advanced 增加了每个应用的连接日志、跟踪器拦截和加密 DNS。</string>
+    <string name="about_editions_advanced">这是 Datapavan Advanced，由其开发者使用一个离线保存的密钥签名。它仅将互联网用于传输您自己的应用的流量，以及连接您选择的服务器。Datapavan Basic 进行相同的检查，但没有连接日志、跟踪器拦截和加密 DNS。Basic 始终没有互联网访问权限，因此可以从外部检查此应用。</string>
     <!-- On the overview, about four months after this version's release. %1$s is a date in the user's format. -->
     <string name="version_old">此版本的 Datapavan 发布于 %1$s。可能已有较新的版本，而 Datapavan 无法替您检查。</string>
     <string name="version_old_button">在哪里获取</string>
@@ -618,12 +618,13 @@
     <string name="screenshots_allow">允许截图一分钟</string>
     <string name="screenshots_allowed">现在允许截图。一分钟后，或者您一离开此应用，截图就会再次被阻止。</string>
     <string name="screenshots_block">立即阻止截图</string>
-    <!-- Datapavan Advanced only: the way from the network page to Watch (ui/WatchEntry.kt, ADR 0045). -->
-    <string name="network_entry_body">实时查看您手机上的每个应用连接到哪里。Watch 在这部手机上作为 VPN 运行。它使用互联网只是为了转发每个应用的流量，不会向 Datapavan 发送任何内容。</string>
-    <string name="network_entry_open">打开 Watch</string>
+    <!-- Datapavan Advanced only: the card on the Data use tab that opens the Network screen (ui/NetworkEntry.kt, ADR 0045).
+         Its title is network_entry_title, at the end of this file. -->
+    <string name="network_entry_body">实时查看您手机上的每个应用连接到哪里。为此，Datapavan 在这部手机上作为 VPN 运行。它使用互联网只是为了转发每个应用的流量，不会向其开发者发送任何内容。</string>
+    <string name="network_entry_open">查看应用连接到哪里</string>
 
-    <!-- W5, part 3 (ADR 0046): the way into Watch's "Now" from an app's page, Advanced only. -->
-    <!-- Datapavan Advanced, on an app's page: opens Watch's view "Now" for that app. -->
+    <!-- W5, part 3 (ADR 0046): the way into "Now" from an app's page, Advanced only. -->
+    <!-- Datapavan Advanced, on an app's page: opens the view "Now" of the Network screen for that app. -->
     <string name="network_now_open">查看此应用此刻在发送什么</string>
 
     <!-- W7, part 2 (ADR 0035, release gate): the licence screen. -->
@@ -634,7 +635,7 @@
     <string name="licences_text_licence">Apache License 2.0。Datapavan 依据它发布，其许多组件也是如此。</string>
     <!-- %1$s: the name of a native library file, for example libdatapavan.so. -->
     <string name="licences_text_native">%1$s 中各 Rust 软件包的许可文本。</string>
-    <string name="licences_text_mpl">Mozilla Public License 2.0。GotaTun（Watch 中的 WireGuard 代码）依据它发布。</string>
+    <string name="licences_text_mpl">Mozilla Public License 2.0。GotaTun（Datapavan Advanced 中的 WireGuard 代码）依据它发布。</string>
     <string name="licences_text_gotatun">GotaTun 中源自 Cloudflare 的 BoringTun 的那些部分所适用的 BSD 3-Clause License。</string>
     <!-- A file the screen has no description for: its name only. -->
     <string name="licences_text_other">此应用附带的一份许可文本。</string>
@@ -707,4 +708,48 @@
     <string name="android_label_unused_app_setting">暂停闲置应用的活动</string>
     <!-- Android's own label: Settings' app_restricted_settings_lockscreen_title at android-15.0.0_r36. -->
     <string name="android_label_restricted_settings">允许受限制的设置</string>
+    <!-- Android's own labels (ADR 0054) and the Data use tab's card, moved from strings_untranslated.xml for ADR 0030's
+         round of 2026-11-23. For the translators: each label placeholder is a label of Android's own screens, read from
+         the phone in its own language, or Android's text in Datapavan's language where the phone gives none
+         (android_label_* in strings.xml, which are copied from AOSP, never translated). It is always in the language's
+         quotes, as this file's “…”, and after a noun (the page, the switch, the button) or a verb of naming ("call it",
+         "choose"), so that no word around it depends on its gender, number or case: Russian and German keep it in the
+         nominative, Arabic adds no ال to it, and Persian puts no ezafe on it. One placeholder may hold two labels, the
+         phone's then Datapavan's in brackets, as label_both sets them: put nothing of the sentence's grammar on it.
+         Persian's labels write VPN in Latin letters, as AOSP does, where Datapavan's own sentences write it in Persian
+         ones: keep both as they are. -->
+    <!-- An Android label read in the phone's language (%1$s), then the same label in Datapavan's language (%2$s), where
+         the two differ. Chinese takes full-width brackets. -->
+    <string name="label_both">%1$s（%2$s）</string>
+    <!-- Under a part that names Android's own pages, switches or buttons, where some of those names are Android's own
+         rather than this phone's: Datapavan has not seen this phone's maker show them, or the phone gave none. %1$s:
+         those names, each as label_named gives it, joined by list_separator. -->
+    <string name="android_labels_android">这些是 Android 自己的名称，您的手机上可能显示其他名称：%1$s。</string>
+    <!-- One name in the list of android_labels_android, in the language's quotes. -->
+    <string name="label_named">“%1$s”</string>
+    <!-- On the usage access card, after what usage access allows: Datapavan's name for the access is kept, and this line
+         gives the phone's own (the maintainer, 2026-11-22). %1$s: the page's name in this phone's Settings, "Usage access"
+         to Android 15 and "App usage data" from 16; %2$s: the switch on it. -->
+    <string name="usage_access_phone_name">这部手机的设置中称之为“%1$s”，其中的开关为“%2$s”。</string>
+    <!-- The plan's card for wireless debugging. %1$s: the developer options page, %2$s: the wireless debugging switch,
+         as Android names them. -->
+    <string name="plan_wireless_body_quoted">同一网络上的电脑一旦完成配对，就可以控制这部手机。除非您正在使用，否则请在“%1$s”页面上关闭“%2$s”开关。</string>
+    <!-- The plan's card for USB debugging. %1$s: the developer options page, %2$s: the USB debugging switch. -->
+    <string name="plan_usb_body_quoted">通过数据线连接的电脑一旦获得您的允许，就可以控制这部手机。除非您正在使用，否则请在“%1$s”页面上关闭“%2$s”开关。</string>
+    <!-- The plan's card for a certificate authority the user installed. %1$s: Android's page of encryption and
+         credentials. -->
+    <string name="plan_authority_body_quoted">持有其密钥的人可以读取信任它的应用的加密连接。除非您的工作或学校需要它，否则请在“%1$s”页面上将其移除。</string>
+    <!-- Under the button that opens the security settings. %1$s: the page of device admin apps, as Android names it. -->
+    <string name="plan_device_admins_note_quoted">请在安全设置中查找“%1$s”页面。有些手机会将它放在其他安全设置下。</string>
+    <!-- The plan's card for an app not opened for long that still holds sensitive access, where Android has a switch
+         that takes its permissions back while it is not used (Android 11 and later, and an app the plan offers it for).
+         %1$s: that switch. -->
+    <string name="plan_not_opened_sensitive_body_quoted">它仍持有以下访问权限。请移除您不需要的权限，或开启“%1$s”开关。</string>
+    <!-- The same card where Android has no such switch for the app, as on Android 10. -->
+    <string name="plan_not_opened_sensitive_body_plain">它仍持有以下访问权限。请移除您不需要的权限。</string>
+    <!-- How to turn off a preinstalled app. %1$s: the button on the app's page, as Android names it. -->
+    <string name="guide_steps_quoted">1. 在系统设置中打开此应用。\n2. 点按“%1$s”按钮，或用于关闭此应用的按钮。\n3. 如果该按钮显示为灰色，说明手机厂商阻止了此操作。您可以改为通过 USB 调试，从电脑上为您的用户移除此应用；此操作可以撤销。</string>
+    <!-- Datapavan Advanced only: the title of the card on the Data use tab that opens the Network screen, where each
+         app's connections show (ui/NetworkEntry.kt). -->
+    <string name="network_entry_title">每个应用的连接</string>
 </resources>

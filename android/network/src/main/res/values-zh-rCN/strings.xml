@@ -1,17 +1,17 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources xmlns:tools="http://schemas.android.com/tools">
     <string name="network_tagline">查看您手机上的每个应用连接到哪里。</string>
-    <string name="status_on">Watch 已开启。</string>
-    <string name="status_off">Watch 已关闭。</string>
+    <string name="status_on">Datapavan 的 VPN 已开启。</string>
+    <string name="status_off">Datapavan 的 VPN 已关闭。</string>
     <string name="turn_on">开启</string>
     <string name="turn_off">关闭</string>
-    <string name="private_dns_network">您所在网络的 DNS 服务器支持加密，Android 会用它来处理应用查询的名称。这能保护这些名称，但 Watch 无法读取它们。</string>
-    <string name="private_dns_still_named">Watch 仍会根据每个应用发送的内容，或根据其所连接网络的运营方，为大多数连接标注名称。</string>
+    <string name="private_dns_network">您所在网络的 DNS 服务器支持加密，Android 会用它来处理应用查询的名称。这能让这些名称保持私密，但 Datapavan 无法读取它们。</string>
+    <string name="private_dns_still_named">Datapavan 仍会根据每个应用发送的内容，或根据其所连接网络的运营方，为大多数连接标注名称。</string>
     <string name="log_title">连接日志</string>
-    <string name="log_encrypted">Watch 会在这部手机上以加密形式记录每一次连接。</string>
+    <string name="log_encrypted">Datapavan 会在这部手机上以加密形式记录每一次连接。</string>
     <string name="log_locked">只有在手机解锁时，才能打开今天之前的记录。</string>
-    <string name="log_lock_refused">这部手机不允许 Watch 将记录与屏锁绑定，因此今天之前的记录随时都能打开。</string>
-    <string name="log_not_kept">Watch 不保留任何连接记录。</string>
+    <string name="log_lock_refused">这部手机不允许 Datapavan 将记录与屏锁绑定，因此今天之前的记录随时都能打开。</string>
+    <string name="log_not_kept">Datapavan 不保留任何连接记录。</string>
     <string name="log_keep">记录保留时长</string>
     <string name="log_keep_none">不保留</string>
     <plurals name="log_keep_days">
@@ -21,7 +21,7 @@
     <string name="log_deleted">日志已删除。</string>
     <string name="chain_title">您用来绕过网络限制的工具</string>
     <string name="chain_searching">正在查找以代理模式运行的绕过网络限制工具…</string>
-    <string name="chain_none">未安装支持代理模式的绕过网络限制工具。Android 同一时间只能运行一个 VPN，因此 Watch 只能通过此类工具的代理模式与它配合工作。</string>
+    <string name="chain_none">未安装支持代理模式的绕过网络限制工具。Android 同一时间只能运行一个 VPN，因此 Datapavan 的 VPN 只能通过此类工具的代理模式与它并行工作。</string>
     <string name="chain_not_answering">已安装：%1$s。没有代理响应。请以代理模式而不是 VPN 模式运行该工具，然后重新查找。</string>
     <string name="chain_waiting">%1$s 没有响应。您设置为通过它连接的应用会等待，它们的任何数据都不会直接发出。</string>
     <string name="chain_search_again">重新查找</string>
@@ -31,10 +31,10 @@
     <string name="chain_some_apps">仅限我选择的应用</string>
     <string name="chain_no_udp">%1$s 无法传输 UDP 流量。在您设置为通过它连接的应用中，通话和部分游戏将无法使用。网页仍能正常加载。</string>
     <string name="chain_proxy_open">%1$s 的代理不需要密码，因此这部手机上的任何应用都能使用它。这样的应用可以得知您在使用 %1$s，也能得知其服务器的地址，还能通过它发送自己的流量。</string>
-    <string name="chain_proxy_no_password">%1$s 没有设置密码的选项，因此只要它以代理模式运行，它的代理就一直开放。Watch 仍会让您选择的应用通过它连接。</string>
+    <string name="chain_proxy_no_password">%1$s 没有设置密码的选项，因此只要它以代理模式运行，它的代理就一直开放。Datapavan 仍会让您选择的应用通过它连接。</string>
     <string name="chain_proxy_closed">%1$s 的代理需要密码，因此这部手机上的其他应用无法使用它。但它们仍能看到这个代理存在。</string>
     <string name="chain_udp">也让 UDP 通过 %1$s 传输</string>
-    <string name="chain_udp_note">除非您开启，否则保持关闭。目前没有已知的绕过网络限制工具会检查是哪个应用向其代理发送 UDP：当 %1$s 为 Watch 传输 UDP 时，这部手机上的其他应用也可能通过它发送 UDP，即使设置了密码也是如此。关闭时，在您设置为通过 %1$s 连接的应用中，通话和部分游戏无法使用。网页仍能正常加载。</string>
+    <string name="chain_udp_note">除非您开启，否则保持关闭。目前没有已知的绕过网络限制工具会检查是哪个应用向其代理发送 UDP：当 %1$s 为 Datapavan 传输 UDP 时，这部手机上的其他应用也可能通过它发送 UDP，即使设置了密码也是如此。关闭时，在您设置为通过 %1$s 连接的应用中，通话和部分游戏无法使用。网页仍能正常加载。</string>
     <string name="chain_private_dns_open">打开网络设置</string>
     <string name="chain_password">为防止这部手机上的其他应用使用 %1$s 的代理，请在 %1$s 中设置这个用户名和密码。</string>
     <string name="chain_password_where">在 %1$s 中，请到其本地代理的设置里查找，这类设置常被称为 inbound、SOCKS 或本地端口。</string>
@@ -59,8 +59,8 @@
 
     <!-- Apps and the VPN (ADR 0041) -->
     <string name="left_out_title">应用与 VPN</string>
-    <string name="vpn_seen">Android 会告诉每个应用 VPN 已开启，Watch 无法隐藏这一点。有些应用会报告此事，有些应用在 VPN 开启时会拒绝运行。</string>
-    <string name="left_out_body">如果某个应用无法与 Watch 一起使用，请将它排除在外。这样它会不经过 Watch 直接连接互联网：Watch 不会看到它的连接，也不会保留连接记录，它也不会经过您用来绕过网络限制的工具。Android 不会再告诉该应用它的网络是 VPN，但该应用仍可能发现手机上有一个 VPN 接口。Watch 开启时，更改需要一点时间，因为 Watch 要重新设置它的隧道。</string>
+    <string name="vpn_seen">Android 会告诉每个应用 VPN 已开启，Datapavan 无法隐藏这一点。有些应用会报告此事，有些应用在 VPN 开启时会拒绝运行。</string>
+    <string name="left_out_body">如果某个应用无法与 Datapavan 的 VPN 一起使用，请将它排除在外。这样它会不经过 Datapavan 直接连接互联网：Datapavan 不会看到它的连接，也不会记录这些连接，它也不会经过您用来绕过网络限制的工具。Android 不会再告诉该应用它的网络是 VPN，但该应用仍可能发现手机上有一个 VPN 接口。VPN 开启时，更改需要一点时间，因为 Datapavan 要重新设置它的隧道。</string>
     <string name="left_out_none">没有排除任何应用。</string>
     <plurals name="left_out_count">
         <item quantity="other">已排除 %d 个应用。</item>
@@ -69,13 +69,13 @@
     <string name="left_out_done">完成</string>
 
     <!-- W5, part 3 (ADR 0046): "Now" and each app's history. -->
-    <!-- Watch's screen: the way into "Now". -->
+    <!-- the Network screen: the way into "Now". -->
     <string name="now_open">查看应用此刻在发送什么</string>
 
     <string name="now_title">Now</string>
     <string name="now_intro">使用过网络的应用，以及当时您是否在使用它们。</string>
-    <string name="now_network_off">Watch 已关闭，因此看不到任何流量。请在 Watch 的页面中开启它。</string>
-    <string name="now_no_access">Watch 无法得知您正在使用哪个应用，因为它没有使用情况访问权限。各应用显示时不带状态。</string>
+    <string name="now_network_off">Datapavan 的 VPN 已关闭，因此它看不到任何流量。请在“网络”页面中开启它：在“流量使用”标签页上，点按“查看应用连接到哪里”。</string>
+    <string name="now_no_access">Datapavan 无法得知您正在使用哪个应用，因为它没有使用情况访问权限。各应用显示时不带状态。</string>
     <string name="now_allow_access">授予使用情况访问权限</string>
     <string name="now_locked">手机启动后首次解锁之后，才会显示您正在使用哪个应用。</string>
     <string name="now_reading">正在读取您在使用哪些应用。</string>
@@ -115,11 +115,11 @@
     <string name="now_bytes_in_use">在您使用它时，发送了 %1$s，接收了 %2$s。</string>
     <string name="now_bytes_none">发送了 %1$s，接收了 %2$s，无状态。%3$s</string>
     <string name="now_bytes_not_yet">发送了 %1$s，接收了 %2$s，状态尚未得知。</string>
-    <string name="now_why_no_access">Watch 当时没有使用情况访问权限。</string>
+    <string name="now_why_no_access">Datapavan 当时没有使用情况访问权限。</string>
     <string name="now_why_locked">当时手机启动后还未解锁。</string>
-    <string name="now_why_late">Watch 得知状态时已经太晚。</string>
+    <string name="now_why_late">Datapavan 太晚才得知状态。</string>
     <string name="now_why_no_app">Android 没有说明这是哪个应用。</string>
-    <string name="now_why_not_told">Watch 当时还没有读取状态，或已经停止。</string>
+    <string name="now_why_not_told">Datapavan 当时还没有读取状态，或已经停止。</string>
     <string name="now_is_tool">您用来绕过网络限制的工具。它的流量包括您设置为通过它连接的应用的流量。</string>
     <string name="now_history">查看其历史记录</string>
 
@@ -142,19 +142,19 @@
     <!-- What this view cannot see (ADR 0046, decision 5). -->
     <string name="cannot_see_title">此视图看不到的内容</string>
     <string name="cannot_see_sender">代某个应用发送的流量，显示在实际发送它的应用下。推送消息经由 Google Play 服务传送，下载经由 Android 的下载管理器进行。有些应用通过另一个应用发送数据。</string>
-    <string name="cannot_see_content">Watch 看不到内容。对于加密流量，它能看到大小、目的地和时间，但从来看不到发送了什么。</string>
-    <string name="cannot_see_device">Watch 看不到应用在手机上做了什么，例如读取您的通讯录、文件或照片。只有发送会显示出来。</string>
+    <string name="cannot_see_content">Datapavan 看不到内容。对于加密流量，它能看到大小、目的地和时间，但从来看不到发送了什么。</string>
+    <string name="cannot_see_device">Datapavan 看不到应用在手机上做了什么，例如读取您的通讯录、文件或照片。只有发送会显示出来。</string>
     <string name="cannot_see_together">有些应用无法区分开来。共用同一个编号的应用会合并统计。屏幕开启时，键盘计为使用中；屏幕关闭时，计为在后台。动态壁纸没有自己的界面。您用来绕过网络限制的工具承载着您设置为通过它连接的应用的流量。</string>
-    <string name="cannot_see_gaps">另一个 VPN 开启时，Watch 什么也看不到；它也看不到您排除的应用，以及工作资料、私密空间或其他用户中的流量。重启后首次解锁之前，或流量绕过 VPN 时，它同样什么也看不到。手机上应用之间的流量永远不会到达它。</string>
-    <string name="cannot_see_sizes">大小是指应用通过 Watch 发送和接收的数据量。Android 的流量使用情况页面还会计入标头和重新发送的数据，因此显示的数值会略多一些。</string>
+    <string name="cannot_see_gaps">另一个 VPN 开启时，Datapavan 看不到任何流量；来自您排除的应用、工作资料、私密空间或其他用户的流量，它也看不到。重启后首次解锁之前，或流量绕过 VPN 时，它同样看不到任何流量。手机上应用之间的流量永远不会到达它。</string>
+    <string name="cannot_see_sizes">大小是指应用通过 Datapavan 发送和接收的数据量。Android 的流量使用情况页面还会计入标头和重新发送的数据，因此显示的数值会略多一些。</string>
     <string name="cannot_see_notification">“伴有通知”是指 Android 允许该应用显示通知，而不是指您看到了通知。您关闭的通知类别仍计为伴有通知。会隐藏部分通知的手机也是如此；在 Android 12 及更低版本上，您关闭了通知的应用也是如此。不被允许显示通知的音乐播放器，在其通知显示时计为在后台。从 Android 12 起，运行不到 10 秒的服务也计为在后台。</string>
     <string name="cannot_see_in_use">“使用中”依据的是 Android 对每个应用界面的记录。在某些手机上，主屏幕左侧的信息流可能计为在后台。获准从后台打开界面的应用，可能看起来像在使用中。</string>
 
     <!-- Each app's history. -->
     <string name="history_title">%1$s 的历史记录</string>
     <string name="history_back">返回 Now</string>
-    <string name="history_intro">Watch 为此应用保留的每一次连接，最新的在前，每次显示一天。</string>
-    <string name="history_keep">要保留历史记录，请在 Watch 的页面中选择记录保留的天数。</string>
+    <string name="history_intro">Datapavan 为此应用保留的每一次连接，最新的在前，每次显示一天。</string>
+    <string name="history_keep">要保留历史记录，请打开“网络”页面，选择记录保留的天数。在“流量使用”标签页上，点按“查看应用连接到哪里”。</string>
     <string name="history_nothing_yet">尚未保留任何记录。</string>
     <string name="history_closed">现在无法打开这一天的记录。</string>
     <string name="history_empty">这一天没有连接。</string>
@@ -165,16 +165,16 @@
     <string name="history_state">状态：%1$s</string>
     <string name="history_continues">此后连接仍在继续。</string>
     <plurals name="history_lookups">
-        <item quantity="other">通过 Watch 查询了 %d 个名称。</item>
+        <item quantity="other">通过 Datapavan 查询了 %d 个名称。</item>
     </plurals>
     <plurals name="history_before_install">
         <item quantity="other">此应用编号下有 %d 条记录早于此应用的安装，属于一个已移除的应用。</item>
     </plurals>
 
     <!-- W7, part 2 (ADR 0035): the WireGuard import, the configurations, each app's way and their states. -->
-    <!-- The heading of Watch's section for WireGuard configurations from the user's VPN provider. -->
+    <!-- The heading of the Network screen's section for WireGuard configurations from the user's VPN provider. -->
     <string name="tunnels_title">WireGuard 配置</string>
-    <string name="tunnels_intro">让您选择的应用经由您 VPN 服务商的 WireGuard 服务器连接。Watch 会在这部手机上以加密形式保存每个配置。</string>
+    <string name="tunnels_intro">让您选择的应用经由您 VPN 服务商的 WireGuard 服务器连接。Datapavan 会在这部手机上以加密形式保存每个配置。</string>
     <!-- Where the key that encrypts the configurations is kept. -->
     <string name="tunnels_key_strongbox">加密它们的密钥保存在这部手机独立的安全芯片（StrongBox）中。</string>
     <string name="tunnels_key_tee">加密它们的密钥保存在这部手机的安全区域中，与 Android 隔离。</string>
@@ -187,9 +187,9 @@
     <string name="tunnels_add_picture">选择一张 QR 码图片</string>
     <!-- Shown under the two QR code buttons. -->
     <string name="tunnels_picture_note">QR 码图片中含有该配置的私钥。添加之后，您可以考虑删除这张图片。</string>
-    <!-- %d: the most configurations Watch keeps (8). -->
+    <!-- %d: the most configurations Datapavan keeps (8). -->
     <plurals name="tunnels_full">
-        <item quantity="other">Watch 最多保存 %d 个配置。要添加新的配置，请先移除一个。</item>
+        <item quantity="other">Datapavan 最多保存 %d 个配置。要添加新的配置，请先移除一个。</item>
     </plurals>
     <string name="tunnels_default">默认</string>
     <string name="tunnels_default_note">只要有任何应用经由某个配置连接，默认配置还会承载 ping，以及 Android 未指明所属应用的流量。默认配置无法打开时，ping 和这类流量都会等待。</string>
@@ -200,10 +200,10 @@
         <item quantity="other">%d 个应用在等待一个您已移除的配置，因此它们的任何数据都不会发出。请在“各应用的连接方式”中为它们另选方式。</item>
     </plurals>
     <!-- A change of the configurations that could not be saved; nothing was changed. -->
-    <string name="tunnels_not_saved_storage">未保存。Watch 无法写入这部手机的存储空间，存储空间可能已满。您的配置保持原样。</string>
+    <string name="tunnels_not_saved_storage">未保存。Datapavan 无法写入这部手机的存储空间，存储空间可能已满。您的配置保持原样。</string>
     <string name="tunnels_not_saved_keystore">未保存。手机的密钥库没有响应。您的配置保持原样。请重试。</string>
     <string name="tunnels_not_saved_gone">未保存。它要替换的配置在此期间已被移除。</string>
-    <string name="tunnels_not_saved_other">未保存。Watch 内部出了问题。您的配置保持原样。</string>
+    <string name="tunnels_not_saved_other">未保存。Datapavan 内部出了问题。您的配置保持原样。</string>
     <string name="tunnels_make_default">设为默认</string>
     <string name="tunnels_rename">重命名</string>
     <string name="tunnels_replace">替换</string>
@@ -225,18 +225,18 @@
     <string name="unlock_channel">等待解锁</string>
     <string name="unlock_title">解锁手机以重新连接</string>
     <string name="unlock_text">有些应用在等待一个只有在手机解锁时才能打开的 VPN 配置。在此之前，它们的任何数据都不会发出。</string>
-    <!-- The notification while what Watch kept of its configurations can no longer be opened and every app is held.
-         It names no provider and no configuration, and opens Watch's screen. -->
-    <string name="lost_title">Watch 正在暂停您的应用联网</string>
-    <string name="lost_text">Watch 无法再打开它为您保存的 VPN 配置。请打开 Watch，选择您的应用接下来怎么做。</string>
-    <!-- On Watch's screen, in place of the configurations, while they can no longer be opened. -->
+    <!-- The notification while what Datapavan kept of its configurations can no longer be opened and every app is held.
+         It names no provider and no configuration, and opens the Network screen. -->
+    <string name="lost_title">Datapavan 正在暂停您的应用联网</string>
+    <string name="lost_text">Datapavan 无法再打开它为您保存的 VPN 配置。请打开 Datapavan，选择您的应用接下来怎么做。</string>
+    <!-- On the Network screen, in place of the configurations, while they can no longer be opened. -->
     <string name="tunnels_lost_title">您的配置已无法再打开</string>
-    <string name="tunnels_lost_body">Watch 无法再打开它为您保存的 WireGuard 配置，例如在手机的密钥库被重置之后就会这样。它不知道哪些应用曾经由这些配置连接。因此，在您做出选择之前，它会暂停所有应用联网，任何数据都不会发出。</string>
+    <string name="tunnels_lost_body">Datapavan 无法再打开它为您保存的 WireGuard 配置，例如在手机的密钥库被重置之后就会这样。它不知道哪些应用曾经由这些配置连接。因此，在您做出选择之前，它会暂停所有应用联网，任何数据都不会发出。</string>
     <string name="tunnels_lost_again">重新添加配置</string>
     <string name="tunnels_lost_let_go">让应用按各自的方式连接</string>
     <string name="tunnels_lost_note">无论选择哪一项，之后每个应用都会直接连接；如果您用来绕过网络限制的工具接管该应用，则通过该工具连接。要让某个应用再次经由某个配置连接，请添加配置。</string>
     <!-- A configuration's state, refreshed while the screen is shown. -->
-    <string name="tunnel_state_off">Watch 关闭时不使用。</string>
+    <string name="tunnel_state_off">Datapavan 的 VPN 关闭时不使用。</string>
     <!-- Announced when it changes; the handshake's age below it is not, so that it is not announced every second. -->
     <string name="tunnel_state_connected">已连接。</string>
     <plurals name="tunnel_handshake_seconds">
@@ -247,11 +247,11 @@
     </plurals>
     <string name="tunnel_state_idle">尚未连接。它的某个应用发送数据时，它就会连接。</string>
     <string name="tunnel_state_not_answering">服务器没有响应。它的应用会等待，它们的任何数据都不会直接发出。</string>
-    <string name="tunnel_state_missing">在 Watch 中尚未就绪。它的应用会等待，它们的任何数据都不会直接发出。</string>
+    <string name="tunnel_state_missing">在 Datapavan 中尚未就绪。它的应用会等待，它们的任何数据都不会直接发出。</string>
     <string name="tunnel_state_locked">手机锁定时无法打开它。它的应用会等待，直到您解锁手机。</string>
-    <string name="tunnel_state_unavailable">现在无法打开它。它的应用会等待，Watch 会再次尝试。</string>
+    <string name="tunnel_state_unavailable">现在无法打开它。它的应用会等待，Datapavan 会再次尝试。</string>
     <string name="tunnel_state_lost">在这部手机上已无法再打开它。它的应用会等待。请再次用它的文件或 QR 码替换它，这样会保留它的应用。</string>
-    <string name="tunnel_state_plain_dns">Watch 只能通过未加密的 DNS 找到服务器的地址。您的网络可能会看到您使用的是哪家服务商。</string>
+    <string name="tunnel_state_plain_dns">Datapavan 只通过未加密的 DNS 找到了服务器的地址。您的网络可能会看到您使用的是哪家服务商。</string>
 
     <!-- Removing a configuration: what its apps do then. %1$s: its name. -->
     <string name="tunnels_remove_title">移除 %1$s？</string>
@@ -274,7 +274,7 @@
     <string name="import_dns">您所选应用查询的名称会经由服务器发送到 %1$s。</string>
     <string name="import_everything">您所选应用的所有流量都会经由它。</string>
     <!-- %1$s: the networks, comma separated. -->
-    <string name="import_narrower">只有这些目的地会经由它：%1$s。对于您所选应用的其他所有目的地，Watch 都会拒绝，绝不会直接发送。</string>
+    <string name="import_narrower">只有这些目的地会经由它：%1$s。对于您所选应用的其他所有目的地，Datapavan 都会拒绝，绝不会直接发送。</string>
     <string name="import_preshared">它带有预共享密钥，即一个额外的机密，用来防范未来的量子计算机。</string>
     <string name="import_no_preshared">它没有预共享密钥。</string>
     <!-- %1$d: seconds. -->
@@ -300,7 +300,7 @@
     <!-- %1$s: package names, comma separated. -->
     <string name="import_not_installed">文件中指定但未安装：%1$s。</string>
     <string name="import_not_choosable">文件中指定，但不在您可以在此选择的应用中：%1$s。</string>
-    <string name="import_left_out">文件中指定，但已被排除在 Watch 之外，因此它们的任何数据都不会经过 Watch：%1$s。</string>
+    <string name="import_left_out">文件中指定，但已被排除在 Datapavan 的 VPN 之外，因此它们的任何数据都不会经过 Datapavan：%1$s。</string>
     <string name="import_save">保存</string>
     <string name="import_apps_loading">正在加载您的应用…</string>
 
@@ -310,43 +310,43 @@
     <string name="refused_not_text">文件不是文本，因此不是 WireGuard 配置。</string>
     <string name="refused_unreadable">无法读取这一行。</string>
     <string name="refused_outside_section">有一项设置出现在任何 [Interface] 或 [Peer] 部分之前。</string>
-    <string name="refused_unknown_section">Watch 只认识 [Interface] 和 [Peer] 这两个部分。</string>
+    <string name="refused_unknown_section">Datapavan 只认识 [Interface] 和 [Peer] 这两个部分。</string>
     <string name="refused_several_interfaces">文件中有第二个 [Interface] 部分。</string>
-    <string name="refused_several_peers">文件中有第二个 [Peer] 部分。Watch 的每个配置只使用一台服务器。</string>
+    <string name="refused_several_peers">文件中有第二个 [Peer] 部分。Datapavan 的每个配置只使用一台服务器。</string>
     <!-- %1$s: the name of a setting, such as PostUp. -->
-    <string name="refused_unsupported">Watch 不执行设置 %1$s。</string>
-    <string name="refused_unsupported_unnamed">Watch 不执行这项设置。</string>
+    <string name="refused_unsupported">Datapavan 不执行设置 %1$s。</string>
+    <string name="refused_unsupported_unnamed">Datapavan 不执行这项设置。</string>
     <string name="refused_repeated">设置 %1$s 出现了两次。</string>
     <string name="refused_bad_value">无法读取 %1$s 的值。</string>
-    <string name="refused_several_addresses">文件给出了两个同类地址。Watch 只使用一个 IPv4 地址和一个 IPv6 地址。</string>
-    <string name="refused_search_domain">DNS 设置中指定了搜索域，Watch 无法使用它。</string>
+    <string name="refused_several_addresses">文件给出了两个同类地址。Datapavan 只使用一个 IPv4 地址和一个 IPv6 地址。</string>
+    <string name="refused_search_domain">DNS 设置中指定了搜索域，Datapavan 无法使用它。</string>
     <string name="refused_no_interface">文件中没有 [Interface] 部分。</string>
     <string name="refused_no_peer">文件中没有 [Peer] 部分。</string>
     <string name="refused_no_private_key">文件中没有私钥（PrivateKey）。</string>
     <string name="refused_no_address">文件中没有给出地址（Address）。</string>
-    <string name="refused_no_dns">文件中没有指定 DNS 服务器。您的应用查询的名称将没有私密的去处，因此 Watch 不接受此文件。</string>
+    <string name="refused_no_dns">文件中没有指定 DNS 服务器。您的应用查询的名称将没有私密的去处，因此 Datapavan 不接受此文件。</string>
     <string name="refused_dns_unreachable">文件中的 DNS 服务器都无法经由文件中的服务器访问。</string>
     <string name="refused_no_public_key">文件中没有服务器的密钥（PublicKey）。</string>
     <string name="refused_no_endpoint">文件中没有说明服务器在哪里（Endpoint）。</string>
     <string name="refused_no_allowed_ips">文件中没有说明哪些目的地经由服务器（AllowedIPs）。</string>
-    <string name="refused_bad_mtu">文件中的 MTU 不在 Watch 接受的范围内：576 至 1,500 字节；如有 IPv6 地址，则至少 1,280 字节。</string>
+    <string name="refused_bad_mtu">文件中的 MTU 不在 Datapavan 接受的范围内：576 至 1,500 字节；如有 IPv6 地址，则至少 1,280 字节。</string>
     <string name="refused_both_application_lists">文件同时指定了要包含的应用和要排除的应用。两个列表只能使用其中一个。</string>
-    <!-- %d: the most configurations Watch keeps (8). -->
+    <!-- %d: the most configurations Datapavan keeps (8). -->
     <plurals name="refused_too_many">
-        <item quantity="other">Watch 最多保存 %d 个配置。要添加新的配置，请先移除一个。</item>
+        <item quantity="other">Datapavan 最多保存 %d 个配置。要添加新的配置，请先移除一个。</item>
     </plurals>
-    <string name="refused_unknown">Watch 无法读取此配置。</string>
-    <string name="import_unreadable">Watch 无法读取此文件。</string>
+    <string name="refused_unknown">Datapavan 无法读取此配置。</string>
+    <string name="import_unreadable">Datapavan 无法读取此文件。</string>
     <string name="import_too_slow">读取此文件用时过长。如果文件存储在网上，请先下载它。</string>
 
     <!-- Reading a QR code from a picture. -->
-    <string name="qr_not_a_picture">这不是 Watch 能读取的图片。</string>
+    <string name="qr_not_a_picture">这不是 Datapavan 能读取的图片。</string>
     <string name="qr_too_large">这张图片太大，无法读取。</string>
     <string name="qr_no_code">无法在这张图片中读到 QR 码。请试一张清晰的、包含完整 QR 码的照片。</string>
     <string name="qr_too_long">这个 QR 码包含的文本比一份 WireGuard 配置还多。</string>
     <string name="qr_too_slow">读取这张图片用时过长。</string>
-    <string name="qr_stopped">Watch 的图片读取程序在处理这张图片时停止了。</string>
-    <string name="qr_no_camera">这部手机没有可以为 Watch 拍照的相机应用。</string>
+    <string name="qr_stopped">Datapavan 的图片读取程序在处理这张图片时停止了。</string>
+    <string name="qr_no_camera">这部手机没有可以为 Datapavan 拍照的相机应用。</string>
     <string name="qr_reading">正在读取图片…</string>
     <string name="qr_photo_deleted">照片已删除。</string>
 
@@ -362,8 +362,8 @@
     <!-- %1$s: a configuration's name. -->
     <string name="route_tunnel">经由 %1$s</string>
     <string name="route_waiting">在等待一个已被移除的配置。此应用的任何数据都不会发出。</string>
-    <string name="route_left_out">已排除在 Watch 之外：它不经过 Watch 直接连接互联网。</string>
-    <string name="routes_all_apps_note">当您的工具接管所有应用时，只有将某个应用排除在 Watch 之外，它才会直接连接。</string>
+    <string name="route_left_out">已排除在 Datapavan 的 VPN 之外：它不经过 Datapavan 直接连接互联网。</string>
+    <string name="routes_all_apps_note">当您的工具接管所有应用时，只有将某个应用排除在 Datapavan 的 VPN 之外，它才会直接连接。</string>
     <!-- The chain's choice of apps: an app with a configuration goes through it instead of the tool. %1$s: the configuration's name. -->
     <string name="chain_app_tunnel">此应用改为经由 %1$s 连接。可在“各应用的连接方式”中更改。</string>
     <!-- The chain's choice of apps: an app that waits for a removed configuration. -->
@@ -384,7 +384,7 @@
     <!-- W8, part 1 (ADR 0042), and its fix round: the names of apps that go directly. -->
     <string name="dns_title">直接连接的应用如何查询名称</string>
     <string name="dns_now_unknown">在这个网络上，还没有应用查询过名称。</string>
-    <string name="dns_now_none_odoh">在这个网络上，还没有应用查询过名称。Watch 将使用 Oblivious DoH。</string>
+    <string name="dns_now_none_odoh">在这个网络上，还没有应用查询过名称。Datapavan 将使用 Oblivious DoH。</string>
     <!-- The first sentence of the "now" line, read out when it changes; the details follow apart. -->
     <string name="dns_now_odoh">名称现在通过 Oblivious DoH 发送。</string>
     <string name="dns_now_odoh_tool">名称现在通过您的工具，以 Oblivious DoH 发送。</string>
@@ -423,7 +423,7 @@
     <string name="dns_audited_no">没有外部机构核查过这一点。</string>
     <string name="dns_audited_firm">一家会计师事务所核查过这些声明。</string>
     <string name="dns_policy">它的隐私政策</string>
-    <string name="dns_choice_fails">如果它没有响应，Watch 会使用 Oblivious DoH，然后使用其他加密方式。开启“仅使用此 DNS 服务器”即可阻止这种情况。</string>
+    <string name="dns_choice_fails">如果它没有响应，Datapavan 会使用 Oblivious DoH，然后使用其他加密方式。开启“仅使用此 DNS 服务器”即可阻止这种情况。</string>
     <string name="dns_only">仅使用此 DNS 服务器</string>
     <string name="dns_only_cost">如果您的 DNS 服务器没有响应，直接连接的应用将无法查询名称。</string>
     <string name="dns_custom">您自己的 DNS 服务器</string>
@@ -431,37 +431,37 @@
     <string name="dns_custom_at">DoH 地址或 DoT 服务器</string>
     <string name="dns_custom_addresses">IP 地址，用逗号分隔</string>
     <string name="dns_custom_use">测试并使用</string>
-    <string name="dns_custom_refused">请提供一个以 https:// 开头的 DoH 地址或一个 DoT 服务器名称，以及至少一个 IP 地址。Watch 从不以未加密的方式查询 DNS 服务器的名称。</string>
+    <string name="dns_custom_refused">请提供一个以 https:// 开头的 DoH 地址或一个 DoT 服务器名称，以及至少一个 IP 地址。Datapavan 从不以未加密的方式查询 DNS 服务器的名称。</string>
     <string name="dns_custom_testing">正在向您的 DNS 服务器查询一个名称…</string>
     <!-- %1$d: milliseconds. -->
-    <string name="dns_custom_answered">您的 DNS 服务器在 %1$d 毫秒内做出了响应。Watch 现在使用它。</string>
-    <string name="dns_custom_failed">您的 DNS 服务器没有响应，因此 Watch 没有保存它。请检查它的地址和 IP 地址。</string>
-    <string name="dns_custom_tampered">您的 DNS 服务器的证书未通过验证，或者连接被切断。Watch 没有保存它。</string>
+    <string name="dns_custom_answered">您的 DNS 服务器在 %1$d 毫秒内做出了响应。Datapavan 现在使用它。</string>
+    <string name="dns_custom_failed">您的 DNS 服务器没有响应，因此 Datapavan 没有保存它。请检查它的地址和 IP 地址。</string>
+    <string name="dns_custom_tampered">您的 DNS 服务器的证书未通过验证，或者连接被切断。Datapavan 没有保存它。</string>
     <string name="dns_strict">严格模式：从不使用网络的 DNS 服务器</string>
     <string name="dns_strict_cost">如果没有任何加密方式响应，直接连接的应用将无法查询名称。在受到审查或监视的网络上，请使用此项。</string>
     <string name="dns_local_names">本地名称（例如您的打印机或路由器）仍会发送到您网络自己的 DNS 服务器。</string>
     <!-- %1$s: the network's own domains, by commas. -->
-    <string name="dns_search">这个网络表示这些域是它自己的：%1$s。对于这些域下的名称，Watch 会先通过加密方式查询。只有在互联网上查不到该名称时，它才会向这个网络查询。</string>
+    <string name="dns_search">这个网络表示这些域名是它自己的：%1$s。对于这些域名下的名称，Datapavan 会先通过加密方式查询。只有在互联网上查不到该名称时，它才会向这个网络查询。</string>
     <string name="dns_notify">名称发送到网络的 DNS 服务器时通知我</string>
-    <string name="dns_notify_refused">Android 不允许 Watch 显示通知，因此此项保持关闭。请在 Android 设置中允许 Watch 显示通知，然后再次开启此项。</string>
+    <string name="dns_notify_refused">Android 不允许 Datapavan 显示通知，因此此项保持关闭。请在 Android 设置中允许 Datapavan Advanced 显示通知，然后再次开启此项。</string>
     <string name="dns_pairs">Oblivious DoH 配对，每对由位于两个不同国家的两个不同运营方组成：</string>
     <!-- %1$s: the relay's operator and its countries; %2$s: the target's. -->
     <string name="dns_pair">中继：%1$s。目标：%2$s。</string>
     <string name="dns_pairs_change">更改配对</string>
     <string name="dns_pairs_default">使用默认配对</string>
     <string name="dns_pairs_done">完成</string>
-    <string name="dns_not_kept">除了连接日志（如果您保留日志）之外，Watch 不保留应用查询过的名称列表。它会在内存中保留 DNS 应答最多一天，并在网络变化时清除它们。</string>
+    <string name="dns_not_kept">除了连接日志（如果您保留日志）之外，Datapavan 不保留应用查询过的名称列表。它会在内存中保留 DNS 应答最多一天，并在网络变化时清除它们。</string>
     <string name="dns_fallback_channel">未加密的名称</string>
     <string name="dns_fallback_title">名称正发送到网络的 DNS 服务器</string>
-    <string name="dns_fallback_text">这个网络上没有任何加密方式响应，因此直接连接的应用目前使用该网络的 DNS 服务器。打开 Watch 即可开启严格模式。</string>
+    <string name="dns_fallback_text">这个网络上没有任何加密方式响应，因此直接连接的应用目前使用该网络的 DNS 服务器。打开 Datapavan 即可开启严格模式。</string>
 
-    <!-- The one switch for what Watch leaves out of the log and "Now" (W6, W7 and W8): off unless the user turns it
+    <!-- The one switch for what Datapavan leaves out of the log and "Now" (W6, W7 and W8): off unless the user turns it
          on. It replaces "Log where these apps connect" (chain_log_destinations), which spoke of chained apps alone.
          The lines below that name it quote it word for word. -->
     <string name="log_switch">记录应用通过您的工具、WireGuard 或代理连接到哪里</string>
     <!-- Under the switch above. -->
-    <string name="log_switch_note">除非您开启，否则保持关闭。它涵盖您设置为通过您用来绕过网络限制的工具或 WireGuard 配置连接的应用，以及该工具自己的服务器。它也涵盖通过代理连接的应用，例如通过 Telegram 代理。Watch 仍会统计它们的连接。如果有人搜查您的手机，一份它们去过哪里的列表可能会被用来对您不利。</string>
-    <!-- A button under a row of "Now" or the history that the switch above leaves out: it opens Watch's screen at the
+    <string name="log_switch_note">除非您开启，否则保持关闭。它涵盖您设置为通过您用来绕过网络限制的工具或 WireGuard 配置连接的应用，以及该工具自己的服务器。它也涵盖通过代理连接的应用，例如通过 Telegram 代理。Datapavan 仍会统计它们的连接。如果有人搜查您的手机，一份它们去过哪里的列表可能会被用来对您不利。</string>
+    <!-- A button under a row of "Now" or the history that the switch above leaves out: it opens the Network screen at the
          switch. -->
     <string name="log_switch_open">前往该开关</string>
     <!-- "Now": an app sent through the user's tool, the tool's own servers, and an app sent through a WireGuard
@@ -470,7 +470,7 @@
     <string name="now_tool_servers_off">由于“记录应用通过您的工具、WireGuard 或代理连接到哪里”已关闭，未显示它连接到哪里。</string>
     <string name="now_through_tunnel_off">经由 %1$s 发送。由于“记录应用通过您的工具、WireGuard 或代理连接到哪里”已关闭，未显示它连接到了哪里。</string>
     <!-- The same in an app's history, of a connection logged while the switch was off. history_left_out_off: the
-         tool's own servers, or a record written before Watch logged each connection's route. -->
+         tool's own servers, or a record written before Datapavan logged each connection's route. -->
     <string name="history_through_tool_off">通过您用来绕过网络限制的工具发送。由于当时“记录应用通过您的工具、WireGuard 或代理连接到哪里”处于关闭状态，未记录它连接到了哪里。</string>
     <string name="history_left_out_off">由于当时“记录应用通过您的工具、WireGuard 或代理连接到哪里”处于关闭状态，未记录它连接到了哪里。</string>
     <string name="history_through_tunnel_off">经由 %1$s 发送。由于当时“记录应用通过您的工具、WireGuard 或代理连接到哪里”处于关闭状态，未记录它连接到了哪里。</string>
@@ -490,13 +490,13 @@
     <string name="proxy_kind_signal">Signal 代理</string>
     <!-- A proxy the app's own bytes named and the proxy's reply confirmed: %1$s is its kind (above), %2$s where it is,
          as a name or an address with its port, %3$s the destination the app asked it for. "Read from the connection"
-         says how Watch knows. -->
+         says how Datapavan knows. -->
     <string name="proxy_asked">向位于 %2$s 的 %1$s 请求了 %3$s。从连接中读取。</string>
     <!-- As above, where no destination asked for was read. -->
     <string name="proxy_declared">通过位于 %2$s 的 %1$s。从连接中读取。</string>
-    <!-- A messenger's proxy that Watch infers: %1$s its kind, %2$s where it is. -->
-    <string name="proxy_inferred">通过位于 %2$s 的一个 %1$s。根据它连接的位置和方式推断。Watch 看不到它从那里去往哪里：那部分是加密的。</string>
-    <!-- How Watch knows, on its own line where the sentence above is not shown (the switch off). -->
+    <!-- A messenger's proxy that Datapavan infers: %1$s its kind, %2$s where it is. -->
+    <string name="proxy_inferred">通过位于 %2$s 的一个 %1$s。根据它连接的位置和方式推断。Datapavan 看不到它从那里去往哪里：那部分是加密的。</string>
+    <!-- How Datapavan knows, on its own line where the sentence above is not shown (the switch off). -->
     <string name="proxy_how_read">从连接中读取。</string>
     <string name="proxy_how_inferred">根据它连接的位置和方式推断。</string>
     <!-- A plain HTTP request written in the form a proxy takes, which a web server takes too: the row names the server
@@ -504,25 +504,25 @@
     <string name="proxy_request_asked">它向这台服务器发送了一个按 HTTP 代理格式编写的请求，请求的是 %1$s。从连接中读取。</string>
     <string name="now_proxy_request_hidden">它向这台服务器发送了一个按 HTTP 代理格式编写的请求。由于“记录应用通过您的工具、WireGuard 或代理连接到哪里”已关闭，未显示它请求了什么。</string>
     <string name="history_proxy_request_hidden">它向这台服务器发送了一个按 HTTP 代理格式编写的请求。由于当时“记录应用通过您的工具、WireGuard 或代理连接到哪里”处于关闭状态，未记录它请求了什么。</string>
-    <string name="proxy_request_password">该请求以未加密的方式带有一个代理密码。Watch 没有保留它。</string>
+    <string name="proxy_request_password">该请求以未加密的方式带有一个代理密码。Datapavan 没有保留它。</string>
     <!-- Where a proxy is, by its address alone: who runs it is not known. %1$s is the organisation whose network holds
          the address. -->
-    <string name="proxy_network">这是 %1$s 网络中的一个地址。不知道是谁在运行它。</string>
+    <string name="proxy_network">这是 %1$s 网络中的一个地址。不知道是谁在运行这个地址上的代理。</string>
     <!-- As above, and the network is not the app maker's own: %2$s is the app's maker, such as Telegram. -->
-    <string name="proxy_network_not_maker">这是 %1$s 网络中的一个地址，不在 %2$s 的网络中。不知道是谁在运行它。</string>
-    <string name="proxy_network_unknown">Watch 无法确定这个地址属于哪个网络。不知道是谁在运行它。</string>
-    <!-- Where Watch cannot name the network, or does not show the address: %1$s is the app's maker, such as Telegram. -->
+    <string name="proxy_network_not_maker">这是 %1$s 网络中的一个地址，不在 %2$s 的网络中。不知道是谁在运行这个地址上的代理。</string>
+    <string name="proxy_network_unknown">Datapavan 无法确定这个地址属于哪个网络。不知道是谁在运行这个地址上的代理。</string>
+    <!-- Where Datapavan cannot name the network, or does not show the address: %1$s is the app's maker, such as Telegram. -->
     <string name="proxy_not_maker">该地址不在 %1$s 的网络中。</string>
     <string name="proxy_local">位于您的本地网络中。不知道是谁在运行它。</string>
     <!-- The proxy set in Android's settings, which apps that follow those settings all use. -->
     <string name="proxy_setting">这是 Android 设置中的代理，其他应用也可以使用它。</string>
-    <string name="proxy_password">这个代理的一个密码以未加密的方式经过了网络。Watch 没有保留它。</string>
+    <string name="proxy_password">这个代理的一个密码以未加密的方式经过了网络。Datapavan 没有保留它。</string>
     <!-- The server name an inferred proxy's connection sent, which no DNS answer gave its address: %1$s is that
          name. Facts only: nothing of why the app sent it. -->
-    <string name="proxy_cover">它的连接发送了名称 %1$s。Watch 转发过的任何 DNS 应答都没有为该名称给出这个地址。</string>
+    <string name="proxy_cover">它的连接发送了名称 %1$s。Datapavan 转发过的任何 DNS 应答都没有为该名称给出这个地址。</string>
     <!-- %1$s owns the name above, %2$s the network of the address. -->
     <string name="proxy_cover_owner">该名称属于 %1$s，而该网络属于 %2$s。</string>
-    <!-- A proxy while the switch above is off: %1$s is its kind. Then, on lines of their own, how Watch knows and the
+    <!-- A proxy while the switch above is off: %1$s is its kind. Then, on lines of their own, how Datapavan knows and the
          facts that name nothing. -->
     <string name="now_proxy_hidden">通过该 %1$s。由于“记录应用通过您的工具、WireGuard 或代理连接到哪里”已关闭，未显示它连接到了哪里。</string>
     <string name="history_proxy_hidden">通过该 %1$s。由于当时“记录应用通过您的工具、WireGuard 或代理连接到哪里”处于关闭状态，未记录它连接到了哪里。</string>
@@ -530,40 +530,40 @@
     <string name="now_proxy_setting_hidden">通过 Android 设置中的 %1$s，其他应用也可以使用它。由于“记录应用通过您的工具、WireGuard 或代理连接到哪里”已关闭，未显示它连接到了哪里。</string>
     <string name="history_proxy_setting_hidden">通过 Android 设置中的 %1$s，其他应用也可以使用它。由于当时“记录应用通过您的工具、WireGuard 或代理连接到哪里”处于关闭状态，未记录它连接到了哪里。</string>
     <!-- One more line of "What this view cannot see". -->
-    <string name="cannot_see_proxy">对于应用使用的代理，Watch 看不到是谁在运行它，也看不到是您还是该应用选择了它。对于 Watch 推断出的代理，它看不到流量经过代理之后去往哪里。</string>
+    <string name="cannot_see_proxy">对于应用使用的代理，Datapavan 看不到是谁在运行它，也看不到是您还是该应用选择了它。对于 Datapavan 推断出的代理，它看不到流量经过代理之后去往哪里。</string>
 
     <!--
-        W8, part 3b (ADR 0041, "How the per-tool guides are built"): the per-tool guides for proxy mode, in Watch and on the
+        W8, part 3b (ADR 0041, "How the per-tool guides are built"): the per-tool guides for proxy mode, in Advanced and on the
         website (scripts/guides.py writes docs/site/guides/ from these words and data/tools/guide*.tsv). A quoted %s is a
         tool's own label, read from the tool on this phone or from the data, never translated: only these sentences are.
         The guides name no tool as better than another and never point to a download.
     -->
     <!-- The chain section: one link per tool of the table installed here. %1$s: the tool's name. -->
-    <string name="chain_guides_title">这部手机上的工具如何与 Watch 并行运行：</string>
+    <string name="chain_guides_title">这部手机上的工具如何与 Datapavan 并行运行：</string>
     <string name="chain_guide_proxy">代理模式下的 %1$s</string>
-    <string name="chain_guide_other">%1$s 与 Watch</string>
+    <string name="chain_guide_other">%1$s 与 Datapavan</string>
     <!-- A guide's screen and page. %1$s: the tool's name. -->
     <string name="guide_title_proxy">代理模式下的 %1$s</string>
-    <string name="guide_title_other">%1$s 与 Watch</string>
-    <string name="guide_intro">Android 同一时间只能运行一个 VPN。在代理模式下，%1$s 不以 VPN 方式运行，Watch 可以让您的应用通过它连接。</string>
+    <string name="guide_title_other">%1$s 与 Datapavan</string>
+    <string name="guide_intro">Android 同一时间只能运行一个 VPN。在代理模式下，%1$s 不以 VPN 方式运行，Datapavan 可以让您的应用通过它连接。</string>
     <string name="guide_assumes">以下步骤假定 %1$s 已能作为 VPN 为您正常使用。</string>
     <string name="guide_heading_on">开启代理模式</string>
     <!-- %1$s: an address such as 127.0.0.1; %2$s: its port. -->
     <string name="guide_listener">然后，它的代理会在这部手机上监听，地址为 %1$s，端口为 %2$s。</string>
-    <string name="guide_next">然后回到 Watch。它会自行找到该代理，并提出让您的应用通过它连接。</string>
+    <string name="guide_next">然后回到 Datapavan。它会自行找到该代理，并提出让您的应用通过它连接。</string>
     <string name="guide_heading_password">其代理的密码</string>
-    <string name="guide_password_optional">它的代理可以要求用户名和密码。请设置 Watch 在找到该代理时显示的用户名和密码。这样，这部手机上的其他应用就无法使用它。</string>
+    <string name="guide_password_optional">它的代理可以要求用户名和密码。请设置 Datapavan 在找到该代理时显示的用户名和密码。这样，这部手机上的其他应用就无法使用它。</string>
     <string name="guide_password_none">它的代理无法要求密码。它运行时，这部手机上的任何应用都能使用它。</string>
     <string name="guide_heading_asks">它会请求什么</string>
     <string name="guide_heading_back">回到 VPN 模式</string>
-    <string name="guide_back_note">当 %1$s 再次以 VPN 方式运行时，Android 会关闭 Watch：同一时间只能运行一个 VPN。</string>
+    <string name="guide_back_note">当 %1$s 再次以 VPN 方式运行时，Android 会关闭 Datapavan 的 VPN：同一时间只能运行一个 VPN。</string>
     <!-- %1$s: the tool's name; %2$s: its version. -->
     <string name="guide_read">从 %1$s 的源代码中读取，版本为 %2$s。</string>
-    <string name="guide_checked">已用该版本与 Watch 一起试用过。</string>
-    <string name="guide_not_checked">尚未与 Watch 一起试用过。</string>
+    <string name="guide_checked">已用该版本与 Datapavan 一起试用过。</string>
+    <string name="guide_not_checked">尚未与 Datapavan 一起试用过。</string>
     <string name="guide_labels_tool">引号中的文字读取自这部手机上的 %1$s。</string>
     <string name="guide_labels_recorded">引号中的文字与该版本显示的一致。</string>
-    <string name="guide_audit">Datapavan 的其余部分，即它对您的应用所做的检查，无需 Watch 也能使用。</string>
+    <string name="guide_audit">Datapavan 对您的应用所做的检查，无需它的 VPN 也能运行。</string>
     <!-- Steps. Each %s in quotes is one of the tool's labels. -->
     <string name="guide_step_drawer">打开它屏幕顶部角落的菜单，然后点按“%1$s”。</string>
     <string name="guide_step_overflow">打开三个点的菜单，然后点按“%1$s”。</string>
@@ -598,61 +598,61 @@
     <string name="guide_step_singbox_users">在该“mixed” inbound 中，添加带有“username”和“password”的“users”。</string>
     <string name="guide_step_singbox_back">再次使用含有类型为“tun”的 inbound 的配置文件，或用“%1$s”添加一个。然后启动它。</string>
     <string name="guide_step_auth_entry">在“%1$s”下，点按“%2$s”，然后添加一个条目：用户名、一个冒号，然后是密码。</string>
-    <string name="guide_step_secret">点按“%1$s”，然后输入 Watch 显示的密码。</string>
+    <string name="guide_step_secret">点按“%1$s”，然后输入 Datapavan 显示的密码。</string>
     <string name="guide_step_profile_card">在您的配置文件的卡片上，点按“%1$s”。</string>
     <string name="guide_step_config_ssh">编辑您的配置：将“%1$s”设为“%2$s”，并填写“%3$s”和“%4$s”。</string>
     <string name="guide_step_save_use">点按“%1$s”，然后点按新的设置配置文件以使用它。</string>
     <!-- What a tool asks for in proxy mode, from its code. -->
     <string name="guide_asks_notifications">它会请求显示通知。</string>
-    <string name="guide_asks_local_network">在 Android 17 上，它会请求本地网络权限。Watch 使用它的代理不需要这项权限，因为该代理就在这部手机上。</string>
+    <string name="guide_asks_local_network">在 Android 17 上，它会请求本地网络权限。Datapavan 使用该工具的代理不需要这项权限，因为该代理就在这部手机上。</string>
     <string name="guide_asks_battery">它会请求将它排除在电池优化之外。</string>
     <string name="guide_asks_alarms">在代理模式下，它会在启动前请求闹钟和提醒权限。它表示自己不设置任何闹钟：这项权限能让它在不作为 VPN 运行时保持运行。</string>
-    <string name="guide_asks_vpn_once">首次连接时，即使在这种模式下，它也会请求设置 VPN。如果您允许，Android 会关闭 Watch。之后请重新开启 Watch。</string>
+    <string name="guide_asks_vpn_once">首次连接时，即使在这种模式下，它也会请求设置 VPN。如果您允许，Android 会关闭 Datapavan 的 VPN。之后请重新开启它。</string>
     <string name="guide_asks_none">在这种模式下，它的代码不请求任何权限。</string>
     <!-- Facts a user of one tool needs. %1$s in guide_note_named_port: a port. -->
-    <string name="guide_note_named_port">Watch 只在端口 %1$s 上查找它的代理，因此即使您的配置文件指定了其他端口，也请设置这个端口。</string>
-    <string name="guide_note_fixed_user">它的用户名始终是“%1$s”。Watch 显示的就是这个。</string>
-    <string name="guide_note_user_port">在工作资料或这部手机的其他用户中，它的端口会加上该用户的编号。Watch 也会在那里查找。</string>
+    <string name="guide_note_named_port">Datapavan 只在端口 %1$s 上查找该工具的代理，因此即使您的配置文件指定了其他端口，也请设置这个端口。</string>
+    <string name="guide_note_fixed_user">它的用户名始终是“%1$s”。Datapavan 显示的就是这个。</string>
+    <string name="guide_note_user_port">在工作资料或这部手机的其他用户中，它的端口会加上该用户的编号。Datapavan 也会在那里查找。</string>
     <string name="guide_note_stopped_first">请先停止它：它只在未连接时才会更改这一项。</string>
     <string name="guide_note_no_server">它不会将您的流量发送到服务器。它会改变流量的形态，然后从这部手机发出。因此，它承载的应用会从您自己的地址访问它们的目的地。</string>
-    <string name="guide_note_ssh_only">只有“%1$s”隧道类型会在这部手机上开启 SOCKS5 代理。使用“%2$s”时，只有您的服务器提供 SOCKS5 代理，Watch 才能使用该端口。</string>
+    <string name="guide_note_ssh_only">只有“%1$s”隧道类型会在这部手机上开启 SOCKS5 代理。使用“%2$s”时，只有您的服务器提供 SOCKS5 代理，Datapavan 才能使用该端口。</string>
     <string name="guide_note_remote_profile">远程配置文件只显示“%1$s”：它的内容来自它的地址，无法在这里更改。请改为创建一个本地配置文件。</string>
     <string name="guide_note_engines">在这种模式下，使用 sing-box、OpenConnect、IKEv2 或代理链的配置文件仍会启动 VPN。</string>
     <!-- The pages of tools that run only as a VPN, and of those whose steps wait. %1$s: the tool's name. -->
-    <string name="guide_vpn_only">%1$s 只能作为 VPN 运行。Android 同一时间只能运行一个 VPN，因此 Watch 无法与它并行运行：一个启动时，Android 会停止另一个。</string>
-    <string name="guide_wireguard_only">%1$s 只能作为 VPN 运行，因此 Watch 无法与它并行运行。但 Watch 自己可以承载 WireGuard 配置，并让您选择的应用经由它连接。</string>
-    <!-- Quotes Watch's own heading, tunnels_title, as it reads. -->
-    <string name="guide_wireguard_add">在 Watch 的“WireGuard 配置”下添加一个。</string>
+    <string name="guide_vpn_only">%1$s 只能作为 VPN 运行。Android 同一时间只能运行一个 VPN，因此 Datapavan 的 VPN 无法与它并行运行：一个启动时，Android 会停止另一个。</string>
+    <string name="guide_wireguard_only">%1$s 只能作为 VPN 运行，因此 Datapavan 的 VPN 无法与它并行运行。但 Datapavan 自己可以承载 WireGuard 配置，并让您选择的应用经由它连接。</string>
+    <!-- Quotes the Network screen's own heading, tunnels_title, as it reads. -->
+    <string name="guide_wireguard_add">在 Datapavan 中的“WireGuard 配置”下添加一个。</string>
     <string name="guide_wireguard_proton">Proton VPN 的网站可以生成这些文件，免费方案也可以。在您的账户中，打开“Downloads”，然后打开“WireGuard configuration”。</string>
     <string name="guide_wireguard_mullvad">Mullvad 的网站为付费账户生成这些文件。请使用它的配置生成器。</string>
     <string name="guide_wireguard_windscribe">Windscribe 的网站为付费账户生成这些文件。请使用它的“Config Generator”。</string>
-    <string name="guide_wireguard_same">您添加到 WireGuard 的配置文件或 QR 码在 Watch 中也能使用。</string>
-    <string name="guide_note_amneziawg">AmneziaWG 会改变 WireGuard 数据包的形态。Watch 目前还无法读取这种改变，因此无法承载这些配置。</string>
+    <string name="guide_wireguard_same">您添加到 WireGuard 的配置文件或 QR 码在 Datapavan 中也能使用。</string>
+    <string name="guide_note_amneziawg">AmneziaWG 会改变 WireGuard 数据包的形态。Datapavan 目前还无法读取这种改变，因此无法承载这些配置。</string>
     <string name="guide_waiting_intro">目前还没有 %1$s 的步骤。</string>
-    <string name="guide_waiting_closed">它的代码不公开，因此它的步骤要等到与 Watch 一起试用之后才会提供。</string>
-    <string name="guide_waiting_partly">它的部分代码不公开，因此它的步骤要等到与 Watch 一起试用之后才会提供。</string>
-    <string name="guide_note_tethering">它有一项名为 Proxy Tethering 的功能。目前还不知道该功能能否在这部手机上提供 Watch 可以使用的代理。</string>
-    <!-- The website's list of the guides (scripts/guides.py), which Watch does not show. -->
-    <string name="guide_index_title" tools:ignore="UnusedResources">与 Watch 并行运行您的工具</string>
-    <string name="guide_index_intro" tools:ignore="UnusedResources">Android 同一时间只能运行一个 VPN。这些页面依据每个绕过网络限制工具自己的代码，说明它如何能与 Watch 并行运行。</string>
+    <string name="guide_waiting_closed">它的代码不公开，因此它的步骤要等到与 Datapavan 一起试用之后才会提供。</string>
+    <string name="guide_waiting_partly">它的部分代码不公开，因此它的步骤要等到与 Datapavan 一起试用之后才会提供。</string>
+    <string name="guide_note_tethering">它有一项名为 Proxy Tethering 的功能。目前还不知道该功能能否在这部手机上提供 Datapavan 可以使用的代理。</string>
+    <!-- The website's list of the guides (scripts/guides.py), which Datapavan does not show. -->
+    <string name="guide_index_title" tools:ignore="UnusedResources">您的工具与 Datapavan Advanced 并行运行</string>
+    <string name="guide_index_intro" tools:ignore="UnusedResources">Android 同一时间只能运行一个 VPN。这些页面说明每个绕过网络限制工具如何能与 Datapavan Advanced 的 VPN 并行运行，内容从该工具自己的代码中读取。Datapavan Basic 没有 VPN，因此可以与其中任何一个工具并行运行。</string>
     <string name="guide_index_proxy" tools:ignore="UnusedResources">有代理模式的工具</string>
     <string name="guide_index_wireguard" tools:ignore="UnusedResources">只能作为 VPN 运行、有 WireGuard 配置的工具</string>
     <string name="guide_index_vpn" tools:ignore="UnusedResources">只能作为 VPN 运行的工具</string>
-    <string name="guide_index_waiting" tools:ignore="UnusedResources">步骤要等到与 Watch 一起试用之后才提供的工具</string>
+    <string name="guide_index_waiting" tools:ignore="UnusedResources">步骤要等到与 Datapavan 一起试用之后才提供的工具</string>
 
     <!-- W8, part 3a (ADR 0053): tracker blocking. Counts and sizes only inside the app: nothing of it reaches a
          notification, the summary or the widget (ADR 0046). ADR 0025's words hold (BlockingWordsTest), and "grade"
          never shows. The labels of the switches and buttons below are tapped by their text in the emulator check. -->
-    <!-- Watch's screen: the section, its switches and the global pause, which names no app. -->
+    <!-- the Network screen: the section, its switches and the global pause, which names no app. -->
     <string name="blocking_title">跟踪器拦截</string>
     <string name="blocking_switch">拦截跟踪器</string>
-    <string name="blocking_note">除非您开启，否则保持关闭。Watch 会阻止您安装的应用访问跟踪器 SDK 的主机：它们的查询得不到地址，它们的连接会被拒绝。也为应用本身提供服务的主机不会被拦截。</string>
+    <string name="blocking_note">除非您开启，否则保持关闭。Datapavan 会阻止您安装的应用访问跟踪器 SDK 的主机：它们的查询得不到地址，它们的连接会被拒绝。也为应用本身提供服务的主机不会被拦截。</string>
     <string name="blocking_not_covered">手机自带的应用、Android 本身和 Google Play 服务不在涵盖范围内。</string>
     <string name="blocking_browsers">也在浏览器中拦截</string>
     <string name="blocking_browsers_note">除非您将浏览器包含在内，否则不会拦截浏览器：它们会打开任何网站。</string>
     <!-- Only while the apps go through the user's circumvention tool. -->
     <string name="blocking_tool_dns">也拦截您的工具自己对跟踪器的查询</string>
-    <string name="blocking_tool_dns_note">除非您开启，否则保持关闭。开启后，Watch 会以不含地址的应答回复您的工具自己对跟踪器主机的查询。它从不拒绝该工具的连接：这些连接显示的名称可能是任何热门网站。</string>
+    <string name="blocking_tool_dns_note">除非您开启，否则保持关闭。开启后，Datapavan 会以不含地址的应答回复您的工具自己对跟踪器主机的查询。它从不拒绝该工具的连接：这些连接显示的名称可能是任何热门网站。</string>
     <string name="blocking_pause">暂停拦截 10 分钟</string>
     <!-- %1$s: when the pause ends, as the phone writes the time. -->
     <string name="blocking_paused">已暂停，直到 %1$s</string>
@@ -690,10 +690,10 @@
     <string name="blocking_entry_allowed">已在此应用中允许，直到您再次拦截它。</string>
     <!-- %1$s: what the host does, from Datapavan's table, in English. -->
     <string name="blocking_function">用途：%1$s</string>
-    <!-- A connection of the history that Watch blocked: %1$s names the tracker, never the host where the switch "Log
+    <!-- A connection of the history that Datapavan blocked: %1$s names the tracker, never the host where the switch "Log
          where apps connect ..." left it out. -->
-    <string name="blocking_blocked">已被 Watch 拦截：%1$s。</string>
-    <!-- A host the app reached that Watch does not block in it, and why. -->
+    <string name="blocking_blocked">已被 Datapavan 拦截：%1$s。</string>
+    <!-- A host the app reached that Datapavan does not block in it, and why. -->
     <string name="blocking_kept">未拦截：此主机也为应用本身提供服务。</string>
     <string name="blocking_kept_code">未拦截：在此应用中，此主机也用于登录或分享。</string>
     <string name="blocking_kept_unread">未拦截：此主机可能也用于登录或分享，而 Datapavan 尚未读取此应用的代码。</string>
@@ -716,4 +716,55 @@
     <string name="android_label_usage_access">使用情况访问权限</string>
     <!-- Android's own label: Settings' usage_access at android-16.0.0_r4. -->
     <string name="android_label_usage_access_api36">应用使用情况数据</string>
+    <!-- Android's own labels (ADR 0054) and the Network screen's title, moved from strings_untranslated.xml for ADR
+         0030's round of 2026-11-23. For the translators: each label placeholder is a label of Android's own screens,
+         read from the phone in its own language, or Android's text in Datapavan's language where the phone gives none
+         (android_label_* in strings.xml, which are copied from AOSP, never translated). It is always in the language's
+         quotes, as this file's \"…\", and after a noun (the setting, the switch) or a verb of naming ("call it"), so
+         that no word around it depends on its gender, number or case: Russian and German keep it in the nominative,
+         Arabic adds no ال to it, and Persian puts no ezafe on it. Two exceptions: Private DNS's choices follow "to" and
+         "is" in chain_private_dns_quoted and dns_private_dns_strict_quoted, where Russian and Arabic may set "the
+         choice" before them. One placeholder may hold two labels, the phone's then Datapavan's in brackets, as
+         label_with_own sets them: put nothing of the sentence's grammar on it. Persian's labels write VPN in Latin
+         letters, as AOSP does, where Datapavan's own sentences write it in Persian ones: keep both as they are. -->
+    <!-- A label read in the phone's language (%1$s), then the same label in Datapavan's language (%2$s), where the two
+         differ: Android's labels and the tools' in the per-tool guides. Chinese takes full-width brackets. -->
+    <string name="label_with_own">%1$s（%2$s）</string>
+    <!-- Under a part that names Android's own settings or switches, where some of those names are Android's own rather
+         than this phone's: Datapavan has not seen this phone's maker show them, or the phone gave none. %1$s: those
+         names, each as label_named gives it, joined by labels_list_separator. -->
+    <string name="labels_android_note">这些是 Android 自己的名称，您的手机上可能显示其他名称：%1$s。</string>
+    <!-- One name in the list of labels_android_note, in the language's quotes. -->
+    <string name="label_named">“%1$s”</string>
+    <!-- Between the names in labels_android_note. -->
+    <string name="labels_list_separator">、</string>
+    <!-- In "Now", under the line that Datapavan has no usage access, before the button that opens Android's page for it:
+         Datapavan's name for the access is kept, and this line gives the phone's own (the maintainer, 2026-11-22). %1$s:
+         the page's name in this phone's Settings, "Usage access" to Android 15 and "App usage data" from 16. -->
+    <string name="now_access_phone_name">这部手机的设置中称之为“%1$s”。</string>
+    <!-- After Android refused the VPN consent, or another app's always-on VPN kept Datapavan's VPN from starting.
+         %1$s: Android's always-on switch on a VPN's settings page. -->
+    <string name="consent_refused_quoted">Android 不允许 Datapavan 启动它的 VPN。如果另一个 VPN 应用的“%1$s”开关已开启，请先将其关闭。</string>
+    <!-- Private DNS set to a provider by name, %1$s (for example dns.google); %2$s: Android's name for the setting.
+         Datapavan does not ask the user to change it. -->
+    <string name="private_dns_strict_quoted">这部手机的“%2$s”设置指向 %1$s。Android 会以加密方式将应用查询的名称发送到那里。这能让您的网络无法得知这些名称，但 Datapavan 无法读取它们。</string>
+    <!-- Shown when the phone's Private DNS is set to a provider's host name. %1$s: that host name, such as dns.google.
+         %2$s: the tool's name. %3$s: Android's name for the setting; %4$s and %5$s: its choices Automatic and Off. -->
+    <string name="chain_private_dns_quoted">这部手机的“%3$s”设置指向 %1$s。这样，Android 会以加密方式将应用查询的名称直接发送给 %1$s，绕过 Datapavan，也绕过 %2$s。您的网络无法读取这些名称，但能看到这部手机在使用 %1$s。而 %1$s 能看到这些名称以及您在互联网上的真实地址。对于您设置为通过 %2$s 连接的应用，请将“%3$s”设置改为“%4$s”或“%5$s”。</string>
+    <!-- Under it, before a button that opens Android's network settings, which differ between phone makers. %1$s:
+         Android's name for the setting. -->
+    <string name="chain_private_dns_where_quoted">请在打开的设置中查找“%1$s”设置。在某些手机上，它还要再往里一层。</string>
+    <!-- %1$s: the host name of Android's Private DNS provider. %2$s: Android's name for the setting; %3$s and %4$s: its
+         choices Off and Automatic. -->
+    <string name="dns_private_dns_strict_quoted">Android 的“%2$s”设置会将每个应用的名称发送到 %1$s，绕过 Datapavan。只有当该设置为“%3$s”或“%4$s”时，您在这里的选择才会生效。</string>
+    <!-- %1$s: Android's always-on switch on a VPN's settings page. -->
+    <string name="dns_strict_limits_quoted">严格模式并不能涵盖一切。Android 会自行检查连接，绕过 Datapavan。有些应用使用自己的加密 DNS。您排除的应用不在涵盖范围内。此外，在 Datapavan 重新启动它的 VPN 时，或者在该 VPN 的“%1$s”开关关闭而 Android 将其停止时，应用会使用网络的 DNS 服务器。</string>
+    <!-- A configuration's server given by name. %1$s: Android's name for the Private DNS setting. -->
+    <string name="import_server_name_quoted">Datapavan 会在隧道启动之前通过您的网络查询这个名称。如果“%1$s”设置已关闭，您的网络可能会看到它。</string>
+    <!-- The phone has no screen lock (a PIN, pattern or password). %1$s: Android's name for the setting (Settings,
+         Security). -->
+    <string name="log_no_screen_lock_quoted">这部手机没有在“%1$s”设置下设定 PIN 码、图案或密码，因此今天之前的记录随时都能打开。设定之后，这些记录只有在手机解锁时才能打开。</string>
+    <!-- The title of Datapavan Advanced's screen for its network part: the VPN, the connection log, the user's tool,
+         WireGuard, DNS and tracker blocking (the maintainer, 2026-11-22: the part has no name of its own). -->
+    <string name="network_title">网络</string>
 </resources>

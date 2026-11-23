@@ -93,7 +93,7 @@
     <string name="usage_access_step_allow">2. Нажмите «%1$s», а затем меню (⋮) вверху открывшейся страницы. Выберите пункт «%2$s», который появляется там только после шага 1, и подтвердите. Затем снова нажмите «%3$s».</string>
     <string name="usage_access_app_info">Открыть сведения о приложении</string>
     <string name="usage_reading">Читаем записи Android…</string>
-    <string name="usage_missing">Для передачи данных и времени последнего открытия нужен доступ к данным об использовании. Его можно разрешить на экране «Сводка».</string>
+    <string name="usage_missing">Чтобы показать передачу данных и время последнего открытия, нужен доступ к данным об использовании. Его можно разрешить на вкладке «Передача данных».</string>
     <string name="section_network">Передача данных</string>
     <plurals name="network_period">
         <item quantity="one">Последний %1$d день: с %2$s по %3$s</item>
@@ -111,7 +111,7 @@
     <string name="network_lag">По собственному подсчёту Android. Мобильный интернет указан для всех SIM-карт вместе. Datapavan не хранит эти числа.</string>
     <!-- Below the network list and the apps list. -->
     <string name="other_profiles">Приложения из другого профиля на этом телефоне, например из рабочего профиля, частного пространства или защищённой папки, сюда не входят. Android показывает приложению Datapavan только тот профиль, в котором оно установлено.</string>
-    <string name="network_none">За этот период сеть не использовалась.</string>
+    <string name="network_none">За этот период передачи данных не было.</string>
     <string name="network_mobile">Мобильный интернет %1$s: получено %2$s, отправлено %3$s, из них в фоновом режиме %4$s</string>
     <string name="network_wifi">Wi-Fi %1$s: получено %2$s, отправлено %3$s, из них в фоновом режиме %4$s</string>
     <string name="network_mobile_foreground">Мобильный интернет %1$s: получено %2$s, отправлено %3$s, в фоновом режиме — ничего</string>
@@ -509,10 +509,10 @@
     <string name="journal_cancel">Отмена</string>
 
     <string name="own_title">Эта копия подлинная?</string>
-    <string name="own_teach">У подлинного Datapavan нет доступа к интернету, и он никогда его не запрашивает. Копия, которая его запрашивает, не подлинная.</string>
+    <string name="own_teach">У подлинного Datapavan Basic нет доступа к интернету, и он никогда его не запрашивает. Копия Basic, которая его запрашивает, не подлинная.</string>
     <string name="own_teach_advanced">У подлинного Datapavan Basic никогда нет доступа к интернету. Подлинный Datapavan Advanced использует интернет только для трафика ваших собственных приложений и для связи с выбранными вами серверами. Он никогда не запрашивает доступ к камере, микрофону, местоположению, контактам, сообщениям или журналу звонков. Ни одно приложение Datapavan никогда не просит у вас денег.</string>
     <string name="own_internet_none">У этой копии нет доступа к интернету.</string>
-    <string name="own_internet_present">Эта копия запрашивает доступ к интернету, поэтому это не подлинный Datapavan. Удалите её и установите Datapavan из канала, которому доверяете.</string>
+    <string name="own_internet_present">Эта копия запрашивает доступ к интернету, поэтому это не подлинный Datapavan Basic. Удалите её и установите Datapavan из канала, которому доверяете.</string>
     <string name="own_permissions_none_advanced">Эта копия не запрашивает ни одного из них.</string>
     <string name="own_permissions_present_advanced">Эта копия запрашивает по меньшей мере один из них, поэтому это не подлинный Datapavan Advanced. Удалите её и установите Datapavan из канала, которому доверяете.</string>
     <string name="own_permissions_extra">Эта копия запрашивает разрешение, которое подлинный Datapavan никогда не запрашивает, поэтому это не подлинный Datapavan. Удалите её и установите Datapavan из канала, которому доверяете.</string>
@@ -528,7 +528,7 @@
     <string name="nav_summary">Сводка</string>
     <string name="nav_apps">Приложения</string>
     <string name="nav_phone">Телефон</string>
-    <string name="nav_network">Сеть</string>
+    <string name="nav_network">Передача данных</string>
     <string name="settings_title">Настройки</string>
     <string name="settings_appearance">Оформление</string>
     <string name="settings_theme_system">Как в системе</string>
@@ -560,9 +560,9 @@
     <string name="about_open_website">Открыть сайт</string>
     <!-- The editions (ADR 0045), in a few calm lines, with no prompt: the one this is, and the others. Datapavan Basic on Google Play is updated by Google Play. -->
     <string name="about_editions_title">Редакции</string>
-    <string name="about_editions_basic">Это Datapavan Basic, подписанный разработчиком одним ключом, который хранится офлайн. У него никогда не бывает доступа к интернету. В Google Play Datapavan Basic выполняет те же проверки, и его подписывает Google. Datapavan Advanced добавляет Watch, который показывает, куда подключается каждое приложение.</string>
-    <string name="about_editions_play">Это Datapavan Basic из Google Play, и Google Play его обновляет. Его подписывает Google. У него никогда не бывает доступа к интернету. Datapavan Basic, подписанный разработчиком одним ключом, который хранится офлайн, и Datapavan Advanced, который добавляет Watch, доступны на сайте.</string>
-    <string name="about_editions_advanced">Это Datapavan Advanced, подписанный разработчиком одним ключом, который хранится офлайн. Он использует интернет только для трафика ваших собственных приложений и для связи с выбранными вами серверами. Datapavan Basic выполняет те же проверки без Watch, и у него никогда не бывает доступа к интернету, поэтому он может проверить это приложение извне.</string>
+    <string name="about_editions_basic">Это Datapavan Basic, подписанный разработчиком одним ключом, который хранится офлайн. У него никогда не бывает доступа к интернету. В Google Play Datapavan Basic выполняет те же проверки, и его подписывает Google. Datapavan Advanced добавляет журнал подключений каждого приложения, блокировку трекеров и зашифрованный DNS.</string>
+    <string name="about_editions_play">Это Datapavan Basic из Google Play, и Google Play его обновляет. Его подписывает Google. У него никогда не бывает доступа к интернету. На сайте есть Datapavan Basic, подписанный разработчиком одним ключом, который хранится офлайн, и Datapavan Advanced. Advanced добавляет журнал подключений каждого приложения, блокировку трекеров и зашифрованный DNS.</string>
+    <string name="about_editions_advanced">Это Datapavan Advanced, подписанный разработчиком одним ключом, который хранится офлайн. Он использует интернет только для трафика ваших собственных приложений и для связи с выбранными вами серверами. Datapavan Basic выполняет те же проверки без журнала подключений, блокировки трекеров и зашифрованного DNS. У него никогда не бывает доступа к интернету, поэтому он может проверить это приложение извне.</string>
     <!-- On the overview, about four months after this version's release. %1$s is a date in the user's format. -->
     <string name="version_old">Эта версия Datapavan от %1$s, и, возможно, уже вышла более новая. Datapavan не может проверить это за вас.</string>
     <string name="version_old_button">Где её получить</string>
@@ -634,12 +634,13 @@
     <string name="screenshots_allow">Разрешить скриншоты на одну минуту</string>
     <string name="screenshots_allowed">Скриншоты сейчас разрешены. Они снова будут запрещены через минуту или как только вы выйдете из приложения.</string>
     <string name="screenshots_block">Запретить скриншоты сейчас</string>
-    <!-- Datapavan Advanced only: the way from the network page to Watch (ui/WatchEntry.kt, ADR 0045). -->
-    <string name="network_entry_body">Смотрите в реальном времени, куда подключается каждое приложение на вашем телефоне. Watch работает на этом телефоне как VPN. Он использует интернет только для того, чтобы передавать дальше трафик каждого приложения, и ничего не отправляет в Datapavan.</string>
-    <string name="network_entry_open">Открыть Watch</string>
+    <!-- Datapavan Advanced only: the card on the Data use tab that opens the Network screen (ui/NetworkEntry.kt, ADR 0045).
+         Its title is network_entry_title, at the end of this file. -->
+    <string name="network_entry_body">Смотрите в реальном времени, куда подключается каждое приложение на вашем телефоне. Для этого Datapavan работает на этом телефоне как VPN. Он использует интернет только для того, чтобы передавать дальше трафик каждого приложения, и ничего не отправляет своему разработчику.</string>
+    <string name="network_entry_open">Посмотреть, куда подключаются приложения</string>
 
-    <!-- W5, part 3 (ADR 0046): the way into Watch's "Now" from an app's page, Advanced only. -->
-    <!-- Datapavan Advanced, on an app's page: opens Watch's view "Now" for that app. -->
+    <!-- W5, part 3 (ADR 0046): the way into "Now" from an app's page, Advanced only. -->
+    <!-- Datapavan Advanced, on an app's page: opens the view "Now" of the Network screen for that app. -->
     <string name="network_now_open">Посмотреть, что это приложение отправляет сейчас</string>
 
     <!-- W7, part 2 (ADR 0035, release gate): the licence screen. -->
@@ -650,7 +651,7 @@
     <string name="licences_text_licence">Лицензия Apache License 2.0. Под ней опубликован Datapavan, а также многие его компоненты.</string>
     <!-- %1$s: the name of a native library file, for example libdatapavan.so. -->
     <string name="licences_text_native">Тексты лицензий пакетов Rust внутри %1$s.</string>
-    <string name="licences_text_mpl">Лицензия Mozilla Public License 2.0. Под ней опубликован GotaTun — код WireGuard в Watch.</string>
+    <string name="licences_text_mpl">Лицензия Mozilla Public License 2.0. Её использует GotaTun — код WireGuard в Datapavan Advanced.</string>
     <string name="licences_text_gotatun">Лицензия BSD 3-Clause License для тех частей GotaTun, которые взяты из BoringTun компании Cloudflare.</string>
     <!-- A file the screen has no description for: its name only. -->
     <string name="licences_text_other">Текст лицензии, входящий в приложение.</string>
@@ -723,4 +724,48 @@
     <string name="android_label_unused_app_setting">Приостановить работу в неактивный период</string>
     <!-- Android's own label: Settings' app_restricted_settings_lockscreen_title at android-15.0.0_r36. -->
     <string name="android_label_restricted_settings">Разрешить доступ к настройкам</string>
+    <!-- Android's own labels (ADR 0054) and the Data use tab's card, moved from strings_untranslated.xml for ADR 0030's
+         round of 2026-11-23. For the translators: each label placeholder is a label of Android's own screens, read from
+         the phone in its own language, or Android's text in Datapavan's language where the phone gives none
+         (android_label_* in strings.xml, which are copied from AOSP, never translated). It is always in the language's
+         quotes, as this file's “…”, and after a noun (the page, the switch, the button) or a verb of naming ("call it",
+         "choose"), so that no word around it depends on its gender, number or case: Russian and German keep it in the
+         nominative, Arabic adds no ال to it, and Persian puts no ezafe on it. One placeholder may hold two labels, the
+         phone's then Datapavan's in brackets, as label_both sets them: put nothing of the sentence's grammar on it.
+         Persian's labels write VPN in Latin letters, as AOSP does, where Datapavan's own sentences write it in Persian
+         ones: keep both as they are. -->
+    <!-- An Android label read in the phone's language (%1$s), then the same label in Datapavan's language (%2$s), where
+         the two differ. Chinese takes full-width brackets. -->
+    <string name="label_both">%1$s (%2$s)</string>
+    <!-- Under a part that names Android's own pages, switches or buttons, where some of those names are Android's own
+         rather than this phone's: Datapavan has not seen this phone's maker show them, or the phone gave none. %1$s:
+         those names, each as label_named gives it, joined by list_separator. -->
+    <string name="android_labels_android">Это собственные названия Android, на вашем телефоне они могут быть другими: %1$s.</string>
+    <!-- One name in the list of android_labels_android, in the language's quotes. -->
+    <string name="label_named">«%1$s»</string>
+    <!-- On the usage access card, after what usage access allows: Datapavan's name for the access is kept, and this line
+         gives the phone's own (the maintainer, 2026-11-22). %1$s: the page's name in this phone's Settings, "Usage access"
+         to Android 15 and "App usage data" from 16; %2$s: the switch on it. -->
+    <string name="usage_access_phone_name">В настройках этого телефона это называется «%1$s», переключатель — «%2$s».</string>
+    <!-- The plan's card for wireless debugging. %1$s: the developer options page, %2$s: the wireless debugging switch,
+         as Android names them. -->
+    <string name="plan_wireless_body_quoted">Компьютер в той же сети может управлять телефоном после сопряжения. Если сейчас вы этим не пользуетесь, выключите переключатель «%2$s» на странице «%1$s».</string>
+    <!-- The plan's card for USB debugging. %1$s: the developer options page, %2$s: the USB debugging switch. -->
+    <string name="plan_usb_body_quoted">Компьютер, подключённый кабелем, может управлять телефоном, когда вы это разрешите. Если сейчас вы этим не пользуетесь, выключите переключатель «%2$s» на странице «%1$s».</string>
+    <!-- The plan's card for a certificate authority the user installed. %1$s: Android's page of encryption and
+         credentials. -->
+    <string name="plan_authority_body_quoted">Тот, у кого есть его ключ, может читать зашифрованные соединения приложений, которые ему доверяют. Если он не нужен для работы или учёбы, удалите его на странице «%1$s».</string>
+    <!-- Under the button that opens the security settings. %1$s: the page of device admin apps, as Android names it. -->
+    <string name="plan_device_admins_note_quoted">Найдите страницу «%1$s» в настройках безопасности. На некоторых телефонах она находится в других настройках безопасности.</string>
+    <!-- The plan's card for an app not opened for long that still holds sensitive access, where Android has a switch
+         that takes its permissions back while it is not used (Android 11 and later, and an app the plan offers it for).
+         %1$s: that switch. -->
+    <string name="plan_not_opened_sensitive_body_quoted">У него всё ещё есть доступ, указанный ниже. Уберите то, что вам не нужно, или включите переключатель «%1$s».</string>
+    <!-- The same card where Android has no such switch for the app, as on Android 10. -->
+    <string name="plan_not_opened_sensitive_body_plain">У него всё ещё есть доступ, указанный ниже. Уберите то, что вам не нужно.</string>
+    <!-- How to turn off a preinstalled app. %1$s: the button on the app's page, as Android names it. -->
+    <string name="guide_steps_quoted">1. Откройте приложение в настройках системы.\n2. Нажмите кнопку «%1$s» или ту, которая отключает приложение.\n3. Если кнопка неактивна, её блокирует производитель телефона. С компьютера через отладку по USB можно вместо этого удалить приложение для вашего пользователя; это можно отменить.</string>
+    <!-- Datapavan Advanced only: the title of the card on the Data use tab that opens the Network screen, where each
+         app's connections show (ui/NetworkEntry.kt). -->
+    <string name="network_entry_title">Подключения каждого приложения</string>
 </resources>
