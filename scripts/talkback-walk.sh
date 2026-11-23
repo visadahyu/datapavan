@@ -1,16 +1,16 @@
 #!/usr/bin/env bash
 # The TalkBack walk (docs/ACCESSIBILITY.md): what Google's screen reader says on each of Datapavan Advanced's screens,
-# item after item, in each language of WALK_LOCALES (default English, Persian and Arabic), written to a record that
-# people read. Local only: TalkBack ships only in Google Play system images (the dp-api37-16k AVD), and CI's image has
-# none.
+# arriving and then item after item, with each screen's accessibility tree, in each language of WALK_LOCALES (default
+# English, Persian and Arabic). Local only: TalkBack ships only in Google Play system images (the dp-api37-16k AVD), and
+# CI's image has none. scripts/talkback-check.py reads the record.
 #
-# Two pieces of the project's own, from scripts/speech-log (emulators only, never shipped), make it work:
-# - a speech engine that speaks nothing and writes each utterance TalkBack hands it, with the language TalkBack asks
-#   for, to logcat;
-# - an accessibility service that performs TalkBack's swipe to the next item through Android's gesture dispatch, which
-#   passes through TalkBack's touch exploration as a finger would. "adb shell input" does not: it goes past TalkBack.
-# A uiautomator dump unbinds every accessibility service while it runs, so each screen is reached with TalkBack off,
-# then TalkBack is turned on and the screen walked from the item it focuses first, until a swipe brings nothing new.
+# The project's own scripts/speech-log (emulators only, never shipped) makes it work:
+# - a speech engine that speaks nothing and writes each utterance TalkBack hands it, with the language and voice
+#   TalkBack asks for, to logcat;
+# - an accessibility service that performs TalkBack's swipes through Android's gesture dispatch (which passes through
+#   touch exploration as a finger would; "adb shell input" does not), clicks elements by test tag while TalkBack stays
+#   on, so that what it says on arriving at a screen is heard, and writes the screen's node tree.
+# TalkBack stays on for the whole walk: no uiautomator dump is made, since a dump unbinds every accessibility service.
 #
 #   scripts/talkback-walk.sh [output directory, default build/talkback]
 #
@@ -26,6 +26,7 @@ NETWORK=org.visadahyu.datapavan.network.MainActivity
 AUDIT=org.visadahyu.datapavan.MainActivity
 TALKBACK=com.google.android.marvin.talkback/com.google.android.marvin.talkback.TalkBackService
 GESTURES=org.visadahyu.datapavan.speechlog/org.visadahyu.datapavan.speechlog.GestureService
+ACTION=org.visadahyu.datapavan.speechlog.GESTURE
 APK="$ROOT/android/app/build-advanced/outputs/apk/debug/app-debug.apk"
 LOG_APK="$ROOT/build/speech-log/speech-log.apk"
 # shellcheck source=scripts/adb-ui.sh
@@ -54,7 +55,9 @@ restore() {
 trap restore EXIT
 
 adb install -r -g "$APK" >/dev/null
-adb install -r "$LOG_APK" >/dev/null
+# The speech log is signed with a key made at each build: an older copy is removed first.
+adb uninstall org.visadahyu.datapavan.speechlog >/dev/null 2>&1 || true
+adb install "$LOG_APK" >/dev/null
 adb shell settings put secure tts_default_synth org.visadahyu.datapavan.speechlog
 # A walk of a long screen writes thousands of lines; the default log buffer would drop the first.
 adb logcat -G 16M >/dev/null 2>&1 || true
@@ -65,38 +68,40 @@ mkdir -p "$OUT"
 talkback=$(adb shell dumpsys package com.google.android.marvin.talkback | tr -d '\r' | sed -n 's/^ *versionName=//p' | head -1)
 echo "TalkBack $talkback, default settings; Android $(adb shell getprop ro.build.version.release | tr -d '\r')" >"$OUT/about.txt"
 
+tell() { adb shell am broadcast -a "$ACTION" --es do "$@" >/dev/null; }
 spoken() { adb logcat -d -s DatapavanSpeech:I | grep -c $'\t' || true; }
+# What TalkBack said since the last gesture: the utterances after the last "gesture" line.
+said_last() { adb logcat -d -s DatapavanSpeech:I | tr -d '\r' | sed -n 's/^.* DatapavanSpeech: //p' | awk '/^gesture /{block=""; next} /^load /{next} {block=block $0 "|"} END{print block}'; }
 
 talkback_on() {
-    adb logcat -c
     adb shell settings put secure enabled_accessibility_services "$TALKBACK:$GESTURES"
     adb shell settings put secure accessibility_enabled 1
     for _ in $(seq 1 20); do
         adb logcat -d -s DatapavanSpeech:I | grep -q 'gestures ready' && break
         sleep 1
     done
-    # TalkBack reads the window's title and focuses its first item.
     sleep 4
 }
 
-talkback_off() {
-    put_back enabled_accessibility_services "$old_services"
-    put_back accessibility_enabled "$old_enabled"
-    sleep 2
+# A click by test tag, with TalkBack on; fails the walk if the element is not there.
+click() {
+    tell click --es id "$1"
+    sleep 3
+    adb logcat -d -s DatapavanSpeech:I | grep -q "gesture click $1 done" || fail "no element $1 to click in $locale"
 }
 
-# What TalkBack said since the last swipe: the utterances after the last "gesture" line.
-said_last() { adb logcat -d -s DatapavanSpeech:I | tr -d '\r' | sed -n 's/^.* DatapavanSpeech: //p' | awk '/^gesture /{block=""; next} {block=block $0 "|"} END{print block}'; }
-
-# The screen on display, walked: a swipe to the next item at a time, until TalkBack comes round to the item it said
-# after the first swipe (it goes on from the last item to the first), two swipes in a row bring nothing new, or
-# WALK_MAX swipes (default 80) were made.
+# The screen on display: what TalkBack said on arriving (since the record began), the tree, then a swipe to the next
+# item at a time, until TalkBack comes round to the item it said after the first swipe, two swipes bring nothing new,
+# or WALK_MAX swipes (default 80). The record of the screen begins with the step that led to it: call begin before.
+begin() { adb logcat -c; }
 walk() {
     local name=$1 before after quiet=0 i first="" now
-    talkback_on
+    sleep 2
+    tell tree
+    sleep 2
     for i in $(seq 1 "${WALK_MAX:-80}"); do
         before=$(spoken)
-        adb shell am broadcast -a org.visadahyu.datapavan.speechlog.GESTURE --es do next >/dev/null
+        tell next
         sleep 1.5
         after=$(spoken)
         if [ "$after" = "$before" ]; then quiet=$((quiet + 1)); else quiet=0; fi
@@ -104,61 +109,45 @@ walk() {
         now=$(said_last)
         if [ "$i" = 1 ]; then first=$now; elif [ -n "$first" ] && [ "$now" = "$first" ]; then break; fi
     done
-    adb logcat -d -s DatapavanSpeech:I | tr -d '\r' | sed -n 's/^.* DatapavanSpeech: //p' | grep -v '^gestures ready$' >"$OUT/$locale-$name.txt"
-    talkback_off
-    # A walk whose swipes never ran, or that TalkBack never spoke in, is no record.
-    grep -q '^gesture next done$' "$OUT/$locale-$name.txt" || fail "no swipe was performed on $name in $locale"
-    grep -q $'\t' "$OUT/$locale-$name.txt" || fail "TalkBack said nothing on $name in $locale"
-    echo "walked: $name in $locale ($(grep -c $'\t' "$OUT/$locale-$name.txt" || true) utterances)"
+    adb logcat -d -s DatapavanSpeech:I DatapavanTree:I | tr -d '\r' | sed -n 's/^.* Datapavan\(Speech\|Tree\): /\1\t/p' |
+        grep -v $'^Speech\tgestures ready$' >"$OUT/$locale-$name.txt"
+    # A walk whose swipes never ran, that TalkBack never spoke in, or whose tree is missing, is no record.
+    grep -q $'^Speech\tgesture next done$' "$OUT/$locale-$name.txt" || fail "no swipe was performed on $name in $locale"
+    grep -qP '^Speech\t[^\t]+\t' "$OUT/$locale-$name.txt" || fail "TalkBack said nothing on $name in $locale"
+    grep -q $'^Tree\tend$' "$OUT/$locale-$name.txt" || fail "no tree of $name in $locale"
+    echo "walked: $name in $locale"
 }
 
-start_app() {
-    adb shell am force-stop "$PKG"
-    adb shell am start -W -n "$PKG/$AUDIT" "$@" >/dev/null
-}
+start_activity() { adb shell am start -W -n "$PKG/$1" "${@:2}" >/dev/null; }
 
+talkback_on
 for locale in ${WALK_LOCALES:-en fa ar}; do
     adb shell cmd locale set-app-locales "$PKG" --locales "$locale"
-    start_app
-    wait_for_overview || fail "the summary did not appear in $locale"
-    walk summary
-    for tab in apps phone network; do
-        open_tab "$tab" || fail "no $tab destination in $locale"
-        walk "$tab"
-    done
-    # The walk scrolled the list; the settings button is at its top, so the app starts again.
-    start_app
-    wait_for_overview || fail "the summary did not come back in $locale"
-    tap_id settings || fail "no settings button in $locale"
-    within 10 gone_id settings || fail "the settings did not open in $locale"
-    walk settings
-    start_app
-    wait_for_overview || fail "the summary did not come back in $locale"
-    open_tab apps || fail "no apps destination in $locale"
-    within 60 has_id app-row || fail "no app in the list in $locale"
-    tap_id app-row || fail "no app to open in $locale"
-    within 10 gone_id app-row || fail "the app's page did not open in $locale"
-    walk app
-    adb shell am start -W -a org.visadahyu.datapavan.action.OPEN_PLAN -f 0x1000c000 -n "$PKG/$AUDIT" >/dev/null
-    within 60 has_id plan || fail "the plan did not open in $locale"
-    walk plan
     adb shell am force-stop "$PKG"
-    adb shell am start -W -n "$PKG/$NETWORK" >/dev/null
-    sleep 3
-    walk network-screen
-    adb shell am start -W -n "$PKG/$NETWORK" --activity-clear-top --ez now true >/dev/null
-    sleep 3
-    walk now
+    begin; start_activity "$AUDIT"; sleep 6; walk summary
+    for tab in apps phone network; do begin; click "nav-$tab"; walk "$tab"; done
+    begin; click nav-summary; sleep 1
+    begin; click settings; walk settings
+    for page in data_sources own_copy privacy licences about; do
+        begin; click "settings-page-$page"; walk "settings-$page"
+        tell back; sleep 2
+    done
+    tell back; sleep 2
+    begin; click review-start; walk review
+    tell back; sleep 2
+    begin; click nav-apps; sleep 1
+    begin; click app-row; walk app
+    # The guided check is offered on an app's page only for some apps (a VPN, or one signed by a known maker).
+    begin; tell click --es id check-start; sleep 3
+    if adb logcat -d -s DatapavanSpeech:I | grep -q 'gesture click check-start done'; then walk check; tell back; sleep 2; fi
+    tell back; sleep 2
+    begin; adb shell am start -W -a org.visadahyu.datapavan.action.OPEN_PLAN -f 0x1000c000 -n "$PKG/$AUDIT" >/dev/null; walk plan
+    adb shell am force-stop "$PKG"
+    begin; start_activity "$NETWORK"; walk network-screen
+    begin; start_activity "$NETWORK" --activity-clear-top --ez now true; walk now
+    begin; click now-pause; walk now-paused
+    click now-pause
 done
 
-# What a reader of the record looks for first: items TalkBack could only call unlabelled, and Persian or Arabic text
-# handed to the speech engine as another language's.
-{
-    echo "== $(cat "$OUT/about.txt")"
-    grep -il 'unlabel' "$OUT"/*.txt | sed 's#^.*/#unlabelled items in #' || true
-    for f in "$OUT"/fa-*.txt "$OUT"/ar-*.txt; do
-        [ -f "$f" ] || continue
-        n=$(LC_ALL=C.UTF-8 grep -P '^(?!fas|per|ara)[a-z]{3}-[A-Z]*\t.*[\x{0600}-\x{06FF}]' "$f" | grep -c . || true)
-        [ "$n" = 0 ] || echo "${f##*/}: $n utterances of Persian or Arabic text asked for in another language"
-    done
-} | tee "$OUT/summary.txt"
+# What a reader of the record looks for first.
+python3 -I "$ROOT/scripts/talkback-check.py" "$OUT" | tee "$OUT/summary.txt"

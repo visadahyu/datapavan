@@ -18,7 +18,6 @@ import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.RadioButton
 import androidx.compose.material3.Switch
-import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
@@ -28,17 +27,18 @@ import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalLayoutDirection
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.LiveRegionMode
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.clearAndSetSemantics
-import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.error
 import androidx.compose.ui.semantics.heading
 import androidx.compose.ui.semantics.liveRegion
 import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.semantics.text
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.unit.LayoutDirection
 import androidx.compose.ui.unit.dp
@@ -49,6 +49,7 @@ import org.visadahyu.datapavan.network.R
 import org.visadahyu.datapavan.network.dns.DnsCatalogue
 import org.visadahyu.datapavan.network.dns.DnsSettings
 import org.visadahyu.datapavan.network.dns.DnsStatus
+import org.visadahyu.datapavan.text.inAppLanguage
 
 /** What the network screen shows of the names of apps that go directly (W8, part 1). */
 internal data class DnsView(
@@ -296,6 +297,7 @@ private fun Service(presets: List<DnsCatalogue.Preset>, choice: DnsSettings.Choi
     if (first.policy.isNotEmpty()) {
         val context = LocalContext.current
         val named = stringResource(R.string.dns_policy_named, bidi.unicodeWrap(first.operator))
+        val language = LocalConfiguration.current.locales[0].toLanguageTag()
         TextButton(onClick = {
             try {
                 context.startActivity(Intent(Intent.ACTION_VIEW, first.policy.toUri()))
@@ -306,7 +308,7 @@ private fun Service(presets: List<DnsCatalogue.Preset>, choice: DnsSettings.Choi
             // A screen reader moving from button to button hears whose policy it is (WCAG 2.4.4), its visible words
             // first (2.5.3).
             modifier = Modifier.padding(start = 36.dp).semantics {
-                contentDescription = named
+                text = inAppLanguage(named, language)
             },
         ) { Text(stringResource(R.string.dns_policy), modifier = Modifier.clearAndSetSemantics {}) }
     }

@@ -229,6 +229,7 @@
     <string name="tunnels_remove">Eliminar</string>
     <string name="tunnels_save_name">Guardar el nombre</string>
     <string name="tunnels_name">Nombre</string>
+    <string name="tunnels_name_empty">Escribe un nombre: los espacios solos no cuentan.</string>
     <!-- %1$d: a number, for a configuration whose file gave no name. -->
     <string name="tunnels_default_name">WireGuard %1$d</string>
     <plurals name="tunnels_apps">
@@ -260,16 +261,8 @@
     <string name="tunnel_state_off">No se usa mientras la VPN de Datapavan está desactivada.</string>
     <!-- Announced when it changes; the handshake's age below it is not, so that it is not announced every second. -->
     <string name="tunnel_state_connected">Conectada.</string>
-    <plurals name="tunnel_handshake_seconds">
-        <item quantity="one">El último handshake fue hace %d segundo.</item>
-        <item quantity="many">El último handshake fue hace %d segundos.</item>
-        <item quantity="other">El último handshake fue hace %d segundos.</item>
-    </plurals>
-    <plurals name="tunnel_handshake_minutes">
-        <item quantity="one">El último handshake fue hace %d minuto.</item>
-        <item quantity="many">El último handshake fue hace %d minutos.</item>
-        <item quantity="other">El último handshake fue hace %d minutos.</item>
-    </plurals>
+    <string name="tunnel_handshake_recent">El último handshake fue hace menos de 3 minutos.</string>
+    <string name="tunnel_handshake_at">Último handshake: %1$s.</string>
     <string name="tunnel_state_idle">Aún no está conectada. Se conecta cuando una de sus apps envía algo.</string>
     <string name="tunnel_state_not_answering">El servidor no responde. Sus apps esperan, y nada de lo que envían sale directamente.</string>
     <string name="tunnel_state_missing">Aún no está lista en Datapavan. Sus apps esperan, y nada de lo que envían sale directamente.</string>

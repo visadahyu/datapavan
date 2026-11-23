@@ -26,7 +26,6 @@ import androidx.compose.material3.Card
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.RadioButton
-import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
@@ -47,6 +46,8 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.Role
+import androidx.compose.ui.semantics.heading
+import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.LifecycleEventObserver
@@ -141,7 +142,7 @@ internal fun GuidedCheckScreen(app: AppFacts, carriesOthers: Boolean, sharedUid:
         verticalArrangement = Arrangement.spacedBy(8.dp),
     ) {
         item { TextButton(onClick = onBack) { Text(stringResource(R.string.back)) } }
-        item { Text(stringResource(R.string.check_title, isolate(name)), style = MaterialTheme.typography.titleLarge) }
+        item { Text(stringResource(R.string.check_title, isolate(name)), style = MaterialTheme.typography.titleLarge, modifier = Modifier.semantics { heading() }) }
         when (stage) {
             Stage.CHOOSE -> item {
                 Column {

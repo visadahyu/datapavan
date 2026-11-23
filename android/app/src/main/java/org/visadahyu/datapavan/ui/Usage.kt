@@ -18,13 +18,13 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.wrapContentHeight
 import androidx.compose.material3.Card
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.res.pluralStringResource
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.Role
@@ -248,7 +248,7 @@ internal fun AppUsageSection(
                 TextButton(onClick = { onDays(if (days == 30) 7 else 30) }) {
                     Text(stringResource(if (days == 30) R.string.network_show_7 else R.string.network_show_30))
                 }
-                TextButton(onClick = onCheck) { Text(stringResource(R.string.check_button)) }
+                TextButton(onClick = onCheck, modifier = Modifier.testTag("check-start")) { Text(stringResource(R.string.check_button)) }
                 if (sharedWith.isNotEmpty()) Note(stringResource(R.string.network_shared, sharedWith.map { isolate(it) }.joinedForUser()))
                 if (proxyNote) Note(stringResource(R.string.network_proxy))
                 Note(stringResource(R.string.network_background_note))

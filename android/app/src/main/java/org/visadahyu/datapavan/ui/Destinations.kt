@@ -29,7 +29,6 @@ import androidx.compose.material3.NavigationBar as MaterialNavigationBar
 import androidx.compose.material3.NavigationBarItem
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedTextField
-import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
@@ -39,6 +38,7 @@ import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.res.painterResource
@@ -47,6 +47,7 @@ import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.heading
 import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.semantics.text
 import androidx.compose.ui.unit.dp
 import org.visadahyu.datapavan.BuildConfig
 import org.visadahyu.datapavan.R
@@ -61,6 +62,7 @@ import org.visadahyu.datapavan.audit.Severity
 import org.visadahyu.datapavan.audit.TrackerInfo
 import org.visadahyu.datapavan.audit.UsageFacts
 import org.visadahyu.datapavan.datapack.DataPackRules
+import org.visadahyu.datapavan.text.inAppLanguage
 import java.time.LocalDate
 import java.util.Locale
 
@@ -157,8 +159,12 @@ private fun TopBar(@StringRes title: Int, onSettings: () -> Unit) {
             color = MaterialTheme.colorScheme.primary,
             modifier = Modifier.weight(1f).semantics { heading() },
         )
-        IconButton(onClick = onSettings, modifier = Modifier.testTag("settings")) {
-            Icon(painterResource(R.drawable.ic_settings), contentDescription = stringResource(R.string.settings_title))
+        // Its spoken name as text in the app's language, which a content description cannot carry (the accessibility
+        // unit, part 2).
+        val label = stringResource(R.string.settings_title)
+        val language = LocalConfiguration.current.locales[0].toLanguageTag()
+        IconButton(onClick = onSettings, modifier = Modifier.testTag("settings").semantics { text = inAppLanguage(label, language) }) {
+            Icon(painterResource(R.drawable.ic_settings), contentDescription = null)
         }
     }
 }

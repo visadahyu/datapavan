@@ -286,9 +286,49 @@ def accessibility(pages):
         scale = viewport and re.search(r"maximum-scale=([\d.]+)", viewport[1])
         if not viewport or re.search(r"user-scalable=(no|0)", viewport[1]) or (scale and float(scale[1]) < 5):
             bad.append(f"{name}: the viewport must let readers zoom (house rule: no maximum-scale below 5)")
+        # Every link to a file of the repository names one that exists (the privacy and accessibility pages are written
+        # from the repository's documents, their links resolved at build time).
+        for path in re.findall(r'href="https://github\.com/visadahyu/datapavan/blob/main/([^"#?]+)', html):
+            if not (ROOT / path).exists():
+                bad.append(f"{name}: links the repository's {path}, which does not exist")
         for element in re.findall(r"<(?!a\b|summary\b)\w+\b[^>]*\btabindex=\"0\"[^>]*>", html):
             if 'role="region"' not in element or not re.search(r'aria-label="[^"]+"', element):
                 bad.append(f"{name}: a box that takes the focus needs role=\"region\" and a name: {element[:60]}")
+    return bad + site_map(pages)
+
+
+def site_map(pages):
+    """Each language's map lists every page of its language, and, outside English, the English pages that have no
+    translation in it (the guides), each of those marked as English (WCAG 2.4.5 and 3.1.2)."""
+    bad = []
+    names = {str(p.relative_to(SITE)) for p in pages}
+    def language(name):
+        return name.split("/")[0] if name.split("/")[0] in LANGS else "en"
+    for lang in ("en",) + LANGS:
+        prefix = "" if lang == "en" else lang + "/"
+        map_page = SITE / prefix / "map/index.html"
+        if not map_page.exists():
+            bad.append(f"{prefix}map/index.html is missing")
+            continue
+        html = map_page.read_text(encoding="utf-8")
+        body = html[html.index("<main"):html.index("</main>")]
+        listed, unmarked = set(), []
+        for attributes in re.findall(r"<li><a ([^>]*)>", body):
+            href = re.search(r'href="([^"]+)"', attributes)[1]
+            target = str((map_page.parent / href).resolve().relative_to(SITE.resolve()))
+            listed.add(target)
+            if language(target) != lang and not ('lang="en"' in attributes and 'dir="ltr"' in attributes):
+                unmarked.append(target)
+        own = {n for n in names if language(n) == lang}
+        if lang != "en":
+            # English pages with no page of the same path in this language: the guides.
+            own |= {n for n in names if language(n) == "en" and (prefix + n) not in names}
+        for missing in sorted(own - listed):
+            bad.append(f"{prefix}map/index.html leaves out {missing}")
+        for extra in sorted(listed - own):
+            bad.append(f"{prefix}map/index.html lists {extra}, which is not a page of its language")
+        for target in unmarked:
+            bad.append(f"{prefix}map/index.html lists {target} without lang=\"en\" and dir=\"ltr\"")
     return bad
 
 

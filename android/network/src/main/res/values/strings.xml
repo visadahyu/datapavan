@@ -256,6 +256,8 @@
     <string name="tunnels_remove">Remove</string>
     <string name="tunnels_save_name">Save the name</string>
     <string name="tunnels_name">Name</string>
+    <!-- Under the name field when the name holds nothing but spaces (or invisible characters), and said by screen readers; Save stays off until it has a name (WCAG 3.3.1). -->
+    <string name="tunnels_name_empty">Type a name: spaces alone do not count.</string>
     <!-- %1$d: a number, for a configuration whose file gave no name. -->
     <string name="tunnels_default_name">WireGuard %1$d</string>
     <plurals name="tunnels_apps">
@@ -286,14 +288,10 @@
     <string name="tunnel_state_off">Not in use while Datapavan\'s VPN is off.</string>
     <!-- Announced when it changes; the handshake's age below it is not, so that it is not announced every second. -->
     <string name="tunnel_state_connected">Connected.</string>
-    <plurals name="tunnel_handshake_seconds">
-        <item quantity="one">The last handshake was %d second ago.</item>
-        <item quantity="other">The last handshake was %d seconds ago.</item>
-    </plurals>
-    <plurals name="tunnel_handshake_minutes">
-        <item quantity="one">The last handshake was %d minute ago.</item>
-        <item quantity="other">The last handshake was %d minutes ago.</item>
-    </plurals>
+    <!-- Under "Connected.", not announced: while the session is current (WireGuard renews it every 2 minutes while traffic flows, and rejects it after 3). It does not change each second (WCAG 2.2.2). -->
+    <string name="tunnel_handshake_recent">The last handshake was within the last 3 minutes.</string>
+    <!-- The same line when the last handshake was longer ago: %1$s is the time of day as the phone writes it, or the date and the time if it was not today, so the sentence must read with either. -->
+    <string name="tunnel_handshake_at">Last handshake: %1$s.</string>
     <string name="tunnel_state_idle">Not connected yet. It connects when one of its apps sends.</string>
     <string name="tunnel_state_not_answering">The server does not answer. Its apps wait, and nothing of theirs goes out directly.</string>
     <string name="tunnel_state_missing">Not ready in Datapavan yet. Its apps wait, and nothing of theirs goes out directly.</string>

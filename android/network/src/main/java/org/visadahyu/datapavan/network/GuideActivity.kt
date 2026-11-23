@@ -53,7 +53,11 @@ class GuideActivity : ComponentActivity() {
             // Datapavan's own language in its process (ADR 0054, the audit's M1).
             val labels = ToolLabels(book, guide, read, phone = PhoneLocales.of(this), own = PhoneLocales.own(this))
             val shown = GuideView.of(book, guide, name, labels) { first, second -> getString(R.string.label_with_own, first, second) }
-            runOnUiThread { view.value = shown }
+            runOnUiThread {
+                view.value = shown
+                // Said by a screen reader as the guide's window title (the accessibility unit, part 2).
+                title = shown.title
+            }
         }.apply { name = "network-guide" }.start()
     }
 

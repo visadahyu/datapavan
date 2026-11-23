@@ -229,6 +229,7 @@
     <string name="tunnels_remove">Supprimer</string>
     <string name="tunnels_save_name">Enregistrer le nom</string>
     <string name="tunnels_name">Nom</string>
+    <string name="tunnels_name_empty">Saisissez un nom : des espaces seuls ne comptent pas.</string>
     <!-- %1$d: a number, for a configuration whose file gave no name. -->
     <string name="tunnels_default_name">WireGuard %1$d</string>
     <plurals name="tunnels_apps">
@@ -260,16 +261,8 @@
     <string name="tunnel_state_off">Inutilisée tant que le VPN de Datapavan est désactivé.</string>
     <!-- Announced when it changes; the handshake's age below it is not, so that it is not announced every second. -->
     <string name="tunnel_state_connected">Connectée.</string>
-    <plurals name="tunnel_handshake_seconds">
-        <item quantity="one">La dernière poignée de main a eu lieu il y a %d seconde.</item>
-        <item quantity="many">La dernière poignée de main a eu lieu il y a %d secondes.</item>
-        <item quantity="other">La dernière poignée de main a eu lieu il y a %d secondes.</item>
-    </plurals>
-    <plurals name="tunnel_handshake_minutes">
-        <item quantity="one">La dernière poignée de main a eu lieu il y a %d minute.</item>
-        <item quantity="many">La dernière poignée de main a eu lieu il y a %d minutes.</item>
-        <item quantity="other">La dernière poignée de main a eu lieu il y a %d minutes.</item>
-    </plurals>
+    <string name="tunnel_handshake_recent">La dernière poignée de main a eu lieu au cours des 3 dernières minutes.</string>
+    <string name="tunnel_handshake_at">Dernière poignée de main : %1$s.</string>
     <string name="tunnel_state_idle">Pas encore connectée. Elle se connecte quand l\'une de ses applis envoie des données.</string>
     <string name="tunnel_state_not_answering">Le serveur ne répond pas. Ses applis attendent, et rien de ce qu\'elles envoient ne sort directement.</string>
     <string name="tunnel_state_missing">Pas encore prête dans Datapavan. Ses applis attendent, et rien de ce qu\'elles envoient ne sort directement.</string>

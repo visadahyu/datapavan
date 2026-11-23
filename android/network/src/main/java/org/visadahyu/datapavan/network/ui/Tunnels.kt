@@ -25,7 +25,6 @@ import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.RadioButton
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Switch
-import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
@@ -35,11 +34,13 @@ import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.res.pluralStringResource
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.LiveRegionMode
 import androidx.compose.ui.semantics.Role
+import androidx.compose.ui.semantics.error
 import androidx.compose.ui.semantics.heading
 import androidx.compose.ui.semantics.liveRegion
 import androidx.compose.ui.semantics.semantics
@@ -296,13 +297,7 @@ private fun ConfigurationCard(configuration: ConfigurationView, isDefault: Boole
             if (renaming) {
                 val known = (configuration.name as? TunnelStore.Name.Known)?.name.orEmpty()
                 var edited by rememberSaveable(configuration.slot) { mutableStateOf(known) }
-                OutlinedTextField(
-                    value = edited,
-                    onValueChange = { edited = it.take(TunnelStore.NAME_LENGTH) },
-                    label = { Text(stringResource(R.string.tunnels_name)) },
-                    singleLine = true,
-                    modifier = Modifier.fillMaxWidth(),
-                )
+                NameField(edited, { edited = it.take(TunnelStore.NAME_LENGTH) }, Modifier.fillMaxWidth())
                 Button(
                     onClick = {
                         actions.onRename(configuration.slot, edited)
@@ -383,13 +378,38 @@ internal fun kindWords(kind: TunnelStates.Kind): Int = when (kind) {
     TunnelStates.Kind.CONNECTED -> R.string.tunnel_state_connected
 }
 
-/** How long ago a connected configuration's last handshake was, outside the live region. */
+/**
+ * When a connected configuration's last handshake was, outside the live region, in words that do not change each second
+ * (WCAG 2.2.2, the accessibility unit's part 2): "within the last 3 minutes" while the session is current, since WireGuard
+ * renews it every 2 minutes while traffic flows and rejects it after 3 (REJECT_AFTER_TIME); after that the time of day
+ * it happened.
+ */
 @Composable
-private fun handshakeWords(seconds: Long): String = if (seconds < 120) {
-    pluralStringResource(R.plurals.tunnel_handshake_seconds, seconds.toInt(), seconds)
+private fun handshakeWords(seconds: Long): String = if (seconds <= HANDSHAKE_CURRENT_SECONDS) {
+    stringResource(R.string.tunnel_handshake_recent)
 } else {
-    val minutes = seconds / 60
-    pluralStringResource(R.plurals.tunnel_handshake_minutes, minutes.coerceAtMost(Int.MAX_VALUE.toLong()).toInt(), minutes)
+    stringResource(R.string.tunnel_handshake_at, whenText(LocalContext.current, System.currentTimeMillis() - seconds * 1000))
+}
+
+private const val HANDSHAKE_CURRENT_SECONDS = 180L
+
+/**
+ * A configuration's name, in its error state when it holds nothing but spaces and invisible characters, with the reason
+ * said under it and to screen readers (WCAG 3.3.1, the accessibility unit's part 2); Save stays off until it has one.
+ */
+@Composable
+private fun NameField(value: String, onValueChange: (String) -> Unit, modifier: Modifier) {
+    val empty = TunnelStore.cleanName(value).isEmpty()
+    val reason = stringResource(R.string.tunnels_name_empty)
+    OutlinedTextField(
+        value = value,
+        onValueChange = onValueChange,
+        label = { Text(stringResource(R.string.tunnels_name)) },
+        singleLine = true,
+        isError = empty,
+        supportingText = if (empty) ({ Text(reason) }) else null,
+        modifier = modifier.semantics { if (empty) error(reason) },
+    )
 }
 
 /**
@@ -431,13 +451,7 @@ internal fun ImportConfirmation(
                 modifier = Modifier.semantics { heading() },
             )
             if (pending.replacing != null) Text(stringResource(R.string.import_replace_note), style = body)
-            OutlinedTextField(
-                value = pending.name,
-                onValueChange = { actions.onPendingName(it.take(TunnelStore.NAME_LENGTH)) },
-                label = { Text(stringResource(R.string.tunnels_name)) },
-                singleLine = true,
-                modifier = Modifier.fillMaxWidth().testTag("tunnel-name"),
-            )
+            NameField(pending.name, { actions.onPendingName(it.take(TunnelStore.NAME_LENGTH)) }, Modifier.fillMaxWidth().testTag("tunnel-name"))
             Text(stringResource(R.string.import_server, isolateLtr(d.host), d.port), style = body)
             if (d.host.any { it.isLetter() } && ':' !in d.host) {
                 Text(stringResource(R.string.import_server_name_quoted, quotedLabel("private_dns")), style = body)

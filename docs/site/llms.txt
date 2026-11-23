@@ -58,7 +58,9 @@ Datapavan is a free, open-source privacy app for Android phones, under the Apach
   - [Windscribe and Datapavan](https://datapavan.org/guides/windscribe/)
   - [WireGuard and Datapavan](https://datapavan.org/guides/wireguard/)
   - [ZedSecure in proxy mode](https://datapavan.org/guides/zedsecure/)
+- [Accessibility](https://datapavan.org/accessibility/)
 - [Privacy policy](https://datapavan.org/privacy/)
+- [Site map](https://datapavan.org/map/)
 - [What a bot or mini app can see](https://datapavan.org/bots/)
 
 ## Other languages

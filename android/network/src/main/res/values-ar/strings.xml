@@ -253,6 +253,7 @@
     <string name="tunnels_remove">إزالة</string>
     <string name="tunnels_save_name">حفظ الاسم</string>
     <string name="tunnels_name">الاسم</string>
+    <string name="tunnels_name_empty">اكتب اسمًا: المسافات وحدها لا تُحتسب.</string>
     <!-- %1$d: a number, for a configuration whose file gave no name. -->
     <string name="tunnels_default_name">WireGuard %1$d</string>
     <plurals name="tunnels_apps">
@@ -287,22 +288,8 @@
     <string name="tunnel_state_off">غير مستخدَم ما دامت شبكة VPN الخاصة بـ Datapavan متوقفة.</string>
     <!-- Announced when it changes; the handshake's age below it is not, so that it is not announced every second. -->
     <string name="tunnel_state_connected">متصل.</string>
-    <plurals name="tunnel_handshake_seconds">
-        <item quantity="zero">جرت آخر مصافحة قبل %d ثانية.</item>
-        <item quantity="one">جرت آخر مصافحة قبل ثانية واحدة.</item>
-        <item quantity="two">جرت آخر مصافحة قبل ثانيتين.</item>
-        <item quantity="few">جرت آخر مصافحة قبل %d ثوانٍ.</item>
-        <item quantity="many">جرت آخر مصافحة قبل %d ثانيةً.</item>
-        <item quantity="other">جرت آخر مصافحة قبل %d ثانية.</item>
-    </plurals>
-    <plurals name="tunnel_handshake_minutes">
-        <item quantity="zero">جرت آخر مصافحة قبل %d دقيقة.</item>
-        <item quantity="one">جرت آخر مصافحة قبل دقيقة واحدة.</item>
-        <item quantity="two">جرت آخر مصافحة قبل دقيقتين.</item>
-        <item quantity="few">جرت آخر مصافحة قبل %d دقائق.</item>
-        <item quantity="many">جرت آخر مصافحة قبل %d دقيقةً.</item>
-        <item quantity="other">جرت آخر مصافحة قبل %d دقيقة.</item>
-    </plurals>
+    <string name="tunnel_handshake_recent">جرت آخر مصافحة خلال الدقائق الثلاث الأخيرة.</string>
+    <string name="tunnel_handshake_at">آخر مصافحة: %1$s.</string>
     <string name="tunnel_state_idle">غير متصل بعد. يتصل عندما يرسل أحد تطبيقاته.</string>
     <string name="tunnel_state_not_answering">الخادم لا يستجيب. تطبيقاته تنتظر، ولا يخرج منها أي شيء مباشرةً.</string>
     <string name="tunnel_state_missing">ليس جاهزًا في Datapavan بعد. تطبيقاته تنتظر، ولا يخرج منها أي شيء مباشرةً.</string>

@@ -12,7 +12,6 @@ import androidx.compose.foundation.lazy.items
 import androidx.compose.material3.Card
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
-import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Modifier
@@ -23,6 +22,7 @@ import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.LiveRegionMode
 import androidx.compose.ui.semantics.heading
 import androidx.compose.ui.semantics.liveRegion
+import androidx.compose.ui.semantics.paneTitle
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.unit.dp
 import java.text.DateFormat
@@ -91,8 +91,10 @@ internal fun HistoryScreen(
     // The phone's own choice of a 12- or 24-hour clock (review c1 of W5's third part, screens, nit 6).
     val time = android.text.format.DateFormat.getTimeFormat(context)
     val date = DateFormat.getDateInstance(DateFormat.MEDIUM)
+    // Named for screen readers, which say it as the history opens over "Now" (the accessibility unit, part 2).
+    val paneName = stringResource(R.string.history_title, label(view.app, view.app.uid))
     LazyColumn(
-        modifier = Modifier.safeDrawingPadding().testTag("history"),
+        modifier = Modifier.safeDrawingPadding().testTag("history").semantics { paneTitle = paneName },
         contentPadding = PaddingValues(24.dp),
         verticalArrangement = Arrangement.spacedBy(12.dp),
     ) {

@@ -27,6 +27,46 @@ mkdir -p "$ROOT/site/content/privacy"
     sed -E '1d; s#\]\(([^):]+)\)#](https://github.com/visadahyu/datapavan/blob/main/\1)#g' "$ROOT/PRIVACY.md"
 } >"$ROOT/site/content/privacy/index.en.md"
 
+# The accessibility statement has one source too, docs/ACCESSIBILITY.md, in English. Its links are resolved from docs/: an
+# anchor stays, a link to a file of the repository becomes its address on GitHub (check-site.py checks that the file
+# exists). Every other language gets a short page in its own words, from site/data/text, that says what Datapavan aims
+# for and how to tell us, and links the full statement (the accessibility unit, part 2).
+python3 -I - "$ROOT" <<'PY'
+import json, os, pathlib, re, sys
+root = pathlib.Path(sys.argv[1])
+out = root / "site/content/accessibility"
+out.mkdir(parents=True, exist_ok=True)
+text = (root / "docs/ACCESSIBILITY.md").read_text(encoding="utf-8").split("\n", 1)[1]
+def resolve(match):
+    label, target = match.group(1), match.group(2)
+    if re.match(r"[a-z]+:|#", target):
+        return match.group(0)
+    path, _, anchor = target.partition("#")
+    full = os.path.normpath(os.path.join("docs", path))
+    return f"[{label}](https://github.com/visadahyu/datapavan/blob/main/{full}{'#' + anchor if anchor else ''})"
+text = re.sub(r"\[([^\]]+)\]\(([^)\s]+)\)", resolve, text)
+words = json.loads((root / "site/data/text/en.json").read_text(encoding="utf-8"))
+(out / "index.en.md").write_text(f'---\ntitle: "{words["a11y_title"]}"\n---\n{text}', encoding="utf-8")
+for lang in ("fr", "de", "es", "ru", "zh", "ar", "fa"):
+    w = json.loads((root / f"site/data/text/{lang}.json").read_text(encoding="utf-8"))
+    title = w["a11y_title"].replace('"', '\\"')
+    # The link to the full statement, in English, is the page layout's (site/layouts/page.html).
+    body = f'{w["a11y_aim"]}\n\n{w["a11y_tell"]}\n'
+    (out / f"index.{lang}.md").write_text(f'---\ntitle: "{title}"\n---\n\n{body}', encoding="utf-8")
+PY
+
+# The site's map, one page per language (site/layouts/map.html), so that every page can be found a second way beside the
+# navigation and the footer (WCAG 2.4.5). Its title is the footer's word for it.
+python3 -I - "$ROOT" <<'PY'
+import json, pathlib, sys
+root = pathlib.Path(sys.argv[1])
+out = root / "site/content/map"
+out.mkdir(parents=True, exist_ok=True)
+for lang in ("en", "fr", "de", "es", "ru", "zh", "ar", "fa"):
+    title = json.loads((root / f"site/data/text/{lang}.json").read_text(encoding="utf-8"))["foot_map"].replace('"', '\\"')
+    (out / f"index.{lang}.md").write_text(f'---\ntitle: "{title}"\nlayout: map\n---\n', encoding="utf-8")
+PY
+
 # The per-tool guides for proxy mode (W8, part 3b), one page per tool: written from data/tools/guide*.tsv and the
 # network part's English strings by scripts/guides.py, which checks the data first, so that the site says what the
 # network part says.

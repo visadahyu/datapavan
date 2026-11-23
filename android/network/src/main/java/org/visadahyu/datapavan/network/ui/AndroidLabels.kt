@@ -3,7 +3,6 @@ package org.visadahyu.datapavan.network.ui
 import android.content.Context
 import androidx.annotation.StringRes
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.mutableStateOf

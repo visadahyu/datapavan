@@ -221,6 +221,7 @@
     <string name="tunnels_remove">حذف کردن</string>
     <string name="tunnels_save_name">ذخیرهٔ نام</string>
     <string name="tunnels_name">نام</string>
+    <string name="tunnels_name_empty">یک نام بنویسید: فاصله‌ها به‌تنهایی حساب نمی‌شوند.</string>
     <!-- %1$d: a number, for a configuration whose file gave no name. -->
     <string name="tunnels_default_name">WireGuard %1$d</string>
     <plurals name="tunnels_apps">
@@ -251,14 +252,8 @@
     <string name="tunnel_state_off">تا وقتی وی‌پی‌ان Datapavan خاموش است، به کار نمی‌رود.</string>
     <!-- Announced when it changes; the handshake's age below it is not, so that it is not announced every second. -->
     <string name="tunnel_state_connected">وصل است.</string>
-    <plurals name="tunnel_handshake_seconds">
-        <item quantity="one">آخرین دست‌دهی %d ثانیه پیش بود.</item>
-        <item quantity="other">آخرین دست‌دهی %d ثانیه پیش بود.</item>
-    </plurals>
-    <plurals name="tunnel_handshake_minutes">
-        <item quantity="one">آخرین دست‌دهی %d دقیقه پیش بود.</item>
-        <item quantity="other">آخرین دست‌دهی %d دقیقه پیش بود.</item>
-    </plurals>
+    <string name="tunnel_handshake_recent">آخرین دست‌دهی در ۳ دقیقهٔ گذشته بود.</string>
+    <string name="tunnel_handshake_at">آخرین دست‌دهی: %1$s.</string>
     <string name="tunnel_state_idle">هنوز وصل نشده است. وقتی یکی از برنامه‌هایش چیزی بفرستد، وصل می‌شود.</string>
     <string name="tunnel_state_not_answering">سرور پاسخ نمی‌دهد. برنامه‌هایش منتظر می‌مانند و هیچ داده‌ای از آن‌ها مستقیم بیرون نمی‌رود.</string>
     <string name="tunnel_state_missing">هنوز در Datapavan آماده نیست. برنامه‌هایش منتظر می‌مانند و هیچ داده‌ای از آن‌ها مستقیم بیرون نمی‌رود.</string>

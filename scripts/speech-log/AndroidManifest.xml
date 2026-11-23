@@ -10,6 +10,8 @@
     package="org.visadahyu.datapavan.speechlog">
 
     <application android:label="Datapavan speech log" android:hasCode="true">
+        <!-- Three lines of Persian with and without a LocaleSpan: which language a screen reader asks for (the walk). -->
+        <activity android:name=".LanguageActivity" android:exported="true" />
         <service android:name=".SpeechLogService" android:exported="true"
             android:label="Datapavan speech log">
             <intent-filter>

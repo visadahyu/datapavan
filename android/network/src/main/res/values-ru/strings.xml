@@ -237,6 +237,7 @@
     <string name="tunnels_remove">Удалить</string>
     <string name="tunnels_save_name">Сохранить название</string>
     <string name="tunnels_name">Название</string>
+    <string name="tunnels_name_empty">Введите название: одни пробелы не считаются.</string>
     <!-- %1$d: a number, for a configuration whose file gave no name. -->
     <string name="tunnels_default_name">WireGuard %1$d</string>
     <plurals name="tunnels_apps">
@@ -269,18 +270,8 @@
     <string name="tunnel_state_off">Не используется, пока VPN Datapavan выключен.</string>
     <!-- Announced when it changes; the handshake's age below it is not, so that it is not announced every second. -->
     <string name="tunnel_state_connected">Подключена.</string>
-    <plurals name="tunnel_handshake_seconds">
-        <item quantity="one">Последнее рукопожатие было %d секунду назад.</item>
-        <item quantity="few">Последнее рукопожатие было %d секунды назад.</item>
-        <item quantity="many">Последнее рукопожатие было %d секунд назад.</item>
-        <item quantity="other">Последнее рукопожатие было %d секунды назад.</item>
-    </plurals>
-    <plurals name="tunnel_handshake_minutes">
-        <item quantity="one">Последнее рукопожатие было %d минуту назад.</item>
-        <item quantity="few">Последнее рукопожатие было %d минуты назад.</item>
-        <item quantity="many">Последнее рукопожатие было %d минут назад.</item>
-        <item quantity="other">Последнее рукопожатие было %d минуты назад.</item>
-    </plurals>
+    <string name="tunnel_handshake_recent">Последнее рукопожатие было не более 3 минут назад.</string>
+    <string name="tunnel_handshake_at">Последнее рукопожатие: %1$s.</string>
     <string name="tunnel_state_idle">Пока не подключена. Она подключается, когда одно из её приложений что-то отправляет.</string>
     <string name="tunnel_state_not_answering">Сервер не отвечает. Её приложения ждут, и ничего от них не уходит напрямую.</string>
     <string name="tunnel_state_missing">Пока не готова в Datapavan. Её приложения ждут, и ничего от них не уходит напрямую.</string>

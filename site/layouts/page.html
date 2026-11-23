@@ -1,1 +1,6 @@
-{{ define "main" }}<main id="main"><section><div class="w prose"><h1>{{ .Title }}</h1>{{ .Content }}</div></section></main>{{ end }}
+{{ define "main" }}<main id="main"><section><div class="w prose"><h1>{{ .Title }}</h1>{{ .Content }}
+{{- /* The accessibility page in another language than English says the essentials in its own words and links the full
+statement, which is in English (the accessibility unit, part 2). */ -}}
+{{- if and (strings.HasSuffix .RelPermalink "/accessibility/") (ne site.Language.Lang "en") }}{{ $t := index site.Data.text site.Language.Lang }}
+<p><a href="../../accessibility/index.html" hreflang="en">{{ $t.a11y_full }}</a></p>
+{{- end }}</div></section></main>{{ end }}

@@ -1,0 +1,26 @@
+{{ define "main" }}
+{{- /* The site's map (the accessibility unit, part 2): every page of this language, and the pages that exist only in
+English, each marked as English, so that every page can be found a second way (WCAG 2.4.5). The main page first, then
+the other pages by title, then the guides' index and each guide. scripts/check-site.py holds it to the pages built. */ -}}
+{{- $lang := site.Language.Lang -}}
+{{- $toSite := cond (eq $lang "en") "../" "../../" -}}
+{{- $here := . -}}
+{{- $pages := where site.Pages "RelPermalink" "!=" "" -}}
+{{- $english := slice -}}
+{{- if ne $lang "en" }}{{ range site.Sites }}{{ if eq .Language.Lang "en" }}{{ range where .Pages "RelPermalink" "!=" "" }}{{ $p := . }}
+{{- $translated := false }}{{ range .AllTranslations }}{{ if eq .Language.Lang $lang }}{{ $translated = true }}{{ end }}{{ end }}
+{{- if not $translated }}{{ $english = $english | append $p }}{{ end }}{{ end }}{{ end }}{{ end }}{{ end -}}
+<main id="main"><section><div class="w prose"><h1>{{ .Title }}</h1><ul class="map">
+<li><a href="{{ $toSite }}{{ strings.TrimPrefix "/" site.Home.RelPermalink }}index.html">Datapavan</a></li>
+{{- range (where (where $pages "Kind" "!=" "home") "Section" "!=" "guides").ByTitle }}
+<li><a href="{{ $toSite }}{{ strings.TrimPrefix "/" .RelPermalink }}index.html"{{ if eq .RelPermalink $here.RelPermalink }} aria-current="page"{{ end }}>{{ .Title }}</a></li>
+{{- end }}
+{{- range slice (where $pages "Section" "guides") (where $english "Section" "guides") }}{{ $guides := . }}
+{{- range where $guides "Kind" "section" }}
+<li><a href="{{ $toSite }}{{ strings.TrimPrefix "/" .RelPermalink }}index.html"{{ if ne .Language.Lang $lang }} hreflang="en" lang="en" dir="ltr"{{ end }}>{{ .Title }}</a><ul>
+{{- range (where $guides "Kind" "page").ByTitle }}
+<li><a href="{{ $toSite }}{{ strings.TrimPrefix "/" .RelPermalink }}index.html"{{ if ne .Language.Lang $lang }} hreflang="en" lang="en" dir="ltr"{{ end }}>{{ .Title }}</a></li>
+{{- end }}</ul></li>
+{{- end }}{{ end }}
+</ul></div></section></main>
+{{ end }}

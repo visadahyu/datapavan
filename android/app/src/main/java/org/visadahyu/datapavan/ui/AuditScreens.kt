@@ -32,7 +32,6 @@ import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Scaffold
-import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
@@ -55,6 +54,7 @@ import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.collapse
 import androidx.compose.ui.semantics.expand
 import androidx.compose.ui.semantics.heading
+import androidx.compose.ui.semantics.paneTitle
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.semantics.testTagsAsResourceId
 import androidx.compose.ui.text.font.FontFamily
@@ -341,13 +341,15 @@ internal fun DatapavanApp(
                     usageVersion++
                 }
                 BackHandler(onBack = close)
-                GuidedCheckScreen(
-                    checked,
-                    carriesOthers = checked.packageName in audit.signatures,
-                    sharedUid = audit.apps.any { it.first.uid == checked.uid && it.first.packageName != checked.packageName },
-                    insets = insets,
-                    onBack = close,
-                )
+                Pane(stringResource(R.string.check_title, isolate(checked.label ?: checked.packageName))) {
+                    GuidedCheckScreen(
+                        checked,
+                        carriesOthers = checked.packageName in audit.signatures,
+                        sharedUid = audit.apps.any { it.first.uid == checked.uid && it.first.packageName != checked.packageName },
+                        insets = insets,
+                        onBack = close,
+                    )
+                }
             }
             entry != null -> {
                 BackHandler { selected = null }
@@ -355,26 +357,28 @@ internal fun DatapavanApp(
                 val sharedWith = audit.apps.map { it.first }.filter { it.uid == app.uid && it.packageName != app.packageName }
                     .map { it.label ?: it.packageName }
                 val inPlan = Plan.items(planInput(audit, usage, context.packageName), PlanLevel.STRICT).items.any { it.app?.packageName == app.packageName }
-                AppDetail(
-                    entry, audit.trackers?.get(app.packageName), audit.trackerInfo, audit.signatures[app.packageName],
-                    audit.sdks[app.packageName].orEmpty(), audit.unavailable[app.packageName].orEmpty(),
-                    audit.services, audit.owners[app.packageName], audit.keys[app.packageName],
-                    installerLabel = audit.apps.firstOrNull { it.first.packageName == app.installer }?.first?.label,
-                    insets = insets, onBack = { selected = null },
-                    plain = {
-                        PlainCard(app, audit.trackers?.get(app.packageName), audit.trackerInfo, usage, onPlan = if (inPlan) ({ planning = true }) else null)
-                    },
-                    usage = {
-                        AppUsageSection(
-                            app, usage, days, sharedWith, app.isVpnApp || app.packageName in audit.signatures,
-                            onDays = { days = it }, onCheck = { checking = app.packageName },
-                        )
-                    },
-                )
+                Pane(app.label ?: app.packageName) {
+                    AppDetail(
+                        entry, audit.trackers?.get(app.packageName), audit.trackerInfo, audit.signatures[app.packageName],
+                        audit.sdks[app.packageName].orEmpty(), audit.unavailable[app.packageName].orEmpty(),
+                        audit.services, audit.owners[app.packageName], audit.keys[app.packageName],
+                        installerLabel = audit.apps.firstOrNull { it.first.packageName == app.installer }?.first?.label,
+                        insets = insets, onBack = { selected = null },
+                        plain = {
+                            PlainCard(app, audit.trackers?.get(app.packageName), audit.trackerInfo, usage, onPlan = if (inPlan) ({ planning = true }) else null)
+                        },
+                        usage = {
+                            AppUsageSection(
+                                app, usage, days, sharedWith, app.isVpnApp || app.packageName in audit.signatures,
+                                onDays = { days = it }, onCheck = { checking = app.packageName },
+                            )
+                        },
+                    )
+                }
             }
             reviewing -> {
                 BackHandler { reviewing = false }
-                StrictReview(audit.apps.map { it.first }, insets, onBack = { reviewing = false })
+                Pane(stringResource(R.string.strict_title)) { StrictReview(audit.apps.map { it.first }, insets, onBack = { reviewing = false }) }
             }
             planning -> {
                 // Done runs the audit again, so that the overview shows what changed.
@@ -383,39 +387,54 @@ internal fun DatapavanApp(
                     dataVersion++
                 }
                 BackHandler { planning = false }
-                PlanScreen(
-                    planInput(audit, usage, context.packageName), usage == UsageState.NoAccess, journal, audit::stateOf, insets,
-                    onJournal = saveJournal, onBack = { planning = false }, onDone = done,
-                )
+                Pane(stringResource(R.string.plan_title)) {
+                    PlanScreen(
+                        planInput(audit, usage, context.packageName), usage == UsageState.NoAccess, journal, audit::stateOf, insets,
+                        onJournal = saveJournal, onBack = { planning = false }, onDone = done,
+                    )
+                }
             }
             journaling -> {
                 BackHandler { journaling = false }
-                JournalScreen(
-                    journal, audit.apps.associate { (app, _) -> app.packageName to (app.label ?: app.packageName) }, audit::stateOf, insets,
-                    onBack = { journaling = false },
-                    onDelete = {
-                        journalStore.delete()
-                        journal = Journal()
-                    },
-                )
+                Pane(stringResource(R.string.journal_title)) {
+                    JournalScreen(
+                        journal, audit.apps.associate { (app, _) -> app.packageName to (app.label ?: app.packageName) }, audit::stateOf, insets,
+                        onBack = { journaling = false },
+                        onDelete = {
+                            journalStore.delete()
+                            journal = Journal()
+                        },
+                    )
+                }
             }
             settingsPage != null -> {
                 val back: () -> Unit = { settingsPage = null }
                 BackHandler(onBack = back)
-                when (settingsPage) {
-                    SettingsPage.DATA_SOURCES -> DataSources(insets, onBack = back, onImported = { dataVersion++ })
-                    SettingsPage.OWN_COPY -> {
-                        val own = audit.apps.firstOrNull { it.first.packageName == context.packageName }?.first
-                        OwnCopyScreen(own?.signing, audit.signatures[context.packageName], insets, onBack = back)
+                val pageTitle = when (settingsPage) {
+                    SettingsPage.DATA_SOURCES -> R.string.data_sources_title
+                    SettingsPage.OWN_COPY -> R.string.own_title
+                    SettingsPage.PRIVACY -> R.string.privacy_title
+                    SettingsPage.LICENCES -> R.string.licences_title
+                    SettingsPage.ABOUT, null -> R.string.about_title
+                }
+                Pane(stringResource(pageTitle)) {
+                    when (settingsPage) {
+                        SettingsPage.DATA_SOURCES -> DataSources(insets, onBack = back, onImported = { dataVersion++ })
+                        SettingsPage.OWN_COPY -> {
+                            val own = audit.apps.firstOrNull { it.first.packageName == context.packageName }?.first
+                            OwnCopyScreen(own?.signing, audit.signatures[context.packageName], insets, onBack = back)
+                        }
+                        SettingsPage.PRIVACY -> TextPage(R.string.privacy_title, privacyParagraphs(), insets, back)
+                        SettingsPage.LICENCES -> LicencesScreen(insets, back)
+                        SettingsPage.ABOUT, null -> AboutPage(engineVersion, insets, back)
                     }
-                    SettingsPage.PRIVACY -> TextPage(R.string.privacy_title, privacyParagraphs(), insets, back)
-                    SettingsPage.LICENCES -> LicencesScreen(insets, back)
-                    SettingsPage.ABOUT, null -> AboutPage(engineVersion, insets, back)
                 }
             }
             settingsOpen -> {
                 BackHandler { settingsOpen = false }
-                SettingsScreen(theme, insets, onTheme, onPage = { settingsPage = it }, onBack = { settingsOpen = false })
+                Pane(stringResource(R.string.settings_title)) {
+                    SettingsScreen(theme, insets, onTheme, onPage = { settingsPage = it }, onBack = { settingsOpen = false })
+                }
             }
             else -> Destinations(
                 tab, audit, scanProgress, usage, insets,
@@ -441,6 +460,15 @@ internal fun DatapavanApp(
             )
         }
     }
+}
+
+/**
+ * A screen the audit shows in place of another, named for screen readers, which say its name when it opens (WCAG 2.4.2,
+ * the accessibility unit's part 2); the screens' own titles are headings for moving within them.
+ */
+@Composable
+private fun Pane(title: String, content: @Composable () -> Unit) {
+    Box(Modifier.fillMaxSize().semantics { paneTitle = title }) { content() }
 }
 
 @Composable

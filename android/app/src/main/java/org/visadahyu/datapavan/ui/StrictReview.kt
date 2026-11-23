@@ -19,7 +19,6 @@ import androidx.compose.foundation.lazy.items
 import androidx.compose.material3.Card
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
-import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
@@ -30,6 +29,7 @@ import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.heading
 import androidx.compose.ui.semantics.semantics
@@ -50,7 +50,7 @@ internal fun StrictReviewEntry(apps: List<AppFacts>, onStart: () -> Unit) {
             Text(stringResource(R.string.strict_title), style = MaterialTheme.typography.titleSmall)
             Spacer(Modifier.height(4.dp))
             Text(stringResource(R.string.strict_entry_body, reviewCandidates(apps, includeSystem = false).size), style = MaterialTheme.typography.bodyMedium)
-            TextButton(onClick = onStart) { Text(stringResource(R.string.strict_start)) }
+            TextButton(onClick = onStart, modifier = Modifier.testTag("review-start")) { Text(stringResource(R.string.strict_start)) }
         }
     }
 }

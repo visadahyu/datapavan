@@ -30,6 +30,18 @@
 <loc>https://datapavan.org/guides/warp/</loc>
 </url>
 <url>
+<loc>https://datapavan.org/accessibility/</loc>
+<xhtml:link rel="alternate" hreflang="en" href="https://datapavan.org/accessibility/"/>
+<xhtml:link rel="alternate" hreflang="fr" href="https://datapavan.org/fr/accessibility/"/>
+<xhtml:link rel="alternate" hreflang="de" href="https://datapavan.org/de/accessibility/"/>
+<xhtml:link rel="alternate" hreflang="es" href="https://datapavan.org/es/accessibility/"/>
+<xhtml:link rel="alternate" hreflang="ru" href="https://datapavan.org/ru/accessibility/"/>
+<xhtml:link rel="alternate" hreflang="zh" href="https://datapavan.org/zh/accessibility/"/>
+<xhtml:link rel="alternate" hreflang="ar" href="https://datapavan.org/ar/accessibility/"/>
+<xhtml:link rel="alternate" hreflang="fa" href="https://datapavan.org/fa/accessibility/"/>
+<xhtml:link rel="alternate" hreflang="x-default" href="https://datapavan.org/accessibility/"/>
+</url>
+<url>
 <loc>https://datapavan.org/guides/am-tunnel/</loc>
 </url>
 <url>
@@ -153,6 +165,18 @@
 <loc>https://datapavan.org/guides/sing-box/</loc>
 </url>
 <url>
+<loc>https://datapavan.org/map/</loc>
+<xhtml:link rel="alternate" hreflang="en" href="https://datapavan.org/map/"/>
+<xhtml:link rel="alternate" hreflang="fr" href="https://datapavan.org/fr/map/"/>
+<xhtml:link rel="alternate" hreflang="de" href="https://datapavan.org/de/map/"/>
+<xhtml:link rel="alternate" hreflang="es" href="https://datapavan.org/es/map/"/>
+<xhtml:link rel="alternate" hreflang="ru" href="https://datapavan.org/ru/map/"/>
+<xhtml:link rel="alternate" hreflang="zh" href="https://datapavan.org/zh/map/"/>
+<xhtml:link rel="alternate" hreflang="ar" href="https://datapavan.org/ar/map/"/>
+<xhtml:link rel="alternate" hreflang="fa" href="https://datapavan.org/fa/map/"/>
+<xhtml:link rel="alternate" hreflang="x-default" href="https://datapavan.org/map/"/>
+</url>
+<url>
 <loc>https://datapavan.org/guides/slipnet/</loc>
 </url>
 <url>
@@ -227,6 +251,18 @@
 <xhtml:link rel="alternate" hreflang="x-default" href="https://datapavan.org/"/>
 </url>
 <url>
+<loc>https://datapavan.org/fr/accessibility/</loc>
+<xhtml:link rel="alternate" hreflang="en" href="https://datapavan.org/accessibility/"/>
+<xhtml:link rel="alternate" hreflang="fr" href="https://datapavan.org/fr/accessibility/"/>
+<xhtml:link rel="alternate" hreflang="de" href="https://datapavan.org/de/accessibility/"/>
+<xhtml:link rel="alternate" hreflang="es" href="https://datapavan.org/es/accessibility/"/>
+<xhtml:link rel="alternate" hreflang="ru" href="https://datapavan.org/ru/accessibility/"/>
+<xhtml:link rel="alternate" hreflang="zh" href="https://datapavan.org/zh/accessibility/"/>
+<xhtml:link rel="alternate" hreflang="ar" href="https://datapavan.org/ar/accessibility/"/>
+<xhtml:link rel="alternate" hreflang="fa" href="https://datapavan.org/fa/accessibility/"/>
+<xhtml:link rel="alternate" hreflang="x-default" href="https://datapavan.org/accessibility/"/>
+</url>
+<url>
 <loc>https://datapavan.org/fr/bots/</loc>
 <xhtml:link rel="alternate" hreflang="en" href="https://datapavan.org/bots/"/>
 <xhtml:link rel="alternate" hreflang="fr" href="https://datapavan.org/fr/bots/"/>
@@ -237,6 +273,18 @@
 <xhtml:link rel="alternate" hreflang="ar" href="https://datapavan.org/ar/bots/"/>
 <xhtml:link rel="alternate" hreflang="fa" href="https://datapavan.org/fa/bots/"/>
 <xhtml:link rel="alternate" hreflang="x-default" href="https://datapavan.org/bots/"/>
+</url>
+<url>
+<loc>https://datapavan.org/fr/map/</loc>
+<xhtml:link rel="alternate" hreflang="en" href="https://datapavan.org/map/"/>
+<xhtml:link rel="alternate" hreflang="fr" href="https://datapavan.org/fr/map/"/>
+<xhtml:link rel="alternate" hreflang="de" href="https://datapavan.org/de/map/"/>
+<xhtml:link rel="alternate" hreflang="es" href="https://datapavan.org/es/map/"/>
+<xhtml:link rel="alternate" hreflang="ru" href="https://datapavan.org/ru/map/"/>
+<xhtml:link rel="alternate" hreflang="zh" href="https://datapavan.org/zh/map/"/>
+<xhtml:link rel="alternate" hreflang="ar" href="https://datapavan.org/ar/map/"/>
+<xhtml:link rel="alternate" hreflang="fa" href="https://datapavan.org/fa/map/"/>
+<xhtml:link rel="alternate" hreflang="x-default" href="https://datapavan.org/map/"/>
 </url>
 <url>
 <loc>https://datapavan.org/fr/privacy/</loc>
@@ -277,6 +325,18 @@
 <xhtml:link rel="alternate" hreflang="x-default" href="https://datapavan.org/news/"/>
 </url>
 <url>
+<loc>https://datapavan.org/de/accessibility/</loc>
+<xhtml:link rel="alternate" hreflang="en" href="https://datapavan.org/accessibility/"/>
+<xhtml:link rel="alternate" hreflang="fr" href="https://datapavan.org/fr/accessibility/"/>
+<xhtml:link rel="alternate" hreflang="de" href="https://datapavan.org/de/accessibility/"/>
+<xhtml:link rel="alternate" hreflang="es" href="https://datapavan.org/es/accessibility/"/>
+<xhtml:link rel="alternate" hreflang="ru" href="https://datapavan.org/ru/accessibility/"/>
+<xhtml:link rel="alternate" hreflang="zh" href="https://datapavan.org/zh/accessibility/"/>
+<xhtml:link rel="alternate" hreflang="ar" href="https://datapavan.org/ar/accessibility/"/>
+<xhtml:link rel="alternate" hreflang="fa" href="https://datapavan.org/fa/accessibility/"/>
+<xhtml:link rel="alternate" hreflang="x-default" href="https://datapavan.org/accessibility/"/>
+</url>
+<url>
 <loc>https://datapavan.org/de/privacy/</loc>
 <xhtml:link rel="alternate" hreflang="en" href="https://datapavan.org/privacy/"/>
 <xhtml:link rel="alternate" hreflang="fr" href="https://datapavan.org/fr/privacy/"/>
@@ -287,6 +347,18 @@
 <xhtml:link rel="alternate" hreflang="ar" href="https://datapavan.org/ar/privacy/"/>
 <xhtml:link rel="alternate" hreflang="fa" href="https://datapavan.org/fa/privacy/"/>
 <xhtml:link rel="alternate" hreflang="x-default" href="https://datapavan.org/privacy/"/>
+</url>
+<url>
+<loc>https://datapavan.org/de/map/</loc>
+<xhtml:link rel="alternate" hreflang="en" href="https://datapavan.org/map/"/>
+<xhtml:link rel="alternate" hreflang="fr" href="https://datapavan.org/fr/map/"/>
+<xhtml:link rel="alternate" hreflang="de" href="https://datapavan.org/de/map/"/>
+<xhtml:link rel="alternate" hreflang="es" href="https://datapavan.org/es/map/"/>
+<xhtml:link rel="alternate" hreflang="ru" href="https://datapavan.org/ru/map/"/>
+<xhtml:link rel="alternate" hreflang="zh" href="https://datapavan.org/zh/map/"/>
+<xhtml:link rel="alternate" hreflang="ar" href="https://datapavan.org/ar/map/"/>
+<xhtml:link rel="alternate" hreflang="fa" href="https://datapavan.org/fa/map/"/>
+<xhtml:link rel="alternate" hreflang="x-default" href="https://datapavan.org/map/"/>
 </url>
 <url>
 <loc>https://datapavan.org/de/bots/</loc>
@@ -325,6 +397,30 @@
 <xhtml:link rel="alternate" hreflang="ar" href="https://datapavan.org/ar/news/"/>
 <xhtml:link rel="alternate" hreflang="fa" href="https://datapavan.org/fa/news/"/>
 <xhtml:link rel="alternate" hreflang="x-default" href="https://datapavan.org/news/"/>
+</url>
+<url>
+<loc>https://datapavan.org/es/accessibility/</loc>
+<xhtml:link rel="alternate" hreflang="en" href="https://datapavan.org/accessibility/"/>
+<xhtml:link rel="alternate" hreflang="fr" href="https://datapavan.org/fr/accessibility/"/>
+<xhtml:link rel="alternate" hreflang="de" href="https://datapavan.org/de/accessibility/"/>
+<xhtml:link rel="alternate" hreflang="es" href="https://datapavan.org/es/accessibility/"/>
+<xhtml:link rel="alternate" hreflang="ru" href="https://datapavan.org/ru/accessibility/"/>
+<xhtml:link rel="alternate" hreflang="zh" href="https://datapavan.org/zh/accessibility/"/>
+<xhtml:link rel="alternate" hreflang="ar" href="https://datapavan.org/ar/accessibility/"/>
+<xhtml:link rel="alternate" hreflang="fa" href="https://datapavan.org/fa/accessibility/"/>
+<xhtml:link rel="alternate" hreflang="x-default" href="https://datapavan.org/accessibility/"/>
+</url>
+<url>
+<loc>https://datapavan.org/es/map/</loc>
+<xhtml:link rel="alternate" hreflang="en" href="https://datapavan.org/map/"/>
+<xhtml:link rel="alternate" hreflang="fr" href="https://datapavan.org/fr/map/"/>
+<xhtml:link rel="alternate" hreflang="de" href="https://datapavan.org/de/map/"/>
+<xhtml:link rel="alternate" hreflang="es" href="https://datapavan.org/es/map/"/>
+<xhtml:link rel="alternate" hreflang="ru" href="https://datapavan.org/ru/map/"/>
+<xhtml:link rel="alternate" hreflang="zh" href="https://datapavan.org/zh/map/"/>
+<xhtml:link rel="alternate" hreflang="ar" href="https://datapavan.org/ar/map/"/>
+<xhtml:link rel="alternate" hreflang="fa" href="https://datapavan.org/fa/map/"/>
+<xhtml:link rel="alternate" hreflang="x-default" href="https://datapavan.org/map/"/>
 </url>
 <url>
 <loc>https://datapavan.org/es/privacy/</loc>
@@ -377,6 +473,30 @@
 <xhtml:link rel="alternate" hreflang="x-default" href="https://datapavan.org/news/"/>
 </url>
 <url>
+<loc>https://datapavan.org/ru/accessibility/</loc>
+<xhtml:link rel="alternate" hreflang="en" href="https://datapavan.org/accessibility/"/>
+<xhtml:link rel="alternate" hreflang="fr" href="https://datapavan.org/fr/accessibility/"/>
+<xhtml:link rel="alternate" hreflang="de" href="https://datapavan.org/de/accessibility/"/>
+<xhtml:link rel="alternate" hreflang="es" href="https://datapavan.org/es/accessibility/"/>
+<xhtml:link rel="alternate" hreflang="ru" href="https://datapavan.org/ru/accessibility/"/>
+<xhtml:link rel="alternate" hreflang="zh" href="https://datapavan.org/zh/accessibility/"/>
+<xhtml:link rel="alternate" hreflang="ar" href="https://datapavan.org/ar/accessibility/"/>
+<xhtml:link rel="alternate" hreflang="fa" href="https://datapavan.org/fa/accessibility/"/>
+<xhtml:link rel="alternate" hreflang="x-default" href="https://datapavan.org/accessibility/"/>
+</url>
+<url>
+<loc>https://datapavan.org/ru/map/</loc>
+<xhtml:link rel="alternate" hreflang="en" href="https://datapavan.org/map/"/>
+<xhtml:link rel="alternate" hreflang="fr" href="https://datapavan.org/fr/map/"/>
+<xhtml:link rel="alternate" hreflang="de" href="https://datapavan.org/de/map/"/>
+<xhtml:link rel="alternate" hreflang="es" href="https://datapavan.org/es/map/"/>
+<xhtml:link rel="alternate" hreflang="ru" href="https://datapavan.org/ru/map/"/>
+<xhtml:link rel="alternate" hreflang="zh" href="https://datapavan.org/zh/map/"/>
+<xhtml:link rel="alternate" hreflang="ar" href="https://datapavan.org/ar/map/"/>
+<xhtml:link rel="alternate" hreflang="fa" href="https://datapavan.org/fa/map/"/>
+<xhtml:link rel="alternate" hreflang="x-default" href="https://datapavan.org/map/"/>
+</url>
+<url>
 <loc>https://datapavan.org/ru/privacy/</loc>
 <xhtml:link rel="alternate" hreflang="en" href="https://datapavan.org/privacy/"/>
 <xhtml:link rel="alternate" hreflang="fr" href="https://datapavan.org/fr/privacy/"/>
@@ -427,6 +547,18 @@
 <xhtml:link rel="alternate" hreflang="x-default" href="https://datapavan.org/news/"/>
 </url>
 <url>
+<loc>https://datapavan.org/zh/accessibility/</loc>
+<xhtml:link rel="alternate" hreflang="en" href="https://datapavan.org/accessibility/"/>
+<xhtml:link rel="alternate" hreflang="fr" href="https://datapavan.org/fr/accessibility/"/>
+<xhtml:link rel="alternate" hreflang="de" href="https://datapavan.org/de/accessibility/"/>
+<xhtml:link rel="alternate" hreflang="es" href="https://datapavan.org/es/accessibility/"/>
+<xhtml:link rel="alternate" hreflang="ru" href="https://datapavan.org/ru/accessibility/"/>
+<xhtml:link rel="alternate" hreflang="zh" href="https://datapavan.org/zh/accessibility/"/>
+<xhtml:link rel="alternate" hreflang="ar" href="https://datapavan.org/ar/accessibility/"/>
+<xhtml:link rel="alternate" hreflang="fa" href="https://datapavan.org/fa/accessibility/"/>
+<xhtml:link rel="alternate" hreflang="x-default" href="https://datapavan.org/accessibility/"/>
+</url>
+<url>
 <loc>https://datapavan.org/zh/bots/</loc>
 <xhtml:link rel="alternate" hreflang="en" href="https://datapavan.org/bots/"/>
 <xhtml:link rel="alternate" hreflang="fr" href="https://datapavan.org/fr/bots/"/>
@@ -437,6 +569,18 @@
 <xhtml:link rel="alternate" hreflang="ar" href="https://datapavan.org/ar/bots/"/>
 <xhtml:link rel="alternate" hreflang="fa" href="https://datapavan.org/fa/bots/"/>
 <xhtml:link rel="alternate" hreflang="x-default" href="https://datapavan.org/bots/"/>
+</url>
+<url>
+<loc>https://datapavan.org/zh/map/</loc>
+<xhtml:link rel="alternate" hreflang="en" href="https://datapavan.org/map/"/>
+<xhtml:link rel="alternate" hreflang="fr" href="https://datapavan.org/fr/map/"/>
+<xhtml:link rel="alternate" hreflang="de" href="https://datapavan.org/de/map/"/>
+<xhtml:link rel="alternate" hreflang="es" href="https://datapavan.org/es/map/"/>
+<xhtml:link rel="alternate" hreflang="ru" href="https://datapavan.org/ru/map/"/>
+<xhtml:link rel="alternate" hreflang="zh" href="https://datapavan.org/zh/map/"/>
+<xhtml:link rel="alternate" hreflang="ar" href="https://datapavan.org/ar/map/"/>
+<xhtml:link rel="alternate" hreflang="fa" href="https://datapavan.org/fa/map/"/>
+<xhtml:link rel="alternate" hreflang="x-default" href="https://datapavan.org/map/"/>
 </url>
 <url>
 <loc>https://datapavan.org/zh/privacy/</loc>
@@ -475,6 +619,30 @@
 <xhtml:link rel="alternate" hreflang="ar" href="https://datapavan.org/ar/news/"/>
 <xhtml:link rel="alternate" hreflang="fa" href="https://datapavan.org/fa/news/"/>
 <xhtml:link rel="alternate" hreflang="x-default" href="https://datapavan.org/news/"/>
+</url>
+<url>
+<loc>https://datapavan.org/ar/accessibility/</loc>
+<xhtml:link rel="alternate" hreflang="en" href="https://datapavan.org/accessibility/"/>
+<xhtml:link rel="alternate" hreflang="fr" href="https://datapavan.org/fr/accessibility/"/>
+<xhtml:link rel="alternate" hreflang="de" href="https://datapavan.org/de/accessibility/"/>
+<xhtml:link rel="alternate" hreflang="es" href="https://datapavan.org/es/accessibility/"/>
+<xhtml:link rel="alternate" hreflang="ru" href="https://datapavan.org/ru/accessibility/"/>
+<xhtml:link rel="alternate" hreflang="zh" href="https://datapavan.org/zh/accessibility/"/>
+<xhtml:link rel="alternate" hreflang="ar" href="https://datapavan.org/ar/accessibility/"/>
+<xhtml:link rel="alternate" hreflang="fa" href="https://datapavan.org/fa/accessibility/"/>
+<xhtml:link rel="alternate" hreflang="x-default" href="https://datapavan.org/accessibility/"/>
+</url>
+<url>
+<loc>https://datapavan.org/ar/map/</loc>
+<xhtml:link rel="alternate" hreflang="en" href="https://datapavan.org/map/"/>
+<xhtml:link rel="alternate" hreflang="fr" href="https://datapavan.org/fr/map/"/>
+<xhtml:link rel="alternate" hreflang="de" href="https://datapavan.org/de/map/"/>
+<xhtml:link rel="alternate" hreflang="es" href="https://datapavan.org/es/map/"/>
+<xhtml:link rel="alternate" hreflang="ru" href="https://datapavan.org/ru/map/"/>
+<xhtml:link rel="alternate" hreflang="zh" href="https://datapavan.org/zh/map/"/>
+<xhtml:link rel="alternate" hreflang="ar" href="https://datapavan.org/ar/map/"/>
+<xhtml:link rel="alternate" hreflang="fa" href="https://datapavan.org/fa/map/"/>
+<xhtml:link rel="alternate" hreflang="x-default" href="https://datapavan.org/map/"/>
 </url>
 <url>
 <loc>https://datapavan.org/ar/privacy/</loc>
@@ -539,6 +707,18 @@
 <xhtml:link rel="alternate" hreflang="x-default" href="https://datapavan.org/bots/"/>
 </url>
 <url>
+<loc>https://datapavan.org/fa/accessibility/</loc>
+<xhtml:link rel="alternate" hreflang="en" href="https://datapavan.org/accessibility/"/>
+<xhtml:link rel="alternate" hreflang="fr" href="https://datapavan.org/fr/accessibility/"/>
+<xhtml:link rel="alternate" hreflang="de" href="https://datapavan.org/de/accessibility/"/>
+<xhtml:link rel="alternate" hreflang="es" href="https://datapavan.org/es/accessibility/"/>
+<xhtml:link rel="alternate" hreflang="ru" href="https://datapavan.org/ru/accessibility/"/>
+<xhtml:link rel="alternate" hreflang="zh" href="https://datapavan.org/zh/accessibility/"/>
+<xhtml:link rel="alternate" hreflang="ar" href="https://datapavan.org/ar/accessibility/"/>
+<xhtml:link rel="alternate" hreflang="fa" href="https://datapavan.org/fa/accessibility/"/>
+<xhtml:link rel="alternate" hreflang="x-default" href="https://datapavan.org/accessibility/"/>
+</url>
+<url>
 <loc>https://datapavan.org/fa/privacy/</loc>
 <xhtml:link rel="alternate" hreflang="en" href="https://datapavan.org/privacy/"/>
 <xhtml:link rel="alternate" hreflang="fr" href="https://datapavan.org/fr/privacy/"/>
@@ -549,5 +729,17 @@
 <xhtml:link rel="alternate" hreflang="ar" href="https://datapavan.org/ar/privacy/"/>
 <xhtml:link rel="alternate" hreflang="fa" href="https://datapavan.org/fa/privacy/"/>
 <xhtml:link rel="alternate" hreflang="x-default" href="https://datapavan.org/privacy/"/>
+</url>
+<url>
+<loc>https://datapavan.org/fa/map/</loc>
+<xhtml:link rel="alternate" hreflang="en" href="https://datapavan.org/map/"/>
+<xhtml:link rel="alternate" hreflang="fr" href="https://datapavan.org/fr/map/"/>
+<xhtml:link rel="alternate" hreflang="de" href="https://datapavan.org/de/map/"/>
+<xhtml:link rel="alternate" hreflang="es" href="https://datapavan.org/es/map/"/>
+<xhtml:link rel="alternate" hreflang="ru" href="https://datapavan.org/ru/map/"/>
+<xhtml:link rel="alternate" hreflang="zh" href="https://datapavan.org/zh/map/"/>
+<xhtml:link rel="alternate" hreflang="ar" href="https://datapavan.org/ar/map/"/>
+<xhtml:link rel="alternate" hreflang="fa" href="https://datapavan.org/fa/map/"/>
+<xhtml:link rel="alternate" hreflang="x-default" href="https://datapavan.org/map/"/>
 </url>
 </urlset>

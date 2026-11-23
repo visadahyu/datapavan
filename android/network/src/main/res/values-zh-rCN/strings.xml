@@ -213,6 +213,7 @@
     <string name="tunnels_remove">移除</string>
     <string name="tunnels_save_name">保存名称</string>
     <string name="tunnels_name">名称</string>
+    <string name="tunnels_name_empty">请输入名称：只有空格不算。</string>
     <!-- %1$d: a number, for a configuration whose file gave no name. -->
     <string name="tunnels_default_name">WireGuard %1$d</string>
     <plurals name="tunnels_apps">
@@ -242,12 +243,8 @@
     <string name="tunnel_state_off">Datapavan 的 VPN 关闭时不使用。</string>
     <!-- Announced when it changes; the handshake's age below it is not, so that it is not announced every second. -->
     <string name="tunnel_state_connected">已连接。</string>
-    <plurals name="tunnel_handshake_seconds">
-        <item quantity="other">上次握手在 %d 秒前。</item>
-    </plurals>
-    <plurals name="tunnel_handshake_minutes">
-        <item quantity="other">上次握手在 %d 分钟前。</item>
-    </plurals>
+    <string name="tunnel_handshake_recent">上次握手发生在最近 3 分钟内。</string>
+    <string name="tunnel_handshake_at">上次握手：%1$s。</string>
     <string name="tunnel_state_idle">尚未连接。它的某个应用发送数据时，它就会连接。</string>
     <string name="tunnel_state_not_answering">服务器没有响应。它的应用会等待，它们的任何数据都不会直接发出。</string>
     <string name="tunnel_state_missing">在 Datapavan 中尚未就绪。它的应用会等待，它们的任何数据都不会直接发出。</string>
