@@ -18,3 +18,28 @@ fonts or SVG loses only the look.
 
 News items state facts their sources state, in our own words, and link out. They load nothing from the source's server, and
 they never say Datapavan would have prevented or detected anything. The sample app on the main page is marked as sample data.
+
+## Search engines
+
+The goal (maintainer, 2026-11-23): a search for Datapavan in any of the eight languages finds this site and the
+repository first, not a copy of the app from somewhere else; the AI assistants that answer from search indexes can
+find and cite it; and the guides are found by the questions they answer. Nothing on the site tracks visitors for
+this: the engines' own consoles report searches and clicks.
+
+- **`robots.txt`** (`layouts/robots.txt`): every crawler is welcome, AI crawlers included, since the project is open
+  source and wants models to describe it correctly. Only `/download/`, the signed APKs, is left out.
+- **`sitemap.xml`** (`layouts/sitemapindex.xml`): one file at the root with every page of every language, each with its
+  translations and English as `x-default`. Hugo's per-language sitemaps are removed by `scripts/build-site.sh`,
+  since English's would sit under `/en/`, where a sitemap may not list the root's pages.
+- **Each page's head** (`layouts/baseof.html`): its own title (the main page adds its heading), a description (a
+  guide's opening, else the tagline), one canonical address, matching `og:url`, its translations, and a link
+  preview with the store icon (`static/images/icon-512.png`, from `scripts/store-images.sh icon`).
+- **schema.org data** (`layouts/home.html`): the site's name, with the names in other scripts, and the app as a
+  SoftwareApplication, as microdata rather than JSON-LD, so that the site keeps no script tag at all.
+- **IndexNow:** the key file `static/<key>.txt`. After a deploy, `scripts/indexnow.py --send` tells Bing, Yandex,
+  Naver and Seznam which pages exist; Google reads the sitemap.
+- **The consoles:** Google Search Console holds datapavan.org as a domain property, verified by a TXT record in its
+  DNS; Bing Webmaster Tools imports it from there. Both have the sitemap.
+
+`scripts/check-site.py` checks all of it: robots.txt, the sitemap against the pages, the key file, and on every page
+one canonical address and a title no other page of its language has.

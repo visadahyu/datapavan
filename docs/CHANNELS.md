@@ -79,6 +79,8 @@ key.
 datapavan.org is plain files in `docs/site`, built with a pinned Hugo from `site/` ([site/README.md](../site/README.md)):
 the main page, news and privacy policy in every language. `scripts/check.sh` fails if the
 two differ, if a page has a script or loads anything from another server, or if a first load is over about 200 KB.
+For search engines it has `robots.txt`, one sitemap, a canonical address on every page and an IndexNow key; Google
+Search Console and Bing Webmaster Tools hold the domain ([site/README.md](../site/README.md), "Search engines").
 
 ## Store texts and images
 
