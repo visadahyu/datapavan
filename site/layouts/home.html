@@ -16,8 +16,9 @@
 <meta itemprop="name" content="Datapavan"><meta itemprop="operatingSystem" content="Android"><meta itemprop="applicationCategory" content="SecurityApplication">
 <meta itemprop="softwareVersion" content="{{ strings.TrimPrefix "v" site.Params.release_tag }}"><meta itemprop="license" content="https://www.apache.org/licenses/LICENSE-2.0">
 <meta itemprop="url" content="{{ site.Home.Permalink }}"><meta itemprop="sameAs" content="{{ site.Params.repo }}">
-<div itemprop="offers" itemscope itemtype="https://schema.org/Offer"><meta itemprop="price" content="0"><meta itemprop="priceCurrency" content="USD"></div>
-<div><p class="status">{{ $t.status }}</p><h1>{{ $t.h1 }}</h1><p class="lead" itemprop="description">{{ $t.tagline }}</p><p class="lead2">{{ $t.lead }}</p>
+{{- /* The offer sits inside the first column: a div of the hero's own would be a cell of its grid, an empty one that
+pushes the text and the label out of their places. */ -}}
+<div><div itemprop="offers" itemscope itemtype="https://schema.org/Offer"><meta itemprop="price" content="0"><meta itemprop="priceCurrency" content="USD"></div><p class="status">{{ $t.status }}</p><h1>{{ $t.h1 }}</h1><p class="lead" itemprop="description">{{ $t.tagline }}</p><p class="lead2">{{ $t.lead }}</p>
 <p class="cta"><a class="btn" href="{{ $apk | safeURL }}" itemprop="downloadUrl">{{ $t.cta_get }}</a><a href="#verify">{{ $t.cta_how }}</a></p></div>
 <aside class="label" aria-label="{{ $t.label_title }}, {{ $t.sample_tag }}">
 <h2 class="l-title">{{ $t.label_title }}</h2>

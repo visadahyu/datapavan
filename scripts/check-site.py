@@ -58,6 +58,12 @@ def main():
             if not target.exists():
                 bad.append(f"{name}: broken link {link}")
     bad += search(pages)
+    # An element of nothing but microdata still takes a place in the layout: as a child of a grid or a flex row, an
+    # empty cell that pushes the rest out of place. Microdata goes inside an element that shows something.
+    for page in pages:
+        html = page.read_text(encoding="utf-8")
+        for grid in re.findall(r'<div class="(hero)"[^>]*>(?:<meta [^>]*>|\s)*<div[^>]*>(?:<meta [^>]*>|\s)*</div>', html):
+            bad.append(f"{page.relative_to(SITE)}: a div of nothing but meta elements is a cell of .{grid}'s grid")
     bad += accessibility(pages)
     home = pages and (SITE / "index.html").read_text(encoding="utf-8")
     if not home or FP not in home:
