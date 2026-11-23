@@ -8,7 +8,9 @@ The contrast measure (ATF's ContrastSwatch, ported) on swatches drawn here: anti
 colours, a ripple caught mid-way, one colour only; the raw capture's two header sizes and its PNG; the large-text
 comparison; the keyboard walk. Part of scripts/check.sh.
 """
+import contextlib
 import importlib.util
+import io
 import pathlib
 import struct
 import sys
@@ -102,9 +104,25 @@ with tempfile.TemporaryDirectory() as tmp:
         raw.write_bytes(capture(10, 4, 16, [word(PAPER)] * 30 + [word(color)] * 10))
         return dump, raw
 
+    # A frame of one colour where the dump has text (a protected screen captured black) fails, as does a frame smaller
+    # than the screen the dump describes.
+    dump, raw = screen(INK)
+    raw.write_bytes(capture(10, 4, 16, [word(0x000000)] * 40))
+    with contextlib.redirect_stderr(io.StringIO()):
+        expect("a black frame fails", a11y.check([str(dump), "1", "p", "--frame", str(raw)]) == 1)
+    raw.write_bytes(capture(5, 4, 16, [word(PAPER)] * 20))
+    with contextlib.redirect_stderr(io.StringIO()):
+        expect("a frame smaller than the screen fails", a11y.check([str(dump), "1", "p", "--frame", str(raw)]) == 1)
+    # Text inside a disabled control is not held to a contrast (WCAG exempts inactive components).
+    disabled = tmp / "disabled.xml"
+    disabled.write_text('<hierarchy><node package="p" bounds="[0,0][10,4]" clickable="true" enabled="false" text="">'
+                        '<node package="p" text="Off" bounds="[0,0][10,4]" clickable="false" enabled="true"/></node></hierarchy>')
+    raw.write_bytes(capture(10, 4, 16, [word(PAPER)] * 30 + [word(PALE)] * 10))
+    with contextlib.redirect_stderr(io.StringIO()):
+        expect("pale text in a disabled control passes", a11y.check([str(disabled), "1", "p", "--frame", str(raw)]) == 0)
+
     for color, fails in ((PALE, True), (INK, False)):
         dump, raw = screen(color)
-        import io, contextlib
         with contextlib.redirect_stderr(io.StringIO()) as err:
             code = a11y.check([str(dump), "1", "p", "--frame", str(raw)])
         expect(f"text in #{color:06X} {'fails' if fails else 'passes'}", code == (1 if fails else 0), err.getvalue())
@@ -114,10 +132,13 @@ with tempfile.TemporaryDirectory() as tmp:
         path.write_text(f'<hierarchy><node package="p" text="Title" bounds="[0,0][100,{height}]"/></hierarchy>')
         return str(path)
 
-    small = dump_with(tmp / "small.xml", 40)
+    # Heights compare in dp: the large pass also makes the display denser (420 to 540 dpi here), so a box of fixed dp
+    # measures more pixels without having grown.
+    small = dump_with(tmp / "small.xml", 42)
     with contextlib.redirect_stderr(io.StringIO()):
-        expect("a text that grew passes", a11y.grew(["p", small, dump_with(tmp / "big.xml", 70)]) == 0)
-        expect("a text held at its height fails", a11y.grew(["p", small, dump_with(tmp / "held.xml", 40)]) == 1)
+        expect("a text that grew passes", a11y.grew(["p", small, dump_with(tmp / "big.xml", 90), "420", "540"]) == 0)
+        expect("a text held at its height fails", a11y.grew(["p", small, dump_with(tmp / "held.xml", 42), "420", "420"]) == 1)
+        expect("a text held at its dp, only denser, fails", a11y.grew(["p", small, dump_with(tmp / "denser.xml", 54), "420", "540"]) == 1)
 
     # The keyboard walk: three buttons in a row, right to left. The walk is a circle (the first key also focuses the
     # first button), read from the button that comes first in reading order. Reaching them from the right passes, also
@@ -127,18 +148,21 @@ with tempfile.TemporaryDirectory() as tmp:
                     '<node package="p" clickable="true" text="B" bounds="[450,0][650,100]"/>'
                     '<node package="p" clickable="true" text="C" bounds="[100,0][300,100]"/></hierarchy>')
 
-    def step(name, box):
+    def step(name, box, label):
         path = tmp / name
-        path.write_text(f'<hierarchy><node package="p" focused="true" bounds="{box}"/></hierarchy>')
+        path.write_text(f'<hierarchy><node package="p" focused="true" text="{label}" bounds="{box}"/></hierarchy>')
         return str(path)
 
-    a, b, c = step("a.xml", "[800,0][1000,100]"), step("b.xml", "[450,0][650,100]"), step("c.xml", "[100,0][300,100]")
+    a, b, c = step("a.xml", "[800,0][1000,100]", "A"), step("b.xml", "[450,0][650,100]", "B"), step("c.xml", "[100,0][300,100]", "C")
+    # Another element scrolled into B's place is not B.
+    other = step("other.xml", "[450,0][650,100]", "D")
     with contextlib.redirect_stderr(io.StringIO()):
         expect("keys from the right, right to left", a11y.keys(["p", "1", str(base), a, b, c]) == 0)
         expect("keys from the right, the record starting at the second", a11y.keys(["p", "1", str(base), b, c, a, b]) == 0)
         expect("keys from the left, right to left", a11y.keys(["p", "1", str(base), c, b, a]) == 1)
         expect("keys from the left, left to right", a11y.keys(["p", "0", str(base), c, b, a]) == 0)
         expect("a button the keyboard never reaches", a11y.keys(["p", "1", str(base), a, b]) == 1)
+        expect("another element in a button's place does not reach it", a11y.keys(["p", "1", str(base), a, other, c]) == 1)
 
 for failure in failures:
     print(f"A11Y-CHECK TEST FAILED: {failure}", file=sys.stderr)

@@ -39,8 +39,10 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.res.pluralStringResource
 import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.semantics.LiveRegionMode
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.heading
+import androidx.compose.ui.semantics.liveRegion
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.unit.dp
 import org.visadahyu.datapavan.ui.isolate
@@ -230,7 +232,15 @@ private fun NowList(
                 OutlinedButton(onClick = onPause, modifier = Modifier.testTag("now-pause")) {
                     Text(stringResource(if (view.paused) R.string.now_resume else R.string.now_pause))
                 }
-                if (view.paused) Text(stringResource(R.string.now_paused), style = MaterialTheme.typography.bodyMedium)
+                // Said once by a screen reader when it appears, so that pausing is confirmed; shown only while the
+                // VPN runs, since Datapavan counts nothing while it is off.
+                if (view.paused && view.running) {
+                    Text(
+                        stringResource(R.string.now_paused),
+                        style = MaterialTheme.typography.bodyMedium,
+                        modifier = Modifier.semantics { liveRegion = LiveRegionMode.Polite },
+                    )
+                }
                 if (view.only != null) {
                     Text(stringResource(R.string.now_one_app), style = MaterialTheme.typography.bodyMedium)
                     OutlinedButton(onClick = onAll) { Text(stringResource(R.string.now_all_apps)) }

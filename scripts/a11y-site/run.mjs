@@ -182,7 +182,7 @@ try {
           const off = png(await tab.screenshot({ clip }));
           await tab.evaluate((n) => {
             // Back to where the walk was: the n-th element the Tab key reaches.
-            const all = [...document.querySelectorAll("a[href], summary, [tabindex]:not([tabindex='-1'])")].filter((e) => e.getClientRects().length);
+            const all = [...document.querySelectorAll("a[href], summary, button, input, select, textarea, [tabindex]:not([tabindex='-1'])")].filter((e) => e.getClientRects().length);
             if (all[n]) all[n].focus({ focusVisible: true });
           }, steps.length - 1);
           const r = ringContrast(on, off);
@@ -224,7 +224,7 @@ try {
           await load(url, scheme, width, [css]);
           for (const c of await tab.evaluate(clipped)) fail(name, what, `${width}: ${c}`);
           const o = await tab.evaluate(sideScroll);
-          if (o > 0) fail(name, `reflow-${what}`, `scrolls ${o} px sideways at 320 px`);
+          if (o > 0) fail(name, `reflow-${what}`, `scrolls ${o} px sideways at ${width} px`);
         }
       }
     }

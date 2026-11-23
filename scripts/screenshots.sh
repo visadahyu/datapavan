@@ -53,9 +53,12 @@ restore() {
     adb shell settings put secure font_weight_adjustment 0 >/dev/null 2>&1 || true
     if [ -n "$density_set" ]; then adb shell wm density "$density_set" >/dev/null 2>&1 || true
     else adb shell wm density reset >/dev/null 2>&1 || true; fi
-    adb shell rm -f "$DUMP" /sdcard/datapavan-frame.raw >/dev/null 2>&1 || true
+    adb shell rm -f "$DUMP" >/dev/null 2>&1 || true
 }
 trap restore EXIT
+# From the default text size and weight, also after a run that was stopped in its large pass.
+adb shell settings put system font_scale 1.0
+adb shell settings put secure font_weight_adjustment 0
 
 # The app protects every screen from screenshots (ADR 0040); a debug build started with
 # screenshots_for_tests keeps it off, so that these pictures are not black.
@@ -83,7 +86,8 @@ capture() {
     rm -f "$OUT/$1-$locale-$mode.raw"
     # At the largest text, each text must have grown from its height at the default (the light pass's dump).
     if [ "$mode" = large ]; then
-        python3 -I "$ROOT/scripts/a11y-check.py" grew "$PKG" "$OUT/$1-$locale-light.xml" "$OUT/$1-$locale-large.xml" || passed=""
+        python3 -I "$ROOT/scripts/a11y-check.py" grew "$PKG" "$OUT/$1-$locale-light.xml" "$OUT/$1-$locale-large.xml" \
+            "$density" "$density_largest" || passed=""
     fi
 }
 
@@ -159,7 +163,7 @@ for mode in light dark large; do
     case $mode in
         dark) locales="en fa"; adb shell cmd uimode night yes >/dev/null ;;
         large)
-            locales="${LARGE_LOCALES:-en fa}"
+            locales="${LARGE_LOCALES-en fa}"
             adb shell cmd uimode night no >/dev/null
             adb shell settings put system font_scale 2.0
             adb shell settings put secure font_weight_adjustment 300
@@ -205,21 +209,25 @@ done
 restore
 min_px=$((48 * density / 160))
 
-# The keyboard: from the top of a screen, Tab after Tab, a dump after each, until the focus has gone round.
+# The keyboard: from the top of a screen, Tab after Tab, a dump after each, until the focus has gone round (it is back
+# on the element of the second step, the first after the one leaving touch mode focused) or KEYS_MAX keys (60).
 key_walk() {
-    local name=$1 rtl=0 steps=() i
+    local name=$1 rtl=0 steps=() i focused second=""
     case $locale in ar | fa | ar-XB) rtl=1 ;; esac
     dump_screen || { echo "SCREENSHOTS FAILED: no UI dump of $name before the keyboard walk in $locale" >&2; exit 1; }
     adb shell cat "$DUMP" >"$OUT/keys-$name-$locale-0.xml"
-    for i in $(seq 1 "${KEYS_MAX:-24}"); do
+    for i in $(seq 1 "${KEYS_MAX:-60}"); do
         adb shell input keyevent KEYCODE_TAB
         dump_screen || continue
         adb shell cat "$DUMP" >"$OUT/keys-$name-$locale-$i.xml"
         steps+=("$OUT/keys-$name-$locale-$i.xml")
+        focused=$(grep -o '<node [^>]*focused="true"[^>]*>' "$OUT/keys-$name-$locale-$i.xml" | tail -1 | grep -o 'bounds="[^"]*"' || true)
+        if [ "${#steps[@]}" = 2 ]; then second=$focused
+        elif [ "${#steps[@]}" -gt 2 ] && [ -n "$second" ] && [ "$focused" = "$second" ]; then break; fi
     done
     python3 -I "$ROOT/scripts/a11y-check.py" keys "$PKG" "$rtl" "$OUT/keys-$name-$locale-0.xml" "${steps[@]}" || passed=""
 }
-for locale in ${KEYS_LOCALES:-en fa}; do
+for locale in ${KEYS_LOCALES-en fa}; do
     adb shell cmd locale set-app-locales "$PKG" --locales "$locale"
     adb shell am force-stop "$PKG"
     adb shell am start -n "$PKG/.MainActivity" --ez screenshots_for_tests true >/dev/null

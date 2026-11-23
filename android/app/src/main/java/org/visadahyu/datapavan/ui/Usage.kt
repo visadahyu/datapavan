@@ -27,6 +27,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.pluralStringResource
 import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.unit.dp
 import java.text.DateFormat
 import java.util.Date
@@ -41,7 +42,6 @@ import org.visadahyu.datapavan.audit.StillHolds
 import org.visadahyu.datapavan.audit.Traffic
 import org.visadahyu.datapavan.audit.TrafficFacts
 import org.visadahyu.datapavan.audit.UsageFacts
-import androidx.compose.ui.semantics.Role
 
 /** What usage access gave: still reading, not granted, or the facts (ADR 0022). */
 internal sealed interface UsageState {

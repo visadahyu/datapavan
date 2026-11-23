@@ -38,11 +38,17 @@ adb shell pm path com.google.android.marvin.talkback | grep -q . || fail "no Tal
 [ -f "$APK" ] && [ -f "$LOG_APK" ] || fail "build Advanced's debug APK and scripts/speech-log first"
 
 old_tts=$(adb shell settings get secure tts_default_synth | tr -d '\r')
+old_services=$(adb shell settings get secure enabled_accessibility_services | tr -d '\r')
+old_enabled=$(adb shell settings get secure accessibility_enabled | tr -d '\r')
+# The settings as they were: an emulator may carry accessibility services of its own.
+put_back() {
+    if [ "$2" = null ]; then adb shell settings delete secure "$1" >/dev/null 2>&1 || true
+    else adb shell settings put secure "$1" "$2" >/dev/null 2>&1 || true; fi
+}
 restore() {
-    adb shell settings delete secure enabled_accessibility_services >/dev/null 2>&1 || true
-    adb shell settings put secure accessibility_enabled 0 >/dev/null 2>&1 || true
-    if [ "$old_tts" = null ]; then adb shell settings delete secure tts_default_synth >/dev/null 2>&1 || true
-    else adb shell settings put secure tts_default_synth "$old_tts" >/dev/null 2>&1 || true; fi
+    put_back enabled_accessibility_services "$old_services"
+    put_back accessibility_enabled "$old_enabled"
+    put_back tts_default_synth "$old_tts"
     adb shell cmd locale set-app-locales "$PKG" --locales en >/dev/null 2>&1 || true
 }
 trap restore EXIT
@@ -50,6 +56,8 @@ trap restore EXIT
 adb install -r -g "$APK" >/dev/null
 adb install -r "$LOG_APK" >/dev/null
 adb shell settings put secure tts_default_synth org.visadahyu.datapavan.speechlog
+# A walk of a long screen writes thousands of lines; the default log buffer would drop the first.
+adb logcat -G 16M >/dev/null 2>&1 || true
 # On Android 13 and later, TalkBack's suite asks once for leave to notify, in a dialog over the screen being walked; the
 # emulator gives it beforehand, so that nothing is tapped.
 adb shell pm grant com.google.android.marvin.talkback android.permission.POST_NOTIFICATIONS 2>/dev/null || true
@@ -72,8 +80,8 @@ talkback_on() {
 }
 
 talkback_off() {
-    adb shell settings delete secure enabled_accessibility_services
-    adb shell settings put secure accessibility_enabled 0
+    put_back enabled_accessibility_services "$old_services"
+    put_back accessibility_enabled "$old_enabled"
     sleep 2
 }
 
@@ -98,6 +106,9 @@ walk() {
     done
     adb logcat -d -s DatapavanSpeech:I | tr -d '\r' | sed -n 's/^.* DatapavanSpeech: //p' | grep -v '^gestures ready$' >"$OUT/$locale-$name.txt"
     talkback_off
+    # A walk whose swipes never ran, or that TalkBack never spoke in, is no record.
+    grep -q '^gesture next done$' "$OUT/$locale-$name.txt" || fail "no swipe was performed on $name in $locale"
+    grep -q $'\t' "$OUT/$locale-$name.txt" || fail "TalkBack said nothing on $name in $locale"
     echo "walked: $name in $locale ($(grep -c $'\t' "$OUT/$locale-$name.txt" || true) utterances)"
 }
 
@@ -147,7 +158,7 @@ done
     grep -il 'unlabel' "$OUT"/*.txt | sed 's#^.*/#unlabelled items in #' || true
     for f in "$OUT"/fa-*.txt "$OUT"/ar-*.txt; do
         [ -f "$f" ] || continue
-        n=$(grep -P '^(?!fas|per|ara)[a-z]{3}-[A-Z]*\t.*[\x{0600}-\x{06FF}]' "$f" | grep -c . || true)
+        n=$(LC_ALL=C.UTF-8 grep -P '^(?!fas|per|ara)[a-z]{3}-[A-Z]*\t.*[\x{0600}-\x{06FF}]' "$f" | grep -c . || true)
         [ "$n" = 0 ] || echo "${f##*/}: $n utterances of Persian or Arabic text asked for in another language"
     done
 } | tee "$OUT/summary.txt"

@@ -182,7 +182,9 @@ class NowActivity : ComponentActivity() {
                 // A history shown when the view left the screen is read again as it comes back.
                 history.value?.takeIf { it.day == null && !it.reading }?.let { showDay(it.index) }
                 while (true) {
-                    if (history.value == null && !paused.value) refresh()
+                    // While paused, the view reads once more only when it has nothing to show: after a rotation, or on
+                    // coming back to the screen, which drops what it held (onStop). Otherwise it would show no app at all.
+                    if (history.value == null && (!paused.value || snapshot.value == null)) refresh()
                     delay(REFRESH_MS)
                 }
             }

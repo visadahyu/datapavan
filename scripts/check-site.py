@@ -169,10 +169,15 @@ def schemes(css):
     light = {}
     for body in re.findall(r"(?<![\w)])(?:^|[}\s]):root\{([^}]*)\}", css):
         light.update(re.findall(r"(--[\w-]+):(#[0-9A-Fa-f]{6})", body))
-    dark = dict(light)
-    for body in re.findall(r'@media \(prefers-color-scheme:dark\)\{:root:not\(\[data-theme="light"\]\)\{([^}]*)\}', css):
-        dark.update(re.findall(r"(--[\w-]+):(#[0-9A-Fa-f]{6})", body))
-    return {"light": light, "dark": dark}
+    dark, chosen = dict(light), {}
+    found = 0
+    for body in re.findall(r'@media\s*\(\s*prefers-color-scheme\s*:\s*dark\s*\)\s*\{\s*:root:not\(\[data-theme="light"\]\)\s*\{([^}]*)\}', css):
+        dark.update(re.findall(r"(--[\w-]+)\s*:\s*(#[0-9A-Fa-f]{6})", body))
+        found += 1
+    # The dark scheme a reader chooses on the page must be the one the phone's setting gives.
+    for body in re.findall(r':root\[data-theme="dark"\]\s*\{([^}]*)\}', css):
+        chosen.update(re.findall(r"(--[\w-]+)\s*:\s*(#[0-9A-Fa-f]{6})", body))
+    return {"light": light, "dark": dark, "found": found, "chosen": chosen}
 
 
 def stylesheet(focusable):
@@ -187,7 +192,13 @@ def stylesheet(focusable):
     for ground in sorted(set(re.findall(r"background(?:-color)?:var\((--[\w-]+)\)", css))):
         if ground not in GROUNDS and ground not in (p[1] for p in PAIRS) and ground not in DRAWN:
             bad.append(f"style.css: ground {ground} is in no pair of check-site.py's TEXT, GROUNDS and PAIRS")
-    for scheme, tokens in schemes(css).items():
+    parsed = schemes(css)
+    if not parsed["found"]:
+        bad.append("style.css: no dark scheme found (@media (prefers-color-scheme:dark) with :root:not([data-theme=\"light\"]))")
+    for token, value in parsed["chosen"].items():
+        if parsed["dark"].get(token) != value:
+            bad.append(f"style.css: {token} is {value} in :root[data-theme=\"dark\"] but {parsed['dark'].get(token)} in the dark scheme")
+    for scheme, tokens in ((k, parsed[k]) for k in ("light", "dark")):
         pairs = [(t, g) for t in TEXT for g in GROUNDS] + list(PAIRS)
         for text, ground in pairs:
             if text not in tokens or ground not in tokens:

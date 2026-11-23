@@ -2,7 +2,7 @@
 """Accessibility checks of Datapavan's screens, from uiautomator dumps and raw screen captures (docs/ACCESSIBILITY.md).
 
     python3 -I scripts/a11y-check.py DUMP.xml MIN_SIZE_PX [PACKAGE] [--frame RAW --png OUT.png]
-    python3 -I scripts/a11y-check.py grew PACKAGE SMALL.xml LARGE.xml
+    python3 -I scripts/a11y-check.py grew PACKAGE SMALL.xml LARGE.xml SMALL_DPI LARGE_DPI
     python3 -I scripts/a11y-check.py keys PACKAGE RTL BASE.xml STEP.xml...
 
 The first form checks one screen. Every clickable element must have a label that a screen reader can announce (its own
@@ -13,13 +13,16 @@ as Google's Accessibility Test Framework measures them (ContrastSwatch, below); 
 so that the picture people review is the frame that was checked. Elements cut off by the edge of a scrolling list are
 skipped: the dump measures only their visible part and leaves out the children that are off screen, label included.
 
-"grew" pairs each text of one screen at font scale 1.0 (SMALL) with the same text at the largest scale (LARGE): a text
-whose height did not grow is held by a box that does not let it, and is cut off on the screen (WCAG 1.4.4), though the
-dump still gives all its words.
+"grew" pairs each text of one screen at font scale 1.0 (SMALL) with the same text at the largest scale (LARGE), their
+heights in dp at each pass's density: a text that did not grow by a tenth is held by a box that does not let it, and is
+cut off on the screen (WCAG 1.4.4), though the dump still gives all its words. A text cut off inside a box that grew
+with it, an ellipsis say, does not show here: the pictures are read by eye for that.
 
 "keys" reads a keyboard walk: BASE is the screen before any key, each STEP the screen after one more Tab. Every
 clickable element of BASE must take the focus at some step (WCAG 2.1.1), in reading order: down the screen, and along
-a row from the right in right-to-left languages (RTL is 1) and from the left otherwise (2.4.3).
+a row from the right in right-to-left languages (RTL is 1) and from the left otherwise (2.4.3). An element counts as
+reached when the focus lands on its bounds with its label, so that another row scrolled into the same place does not.
+Only the elements BASE shows are required: the screen as it first opens.
 
 PACKAGE is Basic's by default in the first form; Datapavan Advanced's screens, the network part's "Now" included, give
 their own.
@@ -59,7 +62,9 @@ def label_of(node):
 # ---- ContrastSwatch, ported from Google's Accessibility Test Framework for Android (Apache-2.0), commit
 # c65cab02b2a845c29c3da100d6adefd345a144e3, src/main/java/com/google/android/apps/common/testing/accessibility/
 # framework/utils/contrast/ContrastSwatch.java and ContrastUtils.java. Colours are 0xRRGGBB integers here; the
-# capture's alpha is always opaque. The order of equal counts follows insertion, where ATF's follows a HashMap's.
+# capture's alpha is always opaque. Where this differs from ATF: the order of equal counts follows insertion, where
+# ATF's follows a HashMap's; the swatch is the node's bounds, where ATF may use the text's character bounds; and text
+# is held to 4.5:1 always, where ATF holds text of unknown size to 3.0:1 (the dump gives no text size).
 
 MAX_FOREGROUND_COLOR = 5
 COLOR_DIFFERENCE_LIMIT = 2.0
@@ -186,10 +191,22 @@ class Frame:
                       + chunk(b"IDAT", zlib.compress(rows, 6)) + chunk(b"IEND", b""))
 
 
+def disabled(node, parents):
+    while node is not None:
+        if node.get("enabled") == "false":
+            return True
+        node = parents.get(node)
+    return False
+
+
 def contrast_problems(root, parents, package, frame):
     problems = []
+    screen = max((bounds(n) for n in root.iter("node") if len(bounds(n)) == 4), key=lambda b: (b[2] - b[0]) * (b[3] - b[1]), default=None)
+    if screen and (screen[2] > frame.w or screen[3] > frame.h):
+        return [f"the capture is {frame.w} x {frame.h}, smaller than the screen the dump describes ({screen[2]} x {screen[3]})"]
+    measured = uniform = 0
     for node in root.iter("node"):
-        if node.get("package") != package or node.get("enabled") == "false" or clipped_by_scroll(node, parents):
+        if node.get("package") != package or disabled(node, parents) or clipped_by_scroll(node, parents):
             continue
         box = bounds(node)
         if len(box) != 4 or box[2] <= box[0] or box[3] <= box[1]:
@@ -202,13 +219,19 @@ def contrast_problems(root, parents, package, frame):
         # its own, so a row's title and the line beneath it are measured apart. The measure of several text colours
         # (multiple=True) would also judge the shades at the edges of small letters, and fail text that reads well.
         background, foregrounds = swatch(frame.histogram(box), multiple=False)
+        measured += 1
         if foregrounds == [background]:
+            uniform += 1
             continue
         need = TEXT_RATIO if text else ICON_RATIO
         for color, ratio in zip(foregrounds, ratios(background, foregrounds)):
             if need - ratio > CONTRAST_TOLERANCE:
                 what = repr(text[:40]) if text else f"icon {label_of(node)[:40]!r}"
                 problems.append(f"contrast {ratio}:1 below {need}:1 at {node.get('bounds')}: {what} (#{color:06X} on #{background:06X})")
+    # A frame that shows nothing where the dump has text (a protected screen captured black, a blank or a stale frame)
+    # would pass every element: it fails instead.
+    if measured and uniform * 2 > measured:
+        problems.append(f"the capture shows one colour in {uniform} of the {measured} elements measured: blank, black or not this screen")
     return problems
 
 
@@ -261,10 +284,12 @@ def texts(path, package):
 
 
 def grew(argv):
-    package, small, large = argv
+    package, small, large, small_dpi, large_dpi = argv[0], argv[1], argv[2], int(argv[3]), int(argv[4])
     before, after = texts(small, package), texts(large, package)
-    problems = [f"{large}: {text[:40]!r} is {after[key]} px high at the largest text, as at the default ({before[key]} px): its box holds it"
-                for key in sorted(set(before) & set(after)) for text in [key[0]] if after[key] <= before[key]]
+    dp = lambda px, dpi: px * 160 / dpi
+    problems = [f"{large}: {text[:40]!r} is {dp(after[key], large_dpi):.0f} dp high at the largest text, against {dp(before[key], small_dpi):.0f} dp at the default: its box holds it"
+                for key in sorted(set(before) & set(after)) for text in [key[0]]
+                if dp(after[key], large_dpi) < dp(before[key], small_dpi) * 1.1]
     for problem in problems:
         print(problem, file=sys.stderr)
     if not set(before) & set(after):
@@ -277,19 +302,21 @@ def keys(argv):
     package, rtl, base, steps = argv[0], argv[1] == "1", argv[2], argv[3:]
     root = ET.parse(base).getroot()
     parents = {child: parent for parent in root.iter() for child in parent}
-    wanted = {bounds(n): label_of(n) for n in root.iter("node")
+    wanted = {(bounds(n), label_of(n)) for n in root.iter("node")
               if n.get("clickable") == "true" and n.get("package") == package and n.get("enabled") != "false" and not clipped_by_scroll(n, parents)}
     order = []
     for step in steps:
-        focused = [bounds(n) for n in ET.parse(step).getroot().iter("node") if n.get("focused") == "true" and n.get("package") == package]
+        focused = [(bounds(n), label_of(n)) for n in ET.parse(step).getroot().iter("node") if n.get("focused") == "true" and n.get("package") == package]
         if not focused or (order and order[-1] == focused[-1]):
             continue
         # Back at an element it reached before: the focus has gone round, from the last element to the first.
         if focused[-1] in order:
             break
         order.append(focused[-1])
-    problems = [f"{base}: the keyboard never reaches {label[:40]!r} at {list(box)}" for box, label in wanted.items() if box not in order]
-    reached = [box for box in order if box in wanted]
+    problems = [f"{base}: the keyboard never reaches {label[:40]!r} at {list(box)}" for box, label in sorted(wanted) if (box, label) not in order]
+    labels = dict(wanted)
+    wanted = labels
+    reached = [box for box, label in order if (box, label) in labels.items()]
     # The first key both leaves touch mode, which focuses the screen's first element, and moves the focus on: the walk
     # is a circle, read from its element that comes first in reading order.
     if reached:

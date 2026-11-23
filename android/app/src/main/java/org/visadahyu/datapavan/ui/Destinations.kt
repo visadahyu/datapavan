@@ -44,6 +44,7 @@ import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.res.pluralStringResource
 import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.heading
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.unit.dp
@@ -62,7 +63,6 @@ import org.visadahyu.datapavan.audit.UsageFacts
 import org.visadahyu.datapavan.datapack.DataPackRules
 import java.time.LocalDate
 import java.util.Locale
-import androidx.compose.ui.semantics.Role
 
 /** The four destinations of the navigation bar (ADR 0027, point 1). */
 enum class Destination(@StringRes val label: Int, @DrawableRes val icon: Int, val tag: String) {

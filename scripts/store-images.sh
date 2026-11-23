@@ -69,7 +69,8 @@ demo network -e mobile hide
 demo notifications -e visible false
 adb shell appops set "$PKG" GET_USAGE_STATS allow
 
-"$ROOT/scripts/screenshots.sh" "$WORK/shots"
+# The store pictures need only the ordinary passes, not the large text or the keyboard walk.
+LARGE_LOCALES="" KEYS_LOCALES="" "$ROOT/scripts/screenshots.sh" "$WORK/shots"
 
 SITE="$ROOT/site/static/images"
 mkdir -p "$SITE"
