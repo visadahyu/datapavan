@@ -592,7 +592,7 @@ internal fun integrityLines(device: DeviceFacts, today: LocalDate): List<Pair<In
 internal fun AppRow(app: AppFacts, findings: List<FindingKind>, onClick: () -> Unit) {
     Card(modifier = Modifier.fillMaxWidth().testTag("app-row").clickable(role = Role.Button, onClick = onClick)) {
         Column(Modifier.padding(12.dp)) {
-            Text(app.label ?: app.packageName, style = MaterialTheme.typography.titleMedium)
+            TextAsIs(app.label ?: app.packageName, style = MaterialTheme.typography.titleMedium)
             Text(isolateLtr(app.packageName), style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
             findings.firstOrNull()?.let { first ->
                 Spacer(Modifier.height(6.dp))
@@ -633,7 +633,7 @@ private fun AppDetail(entry: AppEntry, trackers: AppTrackers?, trackerInfo: Map<
     ) {
         item {
             TextButton(onClick = onBack) { Text(stringResource(R.string.back)) }
-            Text(app.label ?: app.packageName, style = MaterialTheme.typography.headlineSmall, modifier = Modifier.semantics { heading() })
+            TextAsIs(app.label ?: app.packageName, style = MaterialTheme.typography.headlineSmall, modifier = Modifier.semantics { heading() })
             Text(isolateLtr(app.packageName), style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
             Spacer(Modifier.height(8.dp))
             Text(installLine(InstallSource.of(app.isSystem, app.installer, installerLabel)), style = MaterialTheme.typography.bodyMedium)

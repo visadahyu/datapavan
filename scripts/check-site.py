@@ -317,7 +317,7 @@ def site_map(pages):
             href = re.search(r'href="([^"]+)"', attributes)[1]
             target = str((map_page.parent / href).resolve().relative_to(SITE.resolve()))
             listed.add(target)
-            if language(target) != lang and not ('lang="en"' in attributes and 'dir="ltr"' in attributes):
+            if language(target) != lang and not (re.search(r'(?<![\w-])lang="en"', attributes) and re.search(r'(?<![\w-])dir="ltr"', attributes)):
                 unmarked.append(target)
         own = {n for n in names if language(n) == lang}
         if lang != "en":

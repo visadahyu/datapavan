@@ -101,7 +101,7 @@ internal fun DataSources(insets: PaddingValues, onBack: () -> Unit, onImported: 
             Spacer(Modifier.height(4.dp))
             Text(stringResource(R.string.data_fingerprint), style = MaterialTheme.typography.bodySmall)
             SelectionContainer {
-                Text(
+                TextAsIs(
                     pack.fingerprint,
                     style = MaterialTheme.typography.bodySmall.copy(fontFamily = FontFamily.Monospace, textDirection = TextDirection.Ltr),
                     color = MaterialTheme.colorScheme.onSurfaceVariant,

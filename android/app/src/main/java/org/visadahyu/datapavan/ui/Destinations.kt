@@ -38,7 +38,6 @@ import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.res.painterResource
@@ -162,7 +161,7 @@ private fun TopBar(@StringRes title: Int, onSettings: () -> Unit) {
         // Its spoken name as text in the app's language, which a content description cannot carry (the accessibility
         // unit, part 2).
         val label = stringResource(R.string.settings_title)
-        val language = LocalConfiguration.current.locales[0].toLanguageTag()
+        val language = stringResource(R.string.text_language)
         IconButton(onClick = onSettings, modifier = Modifier.testTag("settings").semantics { text = inAppLanguage(label, language) }) {
             Icon(painterResource(R.drawable.ic_settings), contentDescription = null)
         }

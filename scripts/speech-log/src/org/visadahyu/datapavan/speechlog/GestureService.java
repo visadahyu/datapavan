@@ -82,6 +82,10 @@ public class GestureService extends AccessibilityService {
                 Log.i(SpeechLogService.TAG, "gesture click " + id + (done ? " done" : " missing"));
                 return;
             }
+            case "end":
+                // The walk's own mark of how a screen's walk ended (wrap, quiet or cap), for talkback-check.py.
+                Log.i(SpeechLogService.TAG, "gesture end " + id);
+                return;
             case "back":
                 Log.i(SpeechLogService.TAG, "gesture back " + (performGlobalAction(GLOBAL_ACTION_BACK) ? "done" : "cancelled"));
                 return;

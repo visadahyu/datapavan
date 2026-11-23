@@ -28,6 +28,7 @@ import androidx.compose.material3.Switch
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableLongStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.saveable.rememberSaveable
@@ -40,9 +41,11 @@ import androidx.compose.ui.res.pluralStringResource
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.LiveRegionMode
 import androidx.compose.ui.semantics.Role
+import androidx.compose.ui.semantics.clearAndSetSemantics
 import androidx.compose.ui.semantics.error
 import androidx.compose.ui.semantics.heading
 import androidx.compose.ui.semantics.liveRegion
+import androidx.compose.ui.semantics.paneTitle
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.semantics.testTagsAsResourceId
 import androidx.compose.ui.unit.dp
@@ -385,10 +388,14 @@ internal fun kindWords(kind: TunnelStates.Kind): Int = when (kind) {
  * it happened.
  */
 @Composable
-private fun handshakeWords(seconds: Long): String = if (seconds <= HANDSHAKE_CURRENT_SECONDS) {
-    stringResource(R.string.tunnel_handshake_recent)
-} else {
-    stringResource(R.string.tunnel_handshake_at, whenText(LocalContext.current, System.currentTimeMillis() - seconds * 1000))
+private fun handshakeWords(seconds: Long): String {
+    // The time is read from an age in whole seconds, so it moves by up to a second from one reading to the next: it
+    // is kept while it stays within two seconds, so that a handshake at a minute's edge does not flip the line.
+    val shown = remember { mutableLongStateOf(0L) }
+    if (seconds <= HANDSHAKE_CURRENT_SECONDS) return stringResource(R.string.tunnel_handshake_recent)
+    val at = System.currentTimeMillis() - seconds * 1000
+    if (kotlin.math.abs(at - shown.longValue) > 2000) shown.longValue = at
+    return stringResource(R.string.tunnel_handshake_at, whenText(LocalContext.current, shown.longValue))
 }
 
 private const val HANDSHAKE_CURRENT_SECONDS = 180L
@@ -407,7 +414,7 @@ private fun NameField(value: String, onValueChange: (String) -> Unit, modifier: 
         label = { Text(stringResource(R.string.tunnels_name)) },
         singleLine = true,
         isError = empty,
-        supportingText = if (empty) ({ Text(reason) }) else null,
+        supportingText = if (empty) ({ Text(reason, modifier = Modifier.clearAndSetSemantics {}) }) else null,
         modifier = modifier.semantics { if (empty) error(reason) },
     )
 }
@@ -431,7 +438,14 @@ internal fun ImportConfirmation(
     BackHandler(onBack = actions.onCancel)
     val body = MaterialTheme.typography.bodyMedium
     val d = pending.described
-    Surface(modifier = Modifier.fillMaxSize(), color = MaterialTheme.colorScheme.background) {
+    // Named for screen readers, which say it as the confirmation opens over the network screen (the accessibility
+    // unit, part 2).
+    val paneName = if (pending.replacing != null) {
+        stringResource(R.string.import_replace_title, pending.replacingName ?: stringResource(R.string.tunnel_closed_name))
+    } else {
+        stringResource(R.string.import_title)
+    }
+    Surface(modifier = Modifier.fillMaxSize().semantics { paneTitle = paneName }, color = MaterialTheme.colorScheme.background) {
         Column(
             modifier = Modifier
                 .safeDrawingPadding()

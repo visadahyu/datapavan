@@ -118,7 +118,7 @@ internal fun LicencesScreen(insets: PaddingValues, onBack: () -> Unit) {
                 items(list.files) { file -> FullText(file, describe(file, list.library(file))) { open(LicenceList.Text(file)) } }
                 item { Heading(stringResource(R.string.licences_jvm_title)) }
                 item {
-                    Part(LicenceList.Component(stringResource(R.string.licences_own), null, "Apache-2.0", listOf(LicenceList.Text(LicenceList.LICENSE))), open)
+                    Part(LicenceList.Component(stringResource(R.string.licences_own), null, "Apache-2.0", listOf(LicenceList.Text(LicenceList.LICENSE))), open, translated = true)
                 }
                 items(list.jvm) { Part(it, open) }
                 for ((file, crates) in list.native) {
@@ -176,12 +176,17 @@ private fun FullText(file: String, description: String, onOpen: () -> Unit) {
 
 /** A part of the app: its name and version, its licence, and a button for each text that covers it. */
 @Composable
-private fun Part(component: LicenceList.Component, onOpen: (LicenceList.Text) -> Unit) {
+private fun Part(component: LicenceList.Component, onOpen: (LicenceList.Text) -> Unit, translated: Boolean = false) {
     Column {
         HorizontalDivider(Modifier.padding(bottom = 4.dp))
         val name = listOfNotNull(component.name, component.version).joinToString(" ")
-        Text(name, style = MaterialTheme.typography.titleSmall.copy(textDirection = TextDirection.Ltr))
-        Text(
+        // A part's name is its own, read as written, except Datapavan's own code, whose name is in the app's language.
+        if (translated) {
+            Text(name, style = MaterialTheme.typography.titleSmall.copy(textDirection = TextDirection.Ltr))
+        } else {
+            TextAsIs(name, style = MaterialTheme.typography.titleSmall.copy(textDirection = TextDirection.Ltr))
+        }
+        TextAsIs(
             component.licence,
             style = MaterialTheme.typography.bodySmall.copy(textDirection = TextDirection.Ltr),
             color = MaterialTheme.colorScheme.onSurfaceVariant,
@@ -241,7 +246,7 @@ private fun LicenceText(text: LicenceList.Text, insets: PaddingValues, onBack: (
             loaded.isFailure -> item { Text(stringResource(R.string.licences_unreadable), style = MaterialTheme.typography.bodyMedium) }
             else -> items(loaded.getOrThrow()) { paragraph ->
                 SelectionContainer {
-                    Text(paragraph, style = MaterialTheme.typography.bodySmall.copy(textDirection = TextDirection.Ltr))
+                    TextAsIs(paragraph, style = MaterialTheme.typography.bodySmall.copy(textDirection = TextDirection.Ltr))
                 }
             }
         }

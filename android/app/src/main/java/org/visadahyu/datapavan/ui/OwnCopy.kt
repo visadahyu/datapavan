@@ -74,7 +74,7 @@ internal fun OwnCopyScreen(signing: AppSigning?, verdict: SignatureVerdict?, ins
         item {
             SectionTitle(R.string.own_key_label)
             SelectionContainer {
-                Text(
+                TextAsIs(
                     signing?.current?.joinToString("\n") { fingerprint(it) } ?: stringResource(R.string.own_key_unknown),
                     style = MaterialTheme.typography.bodySmall.copy(fontFamily = FontFamily.Monospace, textDirection = TextDirection.Ltr),
                 )

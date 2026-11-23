@@ -27,7 +27,6 @@ import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalLayoutDirection
 import androidx.compose.ui.res.stringResource
@@ -297,7 +296,7 @@ private fun Service(presets: List<DnsCatalogue.Preset>, choice: DnsSettings.Choi
     if (first.policy.isNotEmpty()) {
         val context = LocalContext.current
         val named = stringResource(R.string.dns_policy_named, bidi.unicodeWrap(first.operator))
-        val language = LocalConfiguration.current.locales[0].toLanguageTag()
+        val language = stringResource(R.string.text_language)
         TextButton(onClick = {
             try {
                 context.startActivity(Intent(Intent.ACTION_VIEW, first.policy.toUri()))

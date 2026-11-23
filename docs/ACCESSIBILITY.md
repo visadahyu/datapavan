@@ -40,8 +40,8 @@ Read again when a screen or a page is added or changed:
 - **Reaching a page more than one way (2.4.5).** On the site, every page is in the site map of its language, which
   every page's footer links, beside the header's navigation and the footer's own links; the guides, which are in
   English only, are in every language's map, marked as English, and in their own index. `check-site.py` holds each
-  map to the pages built. In the apps, every screen is reached from the bottom bar or from the screen before it, and
-  the plan also from its launcher shortcut.
+  map to the pages built. The apps are not a set of web pages, and EN 301 549 does not apply 2.4.5 to software; each
+  screen is reached from the bottom bar or from the screen before it, and the plan also from its launcher shortcut.
 - **The same thing named the same way (3.2.3, 3.2.4).** The bottom bar's four destinations keep their order and
   names on every screen; "Network" names only Datapavan Advanced's screen and "Data use" only the audit's tab.
 - **Help in the same place (3.2.6).** Every page's footer, in the same place, links the accessibility page, which says
@@ -107,19 +107,24 @@ What the walk found:
   - tappable cards without a role;
   - a resolver's "Its privacy policy" button that did not say whose policy it was.
 - **The order** goes down each screen, and along the bottom bar in its tabs' order. In long lists TalkBack leaves the
-  list for the bottom bar before it scrolls on, then comes back: Android's own behaviour with lazy lists.
+  list for the bottom bar before it scrolls on, then comes back; we have not found what in Compose's lists or in
+  TalkBack does this.
 
 ## Known gaps
 
-- **The voice for the app's language, in part.** Datapavan marks every text of its own with the language it is
-  written in, so that TalkBack reads Persian with a Persian voice on a phone set to English, as the walk shows. What
-  is left:
+- **The voice for the app's language, in part.** Datapavan marks its own text with the language its strings are in
+  (each translation names its language), so that TalkBack reads Persian with a Persian voice on a phone set to
+  English, as the walk shows; each language's name in the language list is marked with that language. Left unmarked
+  on purpose, to come in the phone's voice: app names on their own, licences, fingerprints, and the names and labels
+  that stand inside a sentence (an app's name, one of Android's labels), which are usually in the phone's language.
+  What is left:
   - TalkBack can switch only to a voice your speech engine has: Google's own engine has no Persian voice, and then
-    TalkBack reads with the phone's voice, as before. eSpeak NG and other engines have one.
+    TalkBack reads with the phone's voice, as before. To hear Persian or Arabic, use a speech engine that has the
+    language, such as eSpeak NG, or set the phone's language to the one you read Datapavan in.
   - A screen's name, said as it opens, and the name of an action in TalkBack's hint ("Double-tap to …") cannot be
     marked: Android takes them as plain text. So they come in the phone's voice.
-  - App names and Android's own labels inside a sentence are left unmarked on purpose: they are usually in the
-    phone's language.
+  - In the language list, each language's name carries its own language, but TalkBack 17 reads a choice row in the
+    app's language, so "Русский" is read with the app's voice. We have not found a way around it from the app's side.
   - TalkBack's own words ("Button", "Double-tap to activate") are always in the phone's language.
 - **Android's contrast setting.** Android 14 and later lets users ask apps for medium or high contrast. Datapavan's
   colours pass WCAG AA in both themes, but do not yet change with that setting.

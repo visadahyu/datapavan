@@ -32,6 +32,7 @@ import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalConfiguration
@@ -57,6 +58,7 @@ import org.visadahyu.datapavan.BuildConfig
 import org.visadahyu.datapavan.R
 import org.visadahyu.datapavan.Release
 import org.visadahyu.datapavan.safety.ScreenProtection
+import org.visadahyu.datapavan.text.inLanguage
 
 /** The appearance the user picked (ADR 0027, point 3). */
 enum class ThemeMode { SYSTEM, LIGHT, DARK }
@@ -156,11 +158,11 @@ internal fun SettingsScreen(theme: ThemeMode, insets: PaddingValues, onTheme: (T
         }
         item {
             SectionTitle(R.string.settings_appearance)
-            Choices(ThemeMode.entries, theme, { stringResource(themeName(it)) }, onTheme)
+            Choices(ThemeMode.entries, theme, { stringResource(themeName(it)) }, onPick = onTheme)
         }
         item {
             SectionTitle(R.string.settings_language)
-            Choices(AppLanguage.entries, language, { languageName(it) }) { choice ->
+            Choices(AppLanguage.entries, language, { languageName(it) }, { it.tag }) { choice ->
                 if (choice != language) (context as? Activity)?.let { Languages.set(it, choice) }
             }
         }
@@ -180,7 +182,14 @@ internal fun SettingsScreen(theme: ThemeMode, insets: PaddingValues, onTheme: (T
 }
 
 @Composable
-private fun <T> Choices(options: List<T>, selected: T, name: @Composable (T) -> String, onPick: (T) -> Unit) {
+private fun <T> Choices(
+    options: List<T>,
+    selected: T,
+    name: @Composable (T) -> String,
+    // A choice that names a language is read in that language's voice (the accessibility unit, part 2).
+    language: (T) -> String? = { null },
+    onPick: (T) -> Unit,
+) {
     Column(Modifier.selectableGroup()) {
         options.forEach { option ->
             Row(
@@ -189,7 +198,14 @@ private fun <T> Choices(options: List<T>, selected: T, name: @Composable (T) -> 
                 verticalAlignment = Alignment.CenterVertically,
             ) {
                 RadioButton(selected = option == selected, onClick = null)
-                Text(name(option), style = MaterialTheme.typography.bodyLarge, modifier = Modifier.padding(start = 12.dp))
+                // Marked with the language it names. TalkBack 17 still reads a choice row in the app's language (the
+                // walk, 2026-11-23; docs/ACCESSIBILITY.md's known gaps); the mark is for screen readers that follow it.
+                val own = language(option)
+                if (own == null) {
+                    Text(name(option), style = MaterialTheme.typography.bodyLarge, modifier = Modifier.padding(start = 12.dp))
+                } else {
+                    androidx.compose.material3.Text(inLanguage(name(option), own), style = MaterialTheme.typography.bodyLarge, modifier = Modifier.padding(start = 12.dp))
+                }
             }
         }
     }
@@ -319,10 +335,13 @@ internal fun releaseDateText(): String = try {
 @Composable
 private fun ScreenshotSetting() {
     val lifted by ScreenProtection.lifted.collectAsState()
+    // A live region only once the state has changed while the line is shown: a screen reader says the change, and not
+    // the line each time the list brings it into view (the accessibility unit's part 2, the tools' review, 4).
+    val first = remember { lifted }
     Text(
         stringResource(if (lifted) R.string.screenshots_allowed else R.string.screenshots_blocked),
         style = MaterialTheme.typography.bodyMedium,
-        modifier = Modifier.semantics { liveRegion = LiveRegionMode.Polite },
+        modifier = if (lifted != first) Modifier.semantics { liveRegion = LiveRegionMode.Polite } else Modifier,
     )
     if (lifted) {
         OutlinedButton(onClick = ScreenProtection::protect) { Text(stringResource(R.string.screenshots_block)) }

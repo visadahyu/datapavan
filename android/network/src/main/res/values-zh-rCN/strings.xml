@@ -751,6 +751,7 @@
     <!-- The title of Datapavan Advanced's screen for its network part: the VPN, the connection log, the user's tool,
          WireGuard, DNS and tracker blocking (the maintainer, 2026-11-22: the part has no name of its own). -->
     <string name="network_title">网络</string>
+    <string name="text_language">zh-CN</string>
     <!-- Android's own label: SettingsLib's select_private_dns_configuration_title at android-15.0.0_r36. -->
     <string name="android_label_private_dns">专用 DNS</string>
     <!-- Android's own label: SettingsLib's private_dns_mode_off at android-15.0.0_r36. -->

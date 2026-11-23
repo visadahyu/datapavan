@@ -62,7 +62,7 @@ internal fun SignatureSection(verdict: SignatureVerdict) {
 @Composable
 private fun Fingerprint(hex: String) {
     SelectionContainer {
-        Text(
+        TextAsIs(
             hex.split(' ').joinToString("\n") { digest -> digest.uppercase(Locale.ROOT).chunked(2).joinToString(":") },
             style = MaterialTheme.typography.bodySmall.copy(fontFamily = FontFamily.Monospace, textDirection = TextDirection.Ltr),
             color = MaterialTheme.colorScheme.onSurfaceVariant,

@@ -805,6 +805,8 @@
     <!-- The title of Datapavan Advanced's screen for its network part: the VPN, the connection log, the user's tool,
          WireGuard, DNS and tracker blocking (the maintainer, 2026-11-22: the part has no name of its own). -->
     <string name="network_title">Network</string>
+    <!-- The language this file's strings are in, as a BCP 47 tag: the app marks its text with it, so that a screen reader reads it in that language's voice (the accessibility unit, part 2). Not a translation: each file names its own language. -->
+    <string name="text_language">en</string>
     <!-- Android's own labels (ADR 0054): AOSP's text at the release most phones run, each copied in every language
          from AOSP's own translation, never translated, for where the phone gives none. scripts/android-labels.py holds
          them to AOSP; an _apiN string is the text from Android's API level N on. -->

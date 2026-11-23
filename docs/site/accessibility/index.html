@@ -233,8 +233,8 @@ and fewer by criterion. That is why the walks and the test with real users are p
 <li><strong>Reaching a page more than one way (2.4.5).</strong> On the site, every page is in the site map of its language, which
 every page&rsquo;s footer links, beside the header&rsquo;s navigation and the footer&rsquo;s own links; the guides, which are in
 English only, are in every language&rsquo;s map, marked as English, and in their own index. <code>check-site.py</code> holds each
-map to the pages built. In the apps, every screen is reached from the bottom bar or from the screen before it, and
-the plan also from its launcher shortcut.</li>
+map to the pages built. The apps are not a set of web pages, and EN 301 549 does not apply 2.4.5 to software; each
+screen is reached from the bottom bar or from the screen before it, and the plan also from its launcher shortcut.</li>
 <li><strong>The same thing named the same way (3.2.3, 3.2.4).</strong> The bottom bar&rsquo;s four destinations keep their order and
 names on every screen; &ldquo;Network&rdquo; names only Datapavan Advanced&rsquo;s screen and &ldquo;Data use&rdquo; only the audit&rsquo;s tab.</li>
 <li><strong>Help in the same place (3.2.6).</strong> Every page&rsquo;s footer, in the same place, links the accessibility page, which says
@@ -305,20 +305,25 @@ this work, every one went as English.</li>
 </ul>
 </li>
 <li><strong>The order</strong> goes down each screen, and along the bottom bar in its tabs&rsquo; order. In long lists TalkBack leaves the
-list for the bottom bar before it scrolls on, then comes back: Android&rsquo;s own behaviour with lazy lists.</li>
+list for the bottom bar before it scrolls on, then comes back; we have not found what in Compose&rsquo;s lists or in
+TalkBack does this.</li>
 </ul>
 <h2 id="known-gaps">Known gaps</h2>
 <ul>
-<li><strong>The voice for the app&rsquo;s language, in part.</strong> Datapavan marks every text of its own with the language it is
-written in, so that TalkBack reads Persian with a Persian voice on a phone set to English, as the walk shows. What
-is left:
+<li><strong>The voice for the app&rsquo;s language, in part.</strong> Datapavan marks its own text with the language its strings are in
+(each translation names its language), so that TalkBack reads Persian with a Persian voice on a phone set to
+English, as the walk shows; each language&rsquo;s name in the language list is marked with that language. Left unmarked
+on purpose, to come in the phone&rsquo;s voice: app names on their own, licences, fingerprints, and the names and labels
+that stand inside a sentence (an app&rsquo;s name, one of Android&rsquo;s labels), which are usually in the phone&rsquo;s language.
+What is left:
 <ul>
 <li>TalkBack can switch only to a voice your speech engine has: Google&rsquo;s own engine has no Persian voice, and then
-TalkBack reads with the phone&rsquo;s voice, as before. eSpeak NG and other engines have one.</li>
+TalkBack reads with the phone&rsquo;s voice, as before. To hear Persian or Arabic, use a speech engine that has the
+language, such as eSpeak NG, or set the phone&rsquo;s language to the one you read Datapavan in.</li>
 <li>A screen&rsquo;s name, said as it opens, and the name of an action in TalkBack&rsquo;s hint (&ldquo;Double-tap to …&rdquo;) cannot be
 marked: Android takes them as plain text. So they come in the phone&rsquo;s voice.</li>
-<li>App names and Android&rsquo;s own labels inside a sentence are left unmarked on purpose: they are usually in the
-phone&rsquo;s language.</li>
+<li>In the language list, each language&rsquo;s name carries its own language, but TalkBack 17 reads a choice row in the
+app&rsquo;s language, so &ldquo;Русский&rdquo; is read with the app&rsquo;s voice. We have not found a way around it from the app&rsquo;s side.</li>
 <li>TalkBack&rsquo;s own words (&ldquo;Button&rdquo;, &ldquo;Double-tap to activate&rdquo;) are always in the phone&rsquo;s language.</li>
 </ul>
 </li>

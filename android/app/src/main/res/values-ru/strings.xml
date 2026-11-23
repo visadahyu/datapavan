@@ -717,6 +717,7 @@
     <!-- Datapavan Advanced only: the title of the card on the Data use tab that opens the Network screen, where each
          app's connections show (ui/NetworkEntry.kt). -->
     <string name="network_entry_title">Подключения каждого приложения</string>
+    <string name="text_language">ru</string>
     <!-- Android's own label: Settings' usage_access at android-15.0.0_r36. -->
     <string name="android_label_usage_access">Доступ к данным об использовании</string>
     <!-- Android's own label: Settings' usage_access at android-16.0.0_r4. -->

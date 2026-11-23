@@ -275,7 +275,9 @@ def texts(path, package):
     seen, out = Counter(), {}
     for node in root.iter("node"):
         text = node.get("text")
-        if not text or node.get("package") != package or clipped_by_scroll(node, parents):
+        # Only texts drawn on the screen: a button that is only an icon may carry its spoken name as text, and its
+        # box is the icon's, which does not grow with the text size.
+        if not text or node.get("package") != package or clipped_by_scroll(node, parents) or node.get("class") != "android.widget.TextView":
             continue
         box = bounds(node)
         seen[text] += 1

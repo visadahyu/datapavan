@@ -9,19 +9,25 @@ the language and voice it asked for, and the walk's gestures) and "Tree" lines (
 node per line: depth|class|role|heading|text {locales}|description {locales}|state|pane|checked|selected|live|clickable|id).
 
 What fails:
+- a walk that ran to its cap without coming round to its first item (the record is cut off);
 - an item TalkBack calls unlabelled;
 - in Persian and Arabic, a text of the app in that script whose node carries no locale of its language (its voice
-  would be the phone's), and an utterance of that script asked for in another language although the app's text is
-  marked;
+  would be the phone's);
+- in every language, an utterance in Arabic, Cyrillic or Chinese script asked for in a language that is not
+  written in it (a language's own name read in another's voice, say), apart from screens' names and TalkBack's
+  action hints, which Android takes as plain text;
 - a screen with no heading;
-- a screen reached by a click with nothing said on arriving;
-- the same utterance said three times or more with no gesture between (a live region that chatters).
+- a screen reached by a click whose name was not said on arriving: its pane's name, or the tab that was selected;
+- the same sentence said twice with no gesture between (a live region that chatters).
 """
 import re
 import sys
 from pathlib import Path
 
-SCRIPT = re.compile(r"[؀-ۿ]")
+SCRIPT = re.compile(r"[\u0600-\u06FF]")
+# A script, and the speech languages (ISO 639-2, as the speech engine is asked) written in it.
+SCRIPTS = ((re.compile(r"[\u0600-\u06FF]"), ("fas", "ara")), (re.compile(r"[\u0400-\u04FF]"), ("rus",)),
+           (re.compile(r"[\u4E00-\u9FFF]"), ("zho", "chi")))
 CODES = {"fa": ("fa", "fas"), "ar": ("ar", "ara")}
 # Screens opened by a click, where TalkBack should say something on arriving.
 # Not "now-paused": its confirmation is a line shown only while the VPN runs, and the walk runs with the VPN off.
@@ -29,6 +35,12 @@ CLICKED = re.compile(r"^(apps|phone|network|settings.*|review|app|check)$")
 # TalkBack's own hint, "Double-tap to <action>", carries the app's name for the action (an onClickLabel), which Compose
 # takes as plain text: in the phone's language (a known gap in docs/ACCESSIBILITY.md), not counted.
 HINT = re.compile(r"^(Double-tap|Double-tap and hold) to ")
+# Known gaps, each in docs/ACCESSIBILITY.md, reported apart rather than failed:
+# - the licences are a list of some hundred parts alike, walked for its first steps only;
+PARTIAL = {"settings-licences"}
+# - TalkBack 17 reads a choice row in the app's language, though each language's name in the language list carries
+#   its own (the walk of 2026-11-23).
+LANGUAGE_NAMES = {"\u2068" + n + "\u2069" for n in ("English", "Français", "Deutsch", "Español", "Русский", "简体中文", "العربية", "فارسی")}
 
 
 def read(path):
@@ -47,6 +59,18 @@ def check(path):
     if any("nlabel" in s.lower() for s in said):
         problems.append("TalkBack calls an item unlabelled")
     nodes = [t.split("|") for t in tree if t.count("|") >= 12]
+    ends = [s.split(" ", 2)[2] for s in speech if s.startswith("gesture end ")]
+    if ends and ends[-1] == "cap" and screen not in PARTIAL:
+        problems.append("the walk ran to its cap without coming round: the record is cut off")
+    titles = {n[7] for n in nodes if n[7]} | {t.split(" ", 1)[1] for t in tree if t.startswith("window ")}
+    for s in said:
+        asked, text = s.split("-")[0], s.split("\t", 1)[1]
+        if text in titles or HINT.match(text) or text in LANGUAGE_NAMES:
+            continue
+        for script, languages in SCRIPTS:
+            if script.search(text) and asked not in languages:
+                problems.append(f"said in the wrong voice ({asked}): {text[:50]!r}")
+                break
     if not any(n[3] == "heading" for n in nodes):
         problems.append("no heading")
     if locale in CODES:
@@ -56,16 +80,9 @@ def check(path):
                 text = re.sub(r"\s*\{[^}]*\}", "", field)
                 locales = re.findall(r"\{([^}]*)\}", field)
                 # Text of the app's own script, outside isolates, with no locale of its language.
-                bare = re.sub(r"[⁦-⁨][^⁩]*⁩", "", text)
+                bare = re.sub(r"[\u2066-\u2068][^\u2069]*\u2069", "", text)
                 if SCRIPT.search(bare) and not any(l.split("-")[0] in own for l in ",".join(locales).split(",") if l):
                     problems.append(f"text without its language: {text[:50]!r}")
-        # A pane's or a window's title is a plain string, which no locale can mark: said in the phone's language (a
-        # known gap), and not counted here.
-        titles = {n[7] for n in nodes if n[7]} | {t.split(" ", 1)[1] for t in tree if t.startswith("window ")}
-        wrong = [s for s in said if SCRIPT.search(s.split("\t", 1)[1]) and s.split("-")[0] not in own
-                 and s.split("\t", 1)[1] not in titles and not HINT.match(s.split("\t", 1)[1])]
-        if wrong:
-            problems.append(f"{len(wrong)} utterances of {locale} text asked for in another language, e.g. {wrong[0][:60]!r}")
     if CLICKED.match(screen):
         arrival = []
         for s in speech:
@@ -73,19 +90,32 @@ def check(path):
                 break
             if "\t" in s:
                 arrival.append(s)
-        if not arrival:
-            problems.append("nothing said on arriving")
-    run, last = 0, None
+        # The screen's name: its pane's, or the words of the tab that is now selected (its own or its children's).
+        names = {n[7] for n in nodes if n[7]}
+        for i, n in enumerate(nodes):
+            if n[9] != "selected":
+                continue
+            depth = int(n[0])
+            for m in [n] + [m for m in nodes[i + 1:i + 6] if int(m[0]) > depth]:
+                if m[4]:
+                    names.add(re.sub(r"\s*\{[^}]*\}", "", m[4]))
+        if not any(name and any(name in a.split("\t", 1)[1] for a in arrival) for name in names):
+            problems.append(f"its name was not said on arriving (said: {' / '.join(a.split(chr(9), 1)[1] for a in arrival)[:80]!r})")
+    # After the first swipe (arriving, TalkBack may say a window's name and then focus it), within one step.
+    block, walking = [], False
     for s in speech:
         if s.startswith("gesture"):
-            run, last = 0, None
+            walking = walking or s.startswith("gesture next")
+            block = []
             continue
-        if "\t" not in s:
+        if "\t" not in s or not walking:
             continue
-        run = run + 1 if s == last else 1
-        last = s
-        if run == 3:
-            problems.append(f"said three times without a gesture: {s[:60]!r}")
+        text = s.split("\t", 1)[1]
+        # TalkBack's own words ("Button", "Double-tap to activate") may come twice in one step; a sentence of the app
+        # may not.
+        if len(text) >= 12 and not HINT.match(text) and text in block:
+            problems.append(f"said twice without a gesture: {text[:60]!r}")
+        block.append(text)
     return problems
 
 

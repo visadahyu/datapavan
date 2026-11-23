@@ -61,6 +61,7 @@ adb install -r -g "$APK" >/dev/null
 adb uninstall org.visadahyu.datapavan.speechlog >/dev/null 2>&1 || true
 adb install "$LOG_APK" >/dev/null
 adb shell settings put secure tts_default_synth org.visadahyu.datapavan.speechlog
+adb shell settings delete global datapavan_speechlog_without >/dev/null 2>&1 || true
 # A walk of a long screen writes thousands of lines; the default log buffer would drop the first.
 adb logcat -G 16M >/dev/null 2>&1 || true
 # On Android 13 and later, TalkBack's suite asks once for leave to notify, in a dialog over the screen being walked; the
@@ -88,12 +89,12 @@ talkback_on() {
 # A click by test tag, with TalkBack on; fails the walk if the element is not there.
 click() {
     local answer="" try
-    # The service may scroll a list to reach the element: it answers when it has clicked, or found nothing. Just after
-    # Back the window may not be the app's yet, so a miss is tried again once, a few seconds later.
+    # The service may scroll a list to reach the element: it answers when it has clicked, or found nothing. A miss is
+    # tried again once, a few seconds later, as the screen may still be changing.
     for try in 1 2; do
         tell click --es id "$1"
         for _ in $(seq 1 20); do
-            answer=$(adb logcat -d -s DatapavanSpeech:I | grep -o "gesture click $1 \(done\|missing\)" | tail -1)
+            answer=$(adb logcat -d -s DatapavanSpeech:I | grep -o "gesture click $1 \(done\|missing\)" | tail -1 || true)
             [ -z "$answer" ] || break
             sleep 1
         done
@@ -110,7 +111,9 @@ click() {
 # or WALK_MAX swipes (default 80). The record of the screen begins with the step that led to it: call begin before.
 begin() { adb logcat -c; }
 walk() {
-    local name=$1 before after quiet=0 i first="" now
+    local name=$1 before after quiet=0 i now key reason=cap
+    local -a blocks=()
+    local -A seen=()
     sleep 2
     tell tree
     sleep 2
@@ -120,10 +123,19 @@ walk() {
         sleep 1.5
         after=$(spoken)
         if [ "$after" = "$before" ]; then quiet=$((quiet + 1)); else quiet=0; fi
-        [ "$quiet" -lt 2 ] || break
+        if [ "$quiet" -ge 2 ]; then reason=quiet; break; fi
         now=$(said_last)
-        if [ "$i" = 1 ]; then first=$now; elif [ -n "$first" ] && [ "$now" = "$first" ]; then break; fi
+        blocks+=("$now")
+        # TalkBack goes on from the last item to the first: three steps in a row that were said before, in the same
+        # order, mean it has come round (one repeated item alone may be two items with the same words).
+        if [ "${#blocks[@]}" -ge 3 ]; then
+            key="${blocks[-3]}"$'\x1f'"${blocks[-2]}"$'\x1f'"${blocks[-1]}"
+            if [ -n "${seen[$key]:-}" ]; then reason=wrap; break; fi
+            seen[$key]=1
+        fi
     done
+    tell end --es id "$reason"
+    sleep 1
     adb logcat -d -s DatapavanSpeech:I DatapavanTree:I | tr -d '\r' | sed -n 's/^.* Datapavan\(Speech\|Tree\): /\1\t/p' |
         grep -v $'^Speech\tgestures ready$' >"$OUT/$locale-$name.txt"
     # A walk whose swipes never ran, that TalkBack never spoke in, or whose tree is missing, is no record.

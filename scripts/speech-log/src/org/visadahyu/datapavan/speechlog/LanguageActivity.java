@@ -27,7 +27,18 @@ public class LanguageActivity extends Activity {
         column.addView(line("یک: بدون برچسب زبان", null));
         column.addView(line("دو: با برچسب فارسی", Locale.forLanguageTag("fa-IR")));
         column.addView(line("سه: با برچسب عربی", Locale.forLanguageTag("ar")));
+        // A language's name between isolates, marked whole, and marked inside the isolates only.
+        column.addView(line("\u2068Русский\u2069", Locale.forLanguageTag("ru")));
+        column.addView(inside("\u2068Русский\u2069", Locale.forLanguageTag("ru")));
         setContentView(column);
+    }
+
+    private TextView inside(String text, Locale locale) {
+        TextView view = line(text, null);
+        SpannableString marked = new SpannableString(text);
+        marked.setSpan(new LocaleSpan(locale), 1, text.length() - 1, Spanned.SPAN_EXCLUSIVE_EXCLUSIVE);
+        view.setText(marked);
+        return view;
     }
 
     private TextView line(String text, Locale locale) {

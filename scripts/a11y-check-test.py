@@ -129,7 +129,7 @@ with tempfile.TemporaryDirectory() as tmp:
 
     # The large-text comparison: a text that grew passes, one that kept its height fails.
     def dump_with(path, height):
-        path.write_text(f'<hierarchy><node package="p" text="Title" bounds="[0,0][100,{height}]"/></hierarchy>')
+        path.write_text(f'<hierarchy><node package="p" class="android.widget.TextView" text="Title" bounds="[0,0][100,{height}]"/></hierarchy>')
         return str(path)
 
     # Heights compare in dp: the large pass also makes the display denser (420 to 540 dpi here), so a box of fixed dp
