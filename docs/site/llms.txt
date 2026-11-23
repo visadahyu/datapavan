@@ -1,0 +1,78 @@
+# Datapavan
+
+> See what your apps can reach and how much they send. Then limit it. On your own phone, through Android’s own settings. No internet access, no account, no root.
+
+Datapavan is a free, open-source privacy app for Android phones, under the Apache License 2.0. It comes as editions of one app: Datapavan Basic, the released app, which never has internet access; Datapavan Advanced, not yet released, which adds a log of every app's connections, tracker blocking and encrypted DNS; and Datapavan Enterprise, for organisations, later. Everything runs on the phone, with no account and no root. Download it from this site or the repository's releases. A copy from anywhere is fine once its signing key matches the fingerprint the main page gives, and the app's "Is this copy genuine?" check tells.
+
+## The site
+
+- [Main page](https://datapavan.org/): what Datapavan checks, what it cannot see, what you can do, questions, and the download with its signing fingerprint
+- [News](https://datapavan.org/news/): news about apps, phones and data, with where each was reported
+- [Your tool beside Datapavan Advanced](https://datapavan.org/guides/): how each circumvention tool can run beside Datapavan, read from the tool's own code
+  - [1.1.1.1 + WARP and Datapavan](https://datapavan.org/guides/warp/)
+  - [AM TUNNEL LITE VPN and Datapavan](https://datapavan.org/guides/am-tunnel/)
+  - [Amnezia VPN and Datapavan](https://datapavan.org/guides/amnezia-vpn/)
+  - [AmneziaWG and Datapavan](https://datapavan.org/guides/amneziawg/)
+  - [ByeByeDPI in proxy mode](https://datapavan.org/guides/byebyedpi/)
+  - [Clash Meta for Android in proxy mode](https://datapavan.org/guides/clash-meta/)
+  - [Defyx VPN and Datapavan](https://datapavan.org/guides/defyx/)
+  - [DNSTT.XYZ in proxy mode](https://datapavan.org/guides/dnstt-xyz/)
+  - [Exclave in proxy mode](https://datapavan.org/guides/exclave/)
+  - [FlClash in proxy mode](https://datapavan.org/guides/flclash/)
+  - [Geph and Datapavan](https://datapavan.org/guides/geph/)
+  - [Happ and Datapavan](https://datapavan.org/guides/happ/)
+  - [Hiddify in proxy mode](https://datapavan.org/guides/hiddify/)
+  - [HTTP Injector and Datapavan](https://datapavan.org/guides/http-injector/)
+  - [Husi in proxy mode](https://datapavan.org/guides/husi/)
+  - [InviZible Pro in proxy mode](https://datapavan.org/guides/invizible/)
+  - [Karing and Datapavan](https://datapavan.org/guides/karing/)
+  - [Lantern and Datapavan](https://datapavan.org/guides/lantern/)
+  - [MahsaNG and Datapavan](https://datapavan.org/guides/mahsang/)
+  - [MasterDnsVPN and Datapavan](https://datapavan.org/guides/masterdnsvpn/)
+  - [MasterDnsVPN Android and Datapavan](https://datapavan.org/guides/masterdnsvpn-android/)
+  - [MasterDnsVPN-GG in proxy mode](https://datapavan.org/guides/masterdnsvpn-gg/)
+  - [MDV-HN Edition in proxy mode](https://datapavan.org/guides/mdv-hn/)
+  - [Mullvad VPN and Datapavan](https://datapavan.org/guides/mullvad/)
+  - [NekoBox in proxy mode](https://datapavan.org/guides/nekobox/)
+  - [NetMod and Datapavan](https://datapavan.org/guides/netmod/)
+  - [Npv Tunnel and Datapavan](https://datapavan.org/guides/npv-tunnel/)
+  - [Oblivion in proxy mode](https://datapavan.org/guides/oblivion/)
+  - [OpenVPN Connect and Datapavan](https://datapavan.org/guides/openvpn-connect/)
+  - [OpenVPN for Android and Datapavan](https://datapavan.org/guides/openvpn-android/)
+  - [Orbot in proxy mode](https://datapavan.org/guides/orbot/)
+  - [Outline and Datapavan](https://datapavan.org/guides/outline/)
+  - [Proton VPN and Datapavan](https://datapavan.org/guides/proton-vpn/)
+  - [Psiphon (Google Play build) and Datapavan](https://datapavan.org/guides/psiphon-play/)
+  - [Psiphon and Datapavan](https://datapavan.org/guides/psiphon/)
+  - [SagerNet in proxy mode](https://datapavan.org/guides/sagernet/)
+  - [Shadowsocks in proxy mode](https://datapavan.org/guides/shadowsocks/)
+  - [sing-box in proxy mode](https://datapavan.org/guides/sing-box/)
+  - [SlipNet in proxy mode](https://datapavan.org/guides/slipnet/)
+  - [Surfboard and Datapavan](https://datapavan.org/guides/surfboard/)
+  - [Tor VPN and Datapavan](https://datapavan.org/guides/tor-vpn/)
+  - [V2Box and Datapavan](https://datapavan.org/guides/v2box/)
+  - [v2rayNG in proxy mode](https://datapavan.org/guides/v2rayng/)
+  - [v2RayTun and Datapavan](https://datapavan.org/guides/v2raytun/)
+  - [WG Tunnel in proxy mode](https://datapavan.org/guides/wg-tunnel/)
+  - [WhiteDNS in proxy mode](https://datapavan.org/guides/whitedns/)
+  - [Windscribe and Datapavan](https://datapavan.org/guides/windscribe/)
+  - [WireGuard and Datapavan](https://datapavan.org/guides/wireguard/)
+  - [ZedSecure in proxy mode](https://datapavan.org/guides/zedsecure/)
+- [Privacy policy](https://datapavan.org/privacy/)
+- [What a bot or mini app can see](https://datapavan.org/bots/)
+
+## Other languages
+
+- [Français](https://datapavan.org/fr/)
+- [Deutsch](https://datapavan.org/de/)
+- [Español](https://datapavan.org/es/)
+- [Русский](https://datapavan.org/ru/)
+- [简体中文](https://datapavan.org/zh/)
+- [العربية](https://datapavan.org/ar/)
+- [فارسی](https://datapavan.org/fa/)
+
+## Source
+
+- [Repository](https://github.com/visadahyu/datapavan): the code, the data and the design decisions (ADRs)
+- [Releases](https://github.com/visadahyu/datapavan/releases): signed APKs
+- [Security policy](https://github.com/visadahyu/datapavan/blob/main/SECURITY.md)

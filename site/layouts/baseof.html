@@ -12,12 +12,33 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <meta name="referrer" content="no-referrer">
-<meta name="description" content="{{ $t.tagline }}">
-<title>{{ if not $isHome }}{{ .Title }} · {{ end }}{{ with $t.name_native }}{{ . }} · {{ end }}Datapavan</title>
+{{- /* For search engines and the AI assistants that answer from them (site/README.md, "Search engines"): each page's
+own title and description, its one address, its translations, and a link preview. Nothing here loads anything. */ -}}
+{{- $title := cond $isHome (printf "%sDatapavan · %s" (cond (ne $t.name_native "") (printf "%s · " $t.name_native) "") $t.h1) (printf "%s · %sDatapavan" .Title (cond (ne $t.name_native "") (printf "%s · " $t.name_native) "")) -}}
+{{- $desc := $t.tagline -}}
+{{- /* A guide's own opening says what it is for; other pages keep the tagline unless they set a description. */ -}}
+{{- with .Description }}{{ $desc = . }}{{ else }}{{ if and .IsPage (eq .Section "guides") }}{{ with .Summary }}{{ $desc = . | plainify | htmlUnescape | replaceRE `\s+` " " | strings.TrimSpace | truncate 160 }}{{ end }}{{ end }}{{ end }}
+<meta name="description" content="{{ $desc }}">
+<title>{{ $title }}</title>
 <link rel="icon" href="{{ $toSite }}favicon.svg" type="image/svg+xml">
+<link rel="canonical" href="{{ .Permalink }}">
 {{- range .AllTranslations }}
 <link rel="alternate" hreflang="{{ .Language.Lang }}" href="{{ .Permalink }}">
 {{- end }}
+{{- range .AllTranslations }}{{ if eq .Language.Lang "en" }}
+<link rel="alternate" hreflang="x-default" href="{{ .Permalink }}">
+{{- end }}{{ end }}
+<meta property="og:site_name" content="Datapavan">
+<meta property="og:title" content="{{ $title }}">
+<meta property="og:description" content="{{ $desc }}">
+<meta property="og:type" content="{{ cond (and .IsPage (eq .Section "news")) "article" "website" }}">
+<meta property="og:url" content="{{ .Permalink }}">
+<meta property="og:image" content="{{ "images/icon-512.png" | absURL }}">
+<meta property="og:image:width" content="512">
+<meta property="og:image:height" content="512">
+<meta property="og:image:alt" content="Datapavan">
+<meta name="twitter:card" content="summary">
+<meta name="twitter:image:alt" content="Datapavan">
 {{- with .OutputFormats.Get "rss" }}
 <link rel="alternate" type="application/rss+xml" title="Datapavan" href="index.xml">
 {{- end }}

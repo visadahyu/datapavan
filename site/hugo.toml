@@ -5,7 +5,10 @@ defaultContentLanguage = "en"
 defaultContentLanguageInSubdir = false
 disableDefaultLanguageRedirect = true
 publishDir = "../docs/site"
-disableKinds = ["taxonomy", "term", "sitemap", "robotsTXT", "404"]
+# The sitemap and robots.txt are for search engines and the AI assistants that answer from their indexes: a search
+# for Datapavan should find this site, not a copy of it (site/README.md, "Search engines").
+disableKinds = ["taxonomy", "term", "404"]
+enableRobotsTXT = true
 enableGitInfo = false
 timeZone = "UTC"
 
@@ -14,8 +17,16 @@ timeZone = "UTC"
 [markup.goldmark.renderHooks.link]
 useEmbedded = "never"
 
+# llms.txt (llmstxt.org): a plain list of the site's pages for AI assistants. Hugo writes one per language; the
+# build keeps only the root one, which lists the others (scripts/build-site.sh).
+[outputFormats.llms]
+mediaType = "text/plain"
+baseName = "llms"
+isPlainText = true
+notAlternative = true
+
 [outputs]
-home = ["html"]
+home = ["html", "llms"]
 section = ["html", "rss"]
 page = ["html"]
 

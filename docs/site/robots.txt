@@ -1,0 +1,7 @@
+# datapavan.org: every crawler is welcome, AI crawlers included. The signed APKs under /download/ are files to
+# install, not pages to index; the page that offers them is open.
+User-agent: *
+Allow: /
+Disallow: /download/
+
+Sitemap: https://datapavan.org/sitemap.xml
