@@ -103,6 +103,12 @@ class NowActivity : ComponentActivity() {
 
     /** Bumped when the rows are to sort anew, so that the view reads the order again. */
     private val sorts = mutableIntStateOf(0)
+
+    /**
+     * Whether the user stopped the counts' updates (WCAG 2.2.2, the accessibility unit): the view then reads nothing new
+     * until the user resumes, so that a screen reader or a slow reader is not overtaken by numbers changing each second.
+     */
+    private val paused = mutableStateOf(false)
     private lateinit var appNames: AppNames
 
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -122,6 +128,7 @@ class NowActivity : ComponentActivity() {
         }
         savedInstanceState?.let { saved ->
             window.intValue = saved.getInt(SAVED_WINDOW, Snapshot.TEN_MINUTES)
+            paused.value = saved.getBoolean(SAVED_PAUSED)
             NowRows.Order.restore(order, saved.getIntArray(SAVED_ORDER))
             if (saved.getBoolean(SAVED_HISTORY)) {
                 val uid = saved.getInt(SAVED_HISTORY_UID).takeIf { !saved.getBoolean(SAVED_HISTORY_NO_APP) }
@@ -145,8 +152,10 @@ class NowActivity : ComponentActivity() {
                         sorts = sorts.intValue,
                         tunnelNames = tunnelNames,
                         blocking = blocking.value,
+                        paused = paused.value,
                     ),
                     history = history.value,
+                    onPause = { paused.value = !paused.value },
                     onWindow = {
                         window.intValue = it
                         sort()
@@ -173,7 +182,7 @@ class NowActivity : ComponentActivity() {
                 // A history shown when the view left the screen is read again as it comes back.
                 history.value?.takeIf { it.day == null && !it.reading }?.let { showDay(it.index) }
                 while (true) {
-                    if (history.value == null) refresh()
+                    if (history.value == null && !paused.value) refresh()
                     delay(REFRESH_MS)
                 }
             }
@@ -189,6 +198,7 @@ class NowActivity : ComponentActivity() {
     override fun onSaveInstanceState(outState: Bundle) {
         super.onSaveInstanceState(outState)
         outState.putInt(SAVED_WINDOW, window.intValue)
+        outState.putBoolean(SAVED_PAUSED, paused.value)
         outState.putIntArray(SAVED_ORDER, NowRows.Order.save(order))
         outState.putString(SAVED_ONLY, only.value)
         history.value?.let {
@@ -414,6 +424,7 @@ class NowActivity : ComponentActivity() {
         private const val TRACKERS_KEPT = 4_096
 
         private const val SAVED_WINDOW = "window"
+        private const val SAVED_PAUSED = "paused"
         private const val SAVED_ORDER = "order"
         private const val SAVED_ONLY = "only"
         private const val SAVED_HISTORY = "history"

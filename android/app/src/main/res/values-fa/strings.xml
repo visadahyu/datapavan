@@ -595,8 +595,6 @@
     <string name="detail_group_trackers">ردیاب‌ها و کیت‌ها</string>
     <string name="detail_group_network">شبکه</string>
     <string name="detail_group_signature">امضا و کلیدها</string>
-    <string name="section_open">باز</string>
-    <string name="section_closed">بسته</string>
     <string name="plain_title">به زبان ساده</string>
     <string name="plain_reach_title">به چه دسترسی دارد</string>
     <string name="plain_reach_none">به هیچ حسگر، دسترسی ویژه یا مجوز وی‌پی‌ان دسترسی ندارد.</string>

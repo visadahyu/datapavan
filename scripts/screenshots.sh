@@ -2,8 +2,12 @@
 # Screenshots of every destination, the settings, an app's page (ADR 0027) and the plan (ADR 0026),
 # opened by its launcher shortcut, in every UI language
 # and in the pseudo-locales (accented and right-to-left), and in dark mode in English and Persian,
-# each with an accessibility check of the screen (scripts/a11y-check.py). CI keeps the screenshots as
-# a build artifact, so layout changes in every language can be reviewed.
+# each with an accessibility check of the screen (scripts/a11y-check.py: labels, touch size, and the contrast of every
+# text and icon on the frame the picture is made from). Then, in LARGE_LOCALES (default English and Persian), the
+# same screens at Android's largest text and display size with bold text, where every text must grow (WCAG 1.4.4);
+# and in KEYS_LOCALES (default the same), a keyboard walk of the summary and the settings, where Tab must reach every
+# button in reading order (2.1.1, 2.4.3). CI keeps the screenshots as a build artifact, so layout changes in every
+# language can be reviewed (docs/ACCESSIBILITY.md).
 #
 # Needs Android 13 or newer for app-specific languages, and python3 for the check. Run
 # scripts/smoke.sh first, which installs the debug APK.
@@ -34,7 +38,24 @@ mkdir -p "$OUT"
 density=$(adb shell wm density | tr -d '\r' | sed -n 's/.*: \([0-9]*\)$/\1/p' | tail -1)
 min_px=$((48 * density / 160))
 failed=0
-trap 'adb shell cmd uimode night no >/dev/null 2>&1 || true; adb shell cmd locale set-app-locales "$PKG" --locales en >/dev/null 2>&1 || true; adb shell rm -f "$DUMP" >/dev/null 2>&1 || true' EXIT
+# Android's largest display size, as Settings computes it (DisplayDensityUtils): 1.5 times the default, but no
+# denser than leaves the screen 320 dp wide. The default and the size are the ones in force (CI's emulator is given a
+# phone's 1080 x 2400 at 420 dpi over its own), and the density in force comes back at the end.
+density_set=$(adb shell wm density | tr -d '\r' | sed -n 's/^Override density: \([0-9]*\)$/\1/p')
+size=$(adb shell wm size | tr -d '\r' | sed -n 's/^\(Physical\|Override\) size: \([0-9]*\)x\([0-9]*\)$/\2 \3/p' | tail -1)
+narrow=$(printf '%s\n' $size | sort -n | head -1)
+density_largest=$((density * 3 / 2 < narrow * 160 / 320 ? density * 3 / 2 : narrow * 160 / 320))
+# Every setting a pass changes, back as it was.
+restore() {
+    adb shell cmd uimode night no >/dev/null 2>&1 || true
+    adb shell cmd locale set-app-locales "$PKG" --locales en >/dev/null 2>&1 || true
+    adb shell settings put system font_scale 1.0 >/dev/null 2>&1 || true
+    adb shell settings put secure font_weight_adjustment 0 >/dev/null 2>&1 || true
+    if [ -n "$density_set" ]; then adb shell wm density "$density_set" >/dev/null 2>&1 || true
+    else adb shell wm density reset >/dev/null 2>&1 || true; fi
+    adb shell rm -f "$DUMP" /sdcard/datapavan-frame.raw >/dev/null 2>&1 || true
+}
+trap restore EXIT
 
 # The app protects every screen from screenshots (ADR 0040); a debug build started with
 # screenshots_for_tests keeps it off, so that these pictures are not black.
@@ -54,9 +75,16 @@ capture() {
         echo "SCREENSHOTS FAILED: no UI dump of $1 in $locale ($mode)" >&2
         exit 1
     fi
-    adb exec-out screencap -p >"$OUT/$1-$locale-$mode.png"
+    # One raw frame, just after the dump: the check measures its contrast and writes the picture from it.
+    adb exec-out screencap >"$OUT/$1-$locale-$mode.raw"
     adb shell cat "$DUMP" >"$OUT/$1-$locale-$mode.xml"
-    python3 -I "$ROOT/scripts/a11y-check.py" "$OUT/$1-$locale-$mode.xml" "$min_px" "$PKG" || passed=""
+    python3 -I "$ROOT/scripts/a11y-check.py" "$OUT/$1-$locale-$mode.xml" "$min_px" "$PKG" \
+        --frame "$OUT/$1-$locale-$mode.raw" --png "$OUT/$1-$locale-$mode.png" || passed=""
+    rm -f "$OUT/$1-$locale-$mode.raw"
+    # At the largest text, each text must have grown from its height at the default (the light pass's dump).
+    if [ "$mode" = large ]; then
+        python3 -I "$ROOT/scripts/a11y-check.py" grew "$PKG" "$OUT/$1-$locale-light.xml" "$OUT/$1-$locale-large.xml" || passed=""
+    fi
 }
 
 # Whether the network part's own account says its tunnel runs (--now).
@@ -80,7 +108,7 @@ now_screens() {
     # shellcheck source=scripts/host-ports.sh
     . "$ROOT/scripts/host-ports.sh"
     host_server || exit 1
-    trap 'adb shell dumpsys activity service "$PKG/org.visadahyu.datapavan.network.NetworkVpnService" log-retention 0 >/dev/null 2>&1 || true; adb shell appops set "$PKG" GET_USAGE_STATS default >/dev/null 2>&1 || true; kill "$SERVER" 2>/dev/null || true; adb shell cmd uimode night no >/dev/null 2>&1 || true; adb shell cmd locale set-app-locales "$PKG" --locales en >/dev/null 2>&1 || true; adb shell rm -f "$DUMP" >/dev/null 2>&1 || true' EXIT
+    trap 'adb shell dumpsys activity service "$PKG/org.visadahyu.datapavan.network.NetworkVpnService" log-retention 0 >/dev/null 2>&1 || true; adb shell appops set "$PKG" GET_USAGE_STATS default >/dev/null 2>&1 || true; kill "$SERVER" 2>/dev/null || true; restore' EXIT
     allow_vpn "$PKG" || { echo "SCREENSHOTS FAILED: no VPN consent for $PKG" >&2; exit 1; }
     adb shell appops set "$PKG" GET_USAGE_STATS allow
     for mode in light dark; do
@@ -127,8 +155,18 @@ adb shell wm dismiss-keyguard >/dev/null 2>&1 || true
 [ -z "$NOW" ] || now_screens
 # Every destination, the settings, an app's page and the plan: light in every language and both
 # pseudo-locales, dark in English and Persian.
-for mode in light dark; do
-    if [ "$mode" = dark ]; then locales="en fa"; adb shell cmd uimode night yes >/dev/null; else locales="en fr de es ru zh-CN ar fa en-XA ar-XB"; adb shell cmd uimode night no >/dev/null; fi
+for mode in light dark large; do
+    case $mode in
+        dark) locales="en fa"; adb shell cmd uimode night yes >/dev/null ;;
+        large)
+            locales="${LARGE_LOCALES:-en fa}"
+            adb shell cmd uimode night no >/dev/null
+            adb shell settings put system font_scale 2.0
+            adb shell settings put secure font_weight_adjustment 300
+            adb shell wm density "$density_largest"
+            min_px=$((48 * density_largest / 160)) ;;
+        *) locales="en fr de es ru zh-CN ar fa en-XA ar-XB"; adb shell cmd uimode night no >/dev/null ;;
+    esac
     for locale in $locales; do
         adb shell cmd locale set-app-locales "$PKG" --locales "$locale"
         adb shell am force-stop "$PKG"
@@ -162,6 +200,36 @@ for mode in light dark; do
         capture plan
         if [ -n "$passed" ]; then echo "ok: $locale ($mode)"; else echo "problems: $locale ($mode)"; failed=1; fi
     done
+done
+
+restore
+min_px=$((48 * density / 160))
+
+# The keyboard: from the top of a screen, Tab after Tab, a dump after each, until the focus has gone round.
+key_walk() {
+    local name=$1 rtl=0 steps=() i
+    case $locale in ar | fa | ar-XB) rtl=1 ;; esac
+    dump_screen || { echo "SCREENSHOTS FAILED: no UI dump of $name before the keyboard walk in $locale" >&2; exit 1; }
+    adb shell cat "$DUMP" >"$OUT/keys-$name-$locale-0.xml"
+    for i in $(seq 1 "${KEYS_MAX:-24}"); do
+        adb shell input keyevent KEYCODE_TAB
+        dump_screen || continue
+        adb shell cat "$DUMP" >"$OUT/keys-$name-$locale-$i.xml"
+        steps+=("$OUT/keys-$name-$locale-$i.xml")
+    done
+    python3 -I "$ROOT/scripts/a11y-check.py" keys "$PKG" "$rtl" "$OUT/keys-$name-$locale-0.xml" "${steps[@]}" || passed=""
+}
+for locale in ${KEYS_LOCALES:-en fa}; do
+    adb shell cmd locale set-app-locales "$PKG" --locales "$locale"
+    adb shell am force-stop "$PKG"
+    adb shell am start -n "$PKG/.MainActivity" --ez screenshots_for_tests true >/dev/null
+    wait_for_overview || { echo "SCREENSHOTS FAILED: the summary did not appear in $locale (keys)" >&2; exit 1; }
+    passed=1
+    key_walk summary
+    tap_id settings || { echo "SCREENSHOTS FAILED: no settings button in $locale (keys)" >&2; exit 1; }
+    within 10 gone_id settings || { echo "SCREENSHOTS FAILED: the settings did not open in $locale (keys)" >&2; exit 1; }
+    key_walk settings
+    if [ -n "$passed" ]; then echo "ok: keys $locale"; else echo "problems: keys $locale"; failed=1; fi
 done
 
 [ "$failed" -eq 0 ] || { echo "SCREENSHOTS FAILED: accessibility problems above" >&2; exit 1; }

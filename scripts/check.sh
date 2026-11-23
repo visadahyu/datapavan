@@ -52,6 +52,9 @@ data_gates() {
     # What the public documents say, against the code and the record (ADR 0039), and the check's own test.
     python3 -I "$ROOT/scripts/check-truth.py" || failed=1
     python3 -I "$ROOT/scripts/check-truth-test.py" || failed=1
+    # The screens' accessibility check measures what it is for: contrast as ATF does, the raw capture, large text and
+    # the keyboard walk, on made-up screens (docs/ACCESSIBILITY.md).
+    python3 -I "$ROOT/scripts/a11y-check-test.py" || failed=1
     # The per-tool guides for proxy mode against the table of tools and the network part's strings (W8, part 3b), and
     # the check's own test; build-site.sh below writes their pages from the same data.
     python3 -I "$ROOT/scripts/guides.py" || failed=1

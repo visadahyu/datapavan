@@ -2,6 +2,7 @@
 
 - Status: Accepted (by the maintainer on 2026-11-12)
 - Date: 2026-11-12
+- Amended on 2026-11-23: gate 9 of 0.2.0, accessibility (the accessibility unit, approved by the maintainer).
 
 ## Context
 
@@ -53,6 +54,10 @@ so, and does not reach the public as if it did.
    - wording tested with people who are not experts;
    - a way for the user to flag a finding they think is wrong.
 8. A second way to get the editions exists besides GitHub and the website.
+9. **Accessibility** ([ACCESSIBILITY.md](../ACCESSIBILITY.md), added on 2026-11-23). Advanced's screens pass every
+   check that page lists, a TalkBack walk of every screen in English, Persian and Arabic among them, with nothing
+   left unlabelled. The test with real users of gate 7 includes at least one person who uses a screen reader every
+   day, and one who uses large text or magnification.
 
 **A preview before outside review.** An Advanced build that has not had an independent security review goes only
 to testers who have identified themselves to the project, each told that it is not yet reviewed. It is not

@@ -596,8 +596,6 @@
     <string name="detail_group_trackers">Трекеры и SDK</string>
     <string name="detail_group_network">Сеть</string>
     <string name="detail_group_signature">Подпись и ключи</string>
-    <string name="section_open">открыто</string>
-    <string name="section_closed">закрыто</string>
     <string name="plain_title">Простыми словами</string>
     <string name="plain_reach_title">К чему есть доступ</string>
     <string name="plain_reach_none">Нет ни датчиков, ни специального доступа, ни разрешения VPN.</string>

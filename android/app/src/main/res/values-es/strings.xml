@@ -591,8 +591,6 @@
     <string name="detail_group_trackers">Rastreadores y SDK</string>
     <string name="detail_group_network">Red</string>
     <string name="detail_group_signature">Firma y claves</string>
-    <string name="section_open">abierta</string>
-    <string name="section_closed">cerrada</string>
     <string name="plain_title">En palabras sencillas</string>
     <string name="plain_reach_title">A qué puede acceder</string>
     <string name="plain_reach_none">Ningún sensor, acceso especial ni permiso de VPN.</string>

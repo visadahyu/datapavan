@@ -595,8 +595,6 @@
     <string name="detail_group_trackers">Tracker und SDKs</string>
     <string name="detail_group_network">Netzwerk</string>
     <string name="detail_group_signature">Signatur und Schlüssel</string>
-    <string name="section_open">offen</string>
-    <string name="section_closed">geschlossen</string>
     <string name="plain_title">Einfach gesagt</string>
     <string name="plain_reach_title">Worauf sie zugreifen kann</string>
     <string name="plain_reach_none">Kein Sensor, kein spezieller Zugriff und keine VPN-Berechtigung.</string>

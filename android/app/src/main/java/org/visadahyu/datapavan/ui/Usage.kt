@@ -41,6 +41,7 @@ import org.visadahyu.datapavan.audit.StillHolds
 import org.visadahyu.datapavan.audit.Traffic
 import org.visadahyu.datapavan.audit.TrafficFacts
 import org.visadahyu.datapavan.audit.UsageFacts
+import androidx.compose.ui.semantics.Role
 
 /** What usage access gave: still reading, not granted, or the facts (ADR 0022). */
 internal sealed interface UsageState {
@@ -161,7 +162,7 @@ internal fun NetworkOverview(usage: UsageFacts, days: Int, apps: List<AppFacts>,
                 ),
                 style = MaterialTheme.typography.bodyMedium,
                 // A row opens the app's page, so it is a full touch target (48 dp), as scripts/a11y-check.py checks.
-                modifier = Modifier.fillMaxWidth().clickable { onOpen(app.packageName) }
+                modifier = Modifier.fillMaxWidth().clickable(role = Role.Button) { onOpen(app.packageName) }
                     .heightIn(min = 48.dp).wrapContentHeight(Alignment.CenterVertically),
             )
         }
@@ -189,7 +190,7 @@ internal fun DormantSection(dormant: List<Dormant>, onOpen: (String) -> Unit) {
             style = MaterialTheme.typography.bodyMedium,
         )
         dormant.forEach { (app, notOpened, holds) ->
-            Card(modifier = Modifier.fillMaxWidth().padding(top = 8.dp).clickable { onOpen(app.packageName) }) {
+            Card(modifier = Modifier.fillMaxWidth().padding(top = 8.dp).clickable(role = Role.Button) { onOpen(app.packageName) }) {
                 Column(Modifier.padding(12.dp)) {
                     Text(app.label ?: app.packageName, style = MaterialTheme.typography.titleMedium)
                     Text(

@@ -602,8 +602,6 @@
     <string name="detail_group_trackers">Traceurs et SDK</string>
     <string name="detail_group_network">Réseau</string>
     <string name="detail_group_signature">Signature et clés</string>
-    <string name="section_open">ouvert</string>
-    <string name="section_closed">fermé</string>
     <string name="plain_title">En clair</string>
     <string name="plain_reach_title">Ce qu\'elle peut atteindre</string>
     <string name="plain_reach_none">Aucun capteur, accès spécial ni autorisation VPN.</string>

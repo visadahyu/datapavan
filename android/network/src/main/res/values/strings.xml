@@ -120,6 +120,10 @@
     <string name="now_window_hour">The last hour</string>
     <string name="now_window_screen">Since the screen came on</string>
     <string name="now_sort">Sort again</string>
+    <!-- "Now" (the accessibility unit, WCAG 2.2.2): the button that stops the counts changing each second, and starts them again, and the line shown while they are stopped. -->
+    <string name="now_pause">Pause the counts</string>
+    <string name="now_resume">Resume the counts</string>
+    <string name="now_paused">Paused: the counts here stay as they are until you resume them. Datapavan keeps counting meanwhile.</string>
     <string name="now_sort_note">Rows stay where they are while you look. New apps are added at the end.</string>
     <string name="now_empty">No app used the network in this time.</string>
     <string name="now_one_app">Showing one app.</string>

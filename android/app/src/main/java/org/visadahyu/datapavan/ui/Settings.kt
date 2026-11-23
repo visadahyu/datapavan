@@ -172,7 +172,7 @@ internal fun SettingsScreen(theme: ThemeMode, insets: PaddingValues, onTheme: (T
             Text(
                 stringResource(pageName(page)),
                 style = MaterialTheme.typography.bodyLarge,
-                modifier = Modifier.fillMaxWidth().heightIn(min = 48.dp).clickable { onPage(page) }.padding(vertical = 12.dp),
+                modifier = Modifier.fillMaxWidth().heightIn(min = 48.dp).clickable(role = Role.Button) { onPage(page) }.padding(vertical = 12.dp),
             )
         }
     }

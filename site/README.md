@@ -19,6 +19,32 @@ fonts or SVG loses only the look.
 News items state facts their sources state, in our own words, and link out. They load nothing from the source's server, and
 they never say Datapavan would have prevented or detected anything. The sample app on the main page is marked as sample data.
 
+## Accessibility
+
+The site aims at WCAG 2.2, level AA, in every language, as [docs/ACCESSIBILITY.md](../docs/ACCESSIBILITY.md) says. Two
+checks hold it there:
+
+- `scripts/check-site.py`, in CI, for what needs no browser:
+  - each page's `lang` and `dir`;
+  - one `h1` and no skipped heading level (a house rule);
+  - a name for every link, control, picture and drawing, holding its visible text where it has one;
+  - the language list's `lang` and `hreflang`;
+  - one `<main id="main">` with a link to it first in the body;
+  - zoom never blocked;
+  - a role and a name for every box that takes the focus;
+  - the stylesheet's colours: every text colour on every ground, and the pairs listed in the script, at least 4.5:1
+    in both schemes; a focus ring that stands out at least 3:1 where a component has its own colour; a rule for
+    readers who ask for less motion. A colour used for text or ground that the script does not list fails, so add a
+    new colour to its lists.
+- `scripts/a11y-site.sh`, locally before a deployment: axe-core in Chrome over every page in both schemes at 1280 and
+  320 px, reflow, text spacing, text at 200%, a keyboard walk that measures each focus ring, and pictures with forced
+  colours. Its packages are pinned in `scripts/a11y-site/package-lock.json`. It writes to `build/a11y-site/`. Read
+  its "to review" lines too: they are what axe could not decide.
+
+Tables in a page's text scroll inside a box of their own on narrow screens (`layouts/_markup/render-table.html`). A
+picture that carries meaning has `alt`; a drawing has `role="img"` and an `aria-label`, or `aria-hidden="true"` if it
+only decorates.
+
 ## Search engines
 
 The goal (maintainer, 2026-11-23): a search for Datapavan in any of the eight languages finds this site and the

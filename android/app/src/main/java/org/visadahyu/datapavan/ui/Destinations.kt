@@ -60,6 +60,7 @@ import org.visadahyu.datapavan.audit.UsageFacts
 import org.visadahyu.datapavan.datapack.DataPackRules
 import java.time.LocalDate
 import java.util.Locale
+import androidx.compose.ui.semantics.Role
 
 /** The four destinations of the navigation bar (ADR 0027, point 1). */
 enum class Destination(@StringRes val label: Int, @DrawableRes val icon: Int, val tag: String) {
@@ -213,7 +214,7 @@ private fun androidx.compose.foundation.lazy.LazyListScope.summary(
 @Composable
 private fun Shortcut(@StringRes title: Int, line: String, onClick: () -> Unit) {
     Card(
-        modifier = Modifier.fillMaxWidth().clickable(onClick = onClick),
+        modifier = Modifier.fillMaxWidth().clickable(role = Role.Button, onClick = onClick),
         colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceContainer),
     ) {
         Column(Modifier.padding(16.dp)) {

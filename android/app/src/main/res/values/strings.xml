@@ -632,8 +632,6 @@
     <string name="detail_group_trackers">Trackers and SDKs</string>
     <string name="detail_group_network">Network</string>
     <string name="detail_group_signature">Signature and keys</string>
-    <string name="section_open">open</string>
-    <string name="section_closed">closed</string>
     <string name="plain_title">In plain words</string>
     <string name="plain_reach_title">What it can reach</string>
     <string name="plain_reach_none">No sensor, special access or VPN permission.</string>

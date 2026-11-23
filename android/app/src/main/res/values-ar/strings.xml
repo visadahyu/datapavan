@@ -624,8 +624,6 @@
     <string name="detail_group_trackers">أدوات التتبّع وحزم SDK</string>
     <string name="detail_group_network">الشبكة</string>
     <string name="detail_group_signature">التوقيع والمفاتيح</string>
-    <string name="section_open">مفتوح</string>
-    <string name="section_closed">مغلق</string>
     <string name="plain_title">بكلمات بسيطة</string>
     <string name="plain_reach_title">ما يمكنه الوصول إليه</string>
     <string name="plain_reach_none">لا مستشعر ولا وصول خاص ولا إذن VPN.</string>

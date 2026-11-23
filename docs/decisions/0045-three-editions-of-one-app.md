@@ -2,6 +2,7 @@
 
 - Status: Accepted (by the maintainer on 2026-11-13)
 - Date: 2026-11-13
+- Amended on 2026-11-23: decision 8's test with real users includes people who use assistive technology (the accessibility unit).
 - Decisions 11 and 12 accepted by the maintainer on 2026-11-05; the app's words for the network part on 2026-11-22.
 
 ## Context
@@ -75,7 +76,10 @@ log in a separate app that the Google Play build could not read.
    both apps say "free" beside the names.
 8. **Each part explains itself the first time it is opened:** what it does, and in Advanced, why it needs the
    internet. A redesign of both editions' look and language, tested with real users, is a gate of Advanced's first
-   release (ADR 0039).
+   release (ADR 0039). Those users include at least one person who uses a screen reader every day, in Persian or
+   Arabic if the testers allow, and one who uses large text or magnification. They do the same tasks as everyone
+   else, with their own screen reader and voice, and the test records what they could not do as well as what they
+   said ([ACCESSIBILITY.md](../ACCESSIBILITY.md), added on 2026-11-23).
 9. **Build rules that follow the package, not the module:**
    - one allowlist of permissions per edition (Basic, Basic on Play, Advanced), checked on the merged manifest in
      Gradle and in the release rehearsal;

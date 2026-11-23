@@ -586,8 +586,6 @@
     <string name="detail_group_trackers">跟踪器和 SDK</string>
     <string name="detail_group_network">网络</string>
     <string name="detail_group_signature">签名和密钥</string>
-    <string name="section_open">已展开</string>
-    <string name="section_closed">已收起</string>
     <string name="plain_title">简单来说</string>
     <string name="plain_reach_title">它能访问什么</string>
     <string name="plain_reach_none">没有传感器权限、特殊权限或 VPN 权限。</string>

@@ -1,0 +1,4 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="gestures_description">Performs TalkBack\'s gestures for Datapavan\'s TalkBack walk on an emulator.</string>
+</resources>

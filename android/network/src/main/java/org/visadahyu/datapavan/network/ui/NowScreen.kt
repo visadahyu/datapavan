@@ -78,6 +78,8 @@ internal data class NowView(
     val tunnelNames: Map<Long, String> = emptyMap(),
     /** Tracker blocking (W8, part 3a; ADR 0053): what was counted, what the user allowed, and the pause. */
     val blocking: BlockingView = BlockingView(),
+    /** The user stopped the counts' updates (the accessibility unit, WCAG 2.2.2). */
+    val paused: Boolean = false,
 )
 
 /** The marks of a destination of the app [uid], from its hosts' matches (ADR 0046, decision 2 (d)). */
@@ -167,6 +169,7 @@ internal fun NowScreen(
     onAllowAccess: () -> Unit,
     onLogSwitch: () -> Unit = {},
     blockingActions: BlockingActions = BlockingActions(),
+    onPause: () -> Unit = {},
 ) {
     // Kept here, above the history, so that coming back from it, or a rotation, finds the list where it was
     // (review c1 of W5's third part, screens, M2).
@@ -179,7 +182,7 @@ internal fun NowScreen(
                 view.blocking, blockingActions,
             )
         } else {
-            NowList(view, listState, onWindow, onSort, onAll, onHistory, onAllowAccess, onLogSwitch, blockingActions)
+            NowList(view, listState, onWindow, onSort, onAll, onHistory, onAllowAccess, onLogSwitch, blockingActions, onPause)
         }
     }
 }
@@ -195,6 +198,7 @@ private fun NowList(
     onAllowAccess: () -> Unit,
     onLogSwitch: () -> Unit,
     blockingActions: BlockingActions,
+    onPause: () -> Unit,
 ) {
     val context = LocalContext.current
     val window = view.window
@@ -222,6 +226,11 @@ private fun NowList(
                 )
                 Text(stringResource(R.string.now_intro), style = MaterialTheme.typography.bodyLarge)
                 Facts(view, snapshot, onAllowAccess)
+                // The counts change every second; the user can stop them, and start them again (WCAG 2.2.2).
+                OutlinedButton(onClick = onPause, modifier = Modifier.testTag("now-pause")) {
+                    Text(stringResource(if (view.paused) R.string.now_resume else R.string.now_pause))
+                }
+                if (view.paused) Text(stringResource(R.string.now_paused), style = MaterialTheme.typography.bodyMedium)
                 if (view.only != null) {
                     Text(stringResource(R.string.now_one_app), style = MaterialTheme.typography.bodyMedium)
                     OutlinedButton(onClick = onAll) { Text(stringResource(R.string.now_all_apps)) }

@@ -1,0 +1,30 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+    The accessibility unit's TalkBack walk (scripts/talkback-walk.sh): a speech engine that speaks nothing and writes
+    each utterance TalkBack hands it, with the language TalkBack asks for, to logcat; and an accessibility service
+    that performs TalkBack's gestures (a swipe to the next or previous item, a double tap) through Android's own
+    gesture dispatch, which passes through TalkBack's touch exploration as a finger would. Emulators only; never
+    shipped. No permission: it reads nothing and sends nothing.
+-->
+<manifest xmlns:android="http://schemas.android.com/apk/res/android"
+    package="org.visadahyu.datapavan.speechlog">
+
+    <application android:label="Datapavan speech log" android:hasCode="true">
+        <service android:name=".SpeechLogService" android:exported="true"
+            android:label="Datapavan speech log">
+            <intent-filter>
+                <action android:name="android.intent.action.TTS_SERVICE" />
+                <category android:name="android.intent.category.DEFAULT" />
+            </intent-filter>
+            <meta-data android:name="android.speech.tts" android:resource="@xml/tts_engine" />
+        </service>
+        <service android:name=".GestureService" android:exported="true"
+            android:label="Datapavan gestures"
+            android:permission="android.permission.BIND_ACCESSIBILITY_SERVICE">
+            <intent-filter>
+                <action android:name="android.accessibilityservice.AccessibilityService" />
+            </intent-filter>
+            <meta-data android:name="android.accessibilityservice" android:resource="@xml/gestures" />
+        </service>
+    </application>
+</manifest>

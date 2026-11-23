@@ -51,9 +51,11 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.semantics.collapse
+import androidx.compose.ui.semantics.expand
+import androidx.compose.ui.semantics.heading
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.semantics
-import androidx.compose.ui.semantics.stateDescription
 import androidx.compose.ui.semantics.testTagsAsResourceId
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.unit.dp
@@ -542,7 +544,7 @@ internal fun integrityLines(device: DeviceFacts, today: LocalDate): List<Pair<In
 
 @Composable
 internal fun AppRow(app: AppFacts, findings: List<FindingKind>, onClick: () -> Unit) {
-    Card(modifier = Modifier.fillMaxWidth().testTag("app-row").clickable(onClick = onClick)) {
+    Card(modifier = Modifier.fillMaxWidth().testTag("app-row").clickable(role = Role.Button, onClick = onClick)) {
         Column(Modifier.padding(12.dp)) {
             Text(app.label ?: app.packageName, style = MaterialTheme.typography.titleMedium)
             Text(isolateLtr(app.packageName), style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
@@ -654,14 +656,19 @@ private enum class DetailGroup(@StringRes val title: Int) {
     SIGNATURE(R.string.detail_group_signature),
 }
 
-/** A section's header, which opens and closes it; screen readers hear its state. */
+/**
+ * A section's header, which opens and closes it. Screen readers hear it as a heading that is expanded or collapsed, in
+ * their own words and language, from the expand and collapse actions (the accessibility unit).
+ */
 @Composable
 private fun GroupHeader(group: DetailGroup, open: Boolean, onToggle: (DetailGroup) -> Unit) {
-    val state = stringResource(if (open) R.string.section_open else R.string.section_closed)
     Row(
         modifier = Modifier.fillMaxWidth().heightIn(min = 56.dp)
             .clickable(role = Role.Button) { onToggle(group) }
-            .semantics { stateDescription = state }
+            .semantics {
+                heading()
+                if (open) collapse { onToggle(group); true } else expand { onToggle(group); true }
+            }
             .padding(vertical = 8.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
