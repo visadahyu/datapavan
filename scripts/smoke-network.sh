@@ -38,13 +38,9 @@ string() {
     sed -n "s/.*<string name=\"$2\">\(.*\)<\/string>.*/\1/p" "$RES/$1/strings.xml" | sed "s/\\\\'/'/g"
 }
 
-# The screen's title, "Network", in the folder $1's language, or in English while it waits for its translations in
-# strings_untranslated.xml.
+# The screen's title, "Network", in the folder $1's language.
 title() {
-    local text
-    text=$(string "$1" network_title)
-    [ -n "$text" ] || text=$(sed -n 's/.*<string name="network_title">\(.*\)<\/string>.*/\1/p' "$RES/values/strings_untranslated.xml")
-    echo "$text"
+    string "$1" network_title
 }
 
 # The bounds of the first element whose text contains $1, for a pseudo-locale that wraps every text in marks.

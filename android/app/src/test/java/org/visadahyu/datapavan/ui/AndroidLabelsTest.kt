@@ -70,8 +70,8 @@ class AndroidLabelsTest {
     /** The note names the labels it is about, buttons included, where "words in quotes" named none (the fix round's M1). */
     @Test
     fun theNoteNamesTheLabelsItIsAbout() {
-        val untranslated = File("src/main/res/values/strings_untranslated.xml").readText()
-        val note = Regex("""<string name="android_labels_android">([^<]*)</string>""").find(untranslated)!!.groupValues[1]
+        val strings = File("src/main/res/values/strings.xml").readText()
+        val note = Regex("""<string name="android_labels_android">([^<]*)</string>""").find(strings)!!.groupValues[1]
         assertTrue(note, "%1\$s" in note)
         assertFalse(note, "quotes" in note)
     }
