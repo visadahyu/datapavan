@@ -6,9 +6,19 @@
 {{- $github := printf "https://github.com/visadahyu/datapavan/releases/download/%s/%s" site.Params.release_tag site.Params.release_apk -}}
 {{- $shots := slice (slice "summary" (index $t.shots 0)) (slice "app" (index $t.shots 1)) (slice "plan" (index $t.shots 2)) -}}
 <main>
-<div class="w"><div class="hero">
-<div><p class="status">{{ $t.status }}</p><h1>{{ $t.h1 }}</h1><p class="lead">{{ $t.tagline }}</p><p class="lead2">{{ $t.lead }}</p>
-<p class="cta"><a class="btn" href="{{ $apk | safeURL }}">{{ $t.cta_get }}</a><a href="#verify">{{ $t.cta_how }}</a></p></div>
+{{- /* schema.org data for search engines, as microdata rather than JSON-LD, since the site has no script tag at all
+(site/README.md, "Search engines"). The site's name, with its name in other scripts, on the main page only. */ -}}
+{{- if eq site.Language.Lang "en" }}
+<div itemscope itemtype="https://schema.org/WebSite"><meta itemprop="name" content="Datapavan"><meta itemprop="url" content="{{ site.Home.Permalink }}">
+{{- range $lang, $text := site.Data.text }}{{ with $text.name_native }}<meta itemprop="alternateName" content="{{ . }}">{{ end }}{{ end }}</div>
+{{- end }}
+<div class="w"><div class="hero" itemscope itemtype="https://schema.org/SoftwareApplication">
+<meta itemprop="name" content="Datapavan"><meta itemprop="operatingSystem" content="Android"><meta itemprop="applicationCategory" content="SecurityApplication">
+<meta itemprop="softwareVersion" content="{{ strings.TrimPrefix "v" site.Params.release_tag }}"><meta itemprop="license" content="https://www.apache.org/licenses/LICENSE-2.0">
+<meta itemprop="url" content="{{ site.Home.Permalink }}"><meta itemprop="sameAs" content="{{ site.Params.repo }}">
+<div itemprop="offers" itemscope itemtype="https://schema.org/Offer"><meta itemprop="price" content="0"><meta itemprop="priceCurrency" content="USD"></div>
+<div><p class="status">{{ $t.status }}</p><h1>{{ $t.h1 }}</h1><p class="lead" itemprop="description">{{ $t.tagline }}</p><p class="lead2">{{ $t.lead }}</p>
+<p class="cta"><a class="btn" href="{{ $apk | safeURL }}" itemprop="downloadUrl">{{ $t.cta_get }}</a><a href="#verify">{{ $t.cta_how }}</a></p></div>
 <aside class="label" aria-label="{{ $t.label_title }}, {{ $t.sample_tag }}">
 <p class="l-title">{{ $t.label_title }}</p>
 <div class="l-name"><span>{{ $t.sample_name }}</span><span class="l-tag">{{ $t.sample_tag }}</span></div>

@@ -41,6 +41,8 @@ open(out, "w").write(f'<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 {wid
 EOF
 mkdir -p "$META/en-US/images"
 magick -background none -density 1200 "$WORK/icon.svg" -resize 512x512 -depth 8 -strip "$META/en-US/images/icon.png"
+# The same icon is the website's link preview (og:image in site/layouts/baseof.html).
+cp "$META/en-US/images/icon.png" "$ROOT/site/static/images/icon-512.png"
 echo "ok: icon"
 [ "${1:-}" = icon ] && exit 0
 

@@ -46,13 +46,22 @@ changes = {
 (root / "site/data/changes.json").write_text(json.dumps(changes, ensure_ascii=False, indent=1) + "\n", encoding="utf-8")
 PY
 
+# Hugo also writes a sitemap per language. The one at the root (site/layouts/sitemapindex.xml) lists every page of
+# every language, and English's own would sit under /en/, where a sitemap may not list the root's pages.
+prune() {
+    rm -f "$1"/*/sitemap.xml
+    rmdir "$1/en"
+}
+
 if [ "${1:-}" = --check ]; then
     OUT="$(mktemp -d)"
     trap 'rm -rf "$OUT"' EXIT
     "$HUGO" --source "$ROOT/site" --destination "$OUT" --logLevel error
+    prune "$OUT"
     diff -r "$OUT" "$ROOT/docs/site"
     python3 -I "$ROOT/scripts/check-site.py" "$OUT"
 else
     "$HUGO" --source "$ROOT/site" --destination "$ROOT/docs/site" --cleanDestinationDir --logLevel error
+    prune "$ROOT/docs/site"
     python3 -I "$ROOT/scripts/check-site.py"
 fi
