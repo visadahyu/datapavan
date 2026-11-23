@@ -25,9 +25,9 @@ not work for you.
 | Large text on the same screens of Basic: every text grows at Android's largest font size and display size with bold text | CI (English, Persian), locally (more languages) | the same script's large pass: each text's height compared with its height at the default size; the pictures read by eye, since a text cut off inside a box that grew does not show in the numbers |
 | A keyboard's Tab (or a switch, which moves the same focus) reaches every button that Basic's summary and settings first show, in reading order | CI (English, Persian) | the same script's keyboard walk: Tab after Tab, the focused element read from each dump |
 | The colours of both themes | CI | `ThemeTest`: every text colour on every ground |
-| What TalkBack says, item by item, and in which language, on nine of Datapavan Advanced's screens so far ([the latest walk](#the-latest-talkback-walk)); every screen of both editions before Datapavan Advanced's first release (ADR 0039, gate 9) | locally, before each release with new screens | `scripts/talkback-walk.sh` on an emulator with TalkBack, with a speech engine of our own that writes down what TalkBack says |
+| What TalkBack says on arriving at each screen and item by item, in which language and voice, and each screen's accessibility tree (roles, headings, states, names, each text's language), on 18 screens so far ([the latest walk](#the-latest-talkback-walk)); every screen of both editions before Datapavan Advanced's first release (ADR 0039, gate 9) | locally, before each release with new screens | `scripts/talkback-walk.sh` on an emulator with TalkBack, with a speech engine and an accessibility service of our own that write down what TalkBack says and what each screen holds; `scripts/talkback-check.py` reads the record |
 | Every page of the website: axe-core's WCAG 2.0 to 2.2 A and AA rules, reflow at 320 px, text spacing, text at 200%, a keyboard walk with the contrast of each focus ring, forced colours | locally, before each deployment | `scripts/a11y-site.sh` |
-| What the website can be held to without a browser: languages and directions, headings, names, the language list, landmarks, zoom, the colours of both schemes | CI, every change | `scripts/check-site.py` |
+| What the website can be held to without a browser: languages and directions, headings, names, the language list, landmarks, zoom, the colours of both schemes, each language's site map against the pages built, links to the repository's files | CI, every change | `scripts/check-site.py` |
 | People who use a screen reader every day, and people who use large text or magnification | before Datapavan Advanced's first release | the test with real users that gates it ([ADR 0045](decisions/0045-three-editions-of-one-app.md), decision 8) |
 
 Automated checks find only part of what fails: the people who make axe-core count about half of the issues by volume,
@@ -70,21 +70,42 @@ Read again when a screen or a page is added or changed:
 
 ## The latest TalkBack walk
 
-On 2026-11-23, with TalkBack 17.0 at its default settings on Android 17 (an emulator), on nine of Datapavan Advanced's
-screens (the summary, the apps, phone and data use tabs, the settings, an app's page, the plan, the network screen and
-"Now"), with Datapavan set to English, Persian and Arabic on a phone set to English (about 4,500 utterances in all).
-Not walked yet: Datapavan Basic, an app's history, the guides, About, the data sources, the journal, the strict review,
-own copy, "Now" while paused, and any screen with the phone itself set to Persian or Arabic.
+On 2026-11-23, with TalkBack 17.0 at its default settings on Android 17 (an emulator), with Datapavan Advanced set to
+English, Persian and Arabic on a phone set to English: 18 screens in each language, 54 in all, about 4,450 utterances.
+TalkBack stayed on throughout, so what it says on arriving at a screen is part of the record. The screens:
+
+- Datapavan Basic's screens, which Advanced carries: the summary, the apps, phone and data use tabs, the settings and
+  their five pages, the strict review, the journal, an app's page, the guided check and the plan;
+- the network screen, and "Now", running and paused.
+
+Not walked yet:
+
+- an app's history, which needs the VPN on with traffic;
+- the guides;
+- the WireGuard screens and the import's confirmation;
+- any screen with the phone itself set to Persian or Arabic.
+
+What the walk found:
 
 - **Every item has a name.** TalkBack called nothing "unlabelled" on any screen in any language.
-- **Roles and states are said.** Buttons as buttons, tabs as tabs with their number ("Tab, 2 of 4"), choices as radio
-  buttons, selected or not, the app's page's sections as headings that are expanded or collapsed, the search field as
-  an edit box.
-- **Found by the walk, and fixed:** the destinations' titles were not headings, so a screen reader could not jump to
-  them (the other screens' titles were fixed from the code); each preset resolver's "Its privacy policy" button did not
-  say whose policy it was.
-- **Fixed before the walk, and confirmed by it:** the app's page's sections are said as expanded or collapsed in
-  TalkBack's own words, rather than "open" and "closed" in Datapavan's; tappable cards are said as buttons.
+- **Roles and states are said.**
+  - Buttons are said as buttons, and tabs as tabs with their number ("Tab, 2 of 4").
+  - Choices are said as radio buttons, selected or not.
+  - The app's page's sections are said as headings that are expanded or collapsed.
+  - The search field is said as an edit box.
+  - Every screen has headings: 80 in all.
+- **Each screen is said by name as it opens:** the window's title, or the pane's name for the audit's screens shown in
+  place of another.
+- **Datapavan's text is read in its own language.** With Datapavan in Persian, 714 utterances of Persian text were
+  handed to the speech engine as Persian and 17 as English. Those 17 were screens' names and TalkBack's hints for
+  actions, which Android takes as plain text: a known gap, below. Arabic was the same, 712 to 17. Before part 2 of
+  this work, every one went as English.
+- **Fixed on the way:**
+  - screen titles that were not headings;
+  - screens without a name;
+  - "open" and "closed" in Datapavan's words rather than TalkBack's own;
+  - tappable cards without a role;
+  - a resolver's "Its privacy policy" button that did not say whose policy it was.
 - **The order** goes down each screen, and along the bottom bar in its tabs' order. In long lists TalkBack leaves the
   list for the bottom bar before it scrolls on, then comes back: Android's own behaviour with lazy lists.
 
@@ -95,8 +116,8 @@ own copy, "Now" while paused, and any screen with the phone itself set to Persia
   is left:
   - TalkBack can switch only to a voice your speech engine has: Google's own engine has no Persian voice, and then
     TalkBack reads with the phone's voice, as before. eSpeak NG and other engines have one.
-  - A screen's name, said as it opens, cannot be marked (Android takes it as plain text), so it comes in the
-    phone's voice.
+  - A screen's name, said as it opens, and the name of an action in TalkBack's hint ("Double-tap to …") cannot be
+    marked: Android takes them as plain text. So they come in the phone's voice.
   - App names and Android's own labels inside a sentence are left unmarked on purpose: they are usually in the
     phone's language.
   - TalkBack's own words ("Button", "Double-tap to activate") are always in the phone's language.
@@ -104,8 +125,8 @@ own copy, "Now" while paused, and any screen with the phone itself set to Persia
   colours pass WCAG AA in both themes, but do not yet change with that setting.
 - **The keyboard in the apps:** the walk checks that Tab reaches every button in order, not how visible the focus is
   (Material's own focus tint, which no check measures yet, 2.4.7), and not the arrow keys.
-- **The walk does not reach every screen yet,** as above; gate 9 of ADR 0039 needs it to before Datapavan Advanced's
-  first release.
+- **The walk does not reach every screen yet:** an app's history, the guides, the WireGuard screens, and a phone set
+  to Persian or Arabic, as above. Gate 9 of ADR 0039 needs them before Datapavan Advanced's first release.
 - **No independent audit yet.** The checks above are the project's own and automated tools' own. A review by
   people who use assistive technology every day comes with Datapavan Advanced's test with real users; a professional
   accessibility audit is not planned yet.

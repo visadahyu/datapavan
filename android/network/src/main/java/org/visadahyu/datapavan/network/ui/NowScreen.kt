@@ -43,6 +43,7 @@ import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.heading
 import androidx.compose.ui.semantics.liveRegion
 import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.semantics.testTagsAsResourceId
 import androidx.compose.ui.unit.dp
 import org.visadahyu.datapavan.ui.isolate
 import org.visadahyu.datapavan.ui.isolateLtr
@@ -175,7 +176,9 @@ internal fun NowScreen(
     // Kept here, above the history, so that coming back from it, or a rotation, finds the list where it was
     // (review c1 of W5's third part, screens, M2).
     val listState = rememberLazyListState()
-    Surface(modifier = Modifier.fillMaxSize(), color = MaterialTheme.colorScheme.background) {
+    // Stable names for the emulator scripts (scripts/talkback-walk.sh, scripts/screenshots.sh --now), as the audit's
+    // screens give them.
+    Surface(modifier = Modifier.fillMaxSize().semantics { testTagsAsResourceId = true }, color = MaterialTheme.colorScheme.background) {
         if (history != null) {
             BackHandler(onBack = onCloseHistory)
             HistoryScreen(

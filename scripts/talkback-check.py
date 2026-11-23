@@ -24,7 +24,11 @@ from pathlib import Path
 SCRIPT = re.compile(r"[؀-ۿ]")
 CODES = {"fa": ("fa", "fas"), "ar": ("ar", "ara")}
 # Screens opened by a click, where TalkBack should say something on arriving.
-CLICKED = re.compile(r"^(apps|phone|network|settings.*|review|app|check|now-paused)$")
+# Not "now-paused": its confirmation is a line shown only while the VPN runs, and the walk runs with the VPN off.
+CLICKED = re.compile(r"^(apps|phone|network|settings.*|review|app|check)$")
+# TalkBack's own hint, "Double-tap to <action>", carries the app's name for the action (an onClickLabel), which Compose
+# takes as plain text: in the phone's language (a known gap in docs/ACCESSIBILITY.md), not counted.
+HINT = re.compile(r"^(Double-tap|Double-tap and hold) to ")
 
 
 def read(path):
@@ -58,7 +62,8 @@ def check(path):
         # A pane's or a window's title is a plain string, which no locale can mark: said in the phone's language (a
         # known gap), and not counted here.
         titles = {n[7] for n in nodes if n[7]} | {t.split(" ", 1)[1] for t in tree if t.startswith("window ")}
-        wrong = [s for s in said if SCRIPT.search(s.split("\t", 1)[1]) and s.split("-")[0] not in own and s.split("\t", 1)[1] not in titles]
+        wrong = [s for s in said if SCRIPT.search(s.split("\t", 1)[1]) and s.split("-")[0] not in own
+                 and s.split("\t", 1)[1] not in titles and not HINT.match(s.split("\t", 1)[1])]
         if wrong:
             problems.append(f"{len(wrong)} utterances of {locale} text asked for in another language, e.g. {wrong[0][:60]!r}")
     if CLICKED.match(screen):

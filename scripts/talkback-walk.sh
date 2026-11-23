@@ -27,6 +27,8 @@ AUDIT=org.visadahyu.datapavan.MainActivity
 TALKBACK=com.google.android.marvin.talkback/com.google.android.marvin.talkback.TalkBackService
 GESTURES=org.visadahyu.datapavan.speechlog/org.visadahyu.datapavan.speechlog.GestureService
 ACTION=org.visadahyu.datapavan.speechlog.GESTURE
+# The app whose guided check is walked: TalkBack itself, an accessibility service on every phone that has it.
+CHECKED=com.google.android.marvin.talkback
 APK="$ROOT/android/app/build-advanced/outputs/apk/debug/app-debug.apk"
 LOG_APK="$ROOT/build/speech-log/speech-log.apk"
 # shellcheck source=scripts/adb-ui.sh
@@ -85,9 +87,22 @@ talkback_on() {
 
 # A click by test tag, with TalkBack on; fails the walk if the element is not there.
 click() {
-    tell click --es id "$1"
-    sleep 3
-    adb logcat -d -s DatapavanSpeech:I | grep -q "gesture click $1 done" || fail "no element $1 to click in $locale"
+    local answer="" try
+    # The service may scroll a list to reach the element: it answers when it has clicked, or found nothing. Just after
+    # Back the window may not be the app's yet, so a miss is tried again once, a few seconds later.
+    for try in 1 2; do
+        tell click --es id "$1"
+        for _ in $(seq 1 20); do
+            answer=$(adb logcat -d -s DatapavanSpeech:I | grep -o "gesture click $1 \(done\|missing\)" | tail -1)
+            [ -z "$answer" ] || break
+            sleep 1
+        done
+        [ "$answer" != "gesture click $1 done" ] || break
+        adb logcat -c
+        sleep 4
+    done
+    [ "$answer" = "gesture click $1 done" ] || fail "no element $1 to click in $locale"
+    sleep 2
 }
 
 # The screen on display: what TalkBack said on arriving (since the record began), the tree, then a swipe to the next
@@ -126,27 +141,29 @@ for locale in ${WALK_LOCALES:-en fa ar}; do
     adb shell am force-stop "$PKG"
     begin; start_activity "$AUDIT"; sleep 6; walk summary
     for tab in apps phone network; do begin; click "nav-$tab"; walk "$tab"; done
-    begin; click nav-summary; sleep 1
     begin; click settings; walk settings
+    # The settings' pages, the strict review, the guided check and the journal are opened directly (debug builds'
+    # screen_for_tests): TalkBack keeps its focus in a list, so a list cannot be scrolled to the way in.
     for page in data_sources own_copy privacy licences about; do
-        begin; click "settings-page-$page"; walk "settings-$page"
-        tell back; sleep 2
+        adb shell am force-stop "$PKG"
+        begin; start_activity "$AUDIT" --es screen_for_tests "settings:$page"; sleep 4; walk "settings-$page"
     done
-    tell back; sleep 2
-    begin; click review-start; walk review
-    tell back; sleep 2
-    begin; click nav-apps; sleep 1
+    for screen in review journal "check:$CHECKED"; do
+        adb shell am force-stop "$PKG"
+        begin; start_activity "$AUDIT" --es screen_for_tests "$screen"; sleep 4; walk "${screen%%:*}"
+    done
+    adb shell am force-stop "$PKG"
+    begin; start_activity "$AUDIT"; sleep 6
+    begin; click nav-apps
     begin; click app-row; walk app
-    # The guided check is offered on an app's page only for some apps (a VPN, or one signed by a known maker).
-    begin; tell click --es id check-start; sleep 3
-    if adb logcat -d -s DatapavanSpeech:I | grep -q 'gesture click check-start done'; then walk check; tell back; sleep 2; fi
-    tell back; sleep 2
     begin; adb shell am start -W -a org.visadahyu.datapavan.action.OPEN_PLAN -f 0x1000c000 -n "$PKG/$AUDIT" >/dev/null; walk plan
     adb shell am force-stop "$PKG"
     begin; start_activity "$NETWORK"; walk network-screen
     begin; start_activity "$NETWORK" --activity-clear-top --ez now true; walk now
+    # Opened again, so that the pause is at the top: the walk scrolled "Now" down.
+    adb shell am force-stop "$PKG"
+    start_activity "$NETWORK" --activity-clear-top --ez now true; sleep 4
     begin; click now-pause; walk now-paused
-    click now-pause
 done
 
 # What a reader of the record looks for first.

@@ -52,6 +52,9 @@ class MainActivity : ComponentActivity() {
         val debuggable = applicationInfo.flags and ApplicationInfo.FLAG_DEBUGGABLE != 0
         val usageUntil = intent.getLongExtra(EXTRA_USAGE_UNTIL, 0).takeIf { debuggable && it > 0 }
         val usageDays = intent.getIntExtra(EXTRA_USAGE_DAYS, 0).takeIf { debuggable && it > 0 }
+        // Debug builds only: a screen opened directly for scripts/talkback-walk.sh, which cannot scroll to the way in
+        // while TalkBack keeps its focus in a list. Release builds never read it.
+        val testScreen = intent.getStringExtra(EXTRA_TEST_SCREEN).takeIf { debuggable && savedInstanceState == null }
         // Every screen is protected (ADR 0040). Debug builds may keep it off for the screenshots of
         // scripts/screenshots.sh, never release builds.
         ScreenProtection.attach(this, screenshotsForTests = debuggable && intent.getBooleanExtra(EXTRA_SCREENSHOTS, false))
@@ -66,7 +69,7 @@ class MainActivity : ComponentActivity() {
                 CompositionLocalProvider(LocalAndroidLabels provides labels) {
                     DatapavanApp(
                         engineVersion = engineVersion, usageUntil = usageUntil, usageDays = usageDays, theme = theme,
-                        launch = launch.value, onLaunched = { launch.value = null },
+                        launch = launch.value, onLaunched = { launch.value = null }, testScreen = testScreen,
                         onTheme = {
                             theme = it
                             preferences.theme = it
@@ -114,5 +117,8 @@ class MainActivity : ComponentActivity() {
         const val EXTRA_USAGE_UNTIL = "usage_until"
         const val EXTRA_USAGE_DAYS = "usage_days"
         const val EXTRA_SCREENSHOTS = "screenshots_for_tests"
+
+        /** Debug builds only: settings[:page], review, journal, app:package or check:package (scripts/talkback-walk.sh). */
+        const val EXTRA_TEST_SCREEN = "screen_for_tests"
     }
 }

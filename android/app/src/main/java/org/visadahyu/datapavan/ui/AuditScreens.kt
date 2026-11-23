@@ -252,6 +252,7 @@ internal fun DatapavanApp(
     onTheme: (ThemeMode) -> Unit = {},
     launch: LaunchTarget? = null,
     onLaunched: () -> Unit = {},
+    testScreen: String? = null,
 ) {
     val context = LocalContext.current.applicationContext
     // The scan reports progress from background threads; a StateFlow carries it safely to the UI.
@@ -324,6 +325,23 @@ internal fun DatapavanApp(
         onLaunched()
     }
     val audit = result
+    // Debug builds only (MainActivity.EXTRA_TEST_SCREEN): the screen scripts/talkback-walk.sh asks for, once the audit
+    // has loaded, as if the user had gone there.
+    LaunchedEffect(testScreen, audit != null) {
+        val screen = testScreen ?: return@LaunchedEffect
+        if (audit == null) return@LaunchedEffect
+        val argument = screen.substringAfter(':', "")
+        when (screen.substringBefore(':')) {
+            "settings" -> {
+                settingsOpen = true
+                settingsPage = SettingsPage.entries.firstOrNull { it.name.equals(argument, ignoreCase = true) }
+            }
+            "review" -> reviewing = true
+            "journal" -> journaling = true
+            "app" -> selected = argument
+            "check" -> checking = argument
+        }
+    }
     val entry = audit?.apps?.firstOrNull { it.first.packageName == selected }
     val checked = audit?.apps?.firstOrNull { it.first.packageName == checking }?.first
     val topLevel = audit != null && checked == null && entry == null && !reviewing && !planning && !journaling && !settingsOpen && settingsPage == null
