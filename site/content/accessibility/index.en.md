@@ -39,27 +39,32 @@ and fewer by criterion. That is why the walks and the test with real users are p
 
 Read again when a screen or a page is added or changed:
 
-- **Reaching a page more than one way (2.4.5).** On the site, the main page and the news are linked from both the
-  header's navigation and every page's footer; the pages for bots and privacy and the guides' index only from the
-  footer, and each guide only from the guides' index, which every footer links (the guides are in English only, and
-  the footer says so in each language). So these reach 2.4.5 only partly: see the known gaps. In the apps, every
-  screen is reached from the bottom bar or from the screen before it, and the plan also from its launcher shortcut.
+- **Reaching a page more than one way (2.4.5).** On the site, every page is in the site map of its language, which
+  every page's footer links, beside the header's navigation and the footer's own links; the guides, which are in
+  English only, are in every language's map, marked as English, and in their own index. `check-site.py` holds each
+  map to the pages built. In the apps, every screen is reached from the bottom bar or from the screen before it, and
+  the plan also from its launcher shortcut.
 - **The same thing named the same way (3.2.3, 3.2.4).** The bottom bar's four destinations keep their order and
   names on every screen; "Network" names only Datapavan Advanced's screen and "Data use" only the audit's tab.
-- **Help in the same place (3.2.6).** The one way to reach the project that the site offers, the security report, is
-  in the same place in every page's footer. The site does not yet link this page's "Tell us": see the known gaps.
+- **Help in the same place (3.2.6).** Every page's footer, in the same place, links the accessibility page, which says
+  in each language how to tell us when something does not work, and the security report.
 - **Orientation (1.3.4).** No screen of either edition is locked to portrait or landscape.
 - **Dragging (2.5.7).** Nothing in either edition or on the site needs a drag.
 - **Signing in (3.3.8).** Neither edition has an account, a sign-in or anything to remember.
 - **Errors in a form (3.3.1 to 3.3.3, 4.1.3).** The text fields are the app search, a WireGuard configuration's name
   and, in Datapavan Advanced, your own resolver. When Datapavan's test of your resolver fails, both its fields are in
   Material's error state, which screen readers announce, and the reason is said in words. A configuration's name
-  that holds nothing usable leaves the Save button off without saying why: a known gap. A configuration file that
-  cannot be read is refused with its line and setting in plain words.
-- **Titles (2.4.2).** Every screen's title is a heading, so that a screen reader can jump to it.
+  that holds nothing but spaces puts its field in the error state, with the reason under it and said to screen
+  readers, and Save stays off until it has one. A configuration file that cannot be read is refused with its line and
+  setting in plain words.
+- **Titles (2.4.2).** Every screen's title is a heading, so that a screen reader can jump to it, and every screen is
+  named for screen readers, which say its name when it opens: the network part's windows by their titles, the audit's
+  screens shown in place of another as named panes.
 - **Moving and changing content (2.2.2).** "Now" updates its counts every second; its button stops them and starts
-  them again, and a screen reader hears that they stopped. On the network screen, each WireGuard configuration's
-  line "last handshake … ago" changes every second with no way to stop it: a known gap. The site's drawing opens
+  them again, and a screen reader hears that they stopped. On the network screen, a WireGuard configuration's last
+  handshake is said as "within the last 3 minutes" while its session is current (WireGuard renews it every 2 minutes
+  while traffic flows and rejects it after 3), and after that as the time it happened: it never counts by the
+  second. The site's drawing opens
   only as it is scrolled into view, and not at all for readers who ask for less motion.
 - **Forced colours and Android's contrast setting.** The site keeps its text, borders and drawing visible with forced
   colours (Windows' high contrast). Android 14 and later lets users ask apps for medium or high contrast; Datapavan's
@@ -87,18 +92,18 @@ own copy, "Now" while paused, and any screen with the phone itself set to Persia
 
 ## Known gaps
 
-- **The voice for the app's language.** When Datapavan's own language differs from the phone's (Persian in Datapavan on
-  a phone set to English, for example), TalkBack reads Datapavan's text with the phone's voice: in the walk, every
-  Persian and Arabic text was handed to the speech engine as English. Marking the text's language on the text, the
-  way Android expects, did not change this in a test with Compose's text. Until it is solved, set the phone's
-  language, or TalkBack's own speech language, to the language you read Datapavan in.
+- **The voice for the app's language, in part.** Datapavan marks every text of its own with the language it is
+  written in, so that TalkBack reads Persian with a Persian voice on a phone set to English, as the walk shows. What
+  is left:
+  - TalkBack can switch only to a voice your speech engine has: Google's own engine has no Persian voice, and then
+    TalkBack reads with the phone's voice, as before. eSpeak NG and other engines have one.
+  - A screen's name, said as it opens, cannot be marked (Android takes it as plain text), so it comes in the
+    phone's voice.
+  - App names and Android's own labels inside a sentence are left unmarked on purpose: they are usually in the
+    phone's language.
+  - TalkBack's own words ("Button", "Double-tap to activate") are always in the phone's language.
 - **Android's contrast setting.** Android 14 and later lets users ask apps for medium or high contrast. Datapavan's
   colours pass WCAG AA in both themes, but do not yet change with that setting.
-- **Reaching the site's pages more than one way (2.4.5).** The pages for bots and privacy, the guides' index and each
-  guide can be reached only one way within the site; an HTML map of the site would give them a second.
-- **The site does not link this page.** Its footer should carry "Accessibility", leading to the way to tell us.
-- **A WireGuard configuration's handshake age** changes every second on the network screen, with no pause (2.2.2).
-- **A configuration's name that holds nothing usable** leaves Save off without saying why (3.3.1).
 - **The keyboard in the apps:** the walk checks that Tab reaches every button in order, not how visible the focus is
   (Material's own focus tint, which no check measures yet, 2.4.7), and not the arrow keys.
 - **The walk does not reach every screen yet,** as above; gate 9 of ADR 0039 needs it to before Datapavan Advanced's
