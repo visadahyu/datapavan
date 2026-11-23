@@ -62,17 +62,20 @@ public class GestureService extends AccessibilityService {
         switch (what) {
             case "click": {
                 // An element of a lazy list exists only once it is scrolled to: scroll forward until it does, at most 15
-                // times, then back to where the list began.
+                // times, and if it is not below, backward, at most 30 times.
                 AccessibilityNodeInfo node = find(getRootInActiveWindow(), id);
-                for (int i = 0; node == null && i < 15; i++) {
-                    AccessibilityNodeInfo list = scrollable(getRootInActiveWindow());
-                    if (list == null || !list.performAction(AccessibilityNodeInfo.ACTION_SCROLL_FORWARD)) break;
-                    try {
-                        Thread.sleep(400);
-                    } catch (InterruptedException e) {
-                        break;
+                for (int action : new int[] {AccessibilityNodeInfo.ACTION_SCROLL_FORWARD, AccessibilityNodeInfo.ACTION_SCROLL_BACKWARD}) {
+                    int tries = action == AccessibilityNodeInfo.ACTION_SCROLL_FORWARD ? 15 : 30;
+                    for (int i = 0; node == null && i < tries; i++) {
+                        AccessibilityNodeInfo list = scrollable(getRootInActiveWindow());
+                        if (list == null || !list.performAction(action)) break;
+                        try {
+                            Thread.sleep(300);
+                        } catch (InterruptedException e) {
+                            break;
+                        }
+                        node = find(getRootInActiveWindow(), id);
                     }
-                    node = find(getRootInActiveWindow(), id);
                 }
                 while (node != null && !node.isClickable()) node = node.getParent();
                 boolean done = node != null && node.performAction(AccessibilityNodeInfo.ACTION_CLICK);
