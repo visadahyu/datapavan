@@ -5,7 +5,7 @@
 {{- $apk := printf "%sdownload/%s" $toSite site.Params.release_apk -}}
 {{- $github := printf "https://github.com/visadahyu/datapavan/releases/download/%s/%s" site.Params.release_tag site.Params.release_apk -}}
 {{- $shots := slice (slice "summary" (index $t.shots 0)) (slice "app" (index $t.shots 1)) (slice "plan" (index $t.shots 2)) -}}
-<main>
+<main id="main">
 {{- /* schema.org data for search engines, as microdata rather than JSON-LD, since the site has no script tag at all
 (site/README.md, "Search engines"). The site's name, with its name in other scripts, on the main page only. */ -}}
 {{- if eq site.Language.Lang "en" }}
@@ -20,7 +20,7 @@
 <div><p class="status">{{ $t.status }}</p><h1>{{ $t.h1 }}</h1><p class="lead" itemprop="description">{{ $t.tagline }}</p><p class="lead2">{{ $t.lead }}</p>
 <p class="cta"><a class="btn" href="{{ $apk | safeURL }}" itemprop="downloadUrl">{{ $t.cta_get }}</a><a href="#verify">{{ $t.cta_how }}</a></p></div>
 <aside class="label" aria-label="{{ $t.label_title }}, {{ $t.sample_tag }}">
-<p class="l-title">{{ $t.label_title }}</p>
+<h2 class="l-title">{{ $t.label_title }}</h2>
 <div class="l-name"><span>{{ $t.sample_name }}</span><span class="l-tag">{{ $t.sample_tag }}</span></div>
 {{ range $t.label_rows }}<div class="l-g"><h3>{{ index . 0 }}</h3><dl>{{ range index . 1 }}<div><dt>{{ index . 0 }}</dt><dd>{{ index . 1 }}</dd></div>{{ end }}</dl></div>{{ end }}
 <p class="fine">{{ $t.label_fine }}</p></aside>
@@ -28,7 +28,7 @@
 <section id="checks"><div class="w"><h2>{{ $t.checks_title }}</h2><p class="sub">{{ $t.checks_lead }}</p><div class="rows">
 {{- range $t.checks }}<div class="rw"><h3>{{ index . 0 }}</h3><p>{{ index . 1 }}</p><p class="need"><b>{{ $t.needs_label }}</b>{{ if index . 2 }}{{ $t.needs_usage }}{{ else }}{{ $t.needs_nothing }}{{ end }}</p></div>{{ end -}}
 </div></div></section>
-<section class="band"><div class="w"><h2>{{ $t.screens_title }}</h2><div class="phones">
+<section class="band"><div class="w"><h2>{{ $t.screens_title }}</h2><div class="phones" tabindex="0" role="region" aria-label="{{ $t.screens_title }}">
 {{- range $shots }}{{ $src := printf "%simages/%s-%s.webp" $toSite site.Language.Lang (index . 0) }}<img src="{{ $src | safeURL }}" width="540" height="1200" loading="lazy" alt="{{ index . 1 }}">{{ end -}}
 </div><p class="note">{{ $t.shots_note }}</p></div></section>
 <section id="limits"><div class="w"><h2>{{ $t.limits_title }}</h2><p class="sub" style="margin-bottom:0">{{ $t.legend_solid }} {{ $t.legend_dash }}</p>
@@ -44,7 +44,7 @@
 </div><div class="more">{{ range $t.plan_more }}<div><h3>{{ index . 0 }}</h3><p>{{ index . 1 }}</p></div>{{ end }}</div></div></section>
 <section class="own"><div class="w"><p class="own-q">{{ $t.never_q }}</p><p class="nothing">{{ $t.never_a }}</p><div class="wrap"><div><h2>{{ $t.never_title }}</h2><p>{{ $t.never_body }}</p></div>
 <aside class="label" aria-label="{{ $t.never_title }}"><p class="l-title ltr-t">Datapavan Basic</p><div class="l-g" style="margin-top:.5rem"><dl style="padding-top:.2rem">{{ range $t.never_rows }}<div><dt>{{ index . 0 }}</dt><dd>{{ index . 1 }}</dd></div>{{ end }}</dl></div><p class="fine" style="margin-bottom:0">{{ $t.foot_licence }}</p></aside></div></div></section>
-<section><div class="w"><h2>{{ $t.compare_title }}</h2><p class="sub">{{ $t.compare_note }}</p><div class="scroll" tabindex="0"><table class="cmp"><thead><tr><td></td>
+<section><div class="w"><h2>{{ $t.compare_title }}</h2><p class="sub">{{ $t.compare_note }}</p><div class="scroll" tabindex="0" role="region" aria-label="{{ $t.compare_title }}"><table class="cmp"><thead><tr><td></td>
 {{- range $i, $c := $t.compare_cols }}<th scope="col"{{ if eq $i 0 }} class="us"{{ end }}>{{ $c }}</th>{{ end -}}
 </tr></thead><tbody>
 {{- range $t.compare_rows }}<tr><th scope="row">{{ index . 0 }}</th>{{ range $i, $v := index . 1 }}<td{{ if eq $i 0 }} class="us"{{ end }}>{{ $v }}</td>{{ end }}</tr>{{ end -}}

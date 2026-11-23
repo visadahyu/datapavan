@@ -1,0 +1,8 @@
+{{- /* A table in a page's text scrolls inside a box of its own on a narrow screen, not the whole page (WCAG 1.4.10), and
+the box takes the keyboard's focus so that it can be scrolled without a pointer (site/README.md, "Accessibility"). */ -}}
+<div class="scroll" tabindex="0" role="region" aria-label="{{ .Page.Title }}"><table
+  {{- range $k, $v := .Attributes }}{{ if $v }} {{ printf "%s=%q" $k $v | safeHTMLAttr }}{{ end }}{{ end }}>
+<thead>{{ range .THead }}<tr>{{ range . }}<th{{ with .Alignment }} style="text-align:{{ . }}"{{ end }}>{{ .Text }}</th>{{ end }}</tr>{{ end }}</thead>
+<tbody>{{ range .TBody }}<tr>{{ range . }}<td{{ with .Alignment }} style="text-align:{{ . }}"{{ end }}>{{ .Text }}</td>{{ end }}</tr>{{ end }}</tbody>
+</table></div>
+{{- /**/ -}}

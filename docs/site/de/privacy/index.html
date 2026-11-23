@@ -39,7 +39,12 @@ html{-webkit-text-size-adjust:100%;scroll-behavior:smooth}
 body{margin:0}
 @media (prefers-reduced-motion:reduce){html{scroll-behavior:auto}*{animation:none!important;transition:none!important}}
 a{color:inherit}
-a:focus-visible,summary:focus-visible{outline:3px solid currentColor;outline-offset:3px}
+a:focus-visible,summary:focus-visible,[tabindex]:focus-visible{outline:3px solid currentColor;outline-offset:3px}
+/* A button's own colour is the paper's, which would draw its ring invisible on the paper around it. */
+.btn:focus-visible{outline-color:var(--lab)}
+/* The link past the header to the page's content: off screen until it has the keyboard's focus (WCAG 2.4.1). */
+.skip{position:absolute;inset-inline-start:1rem;top:-20rem;z-index:10;background:var(--lab);color:var(--paper);padding:.7rem 1rem;font-weight:700}
+.skip:focus{top:1rem}.skip:focus-visible{outline-color:var(--lab)}
 h1,h2,h3{text-wrap:balance;hyphens:auto}
 p{text-wrap:pretty}
 table{border-collapse:collapse;width:100%}
@@ -132,7 +137,8 @@ footer p{margin:.2rem 0;color:var(--mute);font-size:.95rem}
 .hero,.own .wrap,.get{grid-template-columns:minmax(0,1fr)}
 .rw{grid-template-columns:minmax(0,1fr)}
 .lvls,.more,.off{grid-template-columns:minmax(0,1fr)}
-.top nav{display:none}.lng{margin-inline-start:auto}
+/* The navigation stays on narrow screens and at high zoom (WCAG 1.4.10): a row of its own under the name. */
+.top nav{order:3;flex-basis:100%;margin-inline-start:0;gap:.35rem 1.1rem}.lng{margin-inline-start:auto}
 .lvl h3{margin-top:.15rem}
 }
 
@@ -171,18 +177,18 @@ footer p{margin:.2rem 0;color:var(--mute);font-size:.95rem}
 .not p{margin:0;font-size:.98rem;line-height:var(--notlh)}
 .nc-line{margin:1rem 0 0;font-weight:600}
 .own-q{font:800 clamp(1.5rem,3.4vw,3rem)/1.15 var(--f-disp);font-stretch:80%;margin:0;color:var(--on-deep);letter-spacing:var(--h1ls)}
-.nothing{font:900 var(--big)/var(--biglh) var(--f-disp);font-stretch:62%;margin:0 0 clamp(1.5rem,4vw,3rem);color:var(--on-deep);letter-spacing:-.01em;white-space:nowrap}
+.nothing{font:900 var(--big)/var(--biglh) var(--f-disp);font-stretch:62%;margin:0 0 clamp(1.5rem,4vw,3rem);color:var(--on-deep);letter-spacing:-.01em;overflow-wrap:anywhere}
 .own{overflow:hidden}
 @media (max-width:860px){.seen{grid-template-columns:minmax(0,1fr)}.dwg text{font-size:27px}.dwg .ld circle{r:23px}.dwg .nct{font-size:30px}}
 .news{list-style:none;margin:1.5rem 0 0;padding:0;border-top:.62rem solid var(--lab)}
 .news li{padding-block:1.15rem;border-bottom:1px solid var(--lab);display:grid;grid-template-columns:minmax(0,3fr) minmax(0,9fr);gap:.4rem clamp(1rem,3vw,2.5rem)}
 .news time{color:var(--mute);font-variant-numeric:tabular-nums;font-size:.95rem}
-.news h3{font:800 clamp(1.2rem,2vw,1.5rem)/1.25 var(--f-sub);font-stretch:88%;margin:0 0 .35rem}
+.news h2{font:800 clamp(1.2rem,2vw,1.5rem)/1.25 var(--f-sub);font-stretch:88%;margin:0 0 .35rem;color:inherit;letter-spacing:normal}
 .news p{margin:0 0 .4rem;max-width:44em}
 .news .src{font-size:.95rem;color:var(--mute);margin:0}
 .prose{max-width:46em}.prose h1{font-size:clamp(2.2rem,5vw,4rem);margin-bottom:1rem}.prose h2{font-size:clamp(1.5rem,2.8vw,2.2rem);margin:2rem 0 .5rem}
 @media (max-width:760px){.news li{grid-template-columns:minmax(0,1fr)}}
-.lat2{font-weight:500;font-size:.8em;opacity:.75}
+.lat2{font-weight:500;font-size:.8em;opacity:.85}
 .brand{flex-wrap:wrap}
 .names{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:clamp(1.5rem,4vw,4rem);margin-top:.5rem}
 .names article{min-width:0}
@@ -197,9 +203,10 @@ footer p{margin:.2rem 0;color:var(--mute);font-size:.95rem}
 </style>
 </head>
 <body>
+<a class="skip" href="#main">Zum Inhalt springen</a>
 <div class="w"><header class="top"><a class="brand" href="../index.html"><span><svg class="mark" viewBox="0 0 240 240" aria-hidden="true"><rect width="240" height="240" rx="52" class="mk-b"/><path class="mk-f" d="M62.58,72.28 Q63.23,66.59 63.67,61.12 Q64.11,55.65 64.11,49.95 Q64.11,44.04 63.56,37.91 Q63.01,31.79 61.7,25.0 Q70.24,28.72 87.97,32.22 Q105.7,35.73 129.23,38.46 Q152.76,41.2 178.37,43.17 L178.37,48.2 Q136.78,53.68 106.57,59.48 Q76.37,65.28 62.58,72.28 Z M146.63,215.0 Q144.44,189.83 142.47,171.33 Q140.5,152.83 138.64,139.37 Q136.78,125.91 134.59,115.62 Q132.4,105.33 129.67,96.36 Q126.93,87.38 123.21,77.97 Q135.03,79.94 146.85,79.94 Q157.79,79.94 170.49,77.97 Q166.77,88.04 163.92,99.53 Q161.08,111.03 158.89,126.57 Q156.7,142.11 155.06,163.56 Q153.42,185.01 152.32,215.0 L146.63,215.0 Z M92.56,215.0 Q90.38,189.83 88.41,171.33 Q86.44,152.83 84.57,139.37 Q82.71,125.91 80.52,115.62 Q78.34,105.33 75.6,96.36 Q72.86,87.38 69.14,77.97 Q80.96,79.94 92.78,79.94 Q103.73,79.94 116.42,77.97 Q112.7,88.04 109.86,99.53 Q107.01,111.03 104.82,126.57 Q102.63,142.11 100.99,163.56 Q99.35,185.01 98.26,215.0 L92.56,215.0 Z"/></svg></span><span class="ltr">Datapavan</span></a><nav><a href="../index.html#checks">Was es prüft</a><a href="../index.html#limits">Was es nicht sieht</a><a href="../index.html#plan">Was Sie tun können</a><a href="../index.html#faq">Fragen</a><a href="../index.html#get">Download</a><a href="../index.html#names">Die Namen</a><a href="../news/index.html">Neuigkeiten</a><a href="https://github.com/visadahyu/datapavan" class="ltr">GitHub</a></nav>
-<details class="lng"><summary aria-label="Sprache">Deutsch</summary><ul><li><a href="../../privacy/index.html" hreflang="en" lang="en">English</a></li><li><a href="../../fr/privacy/index.html" hreflang="fr" lang="fr">Français</a></li><li><a href="../../de/privacy/index.html" hreflang="de" lang="de" aria-current="true">Deutsch</a></li><li><a href="../../es/privacy/index.html" hreflang="es" lang="es">Español</a></li><li><a href="../../ru/privacy/index.html" hreflang="ru" lang="ru">Русский</a></li><li><a href="../../zh/privacy/index.html" hreflang="zh" lang="zh">简体中文</a></li><li><a href="../../ar/privacy/index.html" hreflang="ar" lang="ar">العربية</a></li><li><a href="../../fa/privacy/index.html" hreflang="fa" lang="fa">فارسی</a></li></ul></details></header></div>
-<main><section><div class="w prose"><h1>Hinweise zum Datenschutz</h1><p>Dies ist eine Übersetzung. Maßgeblich ist der <a href="https://datapavan.org/privacy/index.html">englische Text</a>.</p>
+<details class="lng"><summary aria-label="Sprache: Deutsch">Deutsch</summary><ul><li><a href="../../privacy/index.html" hreflang="en" lang="en">English</a></li><li><a href="../../fr/privacy/index.html" hreflang="fr" lang="fr">Français</a></li><li><a href="../../de/privacy/index.html" hreflang="de" lang="de" aria-current="true">Deutsch</a></li><li><a href="../../es/privacy/index.html" hreflang="es" lang="es">Español</a></li><li><a href="../../ru/privacy/index.html" hreflang="ru" lang="ru">Русский</a></li><li><a href="../../zh/privacy/index.html" hreflang="zh" lang="zh">简体中文</a></li><li><a href="../../ar/privacy/index.html" hreflang="ar" lang="ar">العربية</a></li><li><a href="../../fa/privacy/index.html" hreflang="fa" lang="fa">فارسی</a></li></ul></details></header></div>
+<main id="main"><section><div class="w prose"><h1>Hinweise zum Datenschutz</h1><p>Dies ist eine Übersetzung. Maßgeblich ist der <a href="https://datapavan.org/privacy/index.html">englische Text</a>.</p>
 <ul>
 <li><strong>Gültig ab:</strong> 2026-11-07</li>
 <li><strong>Aktualisiert:</strong> 2026-11-18, mit den Zeilen zu Datapavan Advanced für Version 0.2.0, die noch nicht veröffentlicht ist</li>
@@ -261,53 +268,10 @@ wo das Telefon eine solche nutzte. Wenn Sie Apps durch Ihr Tool zum Umgehen von 
 Namensabfragen an das Tool, und ihre übrigen DNS-Anfragen gehen durch das Tool an Quad9, eine Schweizer Stiftung,
 die keine Adressen protokolliert, sodass Quad9 die Adresse des Tools sieht, nicht Ihre.</p>
 <h2 id="berechtigungen-und-wofür-sie-nötig-sind">Berechtigungen und wofür sie nötig sind</h2>
-<table>
-	<thead>
-			<tr>
-					<th>Berechtigung</th>
-					<th>Wofür</th>
-					<th>Ab</th>
-			</tr>
-	</thead>
-	<tbody>
-			<tr>
-					<td>Installierte Apps sehen</td>
-					<td>Apps und ihre Berechtigungen auflisten</td>
-					<td>v0.1</td>
-			</tr>
-			<tr>
-					<td>Zugriff auf Nutzungsdaten (von Ihnen in den Einstellungen erteilt; optional)</td>
-					<td>Zeigen, wie viele Daten jede App gesendet und empfangen hat und welche Apps Sie lange nicht geöffnet haben. Dafür liest Datapavan nur Summen und das Datum, an dem jede App zuletzt genutzt wurde, und behält nichts davon; Datapavan Basic liest nie, welche App Sie wann geöffnet haben. Wenn Sie eine einzelne Aktivität in einer App prüfen, liest es außerdem die Gesamtzähler des Datenverkehrs des Telefons, für die keine Berechtigung nötig ist, um zu sehen, ob die Zählung von Android aktuell ist; diese Zahlen bleiben im Arbeitsspeicher, solange die Prüfung auf dem Bildschirm ist</td>
-					<td>v0.1</td>
-			</tr>
-			<tr>
-					<td>Zugriff auf Nutzungsdaten, in Datapavan Advanced</td>
-					<td>Für jede Verbindung erkennen, ob Sie ihre App in dem Moment benutzt haben, sie mit einer Benachrichtigung lief, die Android anzeigte (Musik, Navigation), oder keines von beiden. Dafür liest Advanced außerdem die Aufzeichnung von Android ab dem Start des Telefons darüber, welche App wann auf dem Bildschirm war, welche Apps einen Vordergrunddienst ausführten, welche Sie auf andere Weise benutzt haben (etwa durch Tippen auf ihre Benachrichtigung) und wann sich der Bildschirm ein- oder ausschaltete und der Sperrbildschirm erschien; und ob jede App Benachrichtigungen anzeigen darf. Was es dabei erfährt, behält es nur an zwei Stellen: im Arbeitsspeicher für die Ansicht „Now“ und, wenn Sie ein Verbindungsprotokoll führen, als Zustand jedes Eintrags, für die von Ihnen gewählten Tage</td>
-					<td>Datapavan Advanced, ab 0.2.0</td>
-			</tr>
-			<tr>
-					<td>Netzwerkstatus</td>
-					<td>Erkennen, ob ein VPN aktiv ist. Diese Berechtigung erlaubt keine Verbindung</td>
-					<td>v0.1</td>
-			</tr>
-			<tr>
-					<td>Überlagerungen anderer Apps ausblenden</td>
-					<td>Ab Android 12: Solange Datapavan auf dem Bildschirm ist, können andere Apps nichts darüber anzeigen. Diese Berechtigung erlaubt keine Verbindung</td>
-					<td>Datapavan Basic ab der Version nach 0.1.2 und Datapavan Advanced</td>
-			</tr>
-			<tr>
-					<td>VPN (von Ihnen erteilt)</td>
-					<td>Die <strong>lokale</strong> Firewall. Der Datenverkehr wird auf dem Telefon gefiltert und nie an uns gesendet</td>
-					<td>Datapavan Advanced, ab 0.2.0</td>
-			</tr>
-			<tr>
-					<td>Internet</td>
-					<td>Den Datenverkehr anderer Apps durch die lokale Firewall weiterleiten. Datapavan Basic fragt nie danach</td>
-					<td>Datapavan Advanced, ab 0.2.0</td>
-			</tr>
-	</tbody>
-</table>
-<h2 id="optionale-aktualisierungen-der-tracker-listen-geplant">Optionale Aktualisierungen der Tracker-Listen (geplant)</h2>
+<div class="scroll" tabindex="0" role="region" aria-label="Hinweise zum Datenschutz"><table>
+<thead><tr><th>Berechtigung</th><th>Wofür</th><th>Ab</th></tr></thead>
+<tbody><tr><td>Installierte Apps sehen</td><td>Apps und ihre Berechtigungen auflisten</td><td>v0.1</td></tr><tr><td>Zugriff auf Nutzungsdaten (von Ihnen in den Einstellungen erteilt; optional)</td><td>Zeigen, wie viele Daten jede App gesendet und empfangen hat und welche Apps Sie lange nicht geöffnet haben. Dafür liest Datapavan nur Summen und das Datum, an dem jede App zuletzt genutzt wurde, und behält nichts davon; Datapavan Basic liest nie, welche App Sie wann geöffnet haben. Wenn Sie eine einzelne Aktivität in einer App prüfen, liest es außerdem die Gesamtzähler des Datenverkehrs des Telefons, für die keine Berechtigung nötig ist, um zu sehen, ob die Zählung von Android aktuell ist; diese Zahlen bleiben im Arbeitsspeicher, solange die Prüfung auf dem Bildschirm ist</td><td>v0.1</td></tr><tr><td>Zugriff auf Nutzungsdaten, in Datapavan Advanced</td><td>Für jede Verbindung erkennen, ob Sie ihre App in dem Moment benutzt haben, sie mit einer Benachrichtigung lief, die Android anzeigte (Musik, Navigation), oder keines von beiden. Dafür liest Advanced außerdem die Aufzeichnung von Android ab dem Start des Telefons darüber, welche App wann auf dem Bildschirm war, welche Apps einen Vordergrunddienst ausführten, welche Sie auf andere Weise benutzt haben (etwa durch Tippen auf ihre Benachrichtigung) und wann sich der Bildschirm ein- oder ausschaltete und der Sperrbildschirm erschien; und ob jede App Benachrichtigungen anzeigen darf. Was es dabei erfährt, behält es nur an zwei Stellen: im Arbeitsspeicher für die Ansicht „Now“ und, wenn Sie ein Verbindungsprotokoll führen, als Zustand jedes Eintrags, für die von Ihnen gewählten Tage</td><td>Datapavan Advanced, ab 0.2.0</td></tr><tr><td>Netzwerkstatus</td><td>Erkennen, ob ein VPN aktiv ist. Diese Berechtigung erlaubt keine Verbindung</td><td>v0.1</td></tr><tr><td>Überlagerungen anderer Apps ausblenden</td><td>Ab Android 12: Solange Datapavan auf dem Bildschirm ist, können andere Apps nichts darüber anzeigen. Diese Berechtigung erlaubt keine Verbindung</td><td>Datapavan Basic ab der Version nach 0.1.2 und Datapavan Advanced</td></tr><tr><td>VPN (von Ihnen erteilt)</td><td>Die <strong>lokale</strong> Firewall. Der Datenverkehr wird auf dem Telefon gefiltert und nie an uns gesendet</td><td>Datapavan Advanced, ab 0.2.0</td></tr><tr><td>Internet</td><td>Den Datenverkehr anderer Apps durch die lokale Firewall weiterleiten. Datapavan Basic fragt nie danach</td><td>Datapavan Advanced, ab 0.2.0</td></tr></tbody>
+</table></div><h2 id="optionale-aktualisierungen-der-tracker-listen-geplant">Optionale Aktualisierungen der Tracker-Listen (geplant)</h2>
 <p>Datapavan selbst importiert nur signierte Listendateien. Falls optionale Downloads kommen, werden sie
 von einem öffentlichen Spiegelserver geladen, und nur, wenn Sie das einschalten. Wie bei jedem Download:</p>
 <ul>

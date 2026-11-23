@@ -40,7 +40,12 @@ html{-webkit-text-size-adjust:100%;scroll-behavior:smooth}
 body{margin:0}
 @media (prefers-reduced-motion:reduce){html{scroll-behavior:auto}*{animation:none!important;transition:none!important}}
 a{color:inherit}
-a:focus-visible,summary:focus-visible{outline:3px solid currentColor;outline-offset:3px}
+a:focus-visible,summary:focus-visible,[tabindex]:focus-visible{outline:3px solid currentColor;outline-offset:3px}
+/* A button's own colour is the paper's, which would draw its ring invisible on the paper around it. */
+.btn:focus-visible{outline-color:var(--lab)}
+/* The link past the header to the page's content: off screen until it has the keyboard's focus (WCAG 2.4.1). */
+.skip{position:absolute;inset-inline-start:1rem;top:-20rem;z-index:10;background:var(--lab);color:var(--paper);padding:.7rem 1rem;font-weight:700}
+.skip:focus{top:1rem}.skip:focus-visible{outline-color:var(--lab)}
 h1,h2,h3{text-wrap:balance;hyphens:auto}
 p{text-wrap:pretty}
 table{border-collapse:collapse;width:100%}
@@ -133,7 +138,8 @@ footer p{margin:.2rem 0;color:var(--mute);font-size:.95rem}
 .hero,.own .wrap,.get{grid-template-columns:minmax(0,1fr)}
 .rw{grid-template-columns:minmax(0,1fr)}
 .lvls,.more,.off{grid-template-columns:minmax(0,1fr)}
-.top nav{display:none}.lng{margin-inline-start:auto}
+/* The navigation stays on narrow screens and at high zoom (WCAG 1.4.10): a row of its own under the name. */
+.top nav{order:3;flex-basis:100%;margin-inline-start:0;gap:.35rem 1.1rem}.lng{margin-inline-start:auto}
 .lvl h3{margin-top:.15rem}
 }
 
@@ -172,18 +178,18 @@ footer p{margin:.2rem 0;color:var(--mute);font-size:.95rem}
 .not p{margin:0;font-size:.98rem;line-height:var(--notlh)}
 .nc-line{margin:1rem 0 0;font-weight:600}
 .own-q{font:800 clamp(1.5rem,3.4vw,3rem)/1.15 var(--f-disp);font-stretch:80%;margin:0;color:var(--on-deep);letter-spacing:var(--h1ls)}
-.nothing{font:900 var(--big)/var(--biglh) var(--f-disp);font-stretch:62%;margin:0 0 clamp(1.5rem,4vw,3rem);color:var(--on-deep);letter-spacing:-.01em;white-space:nowrap}
+.nothing{font:900 var(--big)/var(--biglh) var(--f-disp);font-stretch:62%;margin:0 0 clamp(1.5rem,4vw,3rem);color:var(--on-deep);letter-spacing:-.01em;overflow-wrap:anywhere}
 .own{overflow:hidden}
 @media (max-width:860px){.seen{grid-template-columns:minmax(0,1fr)}.dwg text{font-size:27px}.dwg .ld circle{r:23px}.dwg .nct{font-size:30px}}
 .news{list-style:none;margin:1.5rem 0 0;padding:0;border-top:.62rem solid var(--lab)}
 .news li{padding-block:1.15rem;border-bottom:1px solid var(--lab);display:grid;grid-template-columns:minmax(0,3fr) minmax(0,9fr);gap:.4rem clamp(1rem,3vw,2.5rem)}
 .news time{color:var(--mute);font-variant-numeric:tabular-nums;font-size:.95rem}
-.news h3{font:800 clamp(1.2rem,2vw,1.5rem)/1.25 var(--f-sub);font-stretch:88%;margin:0 0 .35rem}
+.news h2{font:800 clamp(1.2rem,2vw,1.5rem)/1.25 var(--f-sub);font-stretch:88%;margin:0 0 .35rem;color:inherit;letter-spacing:normal}
 .news p{margin:0 0 .4rem;max-width:44em}
 .news .src{font-size:.95rem;color:var(--mute);margin:0}
 .prose{max-width:46em}.prose h1{font-size:clamp(2.2rem,5vw,4rem);margin-bottom:1rem}.prose h2{font-size:clamp(1.5rem,2.8vw,2.2rem);margin:2rem 0 .5rem}
 @media (max-width:760px){.news li{grid-template-columns:minmax(0,1fr)}}
-.lat2{font-weight:500;font-size:.8em;opacity:.75}
+.lat2{font-weight:500;font-size:.8em;opacity:.85}
 .brand{flex-wrap:wrap}
 .names{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:clamp(1.5rem,4vw,4rem);margin-top:.5rem}
 .names article{min-width:0}
@@ -198,9 +204,10 @@ footer p{margin:.2rem 0;color:var(--mute);font-size:.95rem}
 </style>
 </head>
 <body>
+<a class="skip" href="#main">رفتن به محتوا</a>
 <div class="w"><header class="top"><a class="brand" href="../index.html"><span><svg class="mark" viewBox="0 0 240 240" aria-hidden="true"><rect width="240" height="240" rx="52" class="mk-b"/><path class="mk-f" d="M62.58,72.28 Q63.23,66.59 63.67,61.12 Q64.11,55.65 64.11,49.95 Q64.11,44.04 63.56,37.91 Q63.01,31.79 61.7,25.0 Q70.24,28.72 87.97,32.22 Q105.7,35.73 129.23,38.46 Q152.76,41.2 178.37,43.17 L178.37,48.2 Q136.78,53.68 106.57,59.48 Q76.37,65.28 62.58,72.28 Z M146.63,215.0 Q144.44,189.83 142.47,171.33 Q140.5,152.83 138.64,139.37 Q136.78,125.91 134.59,115.62 Q132.4,105.33 129.67,96.36 Q126.93,87.38 123.21,77.97 Q135.03,79.94 146.85,79.94 Q157.79,79.94 170.49,77.97 Q166.77,88.04 163.92,99.53 Q161.08,111.03 158.89,126.57 Q156.7,142.11 155.06,163.56 Q153.42,185.01 152.32,215.0 L146.63,215.0 Z M92.56,215.0 Q90.38,189.83 88.41,171.33 Q86.44,152.83 84.57,139.37 Q82.71,125.91 80.52,115.62 Q78.34,105.33 75.6,96.36 Q72.86,87.38 69.14,77.97 Q80.96,79.94 92.78,79.94 Q103.73,79.94 116.42,77.97 Q112.7,88.04 109.86,99.53 Q107.01,111.03 104.82,126.57 Q102.63,142.11 100.99,163.56 Q99.35,185.01 98.26,215.0 L92.56,215.0 Z"/></svg></span><span>داتاپاوان</span><span class="lat2 ltr">Datapavan</span></a><nav><a href="../index.html#checks">چه چیزهایی را بررسی می‌کند</a><a href="../index.html#limits">چه چیزهایی را نمی‌بیند</a><a href="../index.html#plan">چه کاری می‌توانید بکنید</a><a href="../index.html#faq">پرسش‌ها</a><a href="../index.html#get">دریافت</a><a href="../index.html#names">ریشه نام‌ها</a><a href="../news/index.html">اخبار</a><a href="https://github.com/visadahyu/datapavan" class="ltr">GitHub</a></nav>
-<details class="lng"><summary aria-label="زبان">فارسی</summary><ul><li><a href="../../privacy/index.html" hreflang="en" lang="en">English</a></li><li><a href="../../fr/privacy/index.html" hreflang="fr" lang="fr">Français</a></li><li><a href="../../de/privacy/index.html" hreflang="de" lang="de">Deutsch</a></li><li><a href="../../es/privacy/index.html" hreflang="es" lang="es">Español</a></li><li><a href="../../ru/privacy/index.html" hreflang="ru" lang="ru">Русский</a></li><li><a href="../../zh/privacy/index.html" hreflang="zh" lang="zh">简体中文</a></li><li><a href="../../ar/privacy/index.html" hreflang="ar" lang="ar">العربية</a></li><li><a href="../../fa/privacy/index.html" hreflang="fa" lang="fa" aria-current="true">فارسی</a></li></ul></details></header></div>
-<main><section><div class="w prose"><h1>سیاست حریم خصوصی</h1><p>این یک ترجمه است. آنچه ملاک است <a href="https://datapavan.org/privacy/index.html">متن انگلیسی</a> است.</p>
+<details class="lng"><summary aria-label="زبان: فارسی">فارسی</summary><ul><li><a href="../../privacy/index.html" hreflang="en" lang="en">English</a></li><li><a href="../../fr/privacy/index.html" hreflang="fr" lang="fr">Français</a></li><li><a href="../../de/privacy/index.html" hreflang="de" lang="de">Deutsch</a></li><li><a href="../../es/privacy/index.html" hreflang="es" lang="es">Español</a></li><li><a href="../../ru/privacy/index.html" hreflang="ru" lang="ru">Русский</a></li><li><a href="../../zh/privacy/index.html" hreflang="zh" lang="zh">简体中文</a></li><li><a href="../../ar/privacy/index.html" hreflang="ar" lang="ar">العربية</a></li><li><a href="../../fa/privacy/index.html" hreflang="fa" lang="fa" aria-current="true">فارسی</a></li></ul></details></header></div>
+<main id="main"><section><div class="w prose"><h1>سیاست حریم خصوصی</h1><p>این یک ترجمه است. آنچه ملاک است <a href="https://datapavan.org/privacy/index.html">متن انگلیسی</a> است.</p>
 <ul>
 <li><strong>تاریخ اجرا:</strong> ۲۰۲۶-۱۱-۰۷</li>
 <li><strong>به‌روزرسانی:</strong> ۲۰۲۶-۱۱-۱۸، همراه با بندهای Datapavan Advanced برای نسخه 0.2.0، که هنوز منتشر نشده است</li>
@@ -237,53 +244,10 @@ footer p{margin:.2rem 0;color:var(--mute);font-size:.95rem}
 <h2 id="آنچه-datapavan-advanced-به-آن-وصل-میشود">آنچه Datapavan Advanced به آن وصل می‌شود</h2>
 <p>Datapavan Advanced، از 0.2.0، ترافیک برنامه‌های شما را از راه فایروال روی گوشی به همان جایی می‌رساند که آن‌ها آن را می‌فرستند؛ هیچ چیزی از آن به ما نمی‌رسد. خودش، نام‌هایی را که برنامه‌ها جست‌وجو می‌کنند از DNS resolver شبکه شما می‌پرسد، همان‌طور که گوشی بدون Datapavan Advanced می‌پرسید، و هر جا گوشی از اتصال رمزگذاری‌شده استفاده می‌کرد، این پرسش‌ها را هم از راه اتصال رمزگذاری‌شده می‌فرستد. وقتی برنامه‌ها را از راه فیلترشکن خود می‌فرستید، جست‌وجوی نام‌های آن‌ها به فیلترشکن می‌رود، و دیگر پرسش‌های DNS آن‌ها از راه فیلترشکن به Quad9 می‌رود، بنیادی سوئیسی که نشانی‌ها را ثبت نمی‌کند، پس Quad9 نشانی فیلترشکن را می‌بیند، نه نشانی شما را.</p>
 <h2 id="مجوزها-و-اینکه-چرا-لازماند">مجوزها و اینکه چرا لازم‌اند</h2>
-<table>
-	<thead>
-			<tr>
-					<th>مجوز</th>
-					<th>کاربرد</th>
-					<th>از</th>
-			</tr>
-	</thead>
-	<tbody>
-			<tr>
-					<td>دیدن برنامه‌های نصب‌شده</td>
-					<td>فهرست کردن برنامه‌ها و مجوزهایشان</td>
-					<td>v0.1</td>
-			</tr>
-			<tr>
-					<td>دسترسی به داده‌های مصرف (که خودتان در تنظیمات می‌دهید؛ اختیاری)</td>
-					<td>نشان دادن اینکه هر برنامه چقدر داده فرستاده و گرفته، و کدام برنامه‌ها را مدت زیادی باز نکرده‌اید. برای این کار، Datapavan فقط جمع‌ها و تاریخ آخرین استفاده از هر برنامه را می‌خواند و هیچ‌کدام را نگه نمی‌دارد؛ Datapavan Basic هرگز نمی‌خواند کدام برنامه را چه زمانی باز کرده‌اید. وقتی یک کار را در یک برنامه بررسی می‌کنید، شمارنده‌های کل ترافیک گوشی را هم می‌خواند، که مجوزی لازم ندارند، تا ببیند شمارش اندروید به‌روز است یا نه؛ این عددها تا وقتی بررسی روی صفحه است در حافظه می‌مانند</td>
-					<td>v0.1</td>
-			</tr>
-			<tr>
-					<td>دسترسی به داده‌های مصرف، در Datapavan Advanced</td>
-					<td>فهمیدن اینکه برای هر اتصال، آیا در آن لحظه از برنامه‌اش استفاده می‌کردید، برنامه با اعلانی که اندروید نشان می‌داد اجرا می‌شد (موسیقی، مسیریابی)، یا هیچ‌کدام. برای این کار، Advanced آنچه را هم می‌خواند که اندروید از زمان روشن شدن گوشی ثبت می‌کند: کدام برنامه چه زمانی روی صفحه بود، کدام برنامه‌ها سرویس پیش‌زمینه اجرا کردند، از کدام‌ها به شکل‌های دیگری استفاده کردید (مثلاً با لمس اعلانشان)، و صفحه چه زمانی روشن یا خاموش شد و صفحه قفل چه زمانی نمایش داده شد؛ و اینکه هر برنامه اجازه دارد اعلان نشان دهد یا نه. آنچه را می‌فهمد فقط در دو جا نگه می‌دارد: در حافظه برای نمای «Now»، و اگر سابقه اتصال‌ها را نگه دارید، به‌عنوان وضعیت هر رکورد، برای روزهایی که انتخاب کرده‌اید</td>
-					<td>Datapavan Advanced، از 0.2.0</td>
-			</tr>
-			<tr>
-					<td>وضعیت شبکه</td>
-					<td>فهمیدن اینکه آیا وی‌پی‌ان فعال است. اجازه هیچ اتصالی را نمی‌دهد</td>
-					<td>v0.1</td>
-			</tr>
-			<tr>
-					<td>پنهان کردن هم‌پوشانی‌های برنامه‌های دیگر</td>
-					<td>از Android 12: تا وقتی Datapavan روی صفحه است، برنامه‌های دیگر نمی‌توانند روی آن نمایش داده شوند. اجازه هیچ اتصالی را نمی‌دهد</td>
-					<td>Datapavan Basic بعد از 0.1.2، و Datapavan Advanced</td>
-			</tr>
-			<tr>
-					<td>وی‌پی‌ان (که خودتان می‌دهید)</td>
-					<td>فایروال <strong>محلی</strong>. ترافیک روی گوشی پالایش می‌شود و هرگز برای ما فرستاده نمی‌شود</td>
-					<td>Datapavan Advanced، از 0.2.0</td>
-			</tr>
-			<tr>
-					<td>اینترنت</td>
-					<td>عبور دادن ترافیک برنامه‌های دیگر از فایروال محلی. Datapavan Basic هرگز آن را نمی‌خواهد</td>
-					<td>Datapavan Advanced، از 0.2.0</td>
-			</tr>
-	</tbody>
-</table>
-<h2 id="بهروزرسانی-اختیاری-فهرستهای-ردیاب-برنامهریزی-شده">به‌روزرسانی اختیاری فهرست‌های ردیاب (برنامه‌ریزی شده)</h2>
+<div class="scroll" tabindex="0" role="region" aria-label="سیاست حریم خصوصی"><table>
+<thead><tr><th>مجوز</th><th>کاربرد</th><th>از</th></tr></thead>
+<tbody><tr><td>دیدن برنامه‌های نصب‌شده</td><td>فهرست کردن برنامه‌ها و مجوزهایشان</td><td>v0.1</td></tr><tr><td>دسترسی به داده‌های مصرف (که خودتان در تنظیمات می‌دهید؛ اختیاری)</td><td>نشان دادن اینکه هر برنامه چقدر داده فرستاده و گرفته، و کدام برنامه‌ها را مدت زیادی باز نکرده‌اید. برای این کار، Datapavan فقط جمع‌ها و تاریخ آخرین استفاده از هر برنامه را می‌خواند و هیچ‌کدام را نگه نمی‌دارد؛ Datapavan Basic هرگز نمی‌خواند کدام برنامه را چه زمانی باز کرده‌اید. وقتی یک کار را در یک برنامه بررسی می‌کنید، شمارنده‌های کل ترافیک گوشی را هم می‌خواند، که مجوزی لازم ندارند، تا ببیند شمارش اندروید به‌روز است یا نه؛ این عددها تا وقتی بررسی روی صفحه است در حافظه می‌مانند</td><td>v0.1</td></tr><tr><td>دسترسی به داده‌های مصرف، در Datapavan Advanced</td><td>فهمیدن اینکه برای هر اتصال، آیا در آن لحظه از برنامه‌اش استفاده می‌کردید، برنامه با اعلانی که اندروید نشان می‌داد اجرا می‌شد (موسیقی، مسیریابی)، یا هیچ‌کدام. برای این کار، Advanced آنچه را هم می‌خواند که اندروید از زمان روشن شدن گوشی ثبت می‌کند: کدام برنامه چه زمانی روی صفحه بود، کدام برنامه‌ها سرویس پیش‌زمینه اجرا کردند، از کدام‌ها به شکل‌های دیگری استفاده کردید (مثلاً با لمس اعلانشان)، و صفحه چه زمانی روشن یا خاموش شد و صفحه قفل چه زمانی نمایش داده شد؛ و اینکه هر برنامه اجازه دارد اعلان نشان دهد یا نه. آنچه را می‌فهمد فقط در دو جا نگه می‌دارد: در حافظه برای نمای «Now»، و اگر سابقه اتصال‌ها را نگه دارید، به‌عنوان وضعیت هر رکورد، برای روزهایی که انتخاب کرده‌اید</td><td>Datapavan Advanced، از 0.2.0</td></tr><tr><td>وضعیت شبکه</td><td>فهمیدن اینکه آیا وی‌پی‌ان فعال است. اجازه هیچ اتصالی را نمی‌دهد</td><td>v0.1</td></tr><tr><td>پنهان کردن هم‌پوشانی‌های برنامه‌های دیگر</td><td>از Android 12: تا وقتی Datapavan روی صفحه است، برنامه‌های دیگر نمی‌توانند روی آن نمایش داده شوند. اجازه هیچ اتصالی را نمی‌دهد</td><td>Datapavan Basic بعد از 0.1.2، و Datapavan Advanced</td></tr><tr><td>وی‌پی‌ان (که خودتان می‌دهید)</td><td>فایروال <strong>محلی</strong>. ترافیک روی گوشی پالایش می‌شود و هرگز برای ما فرستاده نمی‌شود</td><td>Datapavan Advanced، از 0.2.0</td></tr><tr><td>اینترنت</td><td>عبور دادن ترافیک برنامه‌های دیگر از فایروال محلی. Datapavan Basic هرگز آن را نمی‌خواهد</td><td>Datapavan Advanced، از 0.2.0</td></tr></tbody>
+</table></div><h2 id="بهروزرسانی-اختیاری-فهرستهای-ردیاب-برنامهریزی-شده">به‌روزرسانی اختیاری فهرست‌های ردیاب (برنامه‌ریزی شده)</h2>
 <p>خود Datapavan فقط فایل‌های فهرست امضاشده را وارد می‌کند. اگر دانلودهای اختیاری اضافه شوند، آن‌ها از یک آینه عمومی گرفته می‌شوند، و فقط اگر خودتان این را روشن کنید. مانند هر دانلود دیگری:</p>
 <ul>
 <li>گرداننده آینه نشانی IP شما و زمان درخواست را می‌بیند؛</li>

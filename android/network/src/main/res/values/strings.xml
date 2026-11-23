@@ -611,6 +611,8 @@
     <string name="guide_not_checked">Not yet tried with Datapavan.</string>
     <string name="guide_labels_tool">The words in quotes are read from %1$s on this phone.</string>
     <string name="guide_labels_recorded">The words in quotes are as that version shows them.</string>
+    <!-- The website's guides only: before the list of the words in quotes, each linked to the line of the tool's code it is read from. -->
+    <string name="guide_labels_where" tools:ignore="UnusedResources">Where each word in quotes is in the source code of %1$s:</string>
     <string name="guide_audit">Datapavan\'s check of your apps also works without its VPN.</string>
     <!-- Steps. Each %s in quotes is one of the tool's labels. -->
     <string name="guide_step_drawer">Open the menu in the top corner of its screen and tap \"%1$s\".</string>

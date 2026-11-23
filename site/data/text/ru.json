@@ -3,6 +3,7 @@
  "dir": "ltr",
  "name": "Русский",
  "language_label": "Язык",
+ "skip_to_content": "Перейти к содержимому",
  "digits": [
   "1",
   "2",

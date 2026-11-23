@@ -3,6 +3,7 @@
  "dir": "ltr",
  "name": "简体中文",
  "language_label": "语言",
+ "skip_to_content": "跳到正文",
  "digits": [
   "1",
   "2",

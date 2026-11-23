@@ -3,7 +3,10 @@
 200 KB or less on a first load before images, and every link inside the site leads somewhere. For search engines
 (site/README.md, "Search engines"): robots.txt, one sitemap at the root that lists every page and nothing else,
 llms.txt's links, the IndexNow key file, and on every page one canonical address, matching its og:url, with a title no other page of its
-language has."""
+language has. For accessibility (site/README.md, "Accessibility"), what needs no browser: each page's language and direction,
+one h1 and no skipped heading level, names for links, controls, pictures and drawings, the language list's languages, one
+main with a link to it first, zoom allowed, and the contrast of the stylesheet's colours in both schemes. The rest is
+scripts/a11y-site.sh's, run locally."""
 import datetime
 import gzip
 import re
@@ -55,6 +58,7 @@ def main():
             if not target.exists():
                 bad.append(f"{name}: broken link {link}")
     bad += search(pages)
+    bad += accessibility(pages)
     home = pages and (SITE / "index.html").read_text(encoding="utf-8")
     if not home or FP not in home:
         bad.append("index.html: no signing fingerprint")
@@ -128,6 +132,146 @@ def search(pages):
         bad.append(f"sitemap.xml leaves out {addresses[address]}")
     if len(listed) != len(set(listed)):
         bad.append("sitemap.xml lists an address twice")
+    return bad
+
+
+RTL = ("ar", "fa")
+# The stylesheet's colours (site/assets/style.css): every text colour on every ground, as the app's ThemeTest does, and
+# the pairs that only ever meet each other. A colour the stylesheet uses for text or ground that is in none of these
+# fails, so that a new colour cannot skip the check.
+TEXT = ("--ink", "--mute", "--lab", "--tag")
+GROUNDS = ("--paper", "--panel", "--band")
+PAIRS = (("--paper", "--lab"), ("--paper", "--ink"), ("--on-deep", "--deep"), ("--own-t", "--own-p"), ("--own-ink", "--own-p"))
+# Grounds that carry no text of their own colour: the plan's bars are drawn, not read.
+DRAWN = ("--lab",)
+
+
+def luminance(colour):
+    def channel(c):
+        c /= 255
+        return c / 12.92 if c <= 0.04045 else ((c + 0.055) / 1.055) ** 2.4
+    r, g, b = (int(colour[i:i + 2], 16) for i in (1, 3, 5))
+    return 0.2126 * channel(r) + 0.7152 * channel(g) + 0.0722 * channel(b)
+
+
+def contrast(a, b):
+    high, low = sorted((luminance(a), luminance(b)), reverse=True)
+    return (high + 0.05) / (low + 0.05)
+
+
+def blend(colour, ground, alpha):
+    mix = (round(alpha * int(colour[i:i + 2], 16) + (1 - alpha) * int(ground[i:i + 2], 16)) for i in (1, 3, 5))
+    return "#" + "".join(f"{c:02X}" for c in mix)
+
+
+def schemes(css):
+    """The colour tokens in the light scheme, and in the dark one (the light ones with the dark scheme's changes)."""
+    light = {}
+    for body in re.findall(r"(?<![\w)])(?:^|[}\s]):root\{([^}]*)\}", css):
+        light.update(re.findall(r"(--[\w-]+):(#[0-9A-Fa-f]{6})", body))
+    dark = dict(light)
+    for body in re.findall(r'@media \(prefers-color-scheme:dark\)\{:root:not\(\[data-theme="light"\]\)\{([^}]*)\}', css):
+        dark.update(re.findall(r"(--[\w-]+):(#[0-9A-Fa-f]{6})", body))
+    return {"light": light, "dark": dark}
+
+
+def stylesheet(focusable):
+    """The stylesheet's colours: text at least 4.5:1 on its grounds in both schemes, a focus ring at least 3:1 on the
+    grounds around it, a motion rule where anything moves. FOCUSABLE is the classes the pages give to links and
+    controls."""
+    bad = []
+    css = (ROOT / "site/assets/style.css").read_text(encoding="utf-8")
+    for colour in sorted(set(re.findall(r"(?<![-\w])color:var\((--[\w-]+)\)", css))):
+        if colour not in TEXT and colour not in (p[0] for p in PAIRS):
+            bad.append(f"style.css: text colour {colour} is in no pair of check-site.py's TEXT, GROUNDS and PAIRS")
+    for ground in sorted(set(re.findall(r"background(?:-color)?:var\((--[\w-]+)\)", css))):
+        if ground not in GROUNDS and ground not in (p[1] for p in PAIRS) and ground not in DRAWN:
+            bad.append(f"style.css: ground {ground} is in no pair of check-site.py's TEXT, GROUNDS and PAIRS")
+    for scheme, tokens in schemes(css).items():
+        pairs = [(t, g) for t in TEXT for g in GROUNDS] + list(PAIRS)
+        for text, ground in pairs:
+            if text not in tokens or ground not in tokens:
+                bad.append(f"style.css: {text} or {ground} has no {scheme} value")
+            elif contrast(tokens[text], tokens[ground]) < 4.5:
+                bad.append(f"style.css: {text} on {ground} is {contrast(tokens[text], tokens[ground]):.2f}:1 in the {scheme} scheme")
+        # The name's Latin letters beside a name in another script are drawn lighter (.lat2) on the page's paper.
+        alpha = re.search(r"\.lat2\{[^}]*opacity:([.\d]+)", css)
+        if alpha:
+            seen = blend(tokens["--lab"], tokens["--paper"], float(alpha[1]))
+            if contrast(seen, tokens["--paper"]) < 4.5:
+                bad.append(f"style.css: .lat2 is {contrast(seen, tokens['--paper']):.2f}:1 in the {scheme} scheme")
+        # A focus ring drawn in the element's own colour: where a component has a colour of its own, its ring must
+        # be given one that stands out from the grounds around it (WCAG 2.4.7; 3:1, the house rule after 1.4.11).
+        for name, own in re.findall(r"(?:^|[}\s])\.([\w-]+)\{[^}]*(?<![-\w])color:var\((--[\w-]+)\)", css):
+            ring = re.search(r"\." + re.escape(name) + r":focus-visible\{[^}]*outline-color:var\((--[\w-]+)\)", css)
+            colour = ring[1] if ring else own
+            for ground in GROUNDS:
+                if name not in focusable or colour not in tokens:
+                    continue
+                if contrast(tokens[colour], tokens[ground]) < 3:
+                    bad.append(f"style.css: the focus ring of .{name} ({colour}) is {contrast(tokens[colour], tokens[ground]):.2f}:1 on {ground} in the {scheme} scheme")
+    if not re.search(r"a:focus-visible,summary:focus-visible[^{]*\{outline:3px solid currentColor", css):
+        bad.append("style.css: links and the language list need a visible focus ring")
+    if re.search(r"animation|transition", css) and "@media (prefers-reduced-motion:reduce)" not in css:
+        bad.append("style.css: something moves, and nothing stops it for readers who ask for less motion")
+    return bad
+
+
+def accessibility(pages):
+    """What needs no browser, on every page; scripts/a11y-site.sh checks the rest locally."""
+    focusable = set()
+    for page in pages:
+        for classes in re.findall(r'<(?:a|summary)\b[^>]*\bclass="([^"]+)"', page.read_text(encoding="utf-8")):
+            focusable.update(classes.split())
+    bad = stylesheet(focusable)
+    for page in pages:
+        name = str(page.relative_to(SITE))
+        html = page.read_text(encoding="utf-8")
+        language = name.split("/")[0] if name.split("/")[0] in LANGS else "en"
+        direction = "rtl" if language in RTL else "ltr"
+        if not re.search(rf'<html lang="{language}" dir="{direction}">', html):
+            bad.append(f"{name}: <html> needs lang=\"{language}\" and dir=\"{direction}\"")
+        levels = [int(n) for n in re.findall(r"<h([1-6])\b", html)]
+        if levels.count(1) != 1:
+            bad.append(f"{name}: needs exactly one h1, has {levels.count(1)}")
+        # House rule: no heading level skipped (WCAG asks only that the levels be true).
+        for before, after in zip(levels, levels[1:]):
+            if after > before + 1:
+                bad.append(f"{name}: h{after} follows h{before}")
+                break
+        for img in re.findall(r"<img\b[^>]*>", html):
+            if not re.search(r'\balt="', img):
+                bad.append(f"{name}: a picture without alt: {img[:60]}")
+        for svg in re.findall(r"<svg\b[^>]*>", html):
+            if 'aria-hidden="true"' not in svg and not ('role="img"' in svg and re.search(r'aria-label="[^"]+"', svg)):
+                bad.append(f"{name}: a drawing that is neither hidden nor named: {svg[:60]}")
+        for tag, attributes, inner in re.findall(r"<(a|summary)\b([^>]*)>(.*?)</\1>", html, re.S):
+            label = re.search(r'aria-label="([^"]*)"', attributes)
+            text = " ".join(re.sub(r"<[^>]+>", " ", inner).split())
+            pictures = re.findall(r'<img\b[^>]*alt="([^"]+)"', inner)
+            if not (label and label[1].strip()) and not text and not pictures:
+                bad.append(f"{name}: a {tag} without a name: <{tag}{attributes[:50]}>")
+            elif label and text and text.casefold() not in label[1].casefold():
+                bad.append(f"{name}: the {tag} \"{text[:30]}\" is named \"{label[1][:30]}\", which leaves out its visible text")
+        lists = re.findall(r'<details class="lng">(.*?)</details>', html, re.S)
+        if len(lists) != 1:
+            bad.append(f"{name}: needs one language list")
+        else:
+            for link in re.findall(r"<a\b[^>]*>", lists[0]):
+                if not re.search(r'\blang="[\w-]+"', link) or not re.search(r'\bhreflang="[\w-]+"', link):
+                    bad.append(f"{name}: a language in the language list without lang and hreflang: {link[:60]}")
+        if html.count("<main") != 1 or '<main id="main">' not in html:
+            bad.append(f"{name}: needs one <main id=\"main\">")
+        first = re.search(r"<body>\s*(<a\b[^>]*>)", html)
+        if not first or 'href="#main"' not in first[1]:
+            bad.append(f"{name}: the first thing in the body must be the link to the content, #main")
+        viewport = re.search(r'<meta name="viewport" content="([^"]*)"', html)
+        scale = viewport and re.search(r"maximum-scale=([\d.]+)", viewport[1])
+        if not viewport or re.search(r"user-scalable=(no|0)", viewport[1]) or (scale and float(scale[1]) < 5):
+            bad.append(f"{name}: the viewport must let readers zoom (house rule: no maximum-scale below 5)")
+        for element in re.findall(r"<(?!a\b|summary\b)\w+\b[^>]*\btabindex=\"0\"[^>]*>", html):
+            if 'role="region"' not in element or not re.search(r'aria-label="[^"]+"', element):
+                bad.append(f"{name}: a box that takes the focus needs role=\"region\" and a name: {element[:60]}")
     return bad
 
 

@@ -3,6 +3,7 @@
  "dir": "ltr",
  "name": "Deutsch",
  "language_label": "Sprache",
+ "skip_to_content": "Zum Inhalt springen",
  "digits": [
   "1",
   "2",

@@ -1,0 +1,11 @@
+{
+  "name": "datapavan-a11y-site",
+  "private": true,
+  "description": "The site's local accessibility audit (scripts/a11y-site.sh): axe-core in the system's Chrome.",
+  "license": "Apache-2.0",
+  "type": "module",
+  "dependencies": {
+    "axe-core": "4.14.0",
+    "puppeteer-core": "25.16.0"
+  }
+}

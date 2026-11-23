@@ -39,7 +39,12 @@ html{-webkit-text-size-adjust:100%;scroll-behavior:smooth}
 body{margin:0}
 @media (prefers-reduced-motion:reduce){html{scroll-behavior:auto}*{animation:none!important;transition:none!important}}
 a{color:inherit}
-a:focus-visible,summary:focus-visible{outline:3px solid currentColor;outline-offset:3px}
+a:focus-visible,summary:focus-visible,[tabindex]:focus-visible{outline:3px solid currentColor;outline-offset:3px}
+/* A button's own colour is the paper's, which would draw its ring invisible on the paper around it. */
+.btn:focus-visible{outline-color:var(--lab)}
+/* The link past the header to the page's content: off screen until it has the keyboard's focus (WCAG 2.4.1). */
+.skip{position:absolute;inset-inline-start:1rem;top:-20rem;z-index:10;background:var(--lab);color:var(--paper);padding:.7rem 1rem;font-weight:700}
+.skip:focus{top:1rem}.skip:focus-visible{outline-color:var(--lab)}
 h1,h2,h3{text-wrap:balance;hyphens:auto}
 p{text-wrap:pretty}
 table{border-collapse:collapse;width:100%}
@@ -132,7 +137,8 @@ footer p{margin:.2rem 0;color:var(--mute);font-size:.95rem}
 .hero,.own .wrap,.get{grid-template-columns:minmax(0,1fr)}
 .rw{grid-template-columns:minmax(0,1fr)}
 .lvls,.more,.off{grid-template-columns:minmax(0,1fr)}
-.top nav{display:none}.lng{margin-inline-start:auto}
+/* The navigation stays on narrow screens and at high zoom (WCAG 1.4.10): a row of its own under the name. */
+.top nav{order:3;flex-basis:100%;margin-inline-start:0;gap:.35rem 1.1rem}.lng{margin-inline-start:auto}
 .lvl h3{margin-top:.15rem}
 }
 
@@ -171,18 +177,18 @@ footer p{margin:.2rem 0;color:var(--mute);font-size:.95rem}
 .not p{margin:0;font-size:.98rem;line-height:var(--notlh)}
 .nc-line{margin:1rem 0 0;font-weight:600}
 .own-q{font:800 clamp(1.5rem,3.4vw,3rem)/1.15 var(--f-disp);font-stretch:80%;margin:0;color:var(--on-deep);letter-spacing:var(--h1ls)}
-.nothing{font:900 var(--big)/var(--biglh) var(--f-disp);font-stretch:62%;margin:0 0 clamp(1.5rem,4vw,3rem);color:var(--on-deep);letter-spacing:-.01em;white-space:nowrap}
+.nothing{font:900 var(--big)/var(--biglh) var(--f-disp);font-stretch:62%;margin:0 0 clamp(1.5rem,4vw,3rem);color:var(--on-deep);letter-spacing:-.01em;overflow-wrap:anywhere}
 .own{overflow:hidden}
 @media (max-width:860px){.seen{grid-template-columns:minmax(0,1fr)}.dwg text{font-size:27px}.dwg .ld circle{r:23px}.dwg .nct{font-size:30px}}
 .news{list-style:none;margin:1.5rem 0 0;padding:0;border-top:.62rem solid var(--lab)}
 .news li{padding-block:1.15rem;border-bottom:1px solid var(--lab);display:grid;grid-template-columns:minmax(0,3fr) minmax(0,9fr);gap:.4rem clamp(1rem,3vw,2.5rem)}
 .news time{color:var(--mute);font-variant-numeric:tabular-nums;font-size:.95rem}
-.news h3{font:800 clamp(1.2rem,2vw,1.5rem)/1.25 var(--f-sub);font-stretch:88%;margin:0 0 .35rem}
+.news h2{font:800 clamp(1.2rem,2vw,1.5rem)/1.25 var(--f-sub);font-stretch:88%;margin:0 0 .35rem;color:inherit;letter-spacing:normal}
 .news p{margin:0 0 .4rem;max-width:44em}
 .news .src{font-size:.95rem;color:var(--mute);margin:0}
 .prose{max-width:46em}.prose h1{font-size:clamp(2.2rem,5vw,4rem);margin-bottom:1rem}.prose h2{font-size:clamp(1.5rem,2.8vw,2.2rem);margin:2rem 0 .5rem}
 @media (max-width:760px){.news li{grid-template-columns:minmax(0,1fr)}}
-.lat2{font-weight:500;font-size:.8em;opacity:.75}
+.lat2{font-weight:500;font-size:.8em;opacity:.85}
 .brand{flex-wrap:wrap}
 .names{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:clamp(1.5rem,4vw,4rem);margin-top:.5rem}
 .names article{min-width:0}
@@ -197,9 +203,10 @@ footer p{margin:.2rem 0;color:var(--mute);font-size:.95rem}
 </style>
 </head>
 <body>
+<a class="skip" href="#main">Skip to content</a>
 <div class="w"><header class="top"><a class="brand" href="../index.html"><span><svg class="mark" viewBox="0 0 240 240" aria-hidden="true"><rect width="240" height="240" rx="52" class="mk-b"/><path class="mk-f" d="M62.58,72.28 Q63.23,66.59 63.67,61.12 Q64.11,55.65 64.11,49.95 Q64.11,44.04 63.56,37.91 Q63.01,31.79 61.7,25.0 Q70.24,28.72 87.97,32.22 Q105.7,35.73 129.23,38.46 Q152.76,41.2 178.37,43.17 L178.37,48.2 Q136.78,53.68 106.57,59.48 Q76.37,65.28 62.58,72.28 Z M146.63,215.0 Q144.44,189.83 142.47,171.33 Q140.5,152.83 138.64,139.37 Q136.78,125.91 134.59,115.62 Q132.4,105.33 129.67,96.36 Q126.93,87.38 123.21,77.97 Q135.03,79.94 146.85,79.94 Q157.79,79.94 170.49,77.97 Q166.77,88.04 163.92,99.53 Q161.08,111.03 158.89,126.57 Q156.7,142.11 155.06,163.56 Q153.42,185.01 152.32,215.0 L146.63,215.0 Z M92.56,215.0 Q90.38,189.83 88.41,171.33 Q86.44,152.83 84.57,139.37 Q82.71,125.91 80.52,115.62 Q78.34,105.33 75.6,96.36 Q72.86,87.38 69.14,77.97 Q80.96,79.94 92.78,79.94 Q103.73,79.94 116.42,77.97 Q112.7,88.04 109.86,99.53 Q107.01,111.03 104.82,126.57 Q102.63,142.11 100.99,163.56 Q99.35,185.01 98.26,215.0 L92.56,215.0 Z"/></svg></span><span class="ltr">Datapavan</span></a><nav><a href="../index.html#checks">What it checks</a><a href="../index.html#limits">What it can’t see</a><a href="../index.html#plan">What you can do</a><a href="../index.html#faq">Questions</a><a href="../index.html#get">Get it</a><a href="../index.html#names">The names</a><a href="../news/index.html">News</a><a href="https://github.com/visadahyu/datapavan" class="ltr">GitHub</a></nav>
-<details class="lng"><summary aria-label="Language">English</summary><ul><li><a href="../privacy/index.html" hreflang="en" lang="en" aria-current="true">English</a></li><li><a href="../fr/privacy/index.html" hreflang="fr" lang="fr">Français</a></li><li><a href="../de/privacy/index.html" hreflang="de" lang="de">Deutsch</a></li><li><a href="../es/privacy/index.html" hreflang="es" lang="es">Español</a></li><li><a href="../ru/privacy/index.html" hreflang="ru" lang="ru">Русский</a></li><li><a href="../zh/privacy/index.html" hreflang="zh" lang="zh">简体中文</a></li><li><a href="../ar/privacy/index.html" hreflang="ar" lang="ar">العربية</a></li><li><a href="../fa/privacy/index.html" hreflang="fa" lang="fa">فارسی</a></li></ul></details></header></div>
-<main><section><div class="w prose"><h1>Privacy policy</h1><ul>
+<details class="lng"><summary aria-label="Language: English">English</summary><ul><li><a href="../privacy/index.html" hreflang="en" lang="en" aria-current="true">English</a></li><li><a href="../fr/privacy/index.html" hreflang="fr" lang="fr">Français</a></li><li><a href="../de/privacy/index.html" hreflang="de" lang="de">Deutsch</a></li><li><a href="../es/privacy/index.html" hreflang="es" lang="es">Español</a></li><li><a href="../ru/privacy/index.html" hreflang="ru" lang="ru">Русский</a></li><li><a href="../zh/privacy/index.html" hreflang="zh" lang="zh">简体中文</a></li><li><a href="../ar/privacy/index.html" hreflang="ar" lang="ar">العربية</a></li><li><a href="../fa/privacy/index.html" hreflang="fa" lang="fa">فارسی</a></li></ul></details></header></div>
+<main id="main"><section><div class="w prose"><h1>Privacy policy</h1><ul>
 <li><strong>Effective:</strong> 2026-11-07</li>
 <li><strong>Updated:</strong> 2026-11-20, with Datapavan Advanced&rsquo;s lines for 0.2.0, which is not yet released</li>
 <li><strong>Responsible:</strong> the Datapavan maintainer (mehdashti), until the Visadahyu Foundation is established</li>
@@ -308,58 +315,10 @@ ways; only when none answers, and &ldquo;Strict&rdquo; is off, does your network
 provider you use, and Datapavan says so. Datapavan reads a QR code without the camera permission: the phone&rsquo;s own
 camera app takes the photo for it, or you pick a picture.</p>
 <h2 id="permissions-and-why-they-are-needed">Permissions and why they are needed</h2>
-<table>
-	<thead>
-			<tr>
-					<th>Permission</th>
-					<th>Used for</th>
-					<th>From</th>
-			</tr>
-	</thead>
-	<tbody>
-			<tr>
-					<td>See installed apps</td>
-					<td>Listing apps and their permissions</td>
-					<td>v0.1</td>
-			</tr>
-			<tr>
-					<td>Usage access (granted by you in Settings; optional)</td>
-					<td>Showing how much data each app has sent and received, and which apps you have not opened for a long time. For this, Datapavan reads only totals and the date each app was last used, and keeps none of it; Datapavan Basic never reads which app you opened when. When you check one activity in an app, it also reads the phone&rsquo;s total traffic counters, which need no permission, to see whether Android&rsquo;s count is up to date; these numbers stay in memory while the check is on screen</td>
-					<td>v0.1</td>
-			</tr>
-			<tr>
-					<td>Usage access, in Datapavan Advanced</td>
-					<td>Telling, for each connection, whether you were using its app at that moment, it ran with a notification Android showed (music, navigation), or neither. For this, Advanced also reads Android&rsquo;s record, back to the phone&rsquo;s start, of which app was on screen and when, which apps ran a foreground service, which ones you used in other ways (as by tapping their notification), and when the screen turned on or off and the lock screen showed; and whether each app may show notifications. It keeps what it learns in two places only: in memory for the &ldquo;Now&rdquo; view, and, if you keep a connection log, as the state of each record, for the days you chose</td>
-					<td>Datapavan Advanced, from 0.2.0</td>
-			</tr>
-			<tr>
-					<td>Network state</td>
-					<td>Telling whether a VPN is active. It does not allow any connection</td>
-					<td>v0.1</td>
-			</tr>
-			<tr>
-					<td>Hide other apps&rsquo; overlays</td>
-					<td>From Android 12: while Datapavan is on the screen, other apps cannot draw over it. It does not allow any connection</td>
-					<td>Datapavan Basic after 0.1.2, and Datapavan Advanced</td>
-			</tr>
-			<tr>
-					<td>VPN (granted by you)</td>
-					<td>The <strong>local</strong> firewall. Traffic is filtered on the phone and never sent to us</td>
-					<td>Datapavan Advanced, from 0.2.0</td>
-			</tr>
-			<tr>
-					<td>Internet</td>
-					<td>Forwarding the traffic of other apps through the local firewall. Datapavan Basic never asks for it</td>
-					<td>Datapavan Advanced, from 0.2.0</td>
-			</tr>
-			<tr>
-					<td>Notifications (granted by you, from Android 13)</td>
-					<td>Two notices about the WireGuard configurations: when one kept for a phone that may be searched waits for you to unlock the phone, and when Datapavan can no longer open what it kept and holds your apps until you choose; they name no provider and no configuration</td>
-					<td>Datapavan Advanced, from 0.2.0</td>
-			</tr>
-	</tbody>
-</table>
-<h2 id="optional-updates-of-tracker-lists-planned">Optional updates of tracker lists (planned)</h2>
+<div class="scroll" tabindex="0" role="region" aria-label="Privacy policy"><table>
+<thead><tr><th>Permission</th><th>Used for</th><th>From</th></tr></thead>
+<tbody><tr><td>See installed apps</td><td>Listing apps and their permissions</td><td>v0.1</td></tr><tr><td>Usage access (granted by you in Settings; optional)</td><td>Showing how much data each app has sent and received, and which apps you have not opened for a long time. For this, Datapavan reads only totals and the date each app was last used, and keeps none of it; Datapavan Basic never reads which app you opened when. When you check one activity in an app, it also reads the phone&rsquo;s total traffic counters, which need no permission, to see whether Android&rsquo;s count is up to date; these numbers stay in memory while the check is on screen</td><td>v0.1</td></tr><tr><td>Usage access, in Datapavan Advanced</td><td>Telling, for each connection, whether you were using its app at that moment, it ran with a notification Android showed (music, navigation), or neither. For this, Advanced also reads Android&rsquo;s record, back to the phone&rsquo;s start, of which app was on screen and when, which apps ran a foreground service, which ones you used in other ways (as by tapping their notification), and when the screen turned on or off and the lock screen showed; and whether each app may show notifications. It keeps what it learns in two places only: in memory for the &ldquo;Now&rdquo; view, and, if you keep a connection log, as the state of each record, for the days you chose</td><td>Datapavan Advanced, from 0.2.0</td></tr><tr><td>Network state</td><td>Telling whether a VPN is active. It does not allow any connection</td><td>v0.1</td></tr><tr><td>Hide other apps&rsquo; overlays</td><td>From Android 12: while Datapavan is on the screen, other apps cannot draw over it. It does not allow any connection</td><td>Datapavan Basic after 0.1.2, and Datapavan Advanced</td></tr><tr><td>VPN (granted by you)</td><td>The <strong>local</strong> firewall. Traffic is filtered on the phone and never sent to us</td><td>Datapavan Advanced, from 0.2.0</td></tr><tr><td>Internet</td><td>Forwarding the traffic of other apps through the local firewall. Datapavan Basic never asks for it</td><td>Datapavan Advanced, from 0.2.0</td></tr><tr><td>Notifications (granted by you, from Android 13)</td><td>Two notices about the WireGuard configurations: when one kept for a phone that may be searched waits for you to unlock the phone, and when Datapavan can no longer open what it kept and holds your apps until you choose; they name no provider and no configuration</td><td>Datapavan Advanced, from 0.2.0</td></tr></tbody>
+</table></div><h2 id="optional-updates-of-tracker-lists-planned">Optional updates of tracker lists (planned)</h2>
 <p>Datapavan itself only imports signed list files. If optional downloads come, they will be fetched
 from a public mirror, and only if you turn this on. Like any download:</p>
 <ul>

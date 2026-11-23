@@ -47,11 +47,13 @@ own title and description, its one address, its translations, and a link preview
 {{ (resources.Get "style.css").Content | safeCSS }}</style>
 </head>
 <body>
+<a class="skip" href="#main">{{ $t.skip_to_content }}</a>
 <div class="w"><header class="top"><a class="brand" href="{{ $toLang }}index.html"><span>{{ partial "mark.html" . }}</span>{{ with $t.name_native }}<span>{{ . }}</span><span class="lat2 ltr">Datapavan</span>{{ else }}<span class="ltr">Datapavan</span>{{ end }}</a><nav>
 {{- $homeLink := cond $isHome "" (printf "%sindex.html" $toLang) -}}
 {{- range $t.nav }}{{ $href := printf "%s%s" $homeLink (index . 0) }}<a href="{{ $href | safeURL }}">{{ index . 1 }}</a>{{ end -}}
 <a href="{{ $toLang }}news/index.html">{{ $t.news_title }}</a><a href="{{ site.Params.repo }}" class="ltr">GitHub</a></nav>
-<details class="lng"><summary aria-label="{{ $t.language_label }}">{{ site.Language.Label }}</summary><ul>
+<details class="lng">{{- /* Its name holds its visible text, the current language, for screen readers and voice control (WCAG 2.5.3). */ -}}
+<summary aria-label="{{ $t.language_label }}: {{ site.Language.Label }}">{{ site.Language.Label }}</summary><ul>
 {{- $here := . -}}
 {{- range .Sites -}}
 {{- $lang := .Language.Lang -}}

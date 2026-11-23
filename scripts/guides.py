@@ -425,18 +425,27 @@ def page_markdown(data, g):
     title = data.words["guide_title_proxy" if g["page"] == "proxy" else "guide_title_other"].replace("%1$s", tool_name(data, g))
     out = ["---", f"title: {quote_yaml(title)}", "---", ""]
     n = 0
+    # The words in quotes are plain text in the steps, so that a screen reader does not say "link" at every step;
+    # where each one is in the tool's code is listed once, at the end (the accessibility unit, WCAG 2.4.4).
+    quoted = {}
     for kind, string, arguments in blocks(data, g):
+        for arg in arguments:
+            if arg[0] == "label":
+                quoted.setdefault(arg[1], data.label(g["guide"], arg[1]))
         if kind == "heading":
             out += ["", f"## {markdown_escape(data.words[string])}", ""]
             n = 0
         elif kind == "step":
             n += 1
-            out.append(f"{n}. {fill(data, g, string, arguments, link=True)}")
+            out.append(f"{n}. {fill(data, g, string, arguments, link=False)}")
         else:
             if n:
                 out.append("")
                 n = 0
-            out += [fill(data, g, string, arguments, link=True), ""]
+            out += [fill(data, g, string, arguments, link=string == "guide_read"), ""]
+    if quoted:
+        out += [markdown_escape(data.words["guide_labels_where"].replace("%1$s", tool_name(data, g))), ""]
+        out += [f"- [{markdown_escape(label['text'])}]({label['source']})" for label in quoted.values()]
     return re.sub(r"\n{3,}", "\n\n", "\n".join(line.rstrip() for line in out)).rstrip() + "\n"
 
 
@@ -501,7 +510,8 @@ def self_test():
         assert any(expect in p for p in problems), f"{name}: expected '{expect}' in {problems}"
     # The site's words are the network part's, filled in: a page names the tool, its version and its labels.
     page = page_markdown(good, good.guide("v2rayng"))
-    assert 'choose "[Proxy only](https://github.com/2dust/v2rayNG/blob/' in page, page
+    assert 'choose "Proxy only"' in page, page
+    assert '- [Proxy only](https://github.com/2dust/v2rayNG/blob/' in page, page
     assert "[2.3.15](https://github.com/2dust/v2rayNG/tree/2.3.15)" in page
     assert "127.0.0.1, port 10808" in page
     with tempfile.TemporaryDirectory() as out:

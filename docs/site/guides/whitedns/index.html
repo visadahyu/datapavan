@@ -32,7 +32,12 @@ html{-webkit-text-size-adjust:100%;scroll-behavior:smooth}
 body{margin:0}
 @media (prefers-reduced-motion:reduce){html{scroll-behavior:auto}*{animation:none!important;transition:none!important}}
 a{color:inherit}
-a:focus-visible,summary:focus-visible{outline:3px solid currentColor;outline-offset:3px}
+a:focus-visible,summary:focus-visible,[tabindex]:focus-visible{outline:3px solid currentColor;outline-offset:3px}
+/* A button's own colour is the paper's, which would draw its ring invisible on the paper around it. */
+.btn:focus-visible{outline-color:var(--lab)}
+/* The link past the header to the page's content: off screen until it has the keyboard's focus (WCAG 2.4.1). */
+.skip{position:absolute;inset-inline-start:1rem;top:-20rem;z-index:10;background:var(--lab);color:var(--paper);padding:.7rem 1rem;font-weight:700}
+.skip:focus{top:1rem}.skip:focus-visible{outline-color:var(--lab)}
 h1,h2,h3{text-wrap:balance;hyphens:auto}
 p{text-wrap:pretty}
 table{border-collapse:collapse;width:100%}
@@ -125,7 +130,8 @@ footer p{margin:.2rem 0;color:var(--mute);font-size:.95rem}
 .hero,.own .wrap,.get{grid-template-columns:minmax(0,1fr)}
 .rw{grid-template-columns:minmax(0,1fr)}
 .lvls,.more,.off{grid-template-columns:minmax(0,1fr)}
-.top nav{display:none}.lng{margin-inline-start:auto}
+/* The navigation stays on narrow screens and at high zoom (WCAG 1.4.10): a row of its own under the name. */
+.top nav{order:3;flex-basis:100%;margin-inline-start:0;gap:.35rem 1.1rem}.lng{margin-inline-start:auto}
 .lvl h3{margin-top:.15rem}
 }
 
@@ -164,18 +170,18 @@ footer p{margin:.2rem 0;color:var(--mute);font-size:.95rem}
 .not p{margin:0;font-size:.98rem;line-height:var(--notlh)}
 .nc-line{margin:1rem 0 0;font-weight:600}
 .own-q{font:800 clamp(1.5rem,3.4vw,3rem)/1.15 var(--f-disp);font-stretch:80%;margin:0;color:var(--on-deep);letter-spacing:var(--h1ls)}
-.nothing{font:900 var(--big)/var(--biglh) var(--f-disp);font-stretch:62%;margin:0 0 clamp(1.5rem,4vw,3rem);color:var(--on-deep);letter-spacing:-.01em;white-space:nowrap}
+.nothing{font:900 var(--big)/var(--biglh) var(--f-disp);font-stretch:62%;margin:0 0 clamp(1.5rem,4vw,3rem);color:var(--on-deep);letter-spacing:-.01em;overflow-wrap:anywhere}
 .own{overflow:hidden}
 @media (max-width:860px){.seen{grid-template-columns:minmax(0,1fr)}.dwg text{font-size:27px}.dwg .ld circle{r:23px}.dwg .nct{font-size:30px}}
 .news{list-style:none;margin:1.5rem 0 0;padding:0;border-top:.62rem solid var(--lab)}
 .news li{padding-block:1.15rem;border-bottom:1px solid var(--lab);display:grid;grid-template-columns:minmax(0,3fr) minmax(0,9fr);gap:.4rem clamp(1rem,3vw,2.5rem)}
 .news time{color:var(--mute);font-variant-numeric:tabular-nums;font-size:.95rem}
-.news h3{font:800 clamp(1.2rem,2vw,1.5rem)/1.25 var(--f-sub);font-stretch:88%;margin:0 0 .35rem}
+.news h2{font:800 clamp(1.2rem,2vw,1.5rem)/1.25 var(--f-sub);font-stretch:88%;margin:0 0 .35rem;color:inherit;letter-spacing:normal}
 .news p{margin:0 0 .4rem;max-width:44em}
 .news .src{font-size:.95rem;color:var(--mute);margin:0}
 .prose{max-width:46em}.prose h1{font-size:clamp(2.2rem,5vw,4rem);margin-bottom:1rem}.prose h2{font-size:clamp(1.5rem,2.8vw,2.2rem);margin:2rem 0 .5rem}
 @media (max-width:760px){.news li{grid-template-columns:minmax(0,1fr)}}
-.lat2{font-weight:500;font-size:.8em;opacity:.75}
+.lat2{font-weight:500;font-size:.8em;opacity:.85}
 .brand{flex-wrap:wrap}
 .names{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:clamp(1.5rem,4vw,4rem);margin-top:.5rem}
 .names article{min-width:0}
@@ -190,15 +196,16 @@ footer p{margin:.2rem 0;color:var(--mute);font-size:.95rem}
 </style>
 </head>
 <body>
+<a class="skip" href="#main">Skip to content</a>
 <div class="w"><header class="top"><a class="brand" href="../../index.html"><span><svg class="mark" viewBox="0 0 240 240" aria-hidden="true"><rect width="240" height="240" rx="52" class="mk-b"/><path class="mk-f" d="M62.58,72.28 Q63.23,66.59 63.67,61.12 Q64.11,55.65 64.11,49.95 Q64.11,44.04 63.56,37.91 Q63.01,31.79 61.7,25.0 Q70.24,28.72 87.97,32.22 Q105.7,35.73 129.23,38.46 Q152.76,41.2 178.37,43.17 L178.37,48.2 Q136.78,53.68 106.57,59.48 Q76.37,65.28 62.58,72.28 Z M146.63,215.0 Q144.44,189.83 142.47,171.33 Q140.5,152.83 138.64,139.37 Q136.78,125.91 134.59,115.62 Q132.4,105.33 129.67,96.36 Q126.93,87.38 123.21,77.97 Q135.03,79.94 146.85,79.94 Q157.79,79.94 170.49,77.97 Q166.77,88.04 163.92,99.53 Q161.08,111.03 158.89,126.57 Q156.7,142.11 155.06,163.56 Q153.42,185.01 152.32,215.0 L146.63,215.0 Z M92.56,215.0 Q90.38,189.83 88.41,171.33 Q86.44,152.83 84.57,139.37 Q82.71,125.91 80.52,115.62 Q78.34,105.33 75.6,96.36 Q72.86,87.38 69.14,77.97 Q80.96,79.94 92.78,79.94 Q103.73,79.94 116.42,77.97 Q112.7,88.04 109.86,99.53 Q107.01,111.03 104.82,126.57 Q102.63,142.11 100.99,163.56 Q99.35,185.01 98.26,215.0 L92.56,215.0 Z"/></svg></span><span class="ltr">Datapavan</span></a><nav><a href="../../index.html#checks">What it checks</a><a href="../../index.html#limits">What it can’t see</a><a href="../../index.html#plan">What you can do</a><a href="../../index.html#faq">Questions</a><a href="../../index.html#get">Get it</a><a href="../../index.html#names">The names</a><a href="../../news/index.html">News</a><a href="https://github.com/visadahyu/datapavan" class="ltr">GitHub</a></nav>
-<details class="lng"><summary aria-label="Language">English</summary><ul><li><a href="../../guides/whitedns/index.html" hreflang="en" lang="en" aria-current="true">English</a></li><li><a href="../../fr/index.html" hreflang="fr" lang="fr">Français</a></li><li><a href="../../de/index.html" hreflang="de" lang="de">Deutsch</a></li><li><a href="../../es/index.html" hreflang="es" lang="es">Español</a></li><li><a href="../../ru/index.html" hreflang="ru" lang="ru">Русский</a></li><li><a href="../../zh/index.html" hreflang="zh" lang="zh">简体中文</a></li><li><a href="../../ar/index.html" hreflang="ar" lang="ar">العربية</a></li><li><a href="../../fa/index.html" hreflang="fa" lang="fa">فارسی</a></li></ul></details></header></div>
-<main><section><div class="w prose"><h1>WhiteDNS in proxy mode</h1><p>Android runs one VPN at a time. In its proxy mode, WhiteDNS runs without a VPN, and Datapavan can send your apps through it.</p>
+<details class="lng"><summary aria-label="Language: English">English</summary><ul><li><a href="../../guides/whitedns/index.html" hreflang="en" lang="en" aria-current="true">English</a></li><li><a href="../../fr/index.html" hreflang="fr" lang="fr">Français</a></li><li><a href="../../de/index.html" hreflang="de" lang="de">Deutsch</a></li><li><a href="../../es/index.html" hreflang="es" lang="es">Español</a></li><li><a href="../../ru/index.html" hreflang="ru" lang="ru">Русский</a></li><li><a href="../../zh/index.html" hreflang="zh" lang="zh">简体中文</a></li><li><a href="../../ar/index.html" hreflang="ar" lang="ar">العربية</a></li><li><a href="../../fa/index.html" hreflang="fa" lang="fa">فارسی</a></li></ul></details></header></div>
+<main id="main"><section><div class="w prose"><h1>WhiteDNS in proxy mode</h1><p>Android runs one VPN at a time. In its proxy mode, WhiteDNS runs without a VPN, and Datapavan can send your apps through it.</p>
 <p>These steps assume WhiteDNS already works for you as a VPN.</p>
 <h2 id="turn-on-proxy-mode">Turn on proxy mode</h2>
 <ol>
-<li>Open the &ldquo;<a href="https://github.com/WhiteDNS/WhiteDNS-Android/blob/da24f41451d34a2d3de6d6823444db3c7923e1d8/app/src/main/java/shop/whitedns/client/ui/WhiteDnsStrings.kt#L665">Connect</a>&rdquo; tab.</li>
-<li>Tap &ldquo;<a href="https://github.com/WhiteDNS/WhiteDNS-Android/blob/da24f41451d34a2d3de6d6823444db3c7923e1d8/app/src/main/java/shop/whitedns/client/ui/WhiteDnsStrings.kt#L692">Proxy Mode</a>&rdquo;.</li>
-<li>Tap &ldquo;<a href="https://github.com/WhiteDNS/WhiteDNS-Android/blob/da24f41451d34a2d3de6d6823444db3c7923e1d8/app/src/main/java/shop/whitedns/client/ui/WhiteDnsStrings.kt#L669">Connect</a>&rdquo; to start.</li>
+<li>Open the &ldquo;Connect&rdquo; tab.</li>
+<li>Tap &ldquo;Proxy Mode&rdquo;.</li>
+<li>Tap &ldquo;Connect&rdquo; to start.</li>
 </ol>
 <p>Its proxy then listens on this phone at 127.0.0.1, port 10886.</p>
 <p>Stop it first: it changes this only while it is not connected.</p>
@@ -206,24 +213,39 @@ footer p{margin:.2rem 0;color:var(--mute);font-size:.95rem}
 <h2 id="a-password-for-its-proxy">A password for its proxy</h2>
 <p>Its proxy can ask for a user name and a password. Set the ones Datapavan shows when it finds the proxy. Then other apps on this phone cannot use it.</p>
 <ol>
-<li>Open the &ldquo;<a href="https://github.com/WhiteDNS/WhiteDNS-Android/blob/da24f41451d34a2d3de6d6823444db3c7923e1d8/app/src/main/java/shop/whitedns/client/ui/WhiteDnsStrings.kt#L664">Profiles</a>&rdquo; tab.</li>
-<li>Open the &ldquo;<a href="https://github.com/WhiteDNS/WhiteDNS-Android/blob/da24f41451d34a2d3de6d6823444db3c7923e1d8/app/src/main/java/shop/whitedns/client/ui/WhiteDnsStrings.kt#L736">Setting</a>&rdquo; tab.</li>
-<li>Tap &ldquo;<a href="https://github.com/WhiteDNS/WhiteDNS-Android/blob/da24f41451d34a2d3de6d6823444db3c7923e1d8/app/src/main/java/shop/whitedns/client/ui/WhiteDnsStrings.kt#L1065">Create</a>&rdquo;.</li>
-<li>Under &ldquo;<a href="https://github.com/WhiteDNS/WhiteDNS-Android/blob/da24f41451d34a2d3de6d6823444db3c7923e1d8/app/src/main/java/shop/whitedns/client/ui/WhiteDnsStrings.kt#L1082">Local Proxy</a>&rdquo;, turn on &ldquo;<a href="https://github.com/WhiteDNS/WhiteDNS-Android/blob/da24f41451d34a2d3de6d6823444db3c7923e1d8/app/src/main/java/shop/whitedns/client/ui/WhiteDnsStrings.kt#L1094">SOCKS5 Authentication</a>&rdquo;.</li>
-<li>Fill in &ldquo;<a href="https://github.com/WhiteDNS/WhiteDNS-Android/blob/da24f41451d34a2d3de6d6823444db3c7923e1d8/app/src/main/java/shop/whitedns/client/ui/WhiteDnsStrings.kt#L1095">Username</a>&rdquo; and &ldquo;<a href="https://github.com/WhiteDNS/WhiteDNS-Android/blob/da24f41451d34a2d3de6d6823444db3c7923e1d8/app/src/main/java/shop/whitedns/client/ui/WhiteDnsStrings.kt#L1096">Password</a>&rdquo;.</li>
-<li>Tap &ldquo;<a href="https://github.com/WhiteDNS/WhiteDNS-Android/blob/da24f41451d34a2d3de6d6823444db3c7923e1d8/app/src/main/java/shop/whitedns/client/ui/WhiteDnsStrings.kt#L674">Save</a>&rdquo;, then tap the new setting profile to use it.</li>
+<li>Open the &ldquo;Profiles&rdquo; tab.</li>
+<li>Open the &ldquo;Setting&rdquo; tab.</li>
+<li>Tap &ldquo;Create&rdquo;.</li>
+<li>Under &ldquo;Local Proxy&rdquo;, turn on &ldquo;SOCKS5 Authentication&rdquo;.</li>
+<li>Fill in &ldquo;Username&rdquo; and &ldquo;Password&rdquo;.</li>
+<li>Tap &ldquo;Save&rdquo;, then tap the new setting profile to use it.</li>
 </ol>
 <h2 id="what-it-asks-for">What it asks for</h2>
 <p>It asks to be left out of battery optimisation.</p>
 <h2 id="back-to-vpn-mode">Back to VPN mode</h2>
 <ol>
-<li>Open the &ldquo;<a href="https://github.com/WhiteDNS/WhiteDNS-Android/blob/da24f41451d34a2d3de6d6823444db3c7923e1d8/app/src/main/java/shop/whitedns/client/ui/WhiteDnsStrings.kt#L665">Connect</a>&rdquo; tab.</li>
-<li>Tap &ldquo;<a href="https://github.com/WhiteDNS/WhiteDNS-Android/blob/da24f41451d34a2d3de6d6823444db3c7923e1d8/app/src/main/java/shop/whitedns/client/ui/WhiteDnsStrings.kt#L693">Full VPN</a>&rdquo;.</li>
+<li>Open the &ldquo;Connect&rdquo; tab.</li>
+<li>Tap &ldquo;Full VPN&rdquo;.</li>
 </ol>
 <p>When WhiteDNS runs as a VPN again, Android turns Datapavan&rsquo;s VPN off: only one VPN runs at a time.</p>
 <p>Read from the source code of WhiteDNS, version <a href="https://github.com/WhiteDNS/WhiteDNS-Android/tree/1.6.16">1.6.16</a>.</p>
 <p>Not yet tried with Datapavan.</p>
 <p>The words in quotes are as that version shows them.</p>
+<p>Where each word in quotes is in the source code of WhiteDNS:</p>
+<ul>
+<li><a href="https://github.com/WhiteDNS/WhiteDNS-Android/blob/da24f41451d34a2d3de6d6823444db3c7923e1d8/app/src/main/java/shop/whitedns/client/ui/WhiteDnsStrings.kt#L665">Connect</a></li>
+<li><a href="https://github.com/WhiteDNS/WhiteDNS-Android/blob/da24f41451d34a2d3de6d6823444db3c7923e1d8/app/src/main/java/shop/whitedns/client/ui/WhiteDnsStrings.kt#L692">Proxy Mode</a></li>
+<li><a href="https://github.com/WhiteDNS/WhiteDNS-Android/blob/da24f41451d34a2d3de6d6823444db3c7923e1d8/app/src/main/java/shop/whitedns/client/ui/WhiteDnsStrings.kt#L669">Connect</a></li>
+<li><a href="https://github.com/WhiteDNS/WhiteDNS-Android/blob/da24f41451d34a2d3de6d6823444db3c7923e1d8/app/src/main/java/shop/whitedns/client/ui/WhiteDnsStrings.kt#L664">Profiles</a></li>
+<li><a href="https://github.com/WhiteDNS/WhiteDNS-Android/blob/da24f41451d34a2d3de6d6823444db3c7923e1d8/app/src/main/java/shop/whitedns/client/ui/WhiteDnsStrings.kt#L736">Setting</a></li>
+<li><a href="https://github.com/WhiteDNS/WhiteDNS-Android/blob/da24f41451d34a2d3de6d6823444db3c7923e1d8/app/src/main/java/shop/whitedns/client/ui/WhiteDnsStrings.kt#L1065">Create</a></li>
+<li><a href="https://github.com/WhiteDNS/WhiteDNS-Android/blob/da24f41451d34a2d3de6d6823444db3c7923e1d8/app/src/main/java/shop/whitedns/client/ui/WhiteDnsStrings.kt#L1082">Local Proxy</a></li>
+<li><a href="https://github.com/WhiteDNS/WhiteDNS-Android/blob/da24f41451d34a2d3de6d6823444db3c7923e1d8/app/src/main/java/shop/whitedns/client/ui/WhiteDnsStrings.kt#L1094">SOCKS5 Authentication</a></li>
+<li><a href="https://github.com/WhiteDNS/WhiteDNS-Android/blob/da24f41451d34a2d3de6d6823444db3c7923e1d8/app/src/main/java/shop/whitedns/client/ui/WhiteDnsStrings.kt#L1095">Username</a></li>
+<li><a href="https://github.com/WhiteDNS/WhiteDNS-Android/blob/da24f41451d34a2d3de6d6823444db3c7923e1d8/app/src/main/java/shop/whitedns/client/ui/WhiteDnsStrings.kt#L1096">Password</a></li>
+<li><a href="https://github.com/WhiteDNS/WhiteDNS-Android/blob/da24f41451d34a2d3de6d6823444db3c7923e1d8/app/src/main/java/shop/whitedns/client/ui/WhiteDnsStrings.kt#L674">Save</a></li>
+<li><a href="https://github.com/WhiteDNS/WhiteDNS-Android/blob/da24f41451d34a2d3de6d6823444db3c7923e1d8/app/src/main/java/shop/whitedns/client/ui/WhiteDnsStrings.kt#L693">Full VPN</a></li>
+</ul>
 </div></section></main>
 <div class="w"><footer><div class="fl"><a href="../../news/index.html">News</a>
 <a href="../../bots/index.html">What a bot can see</a>
