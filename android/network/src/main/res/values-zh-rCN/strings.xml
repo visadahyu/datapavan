@@ -698,25 +698,7 @@
     <string name="blocking_kept_code">未拦截：在此应用中，此主机也用于登录或分享。</string>
     <string name="blocking_kept_unread">未拦截：此主机可能也用于登录或分享，而 Datapavan 尚未读取此应用的代码。</string>
     <string name="blocking_kept_own">未拦截：此应用将此主机用于自己的工作。</string>
-    <!-- Android's own label: SettingsLib's select_private_dns_configuration_title at android-15.0.0_r36. -->
-    <string name="android_label_private_dns">专用 DNS</string>
-    <!-- Android's own label: SettingsLib's private_dns_mode_off at android-15.0.0_r36. -->
-    <string name="android_label_private_dns_off">关闭</string>
-    <!-- Android's own label: SettingsLib's private_dns_mode_opportunistic at android-15.0.0_r36. -->
-    <string name="android_label_private_dns_automatic">自动</string>
-    <!-- Android's own label: Settings' vpn_menu_lockdown at android-15.0.0_r36. -->
-    <string name="android_label_always_on_vpn">始终开启的 VPN</string>
-    <!-- Android's own label: Settings' unlock_set_unlock_launch_picker_title at android-15.0.0_r36. -->
-    <string name="android_label_screen_lock">屏幕锁定</string>
-    <!-- Android's own label: Settings' unlock_set_unlock_launch_picker_title at android-16.0.0_r4. -->
-    <string name="android_label_screen_lock_api36">屏锁</string>
-    <!-- Android's own label: Settings' unlock_set_unlock_launch_picker_title at android-17.0.0_r1. -->
-    <string name="android_label_screen_lock_api37">屏锁</string>
-    <!-- Android's own label: Settings' usage_access at android-15.0.0_r36. -->
-    <string name="android_label_usage_access">使用情况访问权限</string>
-    <!-- Android's own label: Settings' usage_access at android-16.0.0_r4. -->
-    <string name="android_label_usage_access_api36">应用使用情况数据</string>
-    <!-- Android's own labels (ADR 0054) and the Network screen's title, moved from strings_untranslated.xml for ADR
+    <!-- Sentences quoting Android's labels (ADR 0054), and the Network screen's title, moved from strings_untranslated.xml for ADR
          0030's round of 2026-11-23. For the translators: each label placeholder is a label of Android's own screens,
          read from the phone in its own language, or Android's text in Datapavan's language where the phone gives none
          (android_label_* in strings.xml, which are copied from AOSP, never translated). It is always in the language's
@@ -767,4 +749,22 @@
     <!-- The title of Datapavan Advanced's screen for its network part: the VPN, the connection log, the user's tool,
          WireGuard, DNS and tracker blocking (the maintainer, 2026-11-22: the part has no name of its own). -->
     <string name="network_title">网络</string>
+    <!-- Android's own label: SettingsLib's select_private_dns_configuration_title at android-15.0.0_r36. -->
+    <string name="android_label_private_dns">专用 DNS</string>
+    <!-- Android's own label: SettingsLib's private_dns_mode_off at android-15.0.0_r36. -->
+    <string name="android_label_private_dns_off">关闭</string>
+    <!-- Android's own label: SettingsLib's private_dns_mode_opportunistic at android-15.0.0_r36. -->
+    <string name="android_label_private_dns_automatic">自动</string>
+    <!-- Android's own label: Settings' vpn_menu_lockdown at android-15.0.0_r36. -->
+    <string name="android_label_always_on_vpn">始终开启的 VPN</string>
+    <!-- Android's own label: Settings' unlock_set_unlock_launch_picker_title at android-15.0.0_r36. -->
+    <string name="android_label_screen_lock">屏幕锁定</string>
+    <!-- Android's own label: Settings' unlock_set_unlock_launch_picker_title at android-16.0.0_r4. -->
+    <string name="android_label_screen_lock_api36">屏锁</string>
+    <!-- Android's own label: Settings' unlock_set_unlock_launch_picker_title at android-17.0.0_r1. -->
+    <string name="android_label_screen_lock_api37">屏锁</string>
+    <!-- Android's own label: Settings' usage_access at android-15.0.0_r36. -->
+    <string name="android_label_usage_access">使用情况访问权限</string>
+    <!-- Android's own label: Settings' usage_access at android-16.0.0_r4. -->
+    <string name="android_label_usage_access_api36">应用使用情况数据</string>
 </resources>

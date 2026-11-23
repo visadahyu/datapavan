@@ -748,28 +748,7 @@
     <string name="blocking_kept_code">Not blocked: in this app, this host also serves sign-in or sharing.</string>
     <string name="blocking_kept_unread">Not blocked: this host may also serve sign-in or sharing, and Datapavan has not yet read this app\'s code.</string>
     <string name="blocking_kept_own">Not blocked: this app uses this host for its own work.</string>
-    <!-- Android's own labels (ADR 0054): AOSP's text at the release most phones run, each copied in every language
-         from AOSP's own translation, never translated, for where the phone gives none. scripts/android-labels.py holds
-         them to AOSP; an _apiN string is the text from Android's API level N on. -->
-    <!-- Android's own label: SettingsLib's select_private_dns_configuration_title at android-15.0.0_r36. -->
-    <string name="android_label_private_dns">Private DNS</string>
-    <!-- Android's own label: SettingsLib's private_dns_mode_off at android-15.0.0_r36. -->
-    <string name="android_label_private_dns_off">Off</string>
-    <!-- Android's own label: SettingsLib's private_dns_mode_opportunistic at android-15.0.0_r36. -->
-    <string name="android_label_private_dns_automatic">Automatic</string>
-    <!-- Android's own label: Settings' vpn_menu_lockdown at android-15.0.0_r36. -->
-    <string name="android_label_always_on_vpn">Always-on VPN</string>
-    <!-- Android's own label: Settings' unlock_set_unlock_launch_picker_title at android-15.0.0_r36. -->
-    <string name="android_label_screen_lock">Screen lock</string>
-    <!-- Android's own label: Settings' unlock_set_unlock_launch_picker_title at android-16.0.0_r4. -->
-    <string name="android_label_screen_lock_api36">Screen lock</string>
-    <!-- Android's own label: Settings' unlock_set_unlock_launch_picker_title at android-17.0.0_r1. -->
-    <string name="android_label_screen_lock_api37">Screen lock</string>
-    <!-- Android's own label: Settings' usage_access at android-15.0.0_r36. -->
-    <string name="android_label_usage_access">Usage access</string>
-    <!-- Android's own label: Settings' usage_access at android-16.0.0_r4. -->
-    <string name="android_label_usage_access_api36">App usage data</string>
-    <!-- Android's own labels (ADR 0054) and the Network screen's title, moved from strings_untranslated.xml for ADR
+    <!-- Sentences quoting Android's labels (ADR 0054), and the Network screen's title, moved from strings_untranslated.xml for ADR
          0030's round of 2026-11-23. For the translators: each label placeholder is a label of Android's own screens,
          read from the phone in its own language, or Android's text in Datapavan's language where the phone gives none
          (android_label_* in strings.xml, which are copied from AOSP, never translated). It is always in the language's
@@ -820,4 +799,25 @@
     <!-- The title of Datapavan Advanced's screen for its network part: the VPN, the connection log, the user's tool,
          WireGuard, DNS and tracker blocking (the maintainer, 2026-11-22: the part has no name of its own). -->
     <string name="network_title">Network</string>
+    <!-- Android's own labels (ADR 0054): AOSP's text at the release most phones run, each copied in every language
+         from AOSP's own translation, never translated, for where the phone gives none. scripts/android-labels.py holds
+         them to AOSP; an _apiN string is the text from Android's API level N on. -->
+    <!-- Android's own label: SettingsLib's select_private_dns_configuration_title at android-15.0.0_r36. -->
+    <string name="android_label_private_dns">Private DNS</string>
+    <!-- Android's own label: SettingsLib's private_dns_mode_off at android-15.0.0_r36. -->
+    <string name="android_label_private_dns_off">Off</string>
+    <!-- Android's own label: SettingsLib's private_dns_mode_opportunistic at android-15.0.0_r36. -->
+    <string name="android_label_private_dns_automatic">Automatic</string>
+    <!-- Android's own label: Settings' vpn_menu_lockdown at android-15.0.0_r36. -->
+    <string name="android_label_always_on_vpn">Always-on VPN</string>
+    <!-- Android's own label: Settings' unlock_set_unlock_launch_picker_title at android-15.0.0_r36. -->
+    <string name="android_label_screen_lock">Screen lock</string>
+    <!-- Android's own label: Settings' unlock_set_unlock_launch_picker_title at android-16.0.0_r4. -->
+    <string name="android_label_screen_lock_api36">Screen lock</string>
+    <!-- Android's own label: Settings' unlock_set_unlock_launch_picker_title at android-17.0.0_r1. -->
+    <string name="android_label_screen_lock_api37">Screen lock</string>
+    <!-- Android's own label: Settings' usage_access at android-15.0.0_r36. -->
+    <string name="android_label_usage_access">Usage access</string>
+    <!-- Android's own label: Settings' usage_access at android-16.0.0_r4. -->
+    <string name="android_label_usage_access_api36">App usage data</string>
 </resources>

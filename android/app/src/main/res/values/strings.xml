@@ -704,6 +704,50 @@
     <string name="licences_data_note">The databases Datapavan compares your apps and your phone with have licences of their own, such as the Open Database License of the εxodus tracker list. The Data sources page in Settings names each one with its licence and where it comes from.</string>
     <!-- A line of a list of parts that the screen could not read: shown as it is. -->
     <string name="licences_unread">Shown as the list has it: %1$s</string>
+    <!-- Sentences quoting Android's labels (ADR 0054), and the Data use tab's card, moved from strings_untranslated.xml for ADR 0030's
+         round of 2026-11-23. For the translators: each label placeholder is a label of Android's own screens, read from
+         the phone in its own language, or Android's text in Datapavan's language where the phone gives none
+         (android_label_* in strings.xml, which are copied from AOSP, never translated). It is always in the language's
+         quotes, as this file's “…”, and after a noun (the page, the switch, the button) or a verb of naming ("call it",
+         "choose"), so that no word around it depends on its gender, number or case: Russian and German keep it in the
+         nominative, Arabic adds no ال to it, and Persian puts no ezafe on it. One placeholder may hold two labels, the
+         phone's then Datapavan's in brackets, as label_both sets them: put nothing of the sentence's grammar on it.
+         Persian's labels write VPN in Latin letters, as AOSP does, where Datapavan's own sentences write it in Persian
+         ones: keep both as they are. -->
+    <!-- An Android label read in the phone's language (%1$s), then the same label in Datapavan's language (%2$s), where
+         the two differ. Chinese takes full-width brackets. -->
+    <string name="label_both">%1$s (%2$s)</string>
+    <!-- Under a part that names Android's own pages, switches or buttons, where some of those names are Android's own
+         rather than this phone's: Datapavan has not seen this phone's maker show them, or the phone gave none. %1$s:
+         those names, each as label_named gives it, joined by list_separator. -->
+    <string name="android_labels_android">These are Android\'s own names, and your phone may show others: %1$s.</string>
+    <!-- One name in the list of android_labels_android, in the language's quotes. -->
+    <string name="label_named">“%1$s”</string>
+    <!-- On the usage access card, after what usage access allows: Datapavan's name for the access is kept, and this line
+         gives the phone's own (the maintainer, 2026-11-22). %1$s: the page's name in this phone's Settings, "Usage access"
+         to Android 15 and "App usage data" from 16; %2$s: the switch on it. -->
+    <string name="usage_access_phone_name">This phone\'s settings call it “%1$s”, with the switch “%2$s”.</string>
+    <!-- The plan's card for wireless debugging. %1$s: the developer options page, %2$s: the wireless debugging switch,
+         as Android names them. -->
+    <string name="plan_wireless_body_quoted">A computer on the same network can control the phone once it is paired. Unless you are using it now, turn off the “%2$s” switch on the “%1$s” page.</string>
+    <!-- The plan's card for USB debugging. %1$s: the developer options page, %2$s: the USB debugging switch. -->
+    <string name="plan_usb_body_quoted">A computer connected by cable can control the phone once you allow it. Unless you are using it now, turn off the “%2$s” switch on the “%1$s” page.</string>
+    <!-- The plan's card for a certificate authority the user installed. %1$s: Android's page of encryption and
+         credentials. -->
+    <string name="plan_authority_body_quoted">Whoever holds its key can read the encrypted connections of apps that trust it. Unless your work or school needs it, remove it on the “%1$s” page.</string>
+    <!-- Under the button that opens the security settings. %1$s: the page of device admin apps, as Android names it. -->
+    <string name="plan_device_admins_note_quoted">Look for the “%1$s” page in the security settings. Some phones put it under other security settings.</string>
+    <!-- The plan's card for an app not opened for long that still holds sensitive access, where Android has a switch
+         that takes its permissions back while it is not used (Android 11 and later, and an app the plan offers it for).
+         %1$s: that switch. -->
+    <string name="plan_not_opened_sensitive_body_quoted">It still holds the access below. Remove what you do not need, or turn on the “%1$s” switch.</string>
+    <!-- The same card where Android has no such switch for the app, as on Android 10. -->
+    <string name="plan_not_opened_sensitive_body_plain">It still holds the access below. Remove what you do not need.</string>
+    <!-- How to turn off a preinstalled app. %1$s: the button on the app's page, as Android names it. -->
+    <string name="guide_steps_quoted">1. Open the app in system settings.\n2. Tap the “%1$s” button, or the one that turns the app off.\n3. If the button is greyed out, the phone maker blocks it. From a computer with USB debugging, you can remove the app for your user instead; this can be undone.</string>
+    <!-- Datapavan Advanced only: the title of the card on the Data use tab that opens the Network screen, where each
+         app's connections show (ui/NetworkEntry.kt). -->
+    <string name="network_entry_title">Each app\'s connections</string>
     <!-- Android's own labels (ADR 0054): AOSP's text at the release most phones run, each copied in every language
          from AOSP's own translation, never translated, for where the phone gives none. scripts/android-labels.py holds
          them to AOSP; an _apiN string is the text from Android's API level N on. -->
@@ -757,48 +801,4 @@
     <string name="android_label_unused_app_setting">Pause app activity if unused</string>
     <!-- Android's own label: Settings' app_restricted_settings_lockscreen_title at android-15.0.0_r36. -->
     <string name="android_label_restricted_settings">Allow restricted settings</string>
-    <!-- Android's own labels (ADR 0054) and the Data use tab's card, moved from strings_untranslated.xml for ADR 0030's
-         round of 2026-11-23. For the translators: each label placeholder is a label of Android's own screens, read from
-         the phone in its own language, or Android's text in Datapavan's language where the phone gives none
-         (android_label_* in strings.xml, which are copied from AOSP, never translated). It is always in the language's
-         quotes, as this file's “…”, and after a noun (the page, the switch, the button) or a verb of naming ("call it",
-         "choose"), so that no word around it depends on its gender, number or case: Russian and German keep it in the
-         nominative, Arabic adds no ال to it, and Persian puts no ezafe on it. One placeholder may hold two labels, the
-         phone's then Datapavan's in brackets, as label_both sets them: put nothing of the sentence's grammar on it.
-         Persian's labels write VPN in Latin letters, as AOSP does, where Datapavan's own sentences write it in Persian
-         ones: keep both as they are. -->
-    <!-- An Android label read in the phone's language (%1$s), then the same label in Datapavan's language (%2$s), where
-         the two differ. Chinese takes full-width brackets. -->
-    <string name="label_both">%1$s (%2$s)</string>
-    <!-- Under a part that names Android's own pages, switches or buttons, where some of those names are Android's own
-         rather than this phone's: Datapavan has not seen this phone's maker show them, or the phone gave none. %1$s:
-         those names, each as label_named gives it, joined by list_separator. -->
-    <string name="android_labels_android">These are Android\'s own names, and your phone may show others: %1$s.</string>
-    <!-- One name in the list of android_labels_android, in the language's quotes. -->
-    <string name="label_named">“%1$s”</string>
-    <!-- On the usage access card, after what usage access allows: Datapavan's name for the access is kept, and this line
-         gives the phone's own (the maintainer, 2026-11-22). %1$s: the page's name in this phone's Settings, "Usage access"
-         to Android 15 and "App usage data" from 16; %2$s: the switch on it. -->
-    <string name="usage_access_phone_name">This phone\'s settings call it “%1$s”, with the switch “%2$s”.</string>
-    <!-- The plan's card for wireless debugging. %1$s: the developer options page, %2$s: the wireless debugging switch,
-         as Android names them. -->
-    <string name="plan_wireless_body_quoted">A computer on the same network can control the phone once it is paired. Unless you are using it now, turn off the “%2$s” switch on the “%1$s” page.</string>
-    <!-- The plan's card for USB debugging. %1$s: the developer options page, %2$s: the USB debugging switch. -->
-    <string name="plan_usb_body_quoted">A computer connected by cable can control the phone once you allow it. Unless you are using it now, turn off the “%2$s” switch on the “%1$s” page.</string>
-    <!-- The plan's card for a certificate authority the user installed. %1$s: Android's page of encryption and
-         credentials. -->
-    <string name="plan_authority_body_quoted">Whoever holds its key can read the encrypted connections of apps that trust it. Unless your work or school needs it, remove it on the “%1$s” page.</string>
-    <!-- Under the button that opens the security settings. %1$s: the page of device admin apps, as Android names it. -->
-    <string name="plan_device_admins_note_quoted">Look for the “%1$s” page in the security settings. Some phones put it under other security settings.</string>
-    <!-- The plan's card for an app not opened for long that still holds sensitive access, where Android has a switch
-         that takes its permissions back while it is not used (Android 11 and later, and an app the plan offers it for).
-         %1$s: that switch. -->
-    <string name="plan_not_opened_sensitive_body_quoted">It still holds the access below. Remove what you do not need, or turn on the “%1$s” switch.</string>
-    <!-- The same card where Android has no such switch for the app, as on Android 10. -->
-    <string name="plan_not_opened_sensitive_body_plain">It still holds the access below. Remove what you do not need.</string>
-    <!-- How to turn off a preinstalled app. %1$s: the button on the app's page, as Android names it. -->
-    <string name="guide_steps_quoted">1. Open the app in system settings.\n2. Tap the “%1$s” button, or the one that turns the app off.\n3. If the button is greyed out, the phone maker blocks it. From a computer with USB debugging, you can remove the app for your user instead; this can be undone.</string>
-    <!-- Datapavan Advanced only: the title of the card on the Data use tab that opens the Network screen, where each
-         app's connections show (ui/NetworkEntry.kt). -->
-    <string name="network_entry_title">Each app\'s connections</string>
 </resources>

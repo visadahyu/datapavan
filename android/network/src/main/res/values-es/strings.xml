@@ -731,25 +731,7 @@
     <string name="blocking_kept_code">No se bloquea: en esta app, este host también sirve para iniciar sesión o compartir.</string>
     <string name="blocking_kept_unread">No se bloquea: puede que este host también sirva para iniciar sesión o compartir, y Datapavan aún no ha leído el código de esta app.</string>
     <string name="blocking_kept_own">No se bloquea: esta app usa este host para sus propias funciones.</string>
-    <!-- Android's own label: SettingsLib's select_private_dns_configuration_title at android-15.0.0_r36. -->
-    <string name="android_label_private_dns">DNS privado</string>
-    <!-- Android's own label: SettingsLib's private_dns_mode_off at android-15.0.0_r36. -->
-    <string name="android_label_private_dns_off">Desactivado</string>
-    <!-- Android's own label: SettingsLib's private_dns_mode_opportunistic at android-15.0.0_r36. -->
-    <string name="android_label_private_dns_automatic">Automático</string>
-    <!-- Android's own label: Settings' vpn_menu_lockdown at android-15.0.0_r36. -->
-    <string name="android_label_always_on_vpn">VPN siempre activada</string>
-    <!-- Android's own label: Settings' unlock_set_unlock_launch_picker_title at android-15.0.0_r36. -->
-    <string name="android_label_screen_lock">Bloqueo de pantalla</string>
-    <!-- Android's own label: Settings' unlock_set_unlock_launch_picker_title at android-16.0.0_r4. -->
-    <string name="android_label_screen_lock_api36">Bloqueo de pantalla</string>
-    <!-- Android's own label: Settings' unlock_set_unlock_launch_picker_title at android-17.0.0_r1. -->
-    <string name="android_label_screen_lock_api37">Bloqueo de pantalla</string>
-    <!-- Android's own label: Settings' usage_access at android-15.0.0_r36. -->
-    <string name="android_label_usage_access">Acceso al uso</string>
-    <!-- Android's own label: Settings' usage_access at android-16.0.0_r4. -->
-    <string name="android_label_usage_access_api36">Datos de uso de aplicaciones</string>
-    <!-- Android's own labels (ADR 0054) and the Network screen's title, moved from strings_untranslated.xml for ADR
+    <!-- Sentences quoting Android's labels (ADR 0054), and the Network screen's title, moved from strings_untranslated.xml for ADR
          0030's round of 2026-11-23. For the translators: each label placeholder is a label of Android's own screens,
          read from the phone in its own language, or Android's text in Datapavan's language where the phone gives none
          (android_label_* in strings.xml, which are copied from AOSP, never translated). It is always in the language's
@@ -800,4 +782,22 @@
     <!-- The title of Datapavan Advanced's screen for its network part: the VPN, the connection log, the user's tool,
          WireGuard, DNS and tracker blocking (the maintainer, 2026-11-22: the part has no name of its own). -->
     <string name="network_title">Red</string>
+    <!-- Android's own label: SettingsLib's select_private_dns_configuration_title at android-15.0.0_r36. -->
+    <string name="android_label_private_dns">DNS privado</string>
+    <!-- Android's own label: SettingsLib's private_dns_mode_off at android-15.0.0_r36. -->
+    <string name="android_label_private_dns_off">Desactivado</string>
+    <!-- Android's own label: SettingsLib's private_dns_mode_opportunistic at android-15.0.0_r36. -->
+    <string name="android_label_private_dns_automatic">Automático</string>
+    <!-- Android's own label: Settings' vpn_menu_lockdown at android-15.0.0_r36. -->
+    <string name="android_label_always_on_vpn">VPN siempre activada</string>
+    <!-- Android's own label: Settings' unlock_set_unlock_launch_picker_title at android-15.0.0_r36. -->
+    <string name="android_label_screen_lock">Bloqueo de pantalla</string>
+    <!-- Android's own label: Settings' unlock_set_unlock_launch_picker_title at android-16.0.0_r4. -->
+    <string name="android_label_screen_lock_api36">Bloqueo de pantalla</string>
+    <!-- Android's own label: Settings' unlock_set_unlock_launch_picker_title at android-17.0.0_r1. -->
+    <string name="android_label_screen_lock_api37">Bloqueo de pantalla</string>
+    <!-- Android's own label: Settings' usage_access at android-15.0.0_r36. -->
+    <string name="android_label_usage_access">Acceso al uso</string>
+    <!-- Android's own label: Settings' usage_access at android-16.0.0_r4. -->
+    <string name="android_label_usage_access_api36">Datos de uso de aplicaciones</string>
 </resources>

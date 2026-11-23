@@ -732,26 +732,8 @@
     <string name="blocking_kept_code">Non bloqué : dans cette appli, cet hôte sert aussi à la connexion au compte ou au partage.</string>
     <string name="blocking_kept_unread">Non bloqué : cet hôte peut aussi servir à la connexion au compte ou au partage, et Datapavan n\'a pas encore lu le code de cette appli.</string>
     <string name="blocking_kept_own">Non bloqué : cette appli utilise cet hôte pour son propre fonctionnement.</string>
-    <!-- Android's own label: SettingsLib's select_private_dns_configuration_title at android-15.0.0_r36. -->
-    <string name="android_label_private_dns">DNS privé</string>
-    <!-- Android's own label: SettingsLib's private_dns_mode_off at android-15.0.0_r36. -->
-    <string name="android_label_private_dns_off">Désactivé</string>
-    <!-- Android's own label: SettingsLib's private_dns_mode_opportunistic at android-15.0.0_r36. -->
-    <string name="android_label_private_dns_automatic">Automatique</string>
-    <!-- Android's own label: Settings' vpn_menu_lockdown at android-15.0.0_r36. -->
-    <string name="android_label_always_on_vpn">VPN permanent</string>
-    <!-- Android's own label: Settings' unlock_set_unlock_launch_picker_title at android-15.0.0_r36. -->
-    <string name="android_label_screen_lock">Verrouillage de l\'écran</string>
-    <!-- Android's own label: Settings' unlock_set_unlock_launch_picker_title at android-16.0.0_r4. -->
-    <string name="android_label_screen_lock_api36">Déverrouillage de l\'écran</string>
-    <!-- Android's own label: Settings' unlock_set_unlock_launch_picker_title at android-17.0.0_r1. -->
-    <string name="android_label_screen_lock_api37">Déverrouillage de l\'écran</string>
-    <!-- Android's own label: Settings' usage_access at android-15.0.0_r36. -->
-    <string name="android_label_usage_access">Accès aux données d\'utilisation</string>
-    <!-- Android's own label: Settings' usage_access at android-16.0.0_r4. -->
-    <string name="android_label_usage_access_api36">Données d\'utilisation d\'applis</string>
 
-    <!-- Android's own labels (ADR 0054) and the Network screen's title, moved from strings_untranslated.xml for ADR
+    <!-- Sentences quoting Android's labels (ADR 0054), and the Network screen's title, moved from strings_untranslated.xml for ADR
          0030's round of 2026-11-23. For the translators: each label placeholder is a label of Android's own screens,
          read from the phone in its own language, or Android's text in Datapavan's language where the phone gives none
          (android_label_* in strings.xml, which are copied from AOSP, never translated). It is always in the language's
@@ -802,4 +784,22 @@
     <!-- The title of Datapavan Advanced's screen for its network part: the VPN, the connection log, the user's tool,
          WireGuard, DNS and tracker blocking (the maintainer, 2026-11-22: the part has no name of its own). -->
     <string name="network_title">Réseau</string>
+    <!-- Android's own label: SettingsLib's select_private_dns_configuration_title at android-15.0.0_r36. -->
+    <string name="android_label_private_dns">DNS privé</string>
+    <!-- Android's own label: SettingsLib's private_dns_mode_off at android-15.0.0_r36. -->
+    <string name="android_label_private_dns_off">Désactivé</string>
+    <!-- Android's own label: SettingsLib's private_dns_mode_opportunistic at android-15.0.0_r36. -->
+    <string name="android_label_private_dns_automatic">Automatique</string>
+    <!-- Android's own label: Settings' vpn_menu_lockdown at android-15.0.0_r36. -->
+    <string name="android_label_always_on_vpn">VPN permanent</string>
+    <!-- Android's own label: Settings' unlock_set_unlock_launch_picker_title at android-15.0.0_r36. -->
+    <string name="android_label_screen_lock">Verrouillage de l\'écran</string>
+    <!-- Android's own label: Settings' unlock_set_unlock_launch_picker_title at android-16.0.0_r4. -->
+    <string name="android_label_screen_lock_api36">Déverrouillage de l\'écran</string>
+    <!-- Android's own label: Settings' unlock_set_unlock_launch_picker_title at android-17.0.0_r1. -->
+    <string name="android_label_screen_lock_api37">Déverrouillage de l\'écran</string>
+    <!-- Android's own label: Settings' usage_access at android-15.0.0_r36. -->
+    <string name="android_label_usage_access">Accès aux données d\'utilisation</string>
+    <!-- Android's own label: Settings' usage_access at android-16.0.0_r4. -->
+    <string name="android_label_usage_access_api36">Données d\'utilisation d\'applis</string>
 </resources>
