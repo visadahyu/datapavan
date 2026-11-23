@@ -94,6 +94,9 @@
     <string name="now_window_hour">آخر ساعة</string>
     <string name="now_window_screen">منذ تشغيل الشاشة</string>
     <string name="now_sort">إعادة الترتيب</string>
+    <string name="now_pause">إيقاف التحديث مؤقتًا</string>
+    <string name="now_resume">استئناف التحديث</string>
+    <string name="now_paused">التحديث متوقف مؤقتًا: تبقى الأرقام على هذه الشاشة كما هي حتى تستأنفه. ويواصل Datapavan العدّ في هذه الأثناء.</string>
     <string name="now_sort_note">تبقى الصفوف في أماكنها ما دمت تنظر إليها. تُضاف التطبيقات الجديدة في النهاية.</string>
     <string name="now_empty">لم يستخدم أي تطبيق الشبكة خلال هذه المدة.</string>
     <string name="now_one_app">يُعرض تطبيق واحد.</string>
@@ -497,6 +500,7 @@
     <string name="dns_audited_no">لم تتحقق من ذلك أي جهة خارجية.</string>
     <string name="dns_audited_firm">تحقّقت شركة محاسبة من هذه الادعاءات.</string>
     <string name="dns_policy">سياسة الخصوصية الخاصة به</string>
+    <string name="dns_policy_named">سياسة الخصوصية الخاصة به: %1$s</string>
     <string name="dns_choice_fails">إذا لم يستجب، يستخدم Datapavan Oblivious DoH، ثم الطرق المشفّرة الأخرى. شغّل «خادم DNS هذا فقط» لإيقاف ذلك.</string>
     <string name="dns_only">خادم DNS هذا فقط</string>
     <string name="dns_only_cost">إذا لم يستجب خادم DNS الخاص بك، لا تستطيع التطبيقات التي تمرّ مباشرةً البحث عن الأسماء.</string>
@@ -637,6 +641,7 @@
     <string name="guide_not_checked">لم يُجرَّب مع Datapavan بعد.</string>
     <string name="guide_labels_tool">الكلمات بين علامتَي التنصيص تُقرأ من %1$s على هذا الهاتف.</string>
     <string name="guide_labels_recorded">الكلمات بين علامتَي التنصيص كما يعرضها ذلك الإصدار.</string>
+    <string name="guide_labels_where" tools:ignore="UnusedResources">موضع كل كلمة بين علامتَي التنصيص في الرمز المصدري لـ %1$s:</string>
     <string name="guide_audit">فحص Datapavan لتطبيقاتك يعمل أيضًا دون شبكة VPN الخاصة به.</string>
     <!-- Steps. Each %s in quotes is one of the tool's labels. -->
     <string name="guide_step_drawer">افتح القائمة في الزاوية العلوية من شاشته وانقر على «%1$s».</string>

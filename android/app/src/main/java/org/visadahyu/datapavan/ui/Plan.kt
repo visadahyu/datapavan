@@ -46,7 +46,9 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.res.pluralStringResource
 import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.semantics.heading
 import androidx.compose.ui.semantics.Role
+import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.LifecycleEventObserver
@@ -208,7 +210,7 @@ internal fun PlanScreen(
         verticalArrangement = Arrangement.spacedBy(8.dp),
     ) {
         item { TextButton(onClick = if (stage == PlanStage.SUMMARY) onDone else onBack) { Text(stringResource(R.string.back)) } }
-        item { Text(stringResource(R.string.plan_title), style = MaterialTheme.typography.headlineSmall) }
+        item { Text(stringResource(R.string.plan_title), style = MaterialTheme.typography.headlineSmall, modifier = Modifier.semantics { heading() }) }
         when (stage) {
             PlanStage.CHOOSE -> {
                 item { LevelChoice(level, usageMissing) { level = it } }
@@ -398,7 +400,7 @@ internal fun JournalScreen(journal: Journal, labels: Map<String, String>, curren
     ) {
         item {
             TextButton(onClick = onBack) { Text(stringResource(R.string.back)) }
-            Text(stringResource(R.string.journal_title), style = MaterialTheme.typography.headlineSmall)
+            Text(stringResource(R.string.journal_title), style = MaterialTheme.typography.headlineSmall, modifier = Modifier.semantics { heading() })
             Text(stringResource(R.string.journal_intro), style = MaterialTheme.typography.bodyMedium)
             if (journal.entries.isEmpty()) Text(stringResource(R.string.journal_empty), style = MaterialTheme.typography.bodyMedium)
         }

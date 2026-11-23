@@ -38,6 +38,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.semantics.heading
 import androidx.compose.ui.semantics.LiveRegionMode
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.liveRegion
@@ -151,7 +152,7 @@ internal fun SettingsScreen(theme: ThemeMode, insets: PaddingValues, onTheme: (T
     ) {
         item {
             TextButton(onClick = onBack) { Text(stringResource(R.string.back)) }
-            Text(stringResource(R.string.settings_title), style = MaterialTheme.typography.headlineSmall)
+            Text(stringResource(R.string.settings_title), style = MaterialTheme.typography.headlineSmall, modifier = Modifier.semantics { heading() })
         }
         item {
             SectionTitle(R.string.settings_appearance)
@@ -234,7 +235,7 @@ internal fun TextPage(@StringRes title: Int, paragraphs: List<String>, insets: P
     ) {
         item {
             TextButton(onClick = onBack) { Text(stringResource(R.string.back)) }
-            Text(stringResource(title), style = MaterialTheme.typography.headlineSmall)
+            Text(stringResource(title), style = MaterialTheme.typography.headlineSmall, modifier = Modifier.semantics { heading() })
         }
         items(paragraphs) { Text(it, style = MaterialTheme.typography.bodyLarge) }
     }
@@ -258,7 +259,7 @@ internal fun AboutPage(engineVersion: String, insets: PaddingValues, onBack: () 
     ) {
         item {
             TextButton(onClick = onBack) { Text(stringResource(R.string.back)) }
-            Text(stringResource(R.string.about_title), style = MaterialTheme.typography.headlineSmall)
+            Text(stringResource(R.string.about_title), style = MaterialTheme.typography.headlineSmall, modifier = Modifier.semantics { heading() })
         }
         items(paragraphs) { Text(it, style = MaterialTheme.typography.bodyLarge) }
         // The editions (ADR 0045), in a few calm lines, with no prompt.

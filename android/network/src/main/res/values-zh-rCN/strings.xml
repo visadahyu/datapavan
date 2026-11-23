@@ -84,6 +84,9 @@
     <string name="now_window_hour">过去一小时</string>
     <string name="now_window_screen">自屏幕亮起以来</string>
     <string name="now_sort">重新排序</string>
+    <string name="now_pause">暂停更新</string>
+    <string name="now_resume">恢复更新</string>
+    <string name="now_paused">更新已暂停：此屏幕上的数字保持不变，直到您恢复更新。在此期间，Datapavan 仍在继续计数。</string>
     <string name="now_sort_note">您查看时，各行保持原位。新的应用会添加到末尾。</string>
     <string name="now_empty">这段时间内没有应用使用网络。</string>
     <string name="now_one_app">正在显示一个应用。</string>
@@ -423,6 +426,7 @@
     <string name="dns_audited_no">没有外部机构核查过这一点。</string>
     <string name="dns_audited_firm">一家会计师事务所核查过这些声明。</string>
     <string name="dns_policy">它的隐私政策</string>
+    <string name="dns_policy_named">它的隐私政策：%1$s</string>
     <string name="dns_choice_fails">如果它没有响应，Datapavan 会使用 Oblivious DoH，然后使用其他加密方式。开启“仅使用此 DNS 服务器”即可阻止这种情况。</string>
     <string name="dns_only">仅使用此 DNS 服务器</string>
     <string name="dns_only_cost">如果您的 DNS 服务器没有响应，直接连接的应用将无法查询名称。</string>
@@ -563,6 +567,7 @@
     <string name="guide_not_checked">尚未与 Datapavan 一起试用过。</string>
     <string name="guide_labels_tool">引号中的文字读取自这部手机上的 %1$s。</string>
     <string name="guide_labels_recorded">引号中的文字与该版本显示的一致。</string>
+    <string name="guide_labels_where" tools:ignore="UnusedResources">引号中每段文字在 %1$s 的源代码中的位置：</string>
     <string name="guide_audit">Datapavan 对您的应用所做的检查，无需它的 VPN 也能运行。</string>
     <!-- Steps. Each %s in quotes is one of the tool's labels. -->
     <string name="guide_step_drawer">打开它屏幕顶部角落的菜单，然后点按“%1$s”。</string>

@@ -88,6 +88,9 @@
     <string name="now_window_hour">La dernière heure</string>
     <string name="now_window_screen">Depuis que l\'écran s\'est allumé</string>
     <string name="now_sort">Trier à nouveau</string>
+    <string name="now_pause">Suspendre l\'actualisation</string>
+    <string name="now_resume">Reprendre l\'actualisation</string>
+    <string name="now_paused">Actualisation suspendue : les chiffres de cet écran restent tels quels jusqu\'à ce que vous la repreniez. Datapavan continue de compter pendant ce temps.</string>
     <string name="now_sort_note">Les lignes restent en place pendant que vous regardez. Les nouvelles applis s\'ajoutent à la fin.</string>
     <string name="now_empty">Aucune appli n\'a utilisé le réseau sur cette période.</string>
     <string name="now_one_app">Une seule appli affichée.</string>
@@ -453,6 +456,7 @@
     <string name="dns_audited_no">Personne de l\'extérieur n\'a vérifié ces affirmations.</string>
     <string name="dns_audited_firm">Un cabinet comptable a vérifié ces affirmations.</string>
     <string name="dns_policy">Sa politique de confidentialité</string>
+    <string name="dns_policy_named">Sa politique de confidentialité : %1$s</string>
     <string name="dns_choice_fails">S\'il ne répond pas, Datapavan utilise Oblivious DoH, puis les autres méthodes chiffrées. Activez « Uniquement ce résolveur » pour l\'empêcher.</string>
     <string name="dns_only">Uniquement ce résolveur</string>
     <string name="dns_only_cost">Si votre résolveur ne répond pas, les applis qui passent directement ne peuvent pas rechercher de noms.</string>
@@ -593,6 +597,7 @@
     <string name="guide_not_checked">Pas encore testé avec Datapavan.</string>
     <string name="guide_labels_tool">Les mots entre guillemets sont lus dans %1$s sur ce téléphone.</string>
     <string name="guide_labels_recorded">Les mots entre guillemets sont ceux qu\'affiche cette version.</string>
+    <string name="guide_labels_where" tools:ignore="UnusedResources">Où se trouve chaque mot entre guillemets dans le code source de l\'outil %1$s :</string>
     <string name="guide_audit">La vérification de vos applis par Datapavan fonctionne aussi sans son VPN.</string>
     <!-- Steps. Each %s in quotes is one of the tool's labels. -->
     <string name="guide_step_drawer">Ouvrez le menu dans le coin supérieur de son écran et appuyez sur « %1$s ».</string>

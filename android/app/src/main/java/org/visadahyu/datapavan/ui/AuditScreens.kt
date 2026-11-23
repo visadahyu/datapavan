@@ -587,7 +587,7 @@ private fun AppDetail(entry: AppEntry, trackers: AppTrackers?, trackerInfo: Map<
     ) {
         item {
             TextButton(onClick = onBack) { Text(stringResource(R.string.back)) }
-            Text(app.label ?: app.packageName, style = MaterialTheme.typography.headlineSmall)
+            Text(app.label ?: app.packageName, style = MaterialTheme.typography.headlineSmall, modifier = Modifier.semantics { heading() })
             Text(isolateLtr(app.packageName), style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
             Spacer(Modifier.height(8.dp))
             Text(installLine(InstallSource.of(app.isSystem, app.installer, installerLabel)), style = MaterialTheme.typography.bodyMedium)

@@ -31,6 +31,8 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalLayoutDirection
 import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.semantics.clearAndSetSemantics
+import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.LiveRegionMode
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.error
@@ -293,13 +295,20 @@ private fun Service(presets: List<DnsCatalogue.Preset>, choice: DnsSettings.Choi
     }
     if (first.policy.isNotEmpty()) {
         val context = LocalContext.current
+        val named = stringResource(R.string.dns_policy_named, bidi.unicodeWrap(first.operator))
         TextButton(onClick = {
             try {
                 context.startActivity(Intent(Intent.ACTION_VIEW, first.policy.toUri()))
             } catch (_: ActivityNotFoundException) {
                 // No browser: the policy's address is in the data pack's table.
             }
-        }, modifier = Modifier.padding(start = 36.dp)) { Text(stringResource(R.string.dns_policy)) }
+        },
+            // A screen reader moving from button to button hears whose policy it is (WCAG 2.4.4), its visible words
+            // first (2.5.3).
+            modifier = Modifier.padding(start = 36.dp).semantics {
+                contentDescription = named
+            },
+        ) { Text(stringResource(R.string.dns_policy), modifier = Modifier.clearAndSetSemantics {}) }
     }
     if (chosen != null && presets.size > 1) {
         Column(Modifier.padding(start = 36.dp).selectableGroup()) {

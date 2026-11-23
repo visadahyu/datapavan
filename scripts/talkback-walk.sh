@@ -22,6 +22,8 @@ ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 OUT="${1:-$ROOT/build/talkback}"
 PKG=org.visadahyu.datapavan.advanced
 NETWORK=org.visadahyu.datapavan.network.MainActivity
+# Advanced holds Basic's classes, so its audit's activity is named in full.
+AUDIT=org.visadahyu.datapavan.MainActivity
 TALKBACK=com.google.android.marvin.talkback/com.google.android.marvin.talkback.TalkBackService
 GESTURES=org.visadahyu.datapavan.speechlog/org.visadahyu.datapavan.speechlog.GestureService
 APK="$ROOT/android/app/build-advanced/outputs/apk/debug/app-debug.apk"
@@ -48,6 +50,9 @@ trap restore EXIT
 adb install -r -g "$APK" >/dev/null
 adb install -r "$LOG_APK" >/dev/null
 adb shell settings put secure tts_default_synth org.visadahyu.datapavan.speechlog
+# On Android 13 and later, TalkBack's suite asks once for leave to notify, in a dialog over the screen being walked; the
+# emulator gives it beforehand, so that nothing is tapped.
+adb shell pm grant com.google.android.marvin.talkback android.permission.POST_NOTIFICATIONS 2>/dev/null || true
 mkdir -p "$OUT"
 talkback=$(adb shell dumpsys package com.google.android.marvin.talkback | tr -d '\r' | sed -n 's/^ *versionName=//p' | head -1)
 echo "TalkBack $talkback, default settings; Android $(adb shell getprop ro.build.version.release | tr -d '\r')" >"$OUT/about.txt"
@@ -72,10 +77,14 @@ talkback_off() {
     sleep 2
 }
 
-# The screen on display, walked: a swipe to the next item at a time, until two swipes in a row bring nothing new or
+# What TalkBack said since the last swipe: the utterances after the last "gesture" line.
+said_last() { adb logcat -d -s DatapavanSpeech:I | tr -d '\r' | sed -n 's/^.* DatapavanSpeech: //p' | awk '/^gesture /{block=""; next} {block=block $0 "|"} END{print block}'; }
+
+# The screen on display, walked: a swipe to the next item at a time, until TalkBack comes round to the item it said
+# after the first swipe (it goes on from the last item to the first), two swipes in a row bring nothing new, or
 # WALK_MAX swipes (default 80) were made.
 walk() {
-    local name=$1 before after quiet=0 i
+    local name=$1 before after quiet=0 i first="" now
     talkback_on
     for i in $(seq 1 "${WALK_MAX:-80}"); do
         before=$(spoken)
@@ -84,6 +93,8 @@ walk() {
         after=$(spoken)
         if [ "$after" = "$before" ]; then quiet=$((quiet + 1)); else quiet=0; fi
         [ "$quiet" -lt 2 ] || break
+        now=$(said_last)
+        if [ "$i" = 1 ]; then first=$now; elif [ -n "$first" ] && [ "$now" = "$first" ]; then break; fi
     done
     adb logcat -d -s DatapavanSpeech:I | tr -d '\r' | sed -n 's/^.* DatapavanSpeech: //p' | grep -v '^gestures ready$' >"$OUT/$locale-$name.txt"
     talkback_off
@@ -92,7 +103,7 @@ walk() {
 
 start_app() {
     adb shell am force-stop "$PKG"
-    adb shell am start -W -n "$PKG/.MainActivity" "$@" >/dev/null
+    adb shell am start -W -n "$PKG/$AUDIT" "$@" >/dev/null
 }
 
 for locale in ${WALK_LOCALES:-en fa ar}; do
@@ -104,6 +115,9 @@ for locale in ${WALK_LOCALES:-en fa ar}; do
         open_tab "$tab" || fail "no $tab destination in $locale"
         walk "$tab"
     done
+    # The walk scrolled the list; the settings button is at its top, so the app starts again.
+    start_app
+    wait_for_overview || fail "the summary did not come back in $locale"
     tap_id settings || fail "no settings button in $locale"
     within 10 gone_id settings || fail "the settings did not open in $locale"
     walk settings
@@ -114,7 +128,7 @@ for locale in ${WALK_LOCALES:-en fa ar}; do
     tap_id app-row || fail "no app to open in $locale"
     within 10 gone_id app-row || fail "the app's page did not open in $locale"
     walk app
-    adb shell am start -W -a org.visadahyu.datapavan.action.OPEN_PLAN -f 0x1000c000 -n "$PKG/.MainActivity" >/dev/null
+    adb shell am start -W -a org.visadahyu.datapavan.action.OPEN_PLAN -f 0x1000c000 -n "$PKG/$AUDIT" >/dev/null
     within 60 has_id plan || fail "the plan did not open in $locale"
     walk plan
     adb shell am force-stop "$PKG"

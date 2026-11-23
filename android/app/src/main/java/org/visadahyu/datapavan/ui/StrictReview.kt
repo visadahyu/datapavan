@@ -31,6 +31,8 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.semantics.heading
+import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.unit.dp
 import org.visadahyu.datapavan.R
 import org.visadahyu.datapavan.audit.AppFacts
@@ -78,7 +80,7 @@ internal fun StrictReview(apps: List<AppFacts>, insets: PaddingValues, onBack: (
     ) {
         item {
             TextButton(onClick = onBack) { Text(stringResource(R.string.back)) }
-            Text(stringResource(R.string.strict_title), style = MaterialTheme.typography.headlineSmall)
+            Text(stringResource(R.string.strict_title), style = MaterialTheme.typography.headlineSmall, modifier = Modifier.semantics { heading() })
             Spacer(Modifier.height(8.dp))
             Text(stringResource(R.string.strict_intro), style = MaterialTheme.typography.bodyMedium)
             privacyDashboard(context)?.let { intent ->

@@ -86,6 +86,9 @@
     <string name="now_window_hour">یک ساعت گذشته</string>
     <string name="now_window_screen">از وقتی صفحه روشن شد</string>
     <string name="now_sort">مرتب کردن دوباره</string>
+    <string name="now_pause">توقف موقت به‌روزرسانی</string>
+    <string name="now_resume">ادامهٔ به‌روزرسانی</string>
+    <string name="now_paused">به‌روزرسانی متوقف شده: عددهای این صفحه همین‌طور می‌مانند تا آن را ادامه دهید. Datapavan در این مدت به شمردن ادامه می‌دهد.</string>
     <string name="now_sort_note">تا وقتی نگاه می‌کنید، ردیف‌ها سر جایشان می‌مانند. برنامه‌های تازه به انتها اضافه می‌شوند.</string>
     <string name="now_empty">در این مدت هیچ برنامه‌ای از شبکه استفاده نکرد.</string>
     <string name="now_one_app">در حال نمایش یک برنامه.</string>
@@ -437,6 +440,7 @@
     <string name="dns_audited_no">هیچ کسی از بیرون این را بررسی نکرده است.</string>
     <string name="dns_audited_firm">یک شرکت حسابرسی این ادعاها را بررسی کرده است.</string>
     <string name="dns_policy">سیاست حریم خصوصی آن</string>
+    <string name="dns_policy_named">سیاست حریم خصوصی آن: %1$s</string>
     <string name="dns_choice_fails">اگر پاسخ ندهد، Datapavan از Oblivious DoH و بعد از راه‌های رمزگذاری‌شدهٔ دیگر استفاده می‌کند. برای جلوگیری از این، «فقط همین سرور DNS» را روشن کنید.</string>
     <string name="dns_only">فقط همین سرور DNS</string>
     <string name="dns_only_cost">اگر سرور DNS شما پاسخ ندهد، برنامه‌هایی که مستقیم می‌روند نمی‌توانند نامی جست‌وجو کنند.</string>
@@ -577,6 +581,7 @@
     <string name="guide_not_checked">هنوز با Datapavan امتحان نشده است.</string>
     <string name="guide_labels_tool">کلمه‌های داخل گیومه از خود %1$s روی این گوشی خوانده شده‌اند.</string>
     <string name="guide_labels_recorded">کلمه‌های داخل گیومه همان‌طورند که آن نسخه نشان می‌دهد.</string>
+    <string name="guide_labels_where" tools:ignore="UnusedResources">جای هر کلمهٔ داخل گیومه در کد منبع %1$s:</string>
     <string name="guide_audit">Datapavan برنامه‌های شما را بدون وی‌پی‌انش هم بررسی می‌کند.</string>
     <!-- Steps. Each %s in quotes is one of the tool's labels. -->
     <string name="guide_step_drawer">منوی گوشهٔ بالای صفحهٔ آن را باز کنید و روی «%1$s» بزنید.</string>

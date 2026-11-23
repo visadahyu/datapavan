@@ -34,15 +34,62 @@ and fewer by criterion. That is why the walks and the test with real users are p
 
 ## What no tool checks, read by hand
 
-<!-- Filled from the unit's walk. -->
+Read again when a screen or a page is added or changed:
+
+- **Reaching a page more than one way (2.4.5).** The site's pages are linked from the header's navigation and from
+  every page's footer, and the guides' index lists every guide; the guides are in English only, and the footer says
+  so in each language. In the apps, every screen is reached from the bottom bar or from the screen before it, and
+  the plan also from its launcher shortcut.
+- **The same thing named the same way (3.2.3, 3.2.4).** The bottom bar's four destinations keep their order and
+  names on every screen; "Network" names only Datapavan Advanced's screen and "Data use" only the audit's tab.
+- **Help in the same place (3.2.6).** The site's footer, on every page, holds the security report, the privacy policy
+  and the source.
+- **Orientation (1.3.4).** No screen of either edition is locked to portrait or landscape.
+- **Dragging (2.5.7).** Nothing in either edition or on the site needs a drag.
+- **Signing in (3.3.8).** Neither edition has an account, a sign-in or anything to remember.
+- **Errors in a form (3.3.1 to 3.3.3, 4.1.3).** The text fields are the app search, a WireGuard configuration's name
+  and, in Datapavan Advanced, your own resolver. Only the resolver's are ever refused: when Datapavan's test of it
+  fails, both fields are in Material's error state, which screen readers announce, and the reason is said in words.
+  A configuration file that cannot be read is refused with its line and setting in plain words.
+- **Titles (2.4.2).** Every screen's title is a heading, and TalkBack reads it when the screen opens.
+- **Moving and changing content (2.2.2).** "Now" updates its counts every second; its button stops them and starts
+  them again. Nothing else moves by itself, and the site's drawing opens only as it is scrolled into view, and not at
+  all for readers who ask for less motion.
+- **Forced colours and Android's contrast setting.** The site keeps its text, borders and drawing visible with forced
+  colours (Windows' high contrast). Android 14 and later lets users ask apps for medium or high contrast; Datapavan's
+  own colours already pass WCAG AA in both themes, and do not change with that setting yet: a known gap, below.
 
 ## The latest TalkBack walk
 
-<!-- Filled from the unit's walk. -->
+On 2026-11-23, with TalkBack 17.0 at its default settings on Android 17 (an emulator), on Datapavan Advanced's
+summary, apps, phone and data use tabs, the settings, an app's page, the plan, the network screen and "Now", in English,
+Persian and Arabic (about 4,500 utterances in all):
+
+- **Every item has a name.** TalkBack called nothing "unlabelled" on any screen in any language.
+- **Roles and states are said.** Buttons as buttons, tabs as tabs with their number ("Tab, 2 of 4"), choices as radio
+  buttons, selected or not, the app's page's sections as headings that are expanded or collapsed, the search field as
+  an edit box.
+- **Fixed on the way:**
+  - the screens' titles were not headings, so a screen reader could not jump to them;
+  - the app's page's sections said "open" and "closed" in Datapavan's words rather than TalkBack's own;
+  - tappable cards had no role;
+  - each preset resolver's "Its privacy policy" button did not say whose policy it was.
+- **The order** follows the screen: down the page, right to left in Persian and Arabic. In long lists TalkBack leaves
+  the list for the bottom bar before it scrolls on, then comes back: Android's own behaviour with lazy lists.
 
 ## Known gaps
 
-<!-- Filled from the unit's results. -->
+- **The voice for the app's language.** When Datapavan's own language differs from the phone's (Persian in Datapavan on
+  a phone set to English, for example), TalkBack reads Datapavan's text with the phone's voice: in the walk, every
+  Persian and Arabic text was handed to the speech engine as English. Marking the text's language on the text, the
+  way Android expects, did not change this in a test with Compose's text. Until it is solved, set the phone's
+  language, or TalkBack's own speech language, to the language you read Datapavan in.
+- **Android's contrast setting.** Android 14 and later lets users ask apps for medium or high contrast. Datapavan's
+  colours pass WCAG AA in both themes, but do not yet change with that setting.
+- **No independent audit yet.** The checks above are the project's own and automated tools' own. A review by
+  people who use assistive technology every day comes with Datapavan Advanced's test with real users; a professional
+  accessibility audit is not planned yet.
+- **The website's guides are in English only.** Every page says so where it links them.
 
 ## Tell us
 

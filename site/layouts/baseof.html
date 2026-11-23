@@ -67,6 +67,8 @@ own title and description, its one address, its translations, and a link preview
 {{ block "main" . }}{{ end }}
 <div class="w"><footer><div class="fl"><a href="{{ $toLang }}news/index.html">{{ $t.news_title }}</a>
 <a href="{{ $toLang }}bots/index.html">{{ $t.foot_bots }}</a>
+{{- /* The guides are in English only; every page links them, so that each can be found more than one way (WCAG 2.4.5). */}}
+<a href="{{ $toSite }}guides/index.html"{{ if ne site.Language.Lang "en" }} hreflang="en"{{ end }}>{{ $t.foot_guides }}</a>
 <a href="{{ $toLang }}privacy/index.html">{{ $t.foot_privacy }}</a>
 <a href="{{ site.Params.repo }}/security/advisories/new">{{ $t.foot_report }}</a>
 <a href="{{ site.Params.repo }}/blob/main/SECURITY.md">{{ $t.foot_security }}</a>

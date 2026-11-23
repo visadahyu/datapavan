@@ -88,6 +88,9 @@
     <string name="now_window_hour">La última hora</string>
     <string name="now_window_screen">Desde que se encendió la pantalla</string>
     <string name="now_sort">Volver a ordenar</string>
+    <string name="now_pause">Pausar la actualización</string>
+    <string name="now_resume">Reanudar la actualización</string>
+    <string name="now_paused">Actualización en pausa: los números de esta pantalla se quedan como están hasta que la reanudes. Datapavan sigue contando mientras tanto.</string>
     <string name="now_sort_note">Las filas no se mueven mientras miras. Las apps nuevas se añaden al final.</string>
     <string name="now_empty">Ninguna app usó la red en este período.</string>
     <string name="now_one_app">Se muestra una sola app.</string>
@@ -452,6 +455,7 @@
     <string name="dns_audited_no">Nadie externo lo ha comprobado.</string>
     <string name="dns_audited_firm">Una empresa de contabilidad comprobó estas afirmaciones.</string>
     <string name="dns_policy">Su política de privacidad</string>
+    <string name="dns_policy_named">Su política de privacidad: %1$s</string>
     <string name="dns_choice_fails">Si no responde, Datapavan usa Oblivious DoH y luego las otras vías cifradas. Activa «Solo este servidor DNS» para impedirlo.</string>
     <string name="dns_only">Solo este servidor DNS</string>
     <string name="dns_only_cost">Si tu servidor DNS no responde, las apps que van directamente no pueden buscar nombres.</string>
@@ -592,6 +596,7 @@
     <string name="guide_not_checked">Aún no se ha probado con Datapavan.</string>
     <string name="guide_labels_tool">Las palabras entre comillas se leen de %1$s en este teléfono.</string>
     <string name="guide_labels_recorded">Las palabras entre comillas son tal como las muestra esa versión.</string>
+    <string name="guide_labels_where" tools:ignore="UnusedResources">Dónde está cada palabra entre comillas en el código fuente de %1$s:</string>
     <string name="guide_audit">La comprobación de tus apps que hace Datapavan también funciona sin su VPN.</string>
     <!-- Steps. Each %s in quotes is one of the tool's labels. -->
     <string name="guide_step_drawer">Abre el menú de la esquina superior de su pantalla y toca «%1$s».</string>

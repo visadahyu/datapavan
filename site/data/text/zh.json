@@ -3,7 +3,7 @@
  "dir": "ltr",
  "name": "简体中文",
  "language_label": "语言",
- "skip_to_content": "跳到正文",
+ "skip_to_content": "跳至内容",
  "digits": [
   "1",
   "2",
@@ -419,6 +419,7 @@
  "foot_security": "安全策略",
  "foot_privacy": "隐私说明",
  "foot_bots": "机器人能看到什么",
+ "foot_guides": "您的工具与 Datapavan Advanced 并用（英文）",
  "foot_source": "源代码",
  "foot_licence": "依据 Apache License 2.0 发布的自由软件。",
  "foot_clean": "此页面不设置 Cookie，也不从其他服务器加载任何内容。",

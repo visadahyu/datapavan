@@ -86,6 +86,9 @@
     <string name="now_window_hour">Die letzte Stunde</string>
     <string name="now_window_screen">Seit der Bildschirm eingeschaltet wurde</string>
     <string name="now_sort">Neu sortieren</string>
+    <string name="now_pause">Aktualisierung pausieren</string>
+    <string name="now_resume">Aktualisierung fortsetzen</string>
+    <string name="now_paused">Aktualisierung pausiert: Die Zahlen auf diesem Bildschirm bleiben so, wie sie sind, bis Sie die Aktualisierung fortsetzen. Datapavan zählt währenddessen weiter.</string>
     <string name="now_sort_note">Zeilen bleiben an ihrem Platz, während Sie hinsehen. Neue Apps kommen ans Ende.</string>
     <string name="now_empty">In diesem Zeitraum hat keine App das Netzwerk genutzt.</string>
     <string name="now_one_app">Eine App wird angezeigt.</string>
@@ -437,6 +440,7 @@
     <string name="dns_audited_no">Niemand von außen hat diese Angaben geprüft.</string>
     <string name="dns_audited_firm">Eine Wirtschaftsprüfungsgesellschaft hat diese Angaben geprüft.</string>
     <string name="dns_policy">Seine Datenschutzerklärung</string>
+    <string name="dns_policy_named">Seine Datenschutzerklärung: %1$s</string>
     <string name="dns_choice_fails">Wenn er nicht antwortet, verwendet Datapavan Oblivious DoH und dann die anderen verschlüsselten Wege. Schalten Sie „Nur dieser Resolver“ ein, um das zu verhindern.</string>
     <string name="dns_only">Nur dieser Resolver</string>
     <string name="dns_only_cost">Wenn Ihr Resolver nicht antwortet, können Apps, die direkt gehen, keine Namen nachschlagen.</string>
@@ -577,6 +581,7 @@
     <string name="guide_not_checked">Noch nicht mit Datapavan ausprobiert.</string>
     <string name="guide_labels_tool">Die Wörter in Anführungszeichen werden auf diesem Telefon aus %1$s gelesen.</string>
     <string name="guide_labels_recorded">Die Wörter in Anführungszeichen sind so, wie diese Version sie anzeigt.</string>
+    <string name="guide_labels_where" tools:ignore="UnusedResources">Wo jedes Wort in Anführungszeichen im Quellcode von %1$s steht:</string>
     <string name="guide_audit">Die Prüfung Ihrer Apps durch Datapavan funktioniert auch ohne sein VPN.</string>
     <!-- Steps. Each %s in quotes is one of the tool's labels. -->
     <string name="guide_step_drawer">Öffnen Sie das Menü in der oberen Ecke seines Bildschirms und tippen Sie auf „%1$s“.</string>

@@ -120,10 +120,10 @@
     <string name="now_window_hour">The last hour</string>
     <string name="now_window_screen">Since the screen came on</string>
     <string name="now_sort">Sort again</string>
-    <!-- "Now" (the accessibility unit, WCAG 2.2.2): the button that stops the counts changing each second, and starts them again, and the line shown while they are stopped. -->
-    <string name="now_pause">Pause the counts</string>
-    <string name="now_resume">Resume the counts</string>
-    <string name="now_paused">Paused: the counts here stay as they are until you resume them. Datapavan keeps counting meanwhile.</string>
+    <!-- "Now" (the accessibility unit, WCAG 2.2.2): the button that stops the screen's numbers changing each second, and starts them again, and the line shown while they are stopped. Only the screen stops changing; Datapavan goes on counting. -->
+    <string name="now_pause">Pause updates</string>
+    <string name="now_resume">Resume updates</string>
+    <string name="now_paused">Updates paused: the numbers on this screen stay as they are until you resume. Datapavan goes on counting meanwhile.</string>
     <string name="now_sort_note">Rows stay where they are while you look. New apps are added at the end.</string>
     <string name="now_empty">No app used the network in this time.</string>
     <string name="now_one_app">Showing one app.</string>
@@ -475,6 +475,8 @@
     <string name="dns_audited_no">No one outside has checked this.</string>
     <string name="dns_audited_firm">An accounting firm checked these claims.</string>
     <string name="dns_policy">Its privacy policy</string>
+    <!-- What a screen reader says for the button above: its own words first, then whose policy it is (the accessibility unit, WCAG 2.4.4). %1$s is the operator's name, such as Quad9. -->
+    <string name="dns_policy_named">Its privacy policy: %1$s</string>
     <string name="dns_choice_fails">If it does not answer, Datapavan uses Oblivious DoH, then the other encrypted ways. Turn on \"Only this resolver\" to stop that.</string>
     <string name="dns_only">Only this resolver</string>
     <string name="dns_only_cost">If your resolver does not answer, apps that go directly cannot look up names.</string>

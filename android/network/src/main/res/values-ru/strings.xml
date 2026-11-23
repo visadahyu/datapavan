@@ -90,6 +90,9 @@
     <string name="now_window_hour">За последний час</string>
     <string name="now_window_screen">С момента включения экрана</string>
     <string name="now_sort">Отсортировать заново</string>
+    <string name="now_pause">Приостановить обновление</string>
+    <string name="now_resume">Возобновить обновление</string>
+    <string name="now_paused">Обновление приостановлено: цифры на этом экране остаются как есть, пока вы его не возобновите. Datapavan тем временем продолжает считать.</string>
     <string name="now_sort_note">Строки остаются на месте, пока вы смотрите. Новые приложения добавляются в конец.</string>
     <string name="now_empty">За это время ни одно приложение не использовало сеть.</string>
     <string name="now_one_app">Показано одно приложение.</string>
@@ -467,6 +470,7 @@
     <string name="dns_audited_no">Никто со стороны это не проверял.</string>
     <string name="dns_audited_firm">Эти заявления проверила аудиторская фирма.</string>
     <string name="dns_policy">Его политика конфиденциальности</string>
+    <string name="dns_policy_named">Его политика конфиденциальности: %1$s</string>
     <string name="dns_choice_fails">Если он не отвечает, Datapavan использует Oblivious DoH, затем другие зашифрованные способы. Включите «Только этот DNS-сервер», чтобы этого не происходило.</string>
     <string name="dns_only">Только этот DNS-сервер</string>
     <string name="dns_only_cost">Если ваш DNS-сервер не отвечает, приложения, идущие напрямую, не могут искать имена.</string>
@@ -607,6 +611,7 @@
     <string name="guide_not_checked">С Datapavan пока не опробовано.</string>
     <string name="guide_labels_tool">Слова в кавычках прочитаны из %1$s на этом телефоне.</string>
     <string name="guide_labels_recorded">Слова в кавычках приведены так, как их показывает эта версия.</string>
+    <string name="guide_labels_where" tools:ignore="UnusedResources">Где в исходном коде %1$s находится каждое слово в кавычках:</string>
     <string name="guide_audit">Проверка ваших приложений, которую выполняет Datapavan, работает и без его VPN.</string>
     <!-- Steps. Each %s in quotes is one of the tool's labels. -->
     <string name="guide_step_drawer">Откройте меню в верхнем углу его экрана и нажмите «%1$s».</string>

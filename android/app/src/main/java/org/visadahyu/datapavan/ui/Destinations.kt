@@ -44,6 +44,8 @@ import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.res.pluralStringResource
 import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.semantics.heading
+import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.unit.dp
 import org.visadahyu.datapavan.BuildConfig
 import org.visadahyu.datapavan.R
@@ -153,7 +155,7 @@ private fun TopBar(@StringRes title: Int, onSettings: () -> Unit) {
             stringResource(title),
             style = MaterialTheme.typography.headlineSmall,
             color = MaterialTheme.colorScheme.primary,
-            modifier = Modifier.weight(1f),
+            modifier = Modifier.weight(1f).semantics { heading() },
         )
         IconButton(onClick = onSettings, modifier = Modifier.testTag("settings")) {
             Icon(painterResource(R.drawable.ic_settings), contentDescription = stringResource(R.string.settings_title))
