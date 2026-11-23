@@ -376,6 +376,7 @@
     <string name="plan_title">Tu plan</string>
     <!-- The launcher shortcut to the plan (xml/shortcuts.xml): at most 10 characters. -->
     <string name="shortcut_plan">Plan</string>
+    <string name="shortcut_network">Datos</string>
     <string name="plan_entry_first">Primero: %1$s</string>
     <string name="plan_entry_none">Ahora no hay nada que hacer en este nivel.</string>
     <string name="plan_open">Abrir el plan</string>

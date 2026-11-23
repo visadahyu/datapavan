@@ -373,6 +373,7 @@
     <string name="plan_title">您的计划</string>
     <!-- The launcher shortcut to the plan (xml/shortcuts.xml): at most 10 characters. -->
     <string name="shortcut_plan">计划</string>
+    <string name="shortcut_network">流量使用</string>
     <string name="plan_entry_first">第一项：%1$s</string>
     <string name="plan_entry_none">此级别目前没有要做的事。</string>
     <string name="plan_open">打开计划</string>

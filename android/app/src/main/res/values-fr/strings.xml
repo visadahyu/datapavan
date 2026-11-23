@@ -385,6 +385,7 @@
     <!-- The remediation plan and its journal (ADR 0026). -->
     <string name="plan_title">Votre plan</string>
     <string name="shortcut_plan">Plan</string>
+    <string name="shortcut_network">Données</string>
     <string name="plan_entry_first">D\'abord : %1$s</string>
     <string name="plan_entry_none">Rien à faire à ce niveau pour l\'instant.</string>
     <string name="plan_open">Ouvrir le plan</string>

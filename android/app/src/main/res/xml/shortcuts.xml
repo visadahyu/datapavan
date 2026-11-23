@@ -30,7 +30,7 @@
     <shortcut
         android:shortcutId="network"
         android:icon="@drawable/ic_shortcut_network"
-        android:shortcutShortLabel="@string/nav_network"
+        android:shortcutShortLabel="@string/shortcut_network"
         android:shortcutLongLabel="@string/section_network">
         <intent
             android:action="org.visadahyu.datapavan.action.OPEN_NETWORK"

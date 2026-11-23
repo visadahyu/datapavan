@@ -411,6 +411,9 @@
     <string name="plan_title">Your plan</string>
     <!-- The launcher shortcut to the plan (xml/shortcuts.xml): at most 10 characters. -->
     <string name="shortcut_plan">Plan</string>
+    <!-- The launcher shortcut to the Data use tab (xml/shortcuts.xml): at most 10 characters; its long label is
+         section_network. -->
+    <string name="shortcut_network">Data use</string>
     <string name="plan_entry_first">First: %1$s</string>
     <string name="plan_entry_none">Nothing to do at this level now.</string>
     <string name="plan_open">Open the plan</string>

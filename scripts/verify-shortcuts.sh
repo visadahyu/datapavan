@@ -71,7 +71,7 @@ open_shortcut() {
 }
 
 if $hidden; then
-    for label in shortcut_plan nav_apps nav_network; do
+    for label in shortcut_plan nav_apps shortcut_network; do
         grep -q "shortLabel=\*\*\*, resId=[0-9]*\[$label\]" <<<"$listed" || fail "no shortcut is labelled with $label"
     done
     [ "$(grep -c 'activity=ComponentInfo{'"$PKG/$PKG.MainActivity"'}' <<<"$listed")" = 3 ] || fail "not three shortcuts start MainActivity"

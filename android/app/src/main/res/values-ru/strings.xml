@@ -93,7 +93,7 @@
     <string name="usage_access_step_allow">2. Нажмите «%1$s», а затем меню (⋮) вверху открывшейся страницы. Выберите пункт «%2$s», который появляется там только после шага 1, и подтвердите. Затем снова нажмите «%3$s».</string>
     <string name="usage_access_app_info">Открыть сведения о приложении</string>
     <string name="usage_reading">Читаем записи Android…</string>
-    <string name="usage_missing">Чтобы показать передачу данных и время последнего открытия, нужен доступ к данным об использовании. Его можно разрешить на вкладке «Передача данных».</string>
+    <string name="usage_missing">Чтобы показать передачу данных и время последнего открытия, нужен доступ к данным об использовании. Его можно разрешить на вкладке «Данные».</string>
     <string name="section_network">Передача данных</string>
     <plurals name="network_period">
         <item quantity="one">Последний %1$d день: с %2$s по %3$s</item>
@@ -379,6 +379,7 @@
     <string name="dataset_remediation">Приложения, которых план никогда не касается, по их функции</string>
     <string name="plan_title">Ваш план</string>
     <string name="shortcut_plan">План</string>
+    <string name="shortcut_network">Данные</string>
     <string name="plan_entry_first">Сначала: %1$s</string>
     <string name="plan_entry_none">На этом уровне сейчас делать нечего.</string>
     <string name="plan_open">Открыть план</string>
@@ -528,7 +529,7 @@
     <string name="nav_summary">Сводка</string>
     <string name="nav_apps">Приложения</string>
     <string name="nav_phone">Телефон</string>
-    <string name="nav_network">Передача данных</string>
+    <string name="nav_network">Данные</string>
     <string name="settings_title">Настройки</string>
     <string name="settings_appearance">Оформление</string>
     <string name="settings_theme_system">Как в системе</string>
