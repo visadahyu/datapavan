@@ -246,10 +246,15 @@ usage_fa=$(phone_label usage_access fa)
 usage_en=$(phone_label usage_access en)
 permit_en=$(phone_label permit_usage_access en)
 permit_fa=$(phone_label permit_usage_access fa)
-line="This phone's settings call it “$LRI$usage_en$PDI ($RLI$usage_fa$PDI)”, with the switch “$LRI$permit_en$PDI ($RLI$permit_fa$PDI)”."
+# The line in Datapavan's language, as values-fa has it, each label filled in as label_both sets it.
+line=$(sed -n 's/.*<string name="usage_access_phone_name">\([^<]*\)<.*/\1/p' "$ROOT/android/app/src/main/res/values-fa/strings.xml" |
+    sed "s/\\\\'/'/g")
+lead=${line%%«*}
+line=${line/"%1\$s"/"$LRI$usage_en$PDI ($RLI$usage_fa$PDI)"}
+line=${line/"%2\$s"/"$LRI$permit_en$PDI ($RLI$permit_fa$PDI)"}
 open_tab network || fail "the network tab did not open"
 for _ in $(seq 1 30); do screen_contains "$line" && break; sleep 1; done
-screen_contains "$line" || { scroll_to "This phone's settings call it" >/dev/null || true; screen_contains "$line"; } ||
+screen_contains "$line" || { scroll_to "$lead" >/dev/null || true; screen_contains "$line"; } ||
     fail "the usage access card does not say '$line'"
 echo "ok: phone in English, Datapavan in Persian: the usage access card says '$line'"
 open_tab phone || fail "the phone's tab did not open"
@@ -299,7 +304,7 @@ if [ -f "$ADVANCED_APK" ]; then
     echo "ok: phone in Persian, Advanced in English: the names' section quotes $quoted"
     set_phone_locale en-US || fail "the phone's language did not change back to English"
     set_app_language "$ADVANCED" fa
-    quoted="\"$LRI$always_en$PDI ($RLI$always_fa$PDI)\" switch"
+    quoted="«$LRI$always_en$PDI ($RLI$always_fa$PDI)»"
     network_says "$quoted" values-fa || fail "with Advanced in Persian, the names' section does not quote $quoted"
     echo "ok: phone in English, Advanced in Persian: the names' section quotes $quoted"
     adb shell cmd locale set-app-locales "$ADVANCED" --locales en
