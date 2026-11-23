@@ -41,8 +41,10 @@ this: the engines' own consoles report searches and clicks.
   SoftwareApplication, as microdata rather than JSON-LD, so that the site keeps no script tag at all.
 - **IndexNow:** the key file `static/<key>.txt`. After a deploy, `scripts/indexnow.py --send` tells Bing, Yandex,
   Naver and Seznam which pages exist; Google reads the sitemap.
-- **The consoles:** Google Search Console holds datapavan.org as a domain property, verified by a TXT record in its
-  DNS; Bing Webmaster Tools imports it from there. Both have the sitemap.
+- **The consoles:** Google Search Console holds datapavan.org as a domain property, and Yandex Webmaster holds it too,
+  each verified by its own TXT record in the domain's DNS, which must stay; Bing Webmaster Tools imported it from
+  Google's (all on 2026-11-23). Each gets the sitemap once it is live. Bing's AI Performance report shows where
+  Copilot's answers cite the site.
 
 `scripts/check-site.py` checks all of it: robots.txt, the sitemap against the pages, llms.txt's links, the key file,
 and on every page
