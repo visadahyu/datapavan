@@ -29,7 +29,8 @@ object ProxyFacts {
      * destination asked for, with its port, for a declared proxy, and empty for a plain request's while the switch
      * is off ([askedLeftOut]); [maker] the company whose network the address is not, where the network part can tell;
      * [cover] and [coverOwner] the name an inferred proxy's hello sent and, where the owners' table names both, the
-     * company it belongs to beside the network's.
+     * company it belongs to beside the network's; [shownOnly] whether "Now" shows this first hop only for its window,
+     * as the engine marks it (snapshot version 5), never in the history.
      */
     data class Facts(
         val kind: Kind,
@@ -44,6 +45,7 @@ object ProxyFacts {
         val password: Boolean,
         val cover: String,
         val coverOwner: Pair<String, String>?,
+        val shownOnly: Boolean = false,
     ) {
         /** Whether a plain request's destination asked for was left out for the switch, its server kept. */
         val askedLeftOut: Boolean get() = kind == Kind.REQUEST && asked.isEmpty()
@@ -53,7 +55,8 @@ object ProxyFacts {
      * The facts of [proxy] at [address] and [port]. [appMaker] is the app's company group's name, where the owners'
      * table knows it, and [networkGroup] and [coverGroup] give the company group of a network by its AS number and of
      * a host name, with [groupName] naming a group; for an inferred proxy outside its maker's network the maker is
-     * the messenger's own name.
+     * the messenger's own name. [shownOnly] is the snapshot's mark of a first hop "Now" shows only; a record of the
+     * history never has it.
      */
     fun of(
         proxy: LogRecord.Proxy,
@@ -64,6 +67,7 @@ object ProxyFacts {
         networkGroup: (Long) -> String? = { null },
         coverGroup: (String) -> String? = { null },
         groupName: (String) -> String = { it },
+        shownOnly: Boolean = false,
     ): Facts {
         val kind = when (proxy.kind) {
             LogRecord.PROXY_SOCKS5 -> Kind.SOCKS5
@@ -109,6 +113,7 @@ object ProxyFacts {
             password = proxy.password,
             cover = proxy.cover,
             coverOwner = coverOwner,
+            shownOnly = shownOnly,
         )
     }
 

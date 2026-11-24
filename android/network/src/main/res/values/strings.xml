@@ -511,8 +511,6 @@
          on. It replaces "Log where these apps connect" (chain_log_destinations), which spoke of chained apps alone.
          The lines below that name it quote it word for word. -->
     <string name="log_switch">Log where apps connect through your tool, WireGuard or a proxy</string>
-    <!-- Under the switch above. -->
-    <string name="log_switch_note">Off unless you turn it on. It covers the apps you send through your circumvention tool or a WireGuard configuration, and the tool\'s own servers. It also covers apps that connect through a proxy, such as a Telegram proxy. Datapavan still counts their connections. A list of where they went can be used against you if someone searches your phone.</string>
     <!-- A button under a row of "Now" or the history that the switch above leaves out: it opens the Network screen at the
          switch. -->
     <string name="log_switch_open">Go to the switch</string>
@@ -576,10 +574,8 @@
     <string name="proxy_cover_owner">That name belongs to %1$s, and the network to %2$s.</string>
     <!-- A proxy while the switch above is off: %1$s is its kind. Then, on lines of their own, how Datapavan knows and the
          facts that name nothing. -->
-    <string name="now_proxy_hidden">Through the %1$s. Where it connected is not shown, because \"Log where apps connect through your tool, WireGuard or a proxy\" is off.</string>
     <string name="history_proxy_hidden">Through the %1$s. Where it connected was not logged, because \"Log where apps connect through your tool, WireGuard or a proxy\" was off.</string>
     <!-- As above, for the proxy set in Android's settings. -->
-    <string name="now_proxy_setting_hidden">Through the %1$s in Android\'s settings, which other apps can use too. Where it connected is not shown, because \"Log where apps connect through your tool, WireGuard or a proxy\" is off.</string>
     <string name="history_proxy_setting_hidden">Through the %1$s in Android\'s settings, which other apps can use too. Where it connected was not logged, because \"Log where apps connect through your tool, WireGuard or a proxy\" was off.</string>
     <!-- One more line of "What this view cannot see". -->
     <string name="cannot_see_proxy">For a proxy an app uses, Datapavan cannot see who runs it, or whether you or the app chose it. For a proxy Datapavan infers, it cannot see where the traffic goes after it.</string>

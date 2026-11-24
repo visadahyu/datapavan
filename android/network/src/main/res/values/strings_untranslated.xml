@@ -1,0 +1,25 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+    The proxy record's unit A (ADR 0052, decision 8): what "Now" and the switch say of an app's own proxy's first hop,
+    shown while its connection is open and for ten minutes after it ends, and not logged while the switch is off. In
+    English only until ADR 0030's next round translates them, with their review, into the seven other languages; they
+    then move into strings.xml, where scripts/check-translations.py holds them to every language. Until then the
+    plain-language gate holds this file (scripts/check.sh), and lint's check for missing translations is lifted for
+    it alone. A release needs it gone (docs/RELEASE.md, "Strings"). They replace log_switch_note, now_proxy_hidden and
+    now_proxy_setting_hidden. Each quotes the switch's label (log_switch) word for word, or writes Now without quotes.
+-->
+<resources xmlns:tools="http://schemas.android.com/tools" tools:ignore="MissingTranslation">
+    <!-- In "Now", under a proxy whose address is shown while the switch is off: facts only. -->
+    <string name="now_proxy_live_only">This proxy\'s address is shown here while the connection is open and for ten minutes after it ends. It is not logged, because \"Log where apps connect through your tool, WireGuard or a proxy\" is off.</string>
+    <!-- Above it, for a proxy read from the connection (SOCKS or HTTP). -->
+    <string name="now_proxy_asked_off">Where the app asked the proxy to go is not shown or logged, because \"Log where apps connect through your tool, WireGuard or a proxy\" is off.</string>
+    <!-- In "Now", a proxy whose address is no longer shown: %1$s is the proxy's kind. It states the rule, so it stays
+         true after the switch is turned on. Then, on lines of their own, how Datapavan knows and the facts that name
+         nothing. -->
+    <string name="now_proxy_past">Through the %1$s. Its address is no longer shown: while \"Log where apps connect through your tool, WireGuard or a proxy\" is off, Datapavan shows a proxy\'s address only while the connection is open and for ten minutes after it ends.</string>
+    <!-- As above, for the proxy set in Android's settings. -->
+    <string name="now_proxy_setting_past">Through the %1$s in Android\'s settings, which other apps can use too. Its address is no longer shown: while \"Log where apps connect through your tool, WireGuard or a proxy\" is off, Datapavan shows a proxy\'s address only while the connection is open and for ten minutes after it ends.</string>
+    <!-- Under the switch. It writes Now without quotes, as history_back does: every quoted string of these rows quotes
+         the switch's label. -->
+    <string name="log_switch_note_proxies">Off unless you turn it on. It covers the apps you send through your circumvention tool or a WireGuard configuration, and the tool\'s own servers. Datapavan still counts their connections. It also covers apps that connect through a proxy, such as a Telegram proxy. While it is off, Now shows the proxy\'s address while the connection is open and for ten minutes after, and Datapavan logs only that the app used a proxy, which kind, when, and facts that name no address, such as whether a password was sent unencrypted. A list of where they went can be used against you if someone searches your phone.</string>
+</resources>

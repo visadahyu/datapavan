@@ -110,6 +110,6 @@ internal fun LogSwitchAlone(on: Boolean, onChange: (Boolean) -> Unit, modifier: 
             Text(stringResource(R.string.log_switch), style = MaterialTheme.typography.bodyLarge, modifier = Modifier.weight(1f))
             Switch(checked = on, onCheckedChange = null)
         }
-        Text(stringResource(R.string.log_switch_note), style = MaterialTheme.typography.bodyMedium)
+        Text(stringResource(R.string.log_switch_note_proxies), style = MaterialTheme.typography.bodyMedium)
     }
 }

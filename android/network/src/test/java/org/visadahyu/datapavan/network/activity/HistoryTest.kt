@@ -2,11 +2,29 @@ package org.visadahyu.datapavan.network.activity
 
 import java.net.InetAddress
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertTrue
 import org.junit.Test
 import org.visadahyu.datapavan.network.log.AppState
 import org.visadahyu.datapavan.network.log.LogRecord
 
 class HistoryTest {
+    /**
+     * The proxy record's unit A: a record of the log is never a first hop shown only, so its row says nothing of a window
+     * and gives no link for it, as the history screen builds it.
+     */
+    @Test
+    fun aRecordsRowIsNeverShownOnly() {
+        val proxy = LogRecord.Proxy(LogRecord.PROXY_SOCKS5, password = true, proxyName = "proxy.example.net")
+        val facts = org.visadahyu.datapavan.network.ui.proxyFacts(proxy, InetAddress.getByName("203.0.113.5"), 1080, 0, null, null)
+        assertEquals(false, facts.shownOnly)
+        val notes = setOf(org.visadahyu.datapavan.network.R.string.now_proxy_live_only, org.visadahyu.datapavan.network.R.string.now_proxy_asked_off)
+        for (shown in listOf(false, true)) {
+            val row = org.visadahyu.datapavan.network.ui.proxyRow(facts.copy(shownOnly = shown), past = true)
+            assertEquals(false, row.toSwitch)
+            assertTrue(row.lines.none { it.text in notes })
+        }
+    }
+
     private val t = 1_794_953_400_000L
     private val app = 10_123
 

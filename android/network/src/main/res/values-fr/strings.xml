@@ -486,8 +486,6 @@
          on. It replaces "Log where these apps connect" (chain_log_destinations), which spoke of chained apps alone.
          The lines below that name it quote it word for word. -->
     <string name="log_switch">Noter où se connectent les applis passant par votre outil, WireGuard ou un proxy</string>
-    <!-- Under the switch above. -->
-    <string name="log_switch_note">Désactivé, sauf si vous l\'activez. Ce réglage concerne les applis que vous faites passer par votre outil de contournement ou par une configuration WireGuard, et les propres serveurs de l\'outil. Il concerne aussi les applis qui se connectent par un proxy, comme un proxy Telegram. Datapavan compte quand même leurs connexions. Une liste de leurs destinations peut être utilisée contre vous si quelqu\'un fouille votre téléphone.</string>
     <!-- A button under a row of "Now" or the history that the switch above leaves out: it opens the Network screen at the
          switch. -->
     <string name="log_switch_open">Aller au réglage</string>
@@ -551,10 +549,8 @@
     <string name="proxy_cover_owner">Ce nom appartient à %1$s, et le réseau à %2$s.</string>
     <!-- A proxy while the switch above is off: %1$s is its kind. Then, on lines of their own, how Datapavan knows and the
          facts that name nothing. -->
-    <string name="now_proxy_hidden">Par le %1$s. Sa destination n\'est pas affichée, car « Noter où se connectent les applis passant par votre outil, WireGuard ou un proxy » est désactivé.</string>
     <string name="history_proxy_hidden">Par le %1$s. Sa destination n\'a pas été notée dans le journal, car « Noter où se connectent les applis passant par votre outil, WireGuard ou un proxy » était désactivé.</string>
     <!-- As above, for the proxy set in Android's settings. -->
-    <string name="now_proxy_setting_hidden">Par le %1$s défini dans les paramètres d\'Android, que d\'autres applis peuvent aussi utiliser. Sa destination n\'est pas affichée, car « Noter où se connectent les applis passant par votre outil, WireGuard ou un proxy » est désactivé.</string>
     <string name="history_proxy_setting_hidden">Par le %1$s défini dans les paramètres d\'Android, que d\'autres applis peuvent aussi utiliser. Sa destination n\'a pas été notée dans le journal, car « Noter où se connectent les applis passant par votre outil, WireGuard ou un proxy » était désactivé.</string>
     <!-- One more line of "What this view cannot see". -->
     <string name="cannot_see_proxy">Pour un proxy qu\'une appli utilise, Datapavan ne peut pas voir qui le gère, ni si c\'est vous ou l\'appli qui l\'a choisi. Pour un proxy que Datapavan déduit, il ne peut pas voir où va le trafic après lui.</string>

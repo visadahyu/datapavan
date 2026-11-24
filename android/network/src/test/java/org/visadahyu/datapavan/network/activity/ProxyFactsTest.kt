@@ -29,6 +29,8 @@ class ProxyFactsTest {
         assertEquals("Mozilla", known.maker)
         val same = ProxyFacts.of(proxy, hetzner, 1080, asn = 15_169, appMaker = "Google", networkGroup = { "google" }, groupName = { "Google" })
         assertEquals("", same.maker)
+        // The snapshot's mark of a first hop "Now" shows only is carried as given, and never set otherwise.
+        assertEquals(false to true, facts.shownOnly to ProxyFacts.of(proxy, hetzner, 1080, shownOnly = true).shownOnly)
     }
 
     @Test
@@ -100,7 +102,7 @@ class ProxyFactsTest {
         val names = "proxy_[a-z_]+|(?:now|history)_proxy_[a-z_]+|cannot_see_proxy|now_named_proxy|log_switch[a-z_]*|(?:now|history)_(?!network_off)[a-z_]+_off"
         val proxy = Regex("""<string name="($names)">([^<]*)</string>""")
             .findAll(strings).associate { it.groupValues[1] to it.groupValues[2].lowercase() }
-        assertTrue(proxy.keys.toString(), proxy.size >= 38)
+        assertTrue(proxy.keys.toString(), proxy.size >= 40)
         val judging = listOf(
             "suspicious", "unusual", "abnormal", "excessive", "leak", "spying", "secretly", "malicious", "threat", "risk",
             "normal", "expected", "safe", "operator", "proxy-like", "hidden", "dangerous", "illegal",
@@ -127,7 +129,7 @@ class ProxyFactsTest {
         // Every row that names the switch names it as it reads.
         val label = proxy.getValue("log_switch")
         val naming = proxy.filterValues { "\\\"" in it }
-        assertTrue(naming.keys.toString(), naming.size >= 13)
+        assertTrue(naming.keys.toString(), naming.size >= 15)
         for ((name, text) in naming) assertTrue(name, text.contains("\\\"$label\\\""))
     }
 

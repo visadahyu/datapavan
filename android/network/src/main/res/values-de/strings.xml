@@ -472,8 +472,6 @@
          on. It replaces "Log where these apps connect" (chain_log_destinations), which spoke of chained apps alone.
          The lines below that name it quote it word for word. -->
     <string name="log_switch">Protokollieren, wohin sich Apps über Ihr Tool, WireGuard oder einen Proxy verbinden</string>
-    <!-- Under the switch above. -->
-    <string name="log_switch_note">Aus, solange Sie es nicht einschalten. Es gilt für die Apps, die Sie über Ihr Umgehungs-Tool oder eine WireGuard-Konfiguration leiten, und für die eigenen Server des Tools. Es gilt auch für Apps, die sich über einen Proxy verbinden, etwa einen Telegram-Proxy. Datapavan zählt ihre Verbindungen trotzdem. Eine Liste, wohin sie sich verbunden haben, kann gegen Sie verwendet werden, wenn jemand Ihr Telefon durchsucht.</string>
     <!-- A button under a row of "Now" or the history that the switch above leaves out: it opens the Network screen at the
          switch. -->
     <string name="log_switch_open">Zum Schalter</string>
@@ -537,10 +535,8 @@
     <string name="proxy_cover_owner">Dieser Name gehört %1$s, und das Netzwerk gehört %2$s.</string>
     <!-- A proxy while the switch above is off: %1$s is its kind. Then, on lines of their own, how Datapavan knows and the
          facts that name nothing. -->
-    <string name="now_proxy_hidden">Über den %1$s. Das Ziel wird nicht angezeigt, weil „Protokollieren, wohin sich Apps über Ihr Tool, WireGuard oder einen Proxy verbinden“ aus ist.</string>
     <string name="history_proxy_hidden">Über den %1$s. Das Ziel wurde nicht protokolliert, weil „Protokollieren, wohin sich Apps über Ihr Tool, WireGuard oder einen Proxy verbinden“ aus war.</string>
     <!-- As above, for the proxy set in Android's settings. -->
-    <string name="now_proxy_setting_hidden">Über den %1$s in den Einstellungen von Android, den auch andere Apps nutzen können. Das Ziel wird nicht angezeigt, weil „Protokollieren, wohin sich Apps über Ihr Tool, WireGuard oder einen Proxy verbinden“ aus ist.</string>
     <string name="history_proxy_setting_hidden">Über den %1$s in den Einstellungen von Android, den auch andere Apps nutzen können. Das Ziel wurde nicht protokolliert, weil „Protokollieren, wohin sich Apps über Ihr Tool, WireGuard oder einen Proxy verbinden“ aus war.</string>
     <!-- One more line of "What this view cannot see". -->
     <string name="cannot_see_proxy">Bei einem Proxy, den eine App nutzt, kann Datapavan nicht sehen, wer ihn betreibt oder ob Sie oder die App ihn gewählt haben. Bei einem Proxy, den Datapavan ableitet, kann es nicht sehen, wohin der Datenverkehr danach geht.</string>

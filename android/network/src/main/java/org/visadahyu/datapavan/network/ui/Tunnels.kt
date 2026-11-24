@@ -233,7 +233,7 @@ internal fun TunnelsSection(
         if (view.configurations.isNotEmpty()) {
             Column(Modifier.bringingIntoView(logSwitch), verticalArrangement = Arrangement.spacedBy(8.dp)) {
                 Switching(stringResource(R.string.log_switch), view.logDestinations, actions.onLogDestinations)
-                Text(stringResource(R.string.log_switch_note), style = MaterialTheme.typography.bodyMedium)
+                Text(stringResource(R.string.log_switch_note_proxies), style = MaterialTheme.typography.bodyMedium)
             }
         }
     }

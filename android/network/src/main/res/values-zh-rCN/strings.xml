@@ -460,8 +460,6 @@
          on. It replaces "Log where these apps connect" (chain_log_destinations), which spoke of chained apps alone.
          The lines below that name it quote it word for word. -->
     <string name="log_switch">记录应用通过您的工具、WireGuard 或代理连接到哪里</string>
-    <!-- Under the switch above. -->
-    <string name="log_switch_note">除非您开启，否则保持关闭。它涵盖您设置为通过您用来绕过网络限制的工具或 WireGuard 配置连接的应用，以及该工具自己的服务器。它也涵盖通过代理连接的应用，例如通过 Telegram 代理。Datapavan 仍会统计它们的连接。如果有人搜查您的手机，一份它们去过哪里的列表可能会被用来对您不利。</string>
     <!-- A button under a row of "Now" or the history that the switch above leaves out: it opens the Network screen at the
          switch. -->
     <string name="log_switch_open">前往该开关</string>
@@ -525,10 +523,8 @@
     <string name="proxy_cover_owner">该名称属于 %1$s，而该网络属于 %2$s。</string>
     <!-- A proxy while the switch above is off: %1$s is its kind. Then, on lines of their own, how Datapavan knows and the
          facts that name nothing. -->
-    <string name="now_proxy_hidden">通过该 %1$s。由于“记录应用通过您的工具、WireGuard 或代理连接到哪里”已关闭，未显示它连接到了哪里。</string>
     <string name="history_proxy_hidden">通过该 %1$s。由于当时“记录应用通过您的工具、WireGuard 或代理连接到哪里”处于关闭状态，未记录它连接到了哪里。</string>
     <!-- As above, for the proxy set in Android's settings. -->
-    <string name="now_proxy_setting_hidden">通过 Android 设置中的 %1$s，其他应用也可以使用它。由于“记录应用通过您的工具、WireGuard 或代理连接到哪里”已关闭，未显示它连接到了哪里。</string>
     <string name="history_proxy_setting_hidden">通过 Android 设置中的 %1$s，其他应用也可以使用它。由于当时“记录应用通过您的工具、WireGuard 或代理连接到哪里”处于关闭状态，未记录它连接到了哪里。</string>
     <!-- One more line of "What this view cannot see". -->
     <string name="cannot_see_proxy">对于应用使用的代理，Datapavan 看不到是谁在运行它，也看不到是您还是该应用选择了它。对于 Datapavan 推断出的代理，它看不到流量经过代理之后去往哪里。</string>

@@ -524,8 +524,6 @@
          on. It replaces "Log where these apps connect" (chain_log_destinations), which spoke of chained apps alone.
          The lines below that name it quote it word for word. -->
     <string name="log_switch">تسجيل الجهات التي تتصل بها التطبيقات عبر أداتك أو WireGuard أو خادم وكيل</string>
-    <!-- Under the switch above. -->
-    <string name="log_switch_note">متوقف ما لم تشغّله. يشمل التطبيقات التي تمرّرها عبر أداتك لتجاوز الحجب أو عبر تكوين WireGuard، والخوادم الخاصة بالأداة نفسها. ويشمل أيضًا التطبيقات التي تتصل عبر خادم وكيل، مثل خادم وكيل Telegram. يواصل Datapavan عدّ اتصالاتها. ويمكن أن تُستخدم قائمة بالجهات التي ذهبت إليها ضدك إذا فتّش أحد هاتفك.</string>
     <!-- A button under a row of "Now" or the history that the switch above leaves out: it opens the Network screen at the
          switch. -->
     <string name="log_switch_open">الانتقال إلى مفتاح التبديل</string>
@@ -589,10 +587,8 @@
     <string name="proxy_cover_owner">ذلك الاسم يعود إلى %1$s، والشبكة إلى %2$s.</string>
     <!-- A proxy while the switch above is off: %1$s is its kind. Then, on lines of their own, how Datapavan knows and the
          facts that name nothing. -->
-    <string name="now_proxy_hidden">عبر %1$s. لا تُعرض الجهة التي اتصل بها، لأن خيار «تسجيل الجهات التي تتصل بها التطبيقات عبر أداتك أو WireGuard أو خادم وكيل» متوقف.</string>
     <string name="history_proxy_hidden">عبر %1$s. لم تُسجَّل الجهة التي اتصل بها، لأن خيار «تسجيل الجهات التي تتصل بها التطبيقات عبر أداتك أو WireGuard أو خادم وكيل» كان متوقفًا.</string>
     <!-- As above, for the proxy set in Android's settings. -->
-    <string name="now_proxy_setting_hidden">عبر %1$s في إعدادات Android، الذي يمكن للتطبيقات الأخرى استخدامه أيضًا. لا تُعرض الجهة التي اتصل بها، لأن خيار «تسجيل الجهات التي تتصل بها التطبيقات عبر أداتك أو WireGuard أو خادم وكيل» متوقف.</string>
     <string name="history_proxy_setting_hidden">عبر %1$s في إعدادات Android، الذي يمكن للتطبيقات الأخرى استخدامه أيضًا. لم تُسجَّل الجهة التي اتصل بها، لأن خيار «تسجيل الجهات التي تتصل بها التطبيقات عبر أداتك أو WireGuard أو خادم وكيل» كان متوقفًا.</string>
     <!-- One more line of "What this view cannot see". -->
     <string name="cannot_see_proxy">في حالة الخادم الوكيل الذي يستخدمه تطبيق، لا يستطيع Datapavan أن يرى من يديره، ولا ما إذا كنت أنت من اختاره أم التطبيق. وفي حالة الخادم الوكيل الذي يستنتجه Datapavan، لا يستطيع أن يرى إلى أين تذهب حركة البيانات بعده.</string>

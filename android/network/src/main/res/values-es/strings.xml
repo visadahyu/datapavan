@@ -485,8 +485,6 @@
          on. It replaces "Log where these apps connect" (chain_log_destinations), which spoke of chained apps alone.
          The lines below that name it quote it word for word. -->
     <string name="log_switch">Registrar adónde se conectan las apps a través de tu herramienta, WireGuard o un proxy</string>
-    <!-- Under the switch above. -->
-    <string name="log_switch_note">Desactivado, salvo que lo actives. Abarca las apps que envías a través de tu herramienta para eludir bloqueos o de una configuración de WireGuard, y los propios servidores de la herramienta. También abarca las apps que se conectan a través de un proxy, como un proxy de Telegram. Datapavan sigue contando sus conexiones. Una lista de adónde fueron puede usarse en tu contra si alguien revisa tu teléfono.</string>
     <!-- A button under a row of "Now" or the history that the switch above leaves out: it opens the Network screen at the
          switch. -->
     <string name="log_switch_open">Ir al interruptor</string>
@@ -550,10 +548,8 @@
     <string name="proxy_cover_owner">Ese nombre pertenece a %1$s, y la red, a %2$s.</string>
     <!-- A proxy while the switch above is off: %1$s is its kind. Then, on lines of their own, how Datapavan knows and the
          facts that name nothing. -->
-    <string name="now_proxy_hidden">A través del %1$s. No se muestra adónde se conectó, porque «Registrar adónde se conectan las apps a través de tu herramienta, WireGuard o un proxy» está desactivado.</string>
     <string name="history_proxy_hidden">A través del %1$s. No se registró adónde se conectó, porque «Registrar adónde se conectan las apps a través de tu herramienta, WireGuard o un proxy» estaba desactivado.</string>
     <!-- As above, for the proxy set in Android's settings. -->
-    <string name="now_proxy_setting_hidden">A través del %1$s de los ajustes de Android, que otras apps también pueden usar. No se muestra adónde se conectó, porque «Registrar adónde se conectan las apps a través de tu herramienta, WireGuard o un proxy» está desactivado.</string>
     <string name="history_proxy_setting_hidden">A través del %1$s de los ajustes de Android, que otras apps también pueden usar. No se registró adónde se conectó, porque «Registrar adónde se conectan las apps a través de tu herramienta, WireGuard o un proxy» estaba desactivado.</string>
     <!-- One more line of "What this view cannot see". -->
     <string name="cannot_see_proxy">De un proxy que usa una app, Datapavan no puede ver quién lo gestiona, ni si lo elegiste tú o la app. De un proxy que Datapavan deduce, no puede ver adónde va el tráfico después de él.</string>

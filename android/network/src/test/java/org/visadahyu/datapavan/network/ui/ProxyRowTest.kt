@@ -26,7 +26,7 @@ class ProxyRowTest {
     fun aProxyLeftOutSaysHowItIsKnownAndLinksToTheSwitch() {
         val telegram = ProxyFacts.of(LogRecord.Proxy(LogRecord.PROXY_MTPROTO, outsideMaker = true, leftOut = true), zeros, 0)
         val now = proxyRow(telegram, past = false)
-        assertEquals(ProxyLine(R.string.now_proxy_hidden, ProxyFacts.Kind.MTPROTO), now.header)
+        assertEquals(ProxyLine(R.string.now_proxy_past, ProxyFacts.Kind.MTPROTO), now.header)
         assertEquals(
             listOf(ProxyLine(R.string.proxy_how_inferred), ProxyLine(R.string.proxy_not_maker, args = listOf(isolate("Telegram")))),
             now.lines,
@@ -35,18 +35,58 @@ class ProxyRowTest {
         assertEquals(R.string.history_proxy_hidden, proxyRow(telegram, past = true).header?.text)
         // A SOCKS5 proxy read from the connection says so; a password crossed unencrypted is said, never its value.
         val socks = proxyRow(ProxyFacts.of(LogRecord.Proxy(LogRecord.PROXY_SOCKS5, password = true, leftOut = true), zeros, 0), past = false)
-        assertEquals(listOf(R.string.now_proxy_hidden, R.string.proxy_how_read, R.string.proxy_password), texts(socks))
+        assertEquals(listOf(R.string.now_proxy_past, R.string.proxy_how_read, R.string.proxy_password), texts(socks))
     }
 
     /** Android's proxy setting, left out, has its own words, which never call it the app's: no second line contradicts them. */
     @Test
     fun androidsSettingLeftOutHasItsOwnWords() {
         val setting = ProxyFacts.of(LogRecord.Proxy(LogRecord.PROXY_CONNECT, setting = true, leftOut = true), zeros, 0)
-        assertEquals(listOf(R.string.now_proxy_setting_hidden, R.string.proxy_how_read), texts(proxyRow(setting, past = false)))
+        assertEquals(listOf(R.string.now_proxy_setting_past, R.string.proxy_how_read), texts(proxyRow(setting, past = false)))
         assertEquals(R.string.history_proxy_setting_hidden, proxyRow(setting, past = true).header?.text)
         // Kept, the setting's line follows where the proxy is.
         val kept = ProxyFacts.of(LogRecord.Proxy(LogRecord.PROXY_CONNECT, setting = true, asked = "example.org", askedPort = 443), hetzner, 3128)
         assertEquals(listOf(R.string.proxy_asked, R.string.proxy_network_unknown, R.string.proxy_setting), texts(proxyRow(kept, past = false)))
+    }
+
+    /**
+     * The proxy record's unit A: a first hop "Now" shows only, while the switch is off, says after its facts that where the
+     * app asked a declared proxy to go is not shown or logged, then that its address is shown only so long, and links to
+     * the switch; an inferred one has no line of what was asked. A kept row has neither, and the history never does.
+     */
+    @Test
+    fun aFirstHopShownOnlySaysWhyAndLinksToTheSwitch() {
+        val socks = LogRecord.Proxy(
+            LogRecord.PROXY_SOCKS5, password = true, proxyName = "proxy.example.net", organisation = "Hetzner Online GmbH",
+        )
+        val shown = proxyRow(ProxyFacts.of(socks, hetzner, 1080, shownOnly = true), past = false)
+        assertEquals(
+            listOf(
+                ProxyLine(R.string.proxy_declared, ProxyFacts.Kind.SOCKS5, listOf(isolateLtr("proxy.example.net:1080"))),
+                ProxyLine(R.string.proxy_network, args = listOf(isolate("Hetzner Online GmbH"))),
+                ProxyLine(R.string.proxy_password),
+                ProxyLine(R.string.now_proxy_asked_off),
+                ProxyLine(R.string.now_proxy_live_only),
+            ),
+            shown.lines,
+        )
+        assertEquals(null to true, shown.header to shown.toSwitch)
+        val mtproto = LogRecord.Proxy(LogRecord.PROXY_MTPROTO, outsideMaker = true, organisation = "Example Net", cover = "www.google.com")
+        val inferred = proxyRow(ProxyFacts.of(mtproto, hetzner, 443, shownOnly = true), past = false)
+        assertEquals(
+            listOf(R.string.proxy_inferred, R.string.proxy_network_not_maker, R.string.proxy_cover, R.string.now_proxy_live_only),
+            texts(inferred),
+        )
+        assertTrue(inferred.toSwitch)
+        val notes = setOf(R.string.now_proxy_asked_off, R.string.now_proxy_live_only)
+        for (row in listOf(
+            proxyRow(ProxyFacts.of(socks, hetzner, 1080), past = false),
+            proxyRow(ProxyFacts.of(socks, hetzner, 1080, shownOnly = true), past = true),
+            proxyRow(ProxyFacts.of(mtproto, hetzner, 443, shownOnly = true), past = true),
+        )) {
+            assertEquals(false, row.toSwitch)
+            assertTrue(texts(row).toString(), texts(row).none { it in notes })
+        }
     }
 
     /** With the switch on, a declared proxy and an inferred one say how the network part knows in their first line. */

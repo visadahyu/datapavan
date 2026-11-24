@@ -472,8 +472,6 @@
          on. It replaces "Log where these apps connect" (chain_log_destinations), which spoke of chained apps alone.
          The lines below that name it quote it word for word. -->
     <string name="log_switch">ثبت مقصد برنامه‌هایی که از فیلترشکن شما، WireGuard یا یک پروکسی می‌گذرند</string>
-    <!-- Under the switch above. -->
-    <string name="log_switch_note">تا آن را روشن نکنید، خاموش می‌ماند. برنامه‌هایی را در بر می‌گیرد که از فیلترشکن شما یا یک پیکربندی WireGuard عبور می‌دهید، و سرورهای خود فیلترشکن را. برنامه‌هایی را هم که از راه یک پروکسی وصل می‌شوند در بر می‌گیرد، مثل پروکسی Telegram. Datapavan همچنان اتصال‌های آن‌ها را می‌شمارد. اگر کسی گوشی شما را بگردد، فهرستی از جاهایی که رفته‌اند می‌تواند علیه شما به کار رود.</string>
     <!-- A button under a row of "Now" or the history that the switch above leaves out: it opens the Network screen at the
          switch. -->
     <string name="log_switch_open">رفتن به کلید</string>
@@ -537,10 +535,8 @@
     <string name="proxy_cover_owner">آن نام متعلق به %1$s است، و شبکهٔ آن نشانی متعلق به %2$s.</string>
     <!-- A proxy while the switch above is off: %1$s is its kind. Then, on lines of their own, how Datapavan knows and the
          facts that name nothing. -->
-    <string name="now_proxy_hidden">از راه %1$s. اینکه به کجا وصل شد نشان داده نمی‌شود، چون «ثبت مقصد برنامه‌هایی که از فیلترشکن شما، WireGuard یا یک پروکسی می‌گذرند» خاموش است.</string>
     <string name="history_proxy_hidden">از راه %1$s. اینکه به کجا وصل شد ثبت نشد، چون «ثبت مقصد برنامه‌هایی که از فیلترشکن شما، WireGuard یا یک پروکسی می‌گذرند» خاموش بود.</string>
     <!-- As above, for the proxy set in Android's settings. -->
-    <string name="now_proxy_setting_hidden">از راه %1$s در تنظیمات اندروید، که برنامه‌های دیگر هم می‌توانند از آن استفاده کنند. اینکه به کجا وصل شد نشان داده نمی‌شود، چون «ثبت مقصد برنامه‌هایی که از فیلترشکن شما، WireGuard یا یک پروکسی می‌گذرند» خاموش است.</string>
     <string name="history_proxy_setting_hidden">از راه %1$s در تنظیمات اندروید، که برنامه‌های دیگر هم می‌توانند از آن استفاده کنند. اینکه به کجا وصل شد ثبت نشد، چون «ثبت مقصد برنامه‌هایی که از فیلترشکن شما، WireGuard یا یک پروکسی می‌گذرند» خاموش بود.</string>
     <!-- One more line of "What this view cannot see". -->
     <string name="cannot_see_proxy">برای پروکسی‌ای که یک برنامه از آن استفاده می‌کند، Datapavan نمی‌تواند ببیند چه کسی آن را اداره می‌کند، یا اینکه شما آن را انتخاب کرده‌اید یا خود برنامه. برای پروکسی‌ای که Datapavan وجودش را نتیجه می‌گیرد، نمی‌تواند ببیند ترافیک پس از آن به کجا می‌رود.</string>

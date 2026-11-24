@@ -498,8 +498,6 @@
          on. It replaces "Log where these apps connect" (chain_log_destinations), which spoke of chained apps alone.
          The lines below that name it quote it word for word. -->
     <string name="log_switch">Записывать, куда подключаются приложения через ваш инструмент, WireGuard или прокси</string>
-    <!-- Under the switch above. -->
-    <string name="log_switch_note">Выключено, пока вы это не включите. Это касается приложений, которые вы направляете через ваш инструмент обхода блокировок или конфигурацию WireGuard, и собственных серверов инструмента. Это касается и приложений, которые подключаются через прокси, например прокси Telegram. Datapavan всё равно считает их подключения. Список того, куда они подключались, может быть использован против вас, если кто-то обыщет ваш телефон.</string>
     <!-- A button under a row of "Now" or the history that the switch above leaves out: it opens the Network screen at the
          switch. -->
     <string name="log_switch_open">Перейти к переключателю</string>
@@ -563,10 +561,8 @@
     <string name="proxy_cover_owner">Это имя принадлежит %1$s, а сеть — %2$s.</string>
     <!-- A proxy while the switch above is off: %1$s is its kind. Then, on lines of their own, how Datapavan knows and the
          facts that name nothing. -->
-    <string name="now_proxy_hidden">Через %1$s. Место назначения не показано, потому что переключатель «Записывать, куда подключаются приложения через ваш инструмент, WireGuard или прокси» выключен.</string>
     <string name="history_proxy_hidden">Через %1$s. Место назначения не записано, потому что переключатель «Записывать, куда подключаются приложения через ваш инструмент, WireGuard или прокси» был выключен.</string>
     <!-- As above, for the proxy set in Android's settings. -->
-    <string name="now_proxy_setting_hidden">Через %1$s из настроек Android, которым могут пользоваться и другие приложения. Место назначения не показано, потому что переключатель «Записывать, куда подключаются приложения через ваш инструмент, WireGuard или прокси» выключен.</string>
     <string name="history_proxy_setting_hidden">Через %1$s из настроек Android, которым могут пользоваться и другие приложения. Место назначения не записано, потому что переключатель «Записывать, куда подключаются приложения через ваш инструмент, WireGuard или прокси» был выключен.</string>
     <!-- One more line of "What this view cannot see". -->
     <string name="cannot_see_proxy">Для прокси, которым пользуется приложение, Datapavan не видит, кто им управляет и кто его выбрал: вы или приложение. Для прокси, о котором Datapavan делает вывод, он не видит, куда идёт трафик после него.</string>

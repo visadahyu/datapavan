@@ -427,7 +427,9 @@ private fun Destinations(context: Context, app: Snapshot.App, window: Int, view:
     for (place in shown) {
         HorizontalDivider(Modifier.padding(vertical = 4.dp))
         val bytes = stringResource(R.string.now_destination_bytes, size(context, place.bytes[window * 2]), size(context, place.bytes[window * 2 + 1]))
-        val proxy = place.proxy?.let { proxyFacts(it, place.address, place.port, place.asn, view.groups[app.uid], view.companies) }
+        val proxy = place.proxy?.let {
+            proxyFacts(it, place.address, place.port, place.asn, view.groups[app.uid], view.companies, place.shownOnly)
+        }
         if (proxy != null && !proxy.kept) {
             // A proxy's flow the engine left out for the switch: its kind, how the network part knows, and the facts
             // that name nothing (ADR 0052), with the link to the switch.
@@ -527,7 +529,7 @@ internal fun HiddenProxy(row: ProxyRow, bytes: String, onLogSwitch: () -> Unit, 
 
 /**
  * The facts of a destination's proxy (ADR 0052), for the app of company group [appGroup], with the owners' tables
- * [companies] where the pack holds them.
+ * [companies] where the pack holds them, and in "Now" the engine's mark of a first hop shown there only ([shownOnly]).
  */
 internal fun proxyFacts(
     proxy: org.visadahyu.datapavan.network.log.LogRecord.Proxy,
@@ -536,12 +538,14 @@ internal fun proxyFacts(
     asn: Long,
     appGroup: String?,
     companies: Companies?,
+    shownOnly: Boolean = false,
 ): ProxyFacts.Facts = ProxyFacts.of(
     proxy, address, port, asn,
     appMaker = appGroup?.let { companies?.name(it) ?: it },
     networkGroup = { companies?.groupOfAsn(it) },
     coverGroup = { companies?.groupOfHost(it) },
     groupName = { companies?.name(it) ?: it },
+    shownOnly = shownOnly,
 )
 
 /** A proxy's kind, as the sentences set it in. */
@@ -575,7 +579,9 @@ internal data class ProxyRow(val header: ProxyLine?, val lines: List<ProxyLine>,
  * the facts that name nothing (the maker's network it is not in, a password unencrypted). A plain request in a proxy's
  * form is never called a proxy: its line says what it asked for, or with the switch off that this is not shown. Where
  * the network part cannot name the network, the maker's network the address is not in is still said (ADR 0052, decision
- * 6).
+ * 6). A first hop "Now" shows only for its window ends with why: for a declared proxy, that where the app asked it to
+ * go is not shown or logged, then that its address is shown only so long; and links to the switch. The history never
+ * says so: what it shows was logged.
  */
 internal fun proxyRow(facts: ProxyFacts.Facts, past: Boolean): ProxyRow {
     val lines = mutableListOf<ProxyLine>()
@@ -584,9 +590,9 @@ internal fun proxyRow(facts: ProxyFacts.Facts, past: Boolean): ProxyRow {
         val header = ProxyLine(
             when {
                 facts.setting && past -> R.string.history_proxy_setting_hidden
-                facts.setting -> R.string.now_proxy_setting_hidden
+                facts.setting -> R.string.now_proxy_setting_past
                 past -> R.string.history_proxy_hidden
-                else -> R.string.now_proxy_hidden
+                else -> R.string.now_proxy_past
             },
             kind = facts.kind,
         )
@@ -624,7 +630,12 @@ internal fun proxyRow(facts: ProxyFacts.Facts, past: Boolean): ProxyRow {
     }
     if (facts.setting) lines += ProxyLine(R.string.proxy_setting)
     if (facts.password) lines += ProxyLine(R.string.proxy_password)
-    return ProxyRow(null, lines, toSwitch = false)
+    val shownOnly = facts.shownOnly && !past
+    if (shownOnly) {
+        if (facts.declared) lines += ProxyLine(R.string.now_proxy_asked_off)
+        lines += ProxyLine(R.string.now_proxy_live_only)
+    }
+    return ProxyRow(null, lines, toSwitch = shownOnly)
 }
 
 /** A proxy's line as the user reads it: the kind's words set in first, then the other arguments. */
