@@ -125,24 +125,111 @@ chaining is, and must follow the same switch.
    proxy; "Inferred from where and how it connects" for a messenger's. What Datapavan never knows is said, in "What
    this view cannot see": who runs a proxy, where an inferred proxy sends the traffic on, and whether the user or the
    app chose it.
-8. **An app's own proxy is circumvention, as chaining is.** The proxy's address and the destination asked for follow
-   the one switch, "Log where apps connect through your tool, WireGuard or a proxy" (W6's switch, F6), in the log and
-   in "Now": while it is off (the default), a confirmed or inferred proxy's flow keeps only its kind, the facts that
-   name nothing (Android's setting, a password unencrypted, outside the maker's network) and its trackers' marks, at
-   an address of zeros; turning it off strips the open flows, the segments that wait for their states and the live
-   view at once, and the place a flow's first bytes were counted under goes when the request names it. The trackers'
-   marks are matched in the engine on every name the flow carried before anything was stripped (its address's DNS
-   name, the outer hello's, the destination asked for, an inner hello's) and kept by εxodus id alone, which names a
-   tracker's company, never an address or a name (F1). The switch is drawn wherever anything is left out for it, and
-   every left-out row links to it. That under ADR 0047's profile nothing of it is recorded or shown is W9's work, a
-   must in DESIGN.md's W9 row: no engine path reads the profile yet. A release's dump writes the six proxy counters as
-   `-`. The substitution's state is a few instants and name hashes per messenger, in memory. Nothing reaches a
-   summary, the widget or the tile (ADR 0046, decision 3).
-9. **The records.** The log's records are version 5 and the live view's snapshot version 4, each with a proxy block
+8. **An app's own proxy is seen live in full, and kept in the log only by the user's choice** (the maintainer,
+   2026-11-22). This replaces the rule of 2026-11-21, under which the switch left the proxy out of "Now" too. The
+   maintainer's principle that day: «چیزی نباید به هیچ دلیلی از زیر چتر نظارتی داتاپاوان در بره حتی با این استدلال
+   که ممکنه گوشی کاربر بازرسی بشه», "nothing should, for any reason, slip out from under Datapavan's monitoring
+   umbrella, even on the argument that the user's phone might be searched". The coordinator's proposal that followed,
+   built from an independent design study (rules R1 to R10, in the private strategy repository), was approved the
+   same day («تایید شد», "approved"). On 2026-11-24 the maintainer approved its split into four units and the plan's
+   four proposals («تایید شد», "approved"). Unit A, "seen live in full", builds what follows; the other units are
+   named at the end.
+   - **The words.** An *own proxy flow* is a SOCKS or `CONNECT` flow the server's reply confirmed, or a messenger's
+     inferred proxy (decisions 1 and 5). A plain request in absolute form is not one. Its *first hop* is the flow's own
+     address and port, the DNS name its address had, its network and organisation, and an inferred proxy's cover name.
+     Its *destination* is what the app asked the proxy for, and every name that gives it: the name or address asked
+     for, the DNS name of an address asked for, and the inner hello's name, ECH state and resolver mark. Only a
+     declared SOCKS or `CONNECT` flow can hold one; an inferred flow never does (Signal's is named by its outer hello,
+     the proxy's own name). *The switch* is "Log where apps connect through your tool, WireGuard or a proxy" (W6's
+     switch, F6), off by default.
+   - **R1, the record.** With the switch off, each record of an own proxy flow is stripped as it enters the log
+     (`logbook::without_destination`). It keeps the kind, the facts that name nothing (Android's setting, a password
+     unencrypted, outside the maker's network), the trackers' εxodus ids, the bytes, times, states and route, and a
+     blocked flow's SDK. It keeps nothing of the first hop or the destination, at an address of zeros with flag bit 4
+     set, the shape the log already had for a flow left out. A plain request's record keeps its own address and loses
+     what it asked for. With the switch on, records keep the first hop and the destination, as before.
+     - *When it is decided.* The switch is read under the log's lock at two points: as a record enters the log's
+       queue, before it is held back or pushed, and as a held-back record goes on to the next batch. A messenger's
+       records enter the queue as they are made, so those made while the switch was off are held back already
+       stripped, and turning the switch on during their ten minutes restores nothing.
+     - *What waits, stated as it is.* A held-back record made while the switch was on keeps its first hop until it
+       goes on to the batch: ten minutes or more. A segment that waits for its app's state keeps it until it is
+       written, where it is stripped. If the switch goes off and on again in that time, both are written as they were
+       made. A segment cut seconds before the switch was turned on, and still waiting, is written with its first hop:
+       that is the user's new choice.
+     - *A cut before the reply.* A quarter hour's cut can fall between a request and a slow reply, and the cut segment
+       is then an ordinary flow's, with the proxy's address and name. When the reply confirms the proxy with the switch
+       off, that flow's records still in the batch are stripped too, each given the proxy's kind, so that the history
+       says it was a proxy. The batch waits at least 30 s, so this closes nearly every case (a limit below).
+   - **R2, live.** With the switch off, "Now" shows the first hop of every own proxy flow: its address and port, DNS
+     name, organisation and network, and for an inferred proxy its cover line. The flow is placed under the proxy
+     server's own name. The destination is never live while the switch is off: live flows never hold it (C1), and the
+     kept flows, which only debug builds keep, follow the same rule. The trackers' marks are matched in the engine on
+     every name the flow carried before anything was left out (its address's DNS name, the outer hello's, the
+     destination asked for, an inner hello's) and kept by εxodus id alone, which names a tracker's company, never an
+     address or a name (F1). A release build's dump prints no place.
+     - *The window.* A place shows its first hop in full while a live flow of its app matches it, and until ten minutes
+       after the latest end of the flows that matched it. A quiet flow is full while it is open, however quiet, and for
+       ten minutes after it ends.
+     - *The clock.* The time since the phone started (`CLOCK_BOOTTIME`, `Clock::since_boot`), which counts sleep and is
+       never set: ten minutes asleep are ten minutes. It is read once when a flow ends and once per sweep, never on the
+       packet path. A wall clock set back or forward changes nothing in the window. A failed reading strips rather
+       than keeps: an end read so is not recorded, a sweep that reads so strips everything due, and the window's
+       arithmetic saturates.
+     - *The table of ends.* For each own proxy flow that ended: its app, its first hop and when it ended. Two ends of
+       the same place are kept as one, the later. At most 128 entries per app and 2,048 in all; past them, the oldest
+       of the app goes, and then the oldest of the app that holds the most. It is pruned at each sweep, cleared with
+       the counts and handed to the next engine with them.
+     - *After the window.* A place is stripped as a record is, merged into the app's stripped place of the same kind
+       and facts with its bytes added, and its address's organisation leaves the view's cache. A stripped place never
+       becomes full again. A segment that waits for its app's state, whose flow is no longer live and which no unexpired
+       end matches, is stripped too, so the view's "not told yet" places never show it full.
+     - *The sweep.* At each view, at each reading of the apps' states (at most every 5 s with the screen on and every
+       minute with it off) and at each change of the switch. It reads the switch and the clock once. As a backstop
+       while first hops are not kept, it sets back to its first hop any own proxy flow or place that still holds a
+       destination. It also prunes the messengers' inferred flows past their window.
+     - *The view's bounds.* A guarded place, an own proxy place not left out, gives way only after every other place
+       of its app (128) or of all apps (2,048): stripped and ordinary places go first, oldest first. While the view is
+       built, first hops have a cap of their own of 128, so that neither kind of flood pushes the other out.
+     - *The snapshot's bit.* "Shown here only" tells the screens that a first hop is shown in "Now" and not logged.
+       The engine alone sets it, as it builds the view, so the screens repeat no decision.
+     - With the switch on, nothing expires, and the history keeps it all.
+   - **C1, the inner hello and the request.** The switch is read inside the flow's lock, at naming. While first hops
+     are not kept, a confirmed request leaves the flow's name, its origin and its DNS name as they are, and adds only
+     the proxy, without what was asked, and its network. The flow is marked as named without its destination
+     (`Live.unkept`), and an inner hello, read in the same handshake or after it, changes nothing of the flow and adds
+     only the trackers its name matches. The mark is cleared only by a take-back (F2): turning the switch on does not
+     clear it. With the switch on at naming, both the request and the inner hello name the flow, as before.
+   - **R6, the switch.** Every change of it, and the engine's start, run the same pass. Turned off, at once: every live
+     flow, waiting segment and "Now" place that holds a destination goes back to its first hop, and a place that comes
+     to equal another is merged into it; the own proxy records gathered for the log's next batch are stripped, and
+     plain requests' records lose what they asked for; first hops in "Now" outside the window are stripped by the
+     sweep that follows, and those inside stay until it ends. Held-back records and waiting segments are as R1 says.
+     Turned on: an open flow gains no destination it never held, its later records carry its first hop, and places
+     stay as they are.
+   - **R8, no app makes Datapavan keep less.** The server's confirmation is still needed (F1). The live flow always
+     keeps its own address: the request and the inner hello cannot rename it (C1), and a flood of other destinations
+     cannot push its first hop out of "Now" early (one limit below). Nothing an app sends turns the switch on or off:
+     it is set only from the screen and from the debug-only dump command. A PanicKit trigger from an app the user has
+     not connected no longer clears the live view (ADR 0047, decision 7).
+   - **R9, the profile.** Under ADR 0047's profile, no proxy kind, flag or counter is recorded, and "Now" shows a
+     first hop within the screen-on session only, behind Advanced's lock. The screen-off clear
+     (`Engine::clear_activity`) already forgets every place, full or not, and the table of ends, as a test shows. That
+     the clear also resets the proxy counters the switch's drawing reads (`LogSwitch.proxiesSeen`) and the
+     substitution's memory is W9's work, a must in DESIGN.md's W9 row: no engine path reads the profile yet.
+   - **Kept from before.** The switch is drawn wherever anything is left out for it, and every left-out row links to
+     it. A release's dump writes the six proxy counters as `-`. The substitution's state is a few instants and name
+     hashes per messenger, in memory. Nothing reaches a summary, the widget or the tile (ADR 0046, decision 3).
+   - **The other units.** R3, the per-app choice "Keep where APP connects through a proxy": unit C, which accepts this
+     record. R4, the facts said whatever the switch, with R7, plain requests to Android's setting or a local address:
+     unit B. R10, the tool's own row: unit D.
+9. **The records.** The log's records are version 6 ([ADR 0053](0053-tracker-blocking.md), which added the blocked
+   outcome and the row's SDK), unchanged by decision 8; the live view's snapshot is version 5. Each has a proxy block
    after the route (`log::push_proxy`): the kind, the flags (bit 4: the flow left out), the destination asked for, the
    proxy's own name, its network's organisation, the cover and the trackers' ids (at most eight); six counters are
-   appended (declared, with a password, inferred, substituted, taken back, covers kept out). The network part's Kotlin
-   side reads version 5 and still reads 1 to 4.
+   appended (declared, with a password, inferred, substituted, taken back, covers kept out). Version 5 of the snapshot
+   adds one bit, bit 1 of the destination's flags: the first hop is shown here only. The network part's Kotlin side
+   reads the log's versions 1 to 6.
 
 ## Consequences
 
@@ -164,9 +251,10 @@ chaining is, and must follow the same switch.
     ranges and the names, is compiled into the engine and kept out of the data pack, as the resolvers are (the network
     part's data alone): an update of any of them needs an app release (S-n4).
   - **An app that runs a proxy-shaped server of its own** (F1): a server that answers a SOCKS or `CONNECT`
-    request as a proxy does confirms it, so the app can leave its destination out while the switch is off. Its bytes,
-    its states and its trackers' marks stay; turning the switch on shows the rest. The app, not Datapavan, declares a
-    flow proxied.
+    request as a proxy does confirms it, so the app can leave its destination out while the switch is off. Its first
+    hop, the server's own address and name, is still shown in "Now" (decision 8, R2); only the history lacks it. Its
+    bytes, its states and its trackers' marks stay, and turning the switch on keeps the rest. The app, not Datapavan,
+    declares a flow proxied.
   - **A hello's tie needs the app's lookups** (F3): under strict Private DNS, or for an app whose lookups do not pass
     through the tunnel (its own DNS over HTTPS), a fake-TLS proxy is not inferred from its hello; Telegram's obfuscated
     start and WhatsApp's header still are.
@@ -184,6 +272,25 @@ chaining is, and must follow the same switch.
     Signal opens without a listed host before it, is named its proxy while Signal goes through one.
   - **The packet path is not zeroed** (S-m6): the tunnel's packet buffer, the fragment reassembler and a held Fast Open
     SYN carry a credential's bytes before the relay; zeroing them would cost every packet a write.
+  - **A proxy connection kept open** (decision 8, R2): a messenger that keeps its proxy connection open, as Telegram
+    does while it runs, keeps its first hop in "Now" all that time, hours included. Someone who unlocks the phone and
+    opens "Now" within it, or within ten minutes after, sees the first hop. The words say "while the connection is
+    open".
+  - **Memory past the window** (unit A's plan audit, finding 8). Open flows hold their first hop while they are open.
+    Waiting segments, places and the table of ends hold it until the first sweep after their window: at the next
+    reading of the apps' states, so at most a minute with the screen off, and while the phone sleeps, until it wakes
+    and the first reading or view comes, about 5 s after the screen comes on. Held-back records made while the switch
+    was on hold it until they go on to the batch. A dump of the process's memory in that time holds it. Stripped
+    strings are not zeroed: the engine zeroes only credentials.
+  - **A batch already handed on** (decision 8, R1): a segment cut between a request and a slow reply, in a batch the
+    logger already handed to the network part before the reply confirmed the proxy, stays as written, with the proxy's
+    address and name.
+  - **129 names** (unit A's plan audit, finding 21): a named first hop is one place per name, so an app whose one
+    server has 129 DNS names can push its own real first hop out of "Now" with first hops of its own, each of them
+    shown.
+  - **SOCKS5's `UDP ASSOCIATE`** (unit A's plan audit, finding 22): it is read as no proxy, so its control flow and its
+    relay's UDP flows are ordinary flows, logged with their first hop while the switch is off, as before decision 8.
+    Telling them takes the parser, its fuzz target, and the relay's flows tied to their association: unit B.
   - The false positives that need a maker's own network (a Telegram CDN data centre beside its ranges, WhatsApp's link
     previews and backups) are checked in the engine's tests and its network lab, not on the emulator, which must reach
     no outside server.
@@ -211,8 +318,9 @@ chaining is, and must follow the same switch.
   formats); `core/network-jni` (`nativeProxies`, `nativeMessengerClients`, `nativeFlowProxies`).
 - The network part (`android/network`): `NetworkVpnService.applyProxies` (the messengers' UIDs, Android's proxy
   setting, again at package and proxy changes), `activity/ProxyFacts.kt` (what a row says, a pure function), the
-  screens "Now" and the history, the strings in `strings_untranslated.xml` until ADR 0030's translation, held to
-  ADR 0025's words by a test.
+  screens "Now" and the history, the strings in `strings.xml` and its translations (ADR 0030), and those the proxy
+  record's unit A added in `strings_untranslated.xml` until ADR 0030's next round, all held to ADR 0025's words by a
+  test.
 - Data: `data/messengers` (CC0 for the project's lists; Telegram's `cidr.txt` states no licence, ADR 0015's record).
 
 ## Fix round (2026-11-21)
@@ -250,10 +358,13 @@ reason.
   approval host from PayPal's own API specification, as Signal gets the URL from its server), and the 3-D Secure pages,
   which open in Signal's own web view (`Stripe3DSDialogFragment`, `PayPalConfirmationDialogFragment`), fall in the
   window after a third party.
-- **Open, for the maintainer.** One alternative was weighed and left open: for an app that is not a messenger and does
-  not use Android's setting or a proxy on the local network, its own proxy's connection could show as any flow's
-  does, with only the destination asked for following the switch. That would close F1's residual limit, but departs
-  from the maintainer's rule of 2026-11-19 for the tool's own row (ADR 0046): the servers follow the switch.
+- **Open, for the maintainer, now resolved.** One alternative was weighed and left open: for an app that is not a
+  messenger and does not use Android's setting or a proxy on the local network, its own proxy's connection could show
+  as any flow's does, with only the destination asked for following the switch. That would close F1's residual limit,
+  but departs from the maintainer's rule of 2026-11-19 for the tool's own row (ADR 0046): the servers follow the
+  switch. The maintainer's decision of 2026-11-22 resolved it (decision 8): every app's own proxy is shown in "Now"
+  with its first hop in full, whatever the switch; the destination asked for, and the first hop in the log, follow
+  it.
 
 The minors and nits, as done: SOCKS4's printable user ID and SOCKS5's plausible methods (security m1); obfuscated2's
 high-bit bound and text rule (m2); the fake-TLS cover that resolves to its proxy, an accepted limit (m4); the profile's

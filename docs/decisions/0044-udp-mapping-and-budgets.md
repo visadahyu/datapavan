@@ -2354,6 +2354,7 @@ the log's row.
 | TCP rewriting: idle limit (10 min), port cooling (60 s), the sweep (60 s), the linger after a relay (30 s) | `nat.rs`, `tcp.rs`, `engine.rs` (`run`) | Monotonic | An idle connection is kept across the night, as the app's kernel keeps it, whose TCP timers stand still too | None | None; on `CLOCK_BOOTTIME` the engine would forget a push connection the app still holds, and reset it at its first packet in the morning | Correct as it is |
 | UDP mappings: idle end (120 s), quiet (5 s), asking Android again (1 s, and every 30 s), the contest (5 s), Android's answers near datagrams | `udp.rs`, `whose.rs` | Monotonic | A mapping idle across the night stays, as the app's socket does; no app opens or closes a socket while the phone sleeps, so time awake is the time in which a port can change hands | None | None | Correct as it is |
 | Waits: a TCP connect (60 s), a tool's handshake, lookups through the tool, connections kept to its resolvers, the tunnel's write in a swap (200 ms), the listener's pauses, a reset's drain (2 s), pings (idle 10 s, quiet 2 s), fragments (5 s) | `upstream.rs`, `chain.rs`, `lookups.rs`, `kept.rs`, `tun.rs`, `tcp.rs`, `echo.rs`, `fragments.rs`, `engine.rs` | Monotonic (tokio or `Instant`) | A wait lasts longer in real time, as the kernel's own retransmission timers do | None | None: nothing is recorded from them | Correct as it is |
+| The window of an app's own proxy's first hop in "Now" (ADR 0052, decision 8) | `now.rs`, `logbook.rs` (`finish*`) | `CLOCK_BOOTTIME` | Ten minutes asleep are ten minutes | None | A first hop shown for ten minutes after its connection ends | Correct as it is: on `CLOCK_BOOTTIME` from the start (the proxy record, unit A) |
 | The owner rule's model, and the tests' own waits | `whose/model.rs`, tests | Monotonic | Test only | Test only | None | Test only |
 
 - **Tests.** The log's: ADR 0037's note of the same day. The caches': an answer kept for five minutes answers for
@@ -2366,7 +2367,8 @@ the log's row.
   count of a flow's bytes takes no lock within a quarter hour; a count of an app's lookups locks its count, and a
   TCP packet on the tunnel the map of its flow's bytes. `CLOCK_BOOTTIME` is read for each DNS answer
   a cache keeps or looks up, for each DNS answer whose names the engine learns, and for each hello that would set a
-  differing DNS name beside a flow's own: never for each packet. Measured on the development machine (x86-64,
+  differing DNS name beside a flow's own; and, for the window of an app's own proxy's first hop (ADR 0052), once at
+  each flow's end and once at each sweep of "Now": never for each packet. Measured on the development machine (x86-64,
   vDSO, release build, 2026-11-18): `SystemTime::now` 22.8 ns, `CLOCK_REALTIME_COARSE` 7.9 ns, `CLOCK_BOOTTIME`
   20.4 ns, an `Arc` cloned and dropped 2.8 ns, an atomic addition 1.4 ns. So the log reads the coarse wall
   clock, as the fresh review 2 offered: its steps here are 4 ms (the kernel's tick at 250 Hz), and it lags the

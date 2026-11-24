@@ -1,6 +1,8 @@
 # 0047. A profile for phones that may be searched: nothing of use kept
 
 - Status: Accepted (by the maintainer on 2026-11-15)
+- Amended by the maintainer on 2026-11-24: decision 7, a PanicKit trigger from an app the user has not connected only
+  locks («تایید شد», "approved", to the proxy record's plan).
 - Date: 2026-11-14
 
 ## Context
@@ -102,6 +104,7 @@ asks the question and keeps its own switch; each says that the other edition has
 | ADR 0046's summary notification | Asked at onboarding, with this profile's question | Off. If Advanced still posts an ongoing notification, its text is a neutral "On": no count, no app, no tool and no word for VPN; hidden on the lock screen (`VISIBILITY_SECRET`); silent |
 | ADR 0046's Quick Settings tile | Its state and summary | On and off only, no count. Opening the "Now" view from it asks for the phone's unlock first (`unlockAndRun`) |
 | ADR 0046's "Now" view | As ADR 0046 decides | Shows only this screen-on session, behind Advanced's lock |
+| Apps' own proxies (Advanced, ADR 0052) | Where the proxy is (its address, name and network, and a messenger's cover name) is shown in "Now" while the connection is open and for ten minutes after it ends. It is logged, with where the app asked it to go, only with "Log where apps connect through your tool, WireGuard or a proxy". The history keeps the kind and the facts that name nothing | Nothing is recorded. The proxy's address, name and network are shown within the screen-on session only, behind Advanced's lock. The screen-off clear takes it with the table of the connections' ends, the proxy counters and the substitution's memory (ADR 0052, decision 8, R9; W9 wires it) |
 | ADR 0046's opt-in flag notice | Kept, if the user opted in | Never kept |
 | ADR 0046's optional baseline for each app: one number per app, the most it sent in the background in a day | Kept, if the user turned it on | Never kept, so flags that need it are not raised |
 | Advanced's own lock (ADR 0040) | Offered, off | On, with a code of its own, so that a forced unlock of the phone does not open it; it locks as soon as Advanced leaves the screen or the screen turns off |
@@ -163,7 +166,12 @@ The engine has the call the profile's switch needs at each screen-off, `Engine::
 forgets every app's bytes in every window of "Now", their destinations, the window while the screen was off and
 the organisations looked up, keeps only the moment the screen came on, and keeps out of the view every second
 before it that is placed later. It cannot clear the flows still open, which the engine needs to carry them, nor
-what waits for the log, which retention "none" under the profile already keeps from being written. W9 calls it at
+what waits for the log, which retention "none" under the profile already keeps from being written. What it cannot
+reach holds an app's own proxy's first hop, its address, name and network (ADR 0052, decision 8): the open flows
+while they are open, and the segments that wait for their apps' states until a sweep strips them, at the next reading
+of the states after their ten minutes, at most a minute later with the screen off, and after a sleep at the first
+reading once the phone wakes. An open flow's bytes after the clear show its first hop again, as this screen-on
+session's. W9 calls it at
 each screen-off **and at each screen-on**, before the view can open (review c1 of W5's third part, engine,
 finding 7): a clear at the screen-off alone leaves the window while the screen was off,
 which opens after it and fills while the phone lies locked, to show its line at the next screen-on, and this
@@ -184,8 +192,16 @@ own that the call cannot reach: it drops its snapshot, its trackers and an opene
   0040 decided for Advanced. PanicKit's rules hold: a trigger app may make an app destroy data only once the user
   has connected the two, and the connection is never made automatically. With the profile on:
   - from the connected trigger app, the answer is the wipe above;
-  - from any other app, the answer is only to lock Advanced and clear the flows in memory, which loses nothing
-    kept. So an app that sends the trigger on its own cannot make Datapavan delete anything.
+  - from any other app, the answer is only to lock Advanced, and it clears nothing, the flows in memory included.
+    Clearing memory stays with the connected trigger, the screen-off and the wipe. So an app that sends the trigger
+    on its own cannot make Datapavan delete anything, nor take its own proxy's address out of "Now" (ADR 0052,
+    decision 8, R8: no app makes Datapavan keep less).
+
+  This answer to a trigger that is not connected is proposal 3 of the proxy record's plan, approved by the maintainer
+  on 2026-11-24 («تایید شد», "approved"); before it, this decision also cleared the flows in memory. It follows PanicKit's own
+  guidance, checked at [its source](https://guardianproject.info/code/panickit/) that day: "default responses should
+  be non-destructive", and a destructive response comes only from a trigger app the user connected. Locking destroys
+  nothing.
 
   The responder is a small exported activity with no screen. It is added to each edition's allowlist of exported
   components (ADR 0045, decision 9). The protocol is a few intents; the project implements it itself rather than

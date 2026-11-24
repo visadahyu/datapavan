@@ -661,7 +661,10 @@ this ADR left room, and why. Part 3 builds the screens on it.
   minutes (1.4 KB): together about 7 MB at the very worst, and some hundreds of kilobytes on a busy phone. Marks:
   65,536 of 40 bytes, 2.6 MB, and up to twice that in room their deques keep, which they give back once settled;
   held segments: 4,096, each with its flow, under 4 MB with names at their longest. Past a bound, the app or destination
-  with bytes the longest ago gives way.
+  with bytes the longest ago gives way. A place guarded as an app's own proxy's first hop (ADR 0052, decision 8) gives
+  way only after every other place of its app or of all apps, and while the view is built such places have a cap of
+  their own of 128, so that a flood of other destinations cannot push an app's own proxy out of "Now" early. The ends
+  of those proxies' connections, which time their ten minutes, are kept for at most 128 per app and 2,048 in all.
 - **One call for the screens:** `Engine.nativeActivity`, a versioned binary snapshot (`core/net/src/snapshot.rs`,
   version 1), read by `activity/Snapshot.kt`, from a fixture the engine writes; the readings go the other way
   (`core/net/src/states.rs`, version 1), from a fixture the Kotlin side writes, read by the engine's test and

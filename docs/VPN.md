@@ -93,10 +93,12 @@ Chaining also contains an untrusted tool (see [RESTRICTED-REGIONS.md](RESTRICTED
   only where no answer Datapavan holds gave its name the address, the app did not look the name up through Datapavan,
   and Datapavan sees the app's lookups at all (Private DNS not strict), and a cover never names the flow. Signal's fronting
   counts as going directly, and what its web view opens after a payment's host is not its proxy. The tool's own flows
-  and the apps chained or tunnelled through it are not read: they carry the tool's traffic. An app's own proxy is
-  circumvention as chaining is: its place and the destination asked for are kept only under the one switch "Log where
-  apps connect through your tool, WireGuard or a proxy", and otherwise only its kind and its trackers' marks, matched
-  on its names before they were left out; the switch is on the network screen wherever a row points to it. Proxies inside
+  and the apps chained or tunnelled through it are not read: they carry the tool's traffic. An app's own proxy's first
+  hop (its address, name and network, and a messenger's cover name) is shown in "Now" while the connection is open and
+  for ten minutes after it ends, whatever the switch (ADR 0052, decision 8). It is logged, with the destination asked
+  for, only under the one switch "Log where apps connect through your tool, WireGuard or a proxy"; otherwise the log
+  keeps its kind, the facts that name nothing and its trackers' marks, matched on its names before they were left out,
+  and the destination is not shown either. The switch is on the network screen wherever a row points to it. Proxies inside
   TLS or QUIC, and those on the phone itself, whose loopback never enters the tunnel, are not seen.
 - **Proxy-like behaviour is flagged** (v0.2) and can be blocked (v0.3): many distinct destinations in a short time, sustained upload, or activity while the screen is off. Thresholds come from measurements, and a flag says what was seen instead of accusing the app. Detection counts destinations in memory, so it does not need the destination log that is off by default for chained flows.
 - **Per-app choice.** The user decides which apps go through the tool, and which through which WireGuard
