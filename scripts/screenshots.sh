@@ -60,6 +60,16 @@ trap restore EXIT
 adb shell settings put system font_scale 1.0
 adb shell settings put secure font_weight_adjustment 0
 
+# Sets Datapavan's language and waits until Android holds it, before the app starts: set-app-locales can return before
+# the change lands, and an app started meanwhile comes up in the language before and is then recreated in the new one,
+# while it is being captured (CI, run 45384033081: the Spanish summary dumped in German, its text mid-fade, so that its
+# contrast read 1.11:1).
+holds_language() { adb shell cmd locale get-app-locales "$PKG" | tr -d '\r' | grep -qF "are [$1]"; }
+set_language() {
+    adb shell cmd locale set-app-locales "$PKG" --locales "$1"
+    within 10 holds_language "$1" || { echo "SCREENSHOTS FAILED: Android did not hold $1 as Datapavan's language within 10 s" >&2; exit 1; }
+}
+
 # The app protects every screen from screenshots (ADR 0040); a debug build started with
 # screenshots_for_tests keeps it off, so that these pictures are not black.
 # One screen: its picture, its UI dump and the accessibility check of the dump.
@@ -118,7 +128,7 @@ now_screens() {
     for mode in light dark; do
         if [ "$mode" = dark ]; then locales="${NOW_DARK_LOCALES:-en fa}"; adb shell cmd uimode night yes >/dev/null; else locales="${NOW_LOCALES:-en fr de es ru zh-CN ar fa en-XA ar-XB}"; adb shell cmd uimode night no >/dev/null; fi
         for locale in $locales; do
-            adb shell cmd locale set-app-locales "$PKG" --locales "$locale"
+            set_language "$locale"
             adb shell am force-stop "$PKG"
             adb shell am start -W -n "$PKG/$network" --ez start true >/dev/null
             within 20 network_running || { echo "SCREENSHOTS FAILED: the network part's tunnel did not come up in $locale" >&2; exit 1; }
@@ -172,7 +182,7 @@ for mode in light dark large; do
         *) locales="en fr de es ru zh-CN ar fa en-XA ar-XB"; adb shell cmd uimode night no >/dev/null ;;
     esac
     for locale in $locales; do
-        adb shell cmd locale set-app-locales "$PKG" --locales "$locale"
+        set_language "$locale"
         adb shell am force-stop "$PKG"
         adb shell am start -n "$PKG/.MainActivity" --ez screenshots_for_tests true >/dev/null
         if ! wait_for_overview; then
@@ -228,7 +238,7 @@ key_walk() {
     python3 -I "$ROOT/scripts/a11y-check.py" keys "$PKG" "$rtl" "$OUT/keys-$name-$locale-0.xml" "${steps[@]}" || passed=""
 }
 for locale in ${KEYS_LOCALES-en fa}; do
-    adb shell cmd locale set-app-locales "$PKG" --locales "$locale"
+    set_language "$locale"
     adb shell am force-stop "$PKG"
     adb shell am start -n "$PKG/.MainActivity" --ez screenshots_for_tests true >/dev/null
     wait_for_overview || { echo "SCREENSHOTS FAILED: the summary did not appear in $locale (keys)" >&2; exit 1; }
