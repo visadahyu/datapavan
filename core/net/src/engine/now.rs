@@ -3188,4 +3188,30 @@ mod tests {
             "{places:?}"
         );
     }
+
+    /// Review A, engine, finding 5: a first hop's flow ended by `finish_all`, as the engine stops or hands over, has
+    /// its end noted as one ended alone does: its place stays in full for ten minutes after, then is stripped.
+    #[test]
+    fn the_flows_finish_all_ends_keep_their_window() {
+        for handing_over in [false, true] {
+            let (shared, clock, _) = telling_at(T);
+            let bytes = recorded(&shared, through_proxy(1, UID, 5));
+            up_at(&shared, &clock, &bytes, 500, 10);
+            clock.set(T + 1_500);
+            shared.tell(&on_since(T, T + 1_000, T));
+            shared
+                .handing_over
+                .store(handing_over, std::sync::atomic::Ordering::Relaxed);
+            shared.finish_all();
+            clock.pass(10 * MINUTE - 1_000);
+            assert!(
+                own_first_hop(&shown_places(&shared, UID, clock.wall_ms())[0].flow),
+                "{handing_over}: 9 min 59 s after"
+            );
+            clock.pass(1_000);
+            assert!(stripped(
+                &shown_places(&shared, UID, clock.wall_ms())[0].flow
+            ));
+        }
+    }
 }
