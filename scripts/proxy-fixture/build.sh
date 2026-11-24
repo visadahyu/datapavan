@@ -2,7 +2,9 @@
 # Builds W8 part 2a's proxy fixture with the SDK's build tools only, like scripts/workload-app/build.sh. Output:
 # build/proxy-fixture/proxy-fixture.apk under the repository root, signed with a throwaway key, and the same app under
 # three more package names, proxy-fixture-telegram.apk, -whatsapp.apk and -signal.apk, each an app of its own that
-# the network part's debug builds add to that messenger's clients (scripts/verify-proxies.sh).
+# the network part's debug builds add to that messenger's clients (scripts/verify-proxies.sh); and
+# proxy-fixture-outside.apk, the app the proxy record's measurements leave out of the tunnel
+# (scripts/measure-proxy-settings.sh).
 set -euo pipefail
 
 HERE="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
@@ -18,7 +20,7 @@ javac --release 17 -cp "$PLATFORM" -d "$OUT/classes" $(find "$HERE/src" -name '*
 # A throwaway key: the fixture is never distributed.
 keytool -genkeypair -keystore "$OUT/fixture.keystore" -storepass fixture -keypass fixture \
     -alias fixture -keyalg EC -validity 1 -dname "CN=Datapavan proxy fixture" >/dev/null 2>&1
-for role in "" telegram whatsapp signal; do
+for role in "" telegram whatsapp signal outside; do
     name="proxy-fixture${role:+-$role}"
     rename=()
     [ -z "$role" ] || rename=(--rename-manifest-package "org.visadahyu.datapavan.proxyfixture.$role")

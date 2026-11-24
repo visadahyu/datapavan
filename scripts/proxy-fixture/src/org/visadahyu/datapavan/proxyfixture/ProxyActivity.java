@@ -37,6 +37,19 @@ import javax.crypto.spec.SecretKeySpec;
  *   <li>{@code whatsapp}: WhatsApp's clear header and a frame, which the target echoes;</li>
  *   <li>{@code hello}: a TLS hello for the extra "name", which the target echoes.</li>
  * </ul>
+ *
+ * <p>For the proxy record's measurements 7.1 and 7.2 (scripts/measure-proxy-settings.sh), which set Android's own
+ * proxy settings and look at what an ordinary app does with them:
+ *
+ * <ul>
+ *   <li>{@code read}: what this app is told: {@code getDefaultProxy()}, each network's own proxy, the proxy system
+ *       properties Android set in this process, and what its {@code ProxySelector} picks for two URLs;</li>
+ *   <li>{@code get}: an {@code HttpURLConnection} GET of the extra "url", which follows Android's setting as apps do:
+ *       the status, or the exception's class;</li>
+ *   <li>{@code property}: a plain request for "url" by a socket of its own to the proxy the system properties name,
+ *       as an app that reads them itself does (under a PAC, the framework's handler on the phone's loopback);</li>
+ *   <li>{@code webview}: a WebView, Chromium's network stack in this app's process, loads "url".</li>
+ * </ul>
  */
 public class ProxyActivity extends Activity {
     private static final String TAG = "DatapavanProxyFixture";
@@ -47,6 +60,10 @@ public class ProxyActivity extends Activity {
     protected void onCreate(Bundle state) {
         super.onCreate(state);
         final String action = String.valueOf(getIntent().getStringExtra("action"));
+        if (action.equals("webview")) {
+            webview(extra("url"));
+            return;
+        }
         new Thread(() -> {
             try {
                 Log.i(TAG, action + " ok " + run(action));
@@ -82,8 +99,137 @@ public class ProxyActivity extends Activity {
             case "whatsapp": return whatsapp();
             case "hello": return hello(extra("name"));
             case "lookup": return lookup(extra("name"));
+            case "read": return read();
+            case "get": return get(extra("url"));
+            case "property": return property(extra("url"));
             default: throw new IllegalArgumentException();
         }
+    }
+
+    /** A proxy as one word: none, HOST:PORT, or pac:URL@PORT (the port of the handler on the phone's loopback). */
+    private static String describe(android.net.ProxyInfo proxy) {
+        if (proxy == null) return "none";
+        android.net.Uri pac = proxy.getPacFileUrl();
+        if (pac != null && !android.net.Uri.EMPTY.equals(pac)) return "pac:" + pac + "@" + proxy.getHost() + ":" + proxy.getPort();
+        return proxy.getHost() + ":" + proxy.getPort();
+    }
+
+    private static String selected(java.net.ProxySelector selector, String uri) {
+        StringBuilder picked = new StringBuilder();
+        try {
+            for (java.net.Proxy proxy : selector.select(new java.net.URI(uri))) {
+                if (picked.length() > 0) picked.append(',');
+                picked.append(proxy.type() == java.net.Proxy.Type.DIRECT ? "DIRECT" : proxy.type() + "@" + proxy.address());
+            }
+        } catch (Exception e) {
+            return "failed-" + e.getClass().getSimpleName();
+        }
+        return picked.toString();
+    }
+
+    /** What Android tells this app of its proxy settings, in one line of NAME=VALUE words. */
+    @SuppressWarnings("deprecation")
+    private String read() {
+        android.net.ConnectivityManager connectivity = getSystemService(android.net.ConnectivityManager.class);
+        StringBuilder line = new StringBuilder("default=").append(describe(connectivity.getDefaultProxy()));
+        android.net.Network active = connectivity.getActiveNetwork();
+        for (android.net.Network network : connectivity.getAllNetworks()) {
+            android.net.NetworkCapabilities caps = connectivity.getNetworkCapabilities(network);
+            android.net.LinkProperties link = connectivity.getLinkProperties(network);
+            String kind = caps == null ? "unknown"
+                : caps.hasTransport(android.net.NetworkCapabilities.TRANSPORT_VPN) ? "vpn"
+                : caps.hasTransport(android.net.NetworkCapabilities.TRANSPORT_WIFI) ? "wifi"
+                : caps.hasTransport(android.net.NetworkCapabilities.TRANSPORT_CELLULAR) ? "mobile" : "other";
+            line.append(' ').append(kind).append(network.equals(active) ? "(active)" : "").append('=')
+                .append(link == null ? "unknown" : describe(link.getHttpProxy()));
+        }
+        for (String property : new String[] {"http.proxyHost", "http.proxyPort", "https.proxyHost", "https.proxyPort"}) {
+            line.append(' ').append(property).append('=').append(System.getProperty(property, "-"));
+        }
+        java.net.ProxySelector selector = java.net.ProxySelector.getDefault();
+        line.append(" selector=").append(selector == null ? "none" : selector.getClass().getSimpleName());
+        if (selector != null) {
+            line.append(" select-http=").append(selected(selector, "http://" + INNER + "/"));
+            line.append(" select-https=").append(selected(selector, "https://" + INNER + "/"));
+        }
+        return line.toString();
+    }
+
+    private static String get(String url) throws Exception {
+        HttpURLConnection connection = (HttpURLConnection) new URL(url).openConnection();
+        connection.setConnectTimeout(10_000);
+        connection.setReadTimeout(10_000);
+        connection.setUseCaches(false);
+        try {
+            return String.valueOf(connection.getResponseCode());
+        } finally {
+            connection.disconnect();
+        }
+    }
+
+    private static String property(String url) throws Exception {
+        String host = System.getProperty("http.proxyHost");
+        String port = System.getProperty("http.proxyPort");
+        if (host == null || host.isEmpty() || port == null) return "no-property";
+        // A PAC on a network's own setting names the handler's host with no port (-1): nothing to connect to.
+        if (Integer.parseInt(port) <= 0) return "port " + port;
+        URL target = new URL(url);
+        try (Socket s = new Socket()) {
+            s.connect(new InetSocketAddress(host, Integer.parseInt(port)), 10_000);
+            s.setSoTimeout(10_000);
+            String request = "GET " + url + " HTTP/1.1\r\nHost: " + target.getAuthority() + "\r\nConnection: close\r\n\r\n";
+            s.getOutputStream().write(request.getBytes(StandardCharsets.US_ASCII));
+            String head = head(s.getInputStream());
+            String[] status = head.split(" ", 3);
+            return status.length > 1 ? status[1] : "no-status";
+        }
+    }
+
+    /** Loads [url] in a WebView on the main thread, and logs how it ended within 20 s: "finished", or the error. */
+    private void webview(String url) {
+        final android.webkit.WebView view = new android.webkit.WebView(this);
+        setContentView(view);
+        final boolean[] ended = {false};
+        final android.os.Handler main = new android.os.Handler(android.os.Looper.getMainLooper());
+        final Runnable end = () -> {
+            Log.i(TAG, "done");
+            view.destroy();
+            finish();
+        };
+        view.setWebViewClient(new android.webkit.WebViewClient() {
+            @Override
+            public void onReceivedError(android.webkit.WebView v, android.webkit.WebResourceRequest request,
+                    android.webkit.WebResourceError error) {
+                if (ended[0] || !request.isForMainFrame()) return;
+                ended[0] = true;
+                Log.i(TAG, "webview failed " + error.getErrorCode() + " " + error.getDescription());
+                main.post(end);
+            }
+
+            @Override
+            public void onReceivedHttpError(android.webkit.WebView v, android.webkit.WebResourceRequest request,
+                    android.webkit.WebResourceResponse response) {
+                if (ended[0] || !request.isForMainFrame()) return;
+                ended[0] = true;
+                Log.i(TAG, "webview failed http-" + response.getStatusCode());
+                main.post(end);
+            }
+
+            @Override
+            public void onPageFinished(android.webkit.WebView v, String finished) {
+                if (ended[0]) return;
+                ended[0] = true;
+                Log.i(TAG, "webview ok finished");
+                main.post(end);
+            }
+        });
+        main.postDelayed(() -> {
+            if (ended[0]) return;
+            ended[0] = true;
+            Log.i(TAG, "webview failed timeout");
+            end.run();
+        }, 20_000);
+        view.loadUrl(url);
     }
 
     /**
