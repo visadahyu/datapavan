@@ -63,7 +63,7 @@ getrandom = { version = "=0.4.3", default-features = false }
 # hpke, which the engine used before its own; in tests only, so nothing of it ships.
 odoh-rs = "=1.0.5"
 # Checks the packets the engine builds against an independent implementation, in tests only.
-etherparse = "0.21.0"
+etherparse = "0.21.1"
 # Tokio's paused time, for the tests of the log's timer while the phone sleeps (finding 4): a feature of
 # the tokio above, no other crate.
 tokio = { version = "1.54.1", default-features = false, features = ["test-util"] }
