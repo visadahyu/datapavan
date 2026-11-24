@@ -1,10 +1,11 @@
 #!/usr/bin/env bash
 # Runs CI's emulator shards (scripts/emulator-shard.sh) on local emulators before a push, side by side
-# within this machine's caps, which count every emulator running here, not only this script's: three
-# emulators at most in all; four threads each (two cores and their siblings), pinned with taskset to
-# threads no other emulator is pinned to, twelve threads at most for all emulators together (one that is
-# not pinned counts as four); and a new one only while at least 14 GB of memory would stay free beside
-# it, checked again before each start. A shard's host-side work (adb, the test servers) is pinned to its
+# within this machine's caps, which count every emulator running here, not only this script's: no
+# count of emulators (the maintainer lifted the cap of three on 2026-11-24); four threads each (two cores
+# and their siblings), pinned with taskset to threads no other emulator is pinned to, all of the machine's
+# threads but four for all emulators together (one that is not pinned counts as four), so that the system,
+# the builds and other projects keep four; and a new one only while at least 14 GB of memory would stay
+# free beside it, checked again before each start. A shard's host-side work (adb, the test servers) is pinned to its
 # emulator's threads, and a shard that runs past its time (45 minutes, SHARD_TIMEOUT) is stopped.
 #
 # Each emulator is a read-only instance of one AVD, so it boots clean and keeps nothing; it is named by
@@ -29,9 +30,10 @@ SDK="${ANDROID_HOME:-${ANDROID_SDK_ROOT:-$HOME/Android/sdk}}"
 EMULATOR="$SDK/emulator/emulator"
 AVD=dp-api35-ci
 ALONE=""
-MAX_EMULATORS=3
 THREADS_EACH=4
-MAX_THREADS=12
+# Four of the machine's threads stay free of emulators; the rest may hold them, four each.
+MAX_THREADS=$(($(nproc) - 4))
+MAX_EMULATORS=$((MAX_THREADS / THREADS_EACH))
 FREE_FLOOR_KB=$((14 * 1024 * 1024))
 # What one emulator with a 2 GB guest takes of the host's memory, about.
 EMULATOR_KB=$((5 * 1024 * 1024))
