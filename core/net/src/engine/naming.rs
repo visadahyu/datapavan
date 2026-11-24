@@ -216,7 +216,7 @@ impl Shared {
         };
         let mut hidden_proxy = false;
         if let Some(live) = lock(&self.live).get_mut(&id) {
-            if live.hidden {
+            if live.hidden || live.unkept {
                 hidden_proxy = live.flow.proxy.is_some();
             } else {
                 apply(&mut live.flow);
@@ -247,7 +247,7 @@ impl Shared {
     ) -> Renaming {
         let from_live = lock(&self.live)
             .get(&opened.id)
-            .filter(|live| !live.hidden)
+            .filter(|live| !live.hidden && !live.unkept)
             .map(|live| {
                 (
                     live.flow.destination,

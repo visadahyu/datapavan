@@ -236,6 +236,10 @@ pub(super) struct Live {
     /// Whether its destination stays out of the log (a chained app's flow, [`Shared::hides`]): its
     /// record holds no address, port or name, and no hello names it later.
     pub(super) hidden: bool,
+    /// Whether it was named an app's own proxy without where the app asked it to go, as "Log where these apps
+    /// connect" was off (ADR 0052): a fact of its naming, apart from `hidden`, so that the live view and the
+    /// log can follow the switch each in its own way. No hello names it later. Only a take-back clears it.
+    pub(super) unkept: bool,
     /// Whether it went directly, not through the user's tool, when it opened: a flow hidden by a chain
     /// set after it opened goes on directly (review b2 of W5's second part, N3).
     pub(super) direct: bool,
@@ -469,6 +473,7 @@ impl Shared {
                 state: None,
                 after: 0,
                 hidden,
+                unkept: false,
                 direct,
             },
         );
@@ -718,7 +723,7 @@ impl Shared {
         };
         let mut live = lock(&self.live);
         for live in live.values_mut() {
-            if !live.hidden && hides(&live.flow) {
+            if !live.hidden && !live.unkept && hides(&live.flow) {
                 live.hidden = true;
                 live.flow = without_destination(&live.flow);
             }

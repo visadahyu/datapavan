@@ -371,6 +371,8 @@ impl Shared {
                     let was = l.flow.clone();
                     let restored = restore(&l.flow);
                     l.hidden = l.hidden && self.hides(restored.uid, restored.destination);
+                    // No proxy any more, so nothing was named without its destination.
+                    l.unkept = false;
                     l.flow = restored;
                     was
                 })
@@ -902,12 +904,12 @@ impl Shared {
         let Some(live) = live.get_mut(&opened.id) else {
             return;
         };
-        if live.hidden {
+        if live.hidden || live.unkept {
             return;
         }
         name(&mut live.flow);
         if hide {
-            live.hidden = true;
+            live.unkept = true;
             live.flow = super::logbook::without_destination(&live.flow);
         }
         let flow = live.flow.clone();
@@ -944,7 +946,7 @@ impl Shared {
     fn flow_of(&self, id: u64) -> Option<Flow> {
         lock(&self.live)
             .get(&id)
-            .filter(|l| !l.hidden)
+            .filter(|l| !l.hidden && !l.unkept)
             .map(|l| l.flow.clone())
             .or_else(|| lock(&self.flows).iter().rev().find(|f| f.id == id).cloned())
     }
@@ -2114,7 +2116,11 @@ mod tests {
                 "{reply:?}"
             );
             assert_ne!(flow.named_by, NamedBy::Proxy);
-            assert!(!lock(&shared.live).get(&opened.id).is_some_and(|l| l.hidden));
+            assert!(
+                !lock(&shared.live)
+                    .get(&opened.id)
+                    .is_some_and(|l| l.hidden || l.unkept)
+            );
         }
     }
 
@@ -2338,7 +2344,11 @@ mod tests {
             assert!(flow.proxy.is_none(), "{logs}");
             assert_eq!(flow.destination, at([93, 184, 216, 34], 443));
             assert_eq!(flow.name.as_deref(), Some("cdn.example.net"));
-            assert!(!lock(&shared.live).get(&cdn.id).is_some_and(|l| l.hidden));
+            assert!(
+                !lock(&shared.live)
+                    .get(&cdn.id)
+                    .is_some_and(|l| l.hidden || l.unkept)
+            );
             let view = shared.now_view(clock.wall_ms());
             let places: Vec<_> = view.apps.iter().flat_map(|a| a.places.iter()).collect();
             assert!(places.iter().all(|p| p.flow.proxy.is_none()), "{places:?}");
