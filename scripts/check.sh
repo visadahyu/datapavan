@@ -214,6 +214,24 @@ native_budget() {
     done
 }
 
+# Fails unless the network part's library $2 in the release APK $1 keeps its unwind tables as the size pass left them
+# (ADR 0053): x86_64's is linked without their index (core/network-jni/build.rs), so a crash's tombstone finds the
+# tables through the section headers alone, and nothing may strip those; arm64-v8a's keeps the index. $3 is the NDK.
+unwind_tables() {
+    local apk=$1 lib=$2 readelf="$3/toolchains/llvm/prebuilt/linux-x86_64/bin/llvm-readelf" work sections segments
+    work=$(mktemp -d)
+    unzip -p "$apk" "lib/x86_64/$lib" >"$work/x86_64.so"
+    unzip -p "$apk" "lib/arm64-v8a/$lib" >"$work/arm64-v8a.so"
+    sections=$("$readelf" -SW "$work/x86_64.so")
+    segments=$("$readelf" -lW "$work/x86_64.so")
+    grep -qE ' \.eh_frame +PROGBITS' <<<"$sections" || { echo "lib/x86_64/$lib has no .eh_frame section" >&2; exit 1; }
+    ! grep -q GNU_EH_FRAME <<<"$segments" || { echo "lib/x86_64/$lib has its unwind index again" >&2; exit 1; }
+    segments=$("$readelf" -lW "$work/arm64-v8a.so")
+    grep -q GNU_EH_FRAME <<<"$segments" || { echo "lib/arm64-v8a/$lib has lost its unwind index" >&2; exit 1; }
+    rm -rf "$work"
+    echo "  x86_64: .eh_frame, read through the section headers, no index; arm64-v8a: .eh_frame with its index"
+}
+
 # Fails when the APK $1 does not carry, under assets/licences/, each of the files $2... as the repository has
 # them (NOTICE, W7's fix round, review M4).
 licence_texts() {
@@ -259,6 +277,9 @@ android_gates() {
     # library grew past it unnoticed.
     echo "== Android: the network part's native library within 2 MB per ABI (ADR 0035)"
     native_budget "$out/build-advanced/outputs/apk/release/app-release-unsigned.apk" libdatapavan_network.so 2097152
+    echo "== Android: the network part's unwind tables, for tombstones (ADR 0053, the size pass)"
+    unwind_tables "$out/build-advanced/outputs/apk/release/app-release-unsigned.apk" libdatapavan_network.so \
+        "${ANDROID_HOME:-${ANDROID_SDK_ROOT:-$HOME/Android/sdk}}/ndk/$(sed -n 's/^ *ndkVersion = "\(.*\)"/\1/p' "$ROOT/android/app/build.gradle.kts")"
     # The table of the Java and Kotlin libraries comes along, held by the build to each variant's classpath
     # (checkJvmComponents): the licence screen reads its list from these files (W7, part 2).
     echo "== Android: the release APKs carry NOTICE, their native libraries' licence texts and their libraries' table (licences/)"
