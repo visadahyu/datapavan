@@ -67,10 +67,9 @@ traffic; this probe measures the platform.
 ### 2. What it publishes
 
 - **Where:** `docs/platform-gaps/`, with a README that holds the table and the method, and each run's raw output
-  beside it. The versions are Android 10, 12, 14, 15, 16 and 17 on the emulator, up to three emulators at once
-  on at most 12 of the machine's 24 threads and with at least 14 GB of memory left free; a row whose result
-  depends on timing runs alone, or with each emulator pinned to threads of its own and what ran beside it
-  recorded.
+  beside it. The versions are Android 10, 12, 14, 15, 16 and 17 on the emulator, under the machine's rule of
+  decision 7; a row whose result depends on timing runs alone, or with each emulator pinned to threads of its own
+  and what ran beside it recorded.
 - **One row per behaviour and version,** with:
   - **the image's identity:** the system image's SDK package and revision, the SHA-256 of its archive,
     `ro.build.fingerprint`, the Google Play system update month that Settings shows (or "none" on an image
@@ -213,10 +212,12 @@ time. A draft may be prepared with AI help; the maintainer files it.
   tests on the JVM: turning the probe's raw output into a row, and checking the table's format. It also runs
   decision 1's class check and decision 5's manifest check. No emulator runs the probe in CI: CI minutes are
   limited.
-- **Full runs on the maintainer's machine,** under the maintainer's rule for it: up to three emulators at once, on at
-  most 12 of the machine's 24 threads and with at least 14 GB of memory left free, each stopped and its AVD deleted
-  after its run. A row whose result depends on timing runs alone, or with each emulator pinned to threads of its own
-  and what ran beside it recorded.
+- **Full runs on the maintainer's machine,** under the maintainer's rule for it: no set number of emulators at once
+  (the maintainer lifted the cap of three on 2026-11-24: «سقف سه شبیه ساز همزمان را بردار», "lift the cap of three
+  emulators at once"), together on all of the machine's threads but four, four each, and with at least 14 GB of
+  memory left free, as `scripts/emulator-shards.sh` counts them too; each is stopped and its AVD deleted after its
+  run. A row whose result depends on timing runs alone, or with each emulator pinned to threads of its own and what
+  ran beside it recorded.
 - **When rows are run again:** when a new image revision or Google Play system update month appears for a version
   in the table, and before a release of Datapavan Advanced whose texts cite the table (ADR 0039).
 

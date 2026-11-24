@@ -97,8 +97,9 @@ to its own threads with `taskset`. Every run records the load, the free memory, 
 processes by kind (`beside_before` and `beside_after` in `run.txt`), and whether it ran alone from start to
 end (`alone`); a timing run that finds another emulator at any of its checks stops.
 
-**The machine's rule** (ADR 0048, decision 7): at most three emulators at once, on at most 12 of the machine's 24
-threads, with at least 14 GB of memory left free. The script refuses to start otherwise.
+**The machine's rule** (ADR 0048, decision 7): no set number of emulators at once (the maintainer lifted the cap of
+three on 2026-11-24), together on all of the machine's threads but four, with at least 14 GB of memory left free.
+The script refuses to start otherwise.
 
 **The image's identity.** The SDK manager keeps no archive once an image is installed, and its repository lists
 each archive's SHA-1 only. A row records that SHA-1 from the SDK manager's cache (`not-in-sdk-cache` when the

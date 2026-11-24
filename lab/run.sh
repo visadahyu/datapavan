@@ -21,9 +21,9 @@
 # SHA-256, then stops the emulator and deletes the AVD, also when a step fails. Every adb command names the
 # emulator's serial: a phone plugged into the machine is never touched.
 #
-# The machine's rule (ADR 0048, decision 7): at most three emulators at once, on at most 12 of its threads,
-# with at least 14 GB of memory left free; a timing behaviour runs alone. The script refuses to start
-# otherwise.
+# The machine's rule (ADR 0048, decision 7): no set number of emulators at once (lifted by the maintainer on
+# 2026-11-24), together on all of the machine's threads but four, with at least 14 GB of memory left free; a timing
+# behaviour runs alone. The script refuses to start otherwise.
 #
 # The row is printed and written to <out>/rows.csv. It reaches docs/platform-gaps/results.csv only once
 # someone has checked it under ADR 0048, decision 4: a result that differs from its public source, or a
@@ -128,8 +128,10 @@ for pid in $others; do
 done
 running=$(wc -w <<<"$others")
 free_mb=$(awk '/MemAvailable/ {print int($2 / 1024)}' /proc/meminfo)
-[ "$running" -lt 3 ] || { echo "three emulators already run; the machine's rule allows three at once" >&2; exit 2; }
-[ $((used + threads)) -le 12 ] || { echo "the emulators would use $((used + threads)) of the machine's threads; at most 12" >&2; exit 2; }
+# All of the machine's online threads but four, as scripts/emulator-shards.sh counts them, not those this script may
+# run on.
+allowed=$(($(getconf _NPROCESSORS_ONLN) - 4))
+[ $((used + threads)) -le "$allowed" ] || { echo "the emulators would use $((used + threads)) of the machine's threads; at most $allowed, all but four" >&2; exit 2; }
 [ $((free_mb - RAM_MB)) -ge 14336 ] || { echo "only $free_mb MB of memory available; 14 GB must stay free beside the emulator's $RAM_MB MB" >&2; exit 2; }
 [ "$TIMING" = no ] || [ "$running" -eq 0 ] || { echo "a timing behaviour runs alone, and $running emulator(s) run" >&2; exit 2; }
 case $BEHAVIOUR in

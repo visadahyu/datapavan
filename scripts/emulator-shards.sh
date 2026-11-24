@@ -31,8 +31,10 @@ EMULATOR="$SDK/emulator/emulator"
 AVD=dp-api35-ci
 ALONE=""
 THREADS_EACH=4
-# Four of the machine's threads stay free of emulators; the rest may hold them, four each.
-MAX_THREADS=$(($(nproc) - 4))
+# Four of the machine's threads stay free of emulators; the rest may hold them, four each. The machine's online threads,
+# as ALL_CPUS below reads them, not those this script may run on, which nproc counts under taskset or a cgroup
+# (review A, rest, note 6).
+MAX_THREADS=$(($(getconf _NPROCESSORS_ONLN) - 4))
 MAX_EMULATORS=$((MAX_THREADS / THREADS_EACH))
 FREE_FLOOR_KB=$((14 * 1024 * 1024))
 # What one emulator with a 2 GB guest takes of the host's memory, about.
