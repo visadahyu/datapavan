@@ -87,6 +87,10 @@ configurations.configureEach {
  * The cargo environment is controlled: inherited flags that could change the output are dropped, and
  * absolute paths (the cargo registry, the workspace) are remapped, so the library neither leaks the
  * builder's home directory nor differs between machines.
+ *
+ * Only the crate's own library is kept: cargo-ndk copies every cdylib the build makes, a dependency's too, and
+ * GotaTun declares one, which nothing loads. Until the size pass (2026-11-24, ADR 0053) every Advanced APK carried
+ * it beside the engine: 324,064 bytes on x86_64, 304,968 on arm64-v8a and 11,808 on armeabi-v7a.
  */
 abstract class CargoNdkTask : DefaultTask() {
     @get:InputFiles
@@ -98,6 +102,10 @@ abstract class CargoNdkTask : DefaultTask() {
 
     @get:Input
     abstract val crate: Property<String>
+
+    /** The file name of the crate's library, the one file kept for each ABI. */
+    @get:Input
+    abstract val library: Property<String>
 
     @get:Input
     abstract val abis: ListProperty<String>
@@ -150,6 +158,13 @@ abstract class CargoNdkTask : DefaultTask() {
             workingDir = workspaceDir.get().asFile
             setEnvironment(environment)
             commandLine(args)
+        }
+        abis.get().forEach { abi ->
+            val kept = out.resolve("$abi/${library.get()}")
+            if (!kept.isFile) throw GradleException("cargo-ndk left no ${library.get()} for $abi in $out")
+            kept.parentFile.listFiles().orEmpty().filter { it != kept }.forEach { other ->
+                if (!other.delete()) throw GradleException("could not remove $other from the native libraries")
+            }
         }
     }
 }
@@ -241,6 +256,7 @@ androidComponents {
             sources.from(listOf("clients.tsv", "names.tsv", "telegram-cidr.txt").map { repositoryRoot.file("data/messengers/$it") })
             workspaceDir.set(rustWorkspace)
             crate.set("datapavan-network-jni")
+            library.set("libdatapavan_network.so")
             abis.set(shippedAbis)
             platformLevel.set(variant.minSdk.apiLevel)
             // -Pdatapavan.rustRelease=true: optimised Rust in a debug build too, so that the CPU check

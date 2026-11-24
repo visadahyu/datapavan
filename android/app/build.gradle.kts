@@ -107,6 +107,9 @@ val requiredLibraries = buildMap {
     if (advanced) put(networkLibrary, "Java_org_visadahyu_datapavan_network_Engine_nativeStart")
 }
 val forbiddenLibraries = if (advanced) emptyList() else listOf(networkLibrary)
+// The native libraries the Java and Kotlin dependencies bring, which an APK may carry beside those above:
+// androidx.graphics:graphics-path's, which Compose's ui-graphics brings. Any other fails the APK check.
+val dependencyNativeLibraries = listOf("libandroidx.graphics.path.so")
 // The methods of NetworkVpnService that the network part's library calls back by name (core/network-jni/src/lib.rs),
 // which R8 must neither remove nor rename (network/proguard-rules.pro).
 val jniCallbacks = if (advanced) listOf("ownerUid", "protectSocket", "logRecords", "statesWanted", "resolveEndpoint", "routeOfApp", "exchange", "dnsChanged") else emptyList()
@@ -645,9 +648,11 @@ abstract class ManifestAllowlistCheck : DefaultTask() {
 
 /**
  * Fails if a built APK lacks a native library the edition needs for a shipped ABI, if a library does not
- * export its JNI symbol, if it carries one the edition must not (Basic never carries the network part's engine), or if
- * the APK's code lacks a method a library calls back by name: R8 would have removed or renamed it, and the
- * engine would fail at run time without a word.
+ * export its JNI symbol, if it carries one the edition must not (Basic never carries the network part's engine), if it
+ * carries any other native library than these and its Java and Kotlin libraries' own (a library no one named ships
+ * unchecked: until the size pass of 2026-11-24, ADR 0053, every Advanced APK carried GotaTun's own cdylib beside the
+ * engine), or if the APK's code lacks a method a library calls back by name: R8 would have removed or renamed it, and
+ * the engine would fail at run time without a word.
  */
 abstract class ApkNativeLibraryCheck : DefaultTask() {
     @get:InputFiles
@@ -666,6 +671,10 @@ abstract class ApkNativeLibraryCheck : DefaultTask() {
 
     @get:Input
     abstract val forbidden: ListProperty<String>
+
+    /** The native libraries of the APK's Java and Kotlin dependencies, which it may carry beside [libraries]. */
+    @get:Input
+    abstract val dependencyLibraries: ListProperty<String>
 
     @get:Input
     abstract val callbacks: ListProperty<String>
@@ -705,6 +714,14 @@ abstract class ApkNativeLibraryCheck : DefaultTask() {
                     }
                     lines += "OK $apk has no $library"
                 }
+                val expected = libraries.get().keys + dependencyLibraries.get()
+                zip.entries().asSequence().filter { it.name.startsWith("lib/") && !it.isDirectory }.forEach { entry ->
+                    val path = entry.name.split('/')
+                    if (path.size != 3 || path[1] !in abis.get() || path[2] !in expected) {
+                        throw GradleException("${element.outputFile}: ${entry.name} is no native library this edition expects")
+                    }
+                }
+                lines += "OK $apk holds no other native library"
                 // A method name the code keeps is in some dex file's string table.
                 val code = zip.entries().asSequence().filter { it.name.matches(Regex("classes\\d*\\.dex")) }
                     .joinToString("") { entry -> String(zip.getInputStream(entry).use { it.readBytes() }, Charsets.ISO_8859_1) }
@@ -843,6 +860,7 @@ androidComponents {
             abis.set(shippedAbis)
             libraries.set(requiredLibraries)
             forbidden.set(forbiddenLibraries)
+            dependencyLibraries.set(dependencyNativeLibraries)
             callbacks.set(jniCallbacks)
             labTag.set("DatapavanAttestationLab")
             labTagExpected.set(variant.buildType == "debug")
