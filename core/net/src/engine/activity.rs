@@ -42,12 +42,15 @@
 //! **Without the network part's Kotlin side telling states** ([`super::Platform::tells_states`], as in tests that do
 //! not), no mark is noted and every segment is written at once in no state, "not told".
 
-use super::now::{Counts, Seen};
+use super::logbook::{Live, without_destination};
+use super::now::{Counts, Seen, same_place};
+use super::proxied::{own_proxy, strips};
 use super::{Flow, Shared, lock};
 use crate::log::Record;
 use crate::states::{Interval, Known, Placed, Screen, State, Told, Unknown};
 use std::collections::{HashMap, VecDeque};
 use std::sync::atomic::Ordering;
+use std::time::Duration;
 
 /// At most this many seconds with counts, not placed yet, each flow and each app's lookups hold.
 pub(super) const WINDOW: usize = 120;
@@ -734,6 +737,38 @@ impl Activity {
         (true, settled)
     }
 
+    /// Strips the first hops of apps' own proxies whose window ended at `boot`, in time since the phone started
+    /// (R2), of the apps `keeps` does not keep: in "Now"'s places, unless a flow still `live` matches the place, and
+    /// in the segments held for their states, unless their flow is still live. Only the live flows through a proxy
+    /// are matched, gathered once rather than for each place (audit-A 19).
+    pub(super) fn expire_first_hops(
+        &mut self,
+        boot: Duration,
+        keeps: &dyn Fn(Option<u32>) -> bool,
+        live: &HashMap<u64, Live>,
+    ) {
+        let proxied: Vec<&Flow> = live
+            .values()
+            .map(|l| &l.flow)
+            .filter(|flow| own_proxy(flow))
+            .collect();
+        let open = |uid: Option<u32>, place: &Flow| {
+            proxied
+                .iter()
+                .any(|flow| flow.uid == uid && same_place(flow, place))
+        };
+        self.counts.expire_first_hops(boot, keeps, &open);
+        for piece in &mut self.held {
+            if let Of::Flow { flow, .. } = &mut piece.of
+                && strips(flow, keeps)
+                && !live.contains_key(&flow.id)
+                && !self.counts.shown_after_end(piece.uid, flow, boot)
+            {
+                *flow = without_destination(flow);
+            }
+        }
+    }
+
     /// Forgets what was told before the oldest second still waiting, in the flows' marks
     /// (`oldest_mark`) or the segments held.
     fn forget_told_before(&mut self, oldest_mark: Option<u64>) {
@@ -843,6 +878,9 @@ impl Shared {
     pub(super) fn tell(&self, told: &Told) {
         lock(&self.activity).tell(told);
         self.settle(None);
+        // A reading comes every 5 s with the screen on and every minute with it off, whether "Now" is drawn or
+        // not: what passed its window leaves memory then too (audit-A 8).
+        self.sweep_first_hops();
         // One lock at a time: `waiting` is not held while `activity` is waited for (review b2, N7).
         let marks = lock(&self.waiting).total();
         let waits = marks > 0 || !lock(&self.activity).held.is_empty();
@@ -851,6 +889,21 @@ impl Shared {
                 .store(self.clock.wall_ms() / 1000, Ordering::Relaxed);
             self.platform.wants_states();
         }
+    }
+
+    /// The sweep, taking `live` and then the activity as [`Shared::settle`] does, and the boot clock and the switch
+    /// once; then, with those let go, the inferred flows past their window, under the proxies' own lock. Where no
+    /// first hop is shown it is one pass over the places and the segments held that finds none.
+    pub(super) fn sweep_first_hops(&self) {
+        let boot = self.clock.since_boot();
+        {
+            let live = lock(&self.live);
+            let mut activity = lock(&self.activity);
+            // Read under `live`, as naming reads it.
+            let keeps = self.keeps_first_hops();
+            activity.expire_first_hops(boot, &keeps, &live);
+        }
+        self.prune_inferred(boot);
     }
 
     /// The wall clock was set back by a second or more, to `now` (`logbook`'s `log_now`, after the cut and

@@ -23,10 +23,13 @@
 //! (ADR 0046, decision 2 (a)). [`Counts::clear`] forgets all of it at once, for ADR 0047's profile.
 
 use super::activity::{Mark, Of};
+use super::logbook::without_destination;
+use super::proxied::own_first_hop;
 use super::{Flow, NamedBy, Network, Shared, lock};
 use crate::snapshot::{AppNow, COLUMNS, OFF, PlaceNow, Snapshot, WINDOWS as VIEW_WINDOWS, Ways};
 use crate::states::Placed;
 use std::collections::{BTreeMap, HashMap, VecDeque};
+use std::time::Duration;
 
 /// At most this many apps have counts kept; one more takes the place of the one with bytes the
 /// longest ago.
@@ -48,6 +51,29 @@ const LOOKUPS_PER_VIEW: usize = 64;
 
 /// The windows of the live view in whole minutes: the current one and the 9, or the 59, before it.
 pub(super) const WINDOWS: [u64; 2] = [10, 60];
+
+/// How long after an app's own proxy's connection ends "Now" still shows its first hop in full, while its app's
+/// first hops are not kept (ADR 0052, R2): in time since the phone started, sleep included, so that ten minutes
+/// asleep are ten minutes and a wall clock set back or forward changes nothing in it. Equal to
+/// `proxied::SUBSTITUTION`, and apart from it: that one is how long a messenger's direct connection keeps a
+/// connection elsewhere from being named its proxy.
+pub(super) const SHOWN: Duration = Duration::from_mins(10);
+
+/// An app's own proxy's connection that ended, for its first hop's window in "Now": its app, its first hop as a
+/// place keys it, and when it ended, in time since the phone started.
+struct End {
+    uid: Option<u32>,
+    flow: Flow,
+    at: Duration,
+}
+
+/// Whether an end of the app `uid` whose window still runs at `boot` is the place `flow`'s. Saturating: an end
+/// near the clock's largest value must not overflow, which aborts a release build.
+fn shown_after(ended: &[End], uid: Option<u32>, flow: &Flow, boot: Duration) -> bool {
+    ended.iter().any(|end| {
+        end.uid == uid && end.at.saturating_add(SHOWN) > boot && same_place(&end.flow, flow)
+    })
+}
 
 /// Bytes up and down by column: no state, in use, with its notification, in the background.
 type ByState = [Ways; 4];
@@ -140,7 +166,7 @@ struct Place {
 /// Whether two flows reach one destination as the live view shows it: by name, where the name came
 /// from, the DNS name beside it and the app's own DNS; and by address where neither has a name; and
 /// through the same proxy, if any (ADR 0052).
-fn same_place(a: &Flow, b: &Flow) -> bool {
+pub(super) fn same_place(a: &Flow, b: &Flow) -> bool {
     a.proxy == b.proxy
         && a.name == b.name
         && a.named_by == b.named_by
@@ -266,6 +292,10 @@ pub(super) struct Counts {
     /// When the engine began counting, in milliseconds since 1970 (0 before it is told): the window while the
     /// screen was off begins no earlier, so that it never claims hours the network part did not see (finding 6).
     began: u64,
+    /// The ends of apps' own proxies' connections, for their first hops' window ([`SHOWN`]): one for each place, the
+    /// latest, at most [`PLACES_PER_APP`] of one app's and [`PLACES`] in all. Cleared with the rest, and handed to
+    /// the next engine with the rest.
+    ended: Vec<End>,
 }
 
 impl Counts {
@@ -403,6 +433,93 @@ impl Counts {
                 place.flow = to.clone();
             }
         }
+    }
+
+    /// An app's own proxy's connection ended at `at`, in time since the phone started, its first hop `flow`: its
+    /// place stays in full for [`SHOWN`] more. A later end of the same place takes the earlier's place. Past an app's
+    /// bound its own oldest end goes, and past the bound of all the oldest of the app that holds the most. An end
+    /// read as `Duration::MAX`, the clock's failure, is not kept: its place is stripped once its flow is gone.
+    pub(super) fn end(&mut self, uid: Option<u32>, flow: Flow, at: Duration) {
+        if at == Duration::MAX {
+            return;
+        }
+        if let Some(end) = self
+            .ended
+            .iter_mut()
+            .find(|end| end.uid == uid && same_place(&end.flow, &flow))
+        {
+            end.at = end.at.max(at);
+            return;
+        }
+        self.ended.push(End { uid, flow, at });
+        let over = if self.ended.iter().filter(|end| end.uid == uid).count() > PLACES_PER_APP {
+            Some(uid)
+        } else if self.ended.len() > PLACES {
+            let mut by_app: HashMap<Option<u32>, usize> = HashMap::new();
+            for end in &self.ended {
+                *by_app.entry(end.uid).or_default() += 1;
+            }
+            by_app
+                .into_iter()
+                .max_by_key(|(_, n)| *n)
+                .map(|(uid, _)| uid)
+        } else {
+            None
+        };
+        if let Some(over) = over
+            && let Some(oldest) = (0..self.ended.len())
+                .filter(|&i| self.ended[i].uid == over)
+                .min_by_key(|&i| self.ended[i].at)
+        {
+            self.ended.swap_remove(oldest);
+        }
+    }
+
+    /// Whether an end of the app `uid` whose window still runs at `boot` is the place `flow`'s.
+    pub(super) fn shown_after_end(&self, uid: Option<u32>, flow: &Flow, boot: Duration) -> bool {
+        shown_after(&self.ended, uid, flow, boot)
+    }
+
+    /// Strips the first hops whose window ended at `boot`, in time since the phone started (R2): of each app whose
+    /// first hops `keeps` does not keep, every place that shows an own proxy's first hop, that no end whose window
+    /// still runs matches, and that `open` says no live flow of its app matches. Each is left out as the log leaves
+    /// it, merged into the app's place of the same kind and facts, if it has one, and its address's organisation
+    /// leaves the view's memory (as `hide` does for chained apps). A stripped place is never full again. Then the
+    /// ends past their window go. The ends are read first, as they are fewer than the live flows.
+    pub(super) fn expire_first_hops(
+        &mut self,
+        boot: Duration,
+        keeps: &dyn Fn(Option<u32>) -> bool,
+        open: &dyn Fn(Option<u32>, &Flow) -> bool,
+    ) {
+        let Self {
+            apps,
+            places,
+            organisations,
+            ended,
+            ..
+        } = self;
+        for (&uid, app) in apps.iter_mut() {
+            if keeps(uid) {
+                continue;
+            }
+            let mut at = 0;
+            while at < app.places.len() {
+                let flow = &app.places[at].flow;
+                if !own_first_hop(flow) || shown_after(ended, uid, flow, boot) || open(uid, flow) {
+                    at += 1;
+                    continue;
+                }
+                organisations.remove(&flow.destination.ip());
+                let stripped = without_destination(flow);
+                if rename(&mut app.places, at, &stripped) {
+                    *places -= 1;
+                } else {
+                    at += 1;
+                }
+            }
+        }
+        ended.retain(|end| end.at.saturating_add(SHOWN) > boot);
     }
 
     /// Leaves out every app's own proxies that still show where they went, as "Log where these apps connect"
@@ -559,13 +676,16 @@ impl Counts {
         place.last = place.last.max(second);
     }
 
-    /// Forgets the destination, of any app, with bytes the longest ago.
+    /// Forgets the destination, of any app, that gives way first ([`oldest_place`]).
     fn forget_oldest_place(&mut self) {
         let oldest = self
             .apps
             .iter()
             .filter_map(|(uid, app)| {
-                oldest_place(&app.places).map(|at| (app.places[at].last, *uid, at))
+                oldest_place(&app.places).map(|at| {
+                    let place = &app.places[at];
+                    ((own_first_hop(&place.flow), place.last), *uid, at)
+                })
             })
             .min();
         if let Some((_, uid, at)) = oldest
@@ -599,19 +719,48 @@ impl Counts {
     }
 }
 
-/// Where the destination with bytes the longest ago is in `places`.
+/// Where the destination that gives way first is in `places`: of those that show no own proxy's first hop, the one
+/// with bytes the longest ago, and a first hop only when every place is one (R8). So no flood of other
+/// destinations pushes an app's own proxy out of "Now" before its window ends.
 fn oldest_place(places: &[Place]) -> Option<usize> {
     places
         .iter()
         .enumerate()
-        .min_by_key(|(_, place)| place.last)
+        .min_by_key(|(_, place)| (own_first_hop(&place.flow), place.last))
         .map(|(at, _)| at)
+}
+
+/// Gives the place at `at` the identity of `to`, merged into the place that already has it, if one does: whether
+/// it was merged, and so is gone.
+fn rename(places: &mut Vec<Place>, at: usize, to: &Flow) -> bool {
+    let Some(into) = (0..places.len()).find(|&i| i != at && same_place(&places[i].flow, to)) else {
+        places[at].flow = to.clone();
+        return false;
+    };
+    let from = places.swap_remove(at);
+    // The last place moved into `at`.
+    let into = if into == places.len() { at } else { into };
+    merge(&mut places[into], from);
+    true
+}
+
+/// Adds `from`'s bytes to `into`'s, in every window, and its latest seconds.
+fn merge(into: &mut Place, from: Place) {
+    for (minute, ways) in from.minutes {
+        add_minute(&mut into.minutes, minute, |counts: &mut Ways| {
+            add(counts, ways);
+        });
+    }
+    add(&mut into.session, from.session);
+    into.last = into.last.max(from.last);
+    into.routed = into.routed.max(from.routed);
 }
 
 impl Shared {
     /// What the live view "Now" draws at the wall clock's `now`: each app's bytes by state in each
     /// window, the seconds not placed yet in a column apart, and its destinations with theirs.
     pub(super) fn now_view(&self, now: u64) -> Snapshot {
+        let boot = self.clock.since_boot();
         let tool = self.chain().map(|chain| chain.tool);
         // The tool whose own servers the view leaves out: "Log where these apps connect" is off.
         let hidden_tool = self
@@ -622,6 +771,9 @@ impl Shared {
             let live = lock(&self.live);
             let mut activity = lock(&self.activity);
             activity.counts.forget_old(now);
+            // A first hop whose window ended is not drawn (R2). The switch is read under `live`, as naming reads it.
+            let keeps = self.keeps_first_hops();
+            activity.expire_first_hops(boot, &keeps, &live);
             let counts = &activity.counts;
             let off = counts.off.as_ref().map(|off| (off.from, off.until));
             let mut view = View::new(now, counts.session, off, counts.cleared);
@@ -666,6 +818,7 @@ impl Shared {
             }
             (view, head, found)
         };
+        self.prune_inferred(boot);
         self.look_up(&view, &mut found);
         let (known, told_until, screen, session, states) = head;
         let off = view.off;
@@ -788,6 +941,8 @@ struct AppView {
     /// The tunnel it went through with its destinations left out, in a window (W7).
     through_tunnel: Option<u32>,
     places: Vec<(Flow, [Ways; 3])>,
+    /// How many of them show an own proxy's first hop: they have a cap of their own (audit-A 9).
+    first_hops: usize,
 }
 
 impl View {
@@ -853,6 +1008,7 @@ impl View {
             }
             add(&mut bytes[2], place.session);
             if bytes != [Ways::default(); 3] {
+                view.first_hops += usize::from(own_first_hop(&place.flow));
                 view.places.push((place.flow.clone(), bytes));
             }
         }
@@ -907,13 +1063,21 @@ impl View {
                 }
                 Seen::HiddenDirect(None) | Seen::Lookups => continue,
             };
-            // The flow's destination, found once for all its marks (review b1, engine, nit 3).
+            // The flow's destination, found once for all its marks (review b1, engine, nit 3). Own proxies' first
+            // hops, and other places, each have [`PLACES_PER_APP`]: a flood of either never pushes out the other.
             let at = *place.get_or_insert_with(|| {
                 app.places
                     .iter()
                     .position(|(f, _)| same_place(f, flow))
                     .or_else(|| {
-                        (app.places.len() < PLACES_PER_APP).then(|| {
+                        let first_hop = own_first_hop(flow);
+                        let held = if first_hop {
+                            app.first_hops
+                        } else {
+                            app.places.len() - app.first_hops
+                        };
+                        (held < PLACES_PER_APP).then(|| {
+                            app.first_hops += usize::from(first_hop);
                             app.places.push((flow.clone(), [Ways::default(); 3]));
                             app.places.len() - 1
                         })
@@ -954,6 +1118,7 @@ mod tests {
         BACKGROUND, IN_USE, NOT_TOLD, NOTIFICATION, T, Telling, UID, flow, open, taken, telling_at,
         told, up_at,
     };
+    use super::super::clock::Clock;
     use super::super::tests::shared_with;
     use super::*;
     use crate::states::{Interval, Known, State, Told};
@@ -2536,5 +2701,380 @@ mod tests {
              the Kotlin side's SnapshotTest"
         );
         Ok(())
+    }
+
+    /// A flow of the app `uid` through a SOCKS5 proxy at `203.0.113.n:1080`, named `proxy-n.example.net` by DNS: an
+    /// app's own proxy's first hop in full, as "Now" shows it while the switch is off, with no destination.
+    fn through_proxy(id: u64, uid: u32, n: u8) -> Flow {
+        let name = format!("proxy-{n}.example.net");
+        Flow {
+            destination: SocketAddr::from(([203, 0, 113, n], 1080)),
+            name: Some(name.clone()),
+            named_by: NamedBy::Dns,
+            proxy: Some(Box::new(crate::engine::Proxied {
+                kind: crate::proxies::Kind::Socks5,
+                setting: false,
+                password: true,
+                outside_maker: false,
+                asked: None,
+                proxy_name: Some(name),
+                organisation: None,
+                cover: None,
+                left_out: false,
+                trackers: Vec::new(),
+            })),
+            ..flow(id, Some(uid))
+        }
+    }
+
+    fn recorded(shared: &Shared, flow: Flow) -> Arc<super::super::logbook::FlowBytes> {
+        let Some(bytes) = shared.record(flow) else {
+            unreachable!("an open flow is live")
+        };
+        bytes
+    }
+
+    /// Whether a place's flow has the log's left-out shape: an own proxy's kind, and no address or name.
+    fn stripped(flow: &Flow) -> bool {
+        flow.destination.ip().is_unspecified()
+            && flow.name.is_none()
+            && flow
+                .proxy
+                .as_ref()
+                .is_some_and(|p| p.left_out && p.proxy_name.is_none())
+    }
+
+    /// The places of the app `uid` as the counts hold them, read with no view, which sweeps.
+    fn counted_places(shared: &Shared, uid: u32) -> Vec<Flow> {
+        lock(&shared.activity)
+            .counts
+            .apps
+            .get(&Some(uid))
+            .map(|app| app.places.iter().map(|p| p.flow.clone()).collect())
+            .unwrap_or_default()
+    }
+
+    /// The places of the app `uid` in the view at `now`, which sweeps first.
+    fn shown_places(shared: &Shared, uid: u32, now: u64) -> Vec<PlaceNow> {
+        shared
+            .now_view(now)
+            .apps
+            .into_iter()
+            .find(|app| app.uid == Some(uid))
+            .map(|app| app.places)
+            .unwrap_or_default()
+    }
+
+    /// A reading from `from` to `until` with the screen on since `since`: `UID` in use throughout.
+    fn on_since(from: u64, until: u64, since: u64) -> Told {
+        let mut reading = told(from, until, &[(from, until, State::InUse)]);
+        reading.screen = crate::states::Screen::On(Some(since));
+        reading
+    }
+
+    /// One first hop placed in "Now" with the screen on since `screen_on`, and its flow ended: the shared state
+    /// and its clock.
+    fn ended_first_hop(screen_on: u64) -> (Shared, Arc<super::super::clock::ManualClock>) {
+        let (shared, clock, _) = telling_at(T);
+        let bytes = recorded(&shared, through_proxy(1, UID, 5));
+        up_at(&shared, &clock, &bytes, 500, 10);
+        clock.set(T + 1_500);
+        shared.tell(&on_since(T, T + 1_000, screen_on));
+        assert!(own_first_hop(
+            &shown_places(&shared, UID, T + 1_500)[0].flow
+        ));
+        shared.finish(1);
+        (shared, clock)
+    }
+
+    /// Test 11 (W1, W4, W5): a first hop stays in full until ten minutes after its connection ends, by the time
+    /// since the phone started; then it is stripped, merged into the app's stripped place of the same kind and
+    /// facts with the bytes of both in every window, and its address's organisation leaves the view's memory.
+    #[test]
+    fn a_first_hop_is_shown_in_full_for_ten_minutes_after_its_connection_ends() {
+        let (shared, clock, _) = telling_at(T);
+        let one = recorded(&shared, through_proxy(1, UID, 5));
+        let two = recorded(&shared, through_proxy(2, UID, 6));
+        up_at(&shared, &clock, &one, 500, 10);
+        up_at(&shared, &clock, &two, 600, 20);
+        clock.set(T + 1_500);
+        shared.tell(&on_since(T, T + 1_000, T));
+        assert_eq!(shown_places(&shared, UID, T + 1_500).len(), 2);
+        let first: std::net::IpAddr = [203, 0, 113, 5].into();
+        assert!(
+            lock(&shared.activity)
+                .counts
+                .organisations
+                .contains_key(&first)
+        );
+        shared.finish(1);
+        shared.finish(2);
+        let shown = u64::try_from(SHOWN.as_millis()).unwrap_or(u64::MAX);
+        clock.pass(shown - 1_000);
+        let places = shown_places(&shared, UID, clock.wall_ms());
+        assert!(
+            places.len() == 2 && places.iter().all(|p| own_first_hop(&p.flow)),
+            "9 min 59 s after: {places:?}"
+        );
+        clock.pass(1_000);
+        let places = shown_places(&shared, UID, clock.wall_ms());
+        assert_eq!(places.len(), 1, "merged: {places:?}");
+        assert!(stripped(&places[0].flow), "{places:?}");
+        assert_eq!(
+            (places[0].bytes[1], places[0].bytes[2]),
+            ([30, 0], [30, 0]),
+            "the hour's and the screen-on's bytes of both"
+        );
+        let counted = counted_places(&shared, UID);
+        assert!(counted.len() == 1 && stripped(&counted[0]));
+        let organisations = &lock(&shared.activity).counts.organisations;
+        assert!(
+            !organisations.contains_key(&first)
+                && !organisations.contains_key(&std::net::IpAddr::from([203, 0, 113, 6]))
+        );
+    }
+
+    /// Test 12 (W3): a quiet flow keeps its first hop in full while it is open, however long, and for ten minutes
+    /// after it ends.
+    #[test]
+    fn a_quiet_open_flow_keeps_its_first_hop_in_full() {
+        let (shared, clock, _) = telling_at(T);
+        let bytes = recorded(&shared, through_proxy(1, UID, 5));
+        up_at(&shared, &clock, &bytes, 500, 10);
+        clock.set(T + 1_500);
+        shared.tell(&on_since(T, T + 1_000, T));
+        clock.pass(30 * MINUTE);
+        assert!(
+            own_first_hop(&shown_places(&shared, UID, clock.wall_ms())[0].flow),
+            "open and quiet"
+        );
+        shared.finish(1);
+        clock.pass(10 * MINUTE - 1_000);
+        assert!(own_first_hop(
+            &shown_places(&shared, UID, clock.wall_ms())[0].flow
+        ));
+        clock.pass(1_000);
+        assert!(stripped(
+            &shown_places(&shared, UID, clock.wall_ms())[0].flow
+        ));
+    }
+
+    /// Test 13 (W9): with no view across a sleep, the next reading of the states strips what is due, in memory.
+    #[test]
+    fn a_reading_strips_a_first_hop_past_its_window_with_no_view() {
+        let (shared, clock) = ended_first_hop(T);
+        clock.pass(11 * MINUTE);
+        shared.tell(&on_since(T + 1_000, clock.wall_ms(), T));
+        let counted = counted_places(&shared, UID);
+        assert!(counted.len() == 1 && stripped(&counted[0]), "{counted:?}");
+        assert!(stripped(
+            &shown_places(&shared, UID, clock.wall_ms())[0].flow
+        ));
+    }
+
+    /// Test 14 (W2): the window runs on the time since the phone started, not on the wall clock: set forward a day,
+    /// the place stays in full until ten minutes after the end; set back an hour, it is stripped ten minutes after.
+    /// The screen came on before the flow, so that its window keeps the place through either.
+    #[test]
+    fn the_window_runs_on_the_boot_clock() {
+        let (shared, clock) = ended_first_hop(T - 2 * 60 * MINUTE);
+        clock.set(T + 24 * 60 * MINUTE);
+        assert!(
+            own_first_hop(&shown_places(&shared, UID, clock.wall_ms())[0].flow),
+            "a day ahead"
+        );
+        clock.pass(10 * MINUTE - 2_000);
+        assert!(own_first_hop(
+            &shown_places(&shared, UID, clock.wall_ms())[0].flow
+        ));
+        clock.pass(2_000);
+        assert!(stripped(
+            &shown_places(&shared, UID, clock.wall_ms())[0].flow
+        ));
+        let (shared, clock) = ended_first_hop(T - 2 * 60 * MINUTE);
+        clock.set(T - 60 * MINUTE);
+        assert!(own_first_hop(&counted_places(&shared, UID)[0]));
+        assert!(
+            own_first_hop(&shown_places(&shared, UID, clock.wall_ms())[0].flow),
+            "an hour back"
+        );
+        clock.pass(11 * MINUTE);
+        assert!(stripped(
+            &shown_places(&shared, UID, clock.wall_ms())[0].flow
+        ));
+    }
+
+    /// Test 15 (W6): a segment held for its states, of a flow that ended, is stripped once its window ends: the
+    /// view's place of its seconds not told yet, and the record the log gets.
+    #[test]
+    fn a_held_segment_past_its_window_is_stripped() {
+        let (shared, clock, _) = telling_at(T);
+        let bytes = recorded(&shared, through_proxy(1, UID, 5));
+        up_at(&shared, &clock, &bytes, 500, 10);
+        shared.finish(1);
+        assert!(
+            own_first_hop(&shown_places(&shared, UID, T + 1_000)[0].flow),
+            "not told yet, in full"
+        );
+        clock.pass(11 * MINUTE);
+        let places = shown_places(&shared, UID, clock.wall_ms());
+        assert!(places.len() == 1 && stripped(&places[0].flow), "{places:?}");
+        shared.flush();
+        let written: Vec<_> = taken(&shared)
+            .into_iter()
+            .filter_map(|r| match r {
+                crate::log::Record::Segment { flow, .. } if flow.id == 1 => Some(flow),
+                _ => None,
+            })
+            .collect();
+        assert!(
+            !written.is_empty() && written.iter().all(stripped),
+            "{written:?}"
+        );
+    }
+
+    /// Test 16 (W10): a boot clock that cannot be read, at its largest value, overflows nothing: the end is not
+    /// noted, and the sweep strips what is due.
+    #[test]
+    fn a_failed_boot_reading_notes_no_end_and_strips() {
+        let (shared, clock, _) = telling_at(T);
+        let bytes = recorded(&shared, through_proxy(1, UID, 5));
+        up_at(&shared, &clock, &bytes, 500, 10);
+        clock.set(T + 1_500);
+        shared.tell(&on_since(T, T + 1_000, T));
+        clock.fail_boot();
+        shared.finish(1);
+        assert!(
+            lock(&shared.activity).counts.ended.is_empty(),
+            "no end noted"
+        );
+        assert!(stripped(&shown_places(&shared, UID, T + 2_000)[0].flow));
+        shared.tell(&on_since(T + 1_000, T + 2_000, T));
+    }
+
+    /// Test 17 (W7): with the switch on, nothing expires: twenty minutes after the end, the place is in full.
+    #[test]
+    fn with_the_switch_on_a_first_hop_never_expires() {
+        let (shared, clock, _) = telling_at(T);
+        shared.tunnels.set(&crate::engine::TunnelSetting {
+            log_destinations: true,
+            ..crate::engine::TunnelSetting::default()
+        });
+        let bytes = recorded(&shared, through_proxy(1, UID, 5));
+        up_at(&shared, &clock, &bytes, 500, 10);
+        clock.set(T + 1_500);
+        shared.tell(&on_since(T, T + 1_000, T));
+        shared.finish(1);
+        clock.pass(20 * MINUTE);
+        assert!(own_first_hop(
+            &shown_places(&shared, UID, clock.wall_ms())[0].flow
+        ));
+        assert!(own_first_hop(&counted_places(&shared, UID)[0]));
+    }
+
+    /// Test 20 (B1): one app's flood of other destinations does not push its own proxy's first hop out: an
+    /// ordinary place gives way instead, its oldest.
+    #[test]
+    fn one_apps_flood_does_not_push_its_first_hop_out() {
+        let mut counts = Counts::default();
+        let hop = through_proxy(0, UID, 5);
+        counts.count(Some(UID), 1_000, [1, 0, 0, 0], BACKGROUND, Seen::Flow(&hop));
+        for i in 1..=PLACES_PER_APP as u64 {
+            let place = Flow {
+                name: Some(format!("{i}.example")),
+                ..flow(i, Some(UID))
+            };
+            counts.count(
+                Some(UID),
+                1_000 + i,
+                [1, 0, 0, 0],
+                BACKGROUND,
+                Seen::Flow(&place),
+            );
+        }
+        let app = &counts.apps[&Some(UID)];
+        assert_eq!(app.places.len(), PLACES_PER_APP);
+        assert!(
+            app.places.iter().any(|p| own_first_hop(&p.flow)),
+            "the first hop stays"
+        );
+        assert!(
+            !app.places
+                .iter()
+                .any(|p| p.flow.name.as_deref() == Some("1.example")),
+            "the oldest ordinary place went"
+        );
+    }
+
+    /// Test 21 (B2): all apps' flood, 17 apps of 128 places each, does not push the first app's own proxy's first
+    /// hop out past the bound of all places.
+    #[test]
+    fn all_apps_flood_does_not_push_a_first_hop_out() {
+        let mut counts = Counts::default();
+        let hop = through_proxy(0, 0, 5);
+        counts.count(Some(0), 1_000, [1, 0, 0, 0], BACKGROUND, Seen::Flow(&hop));
+        let mut second = 2_000;
+        for uid in 0..17u32 {
+            for i in u64::from(uid == 0)..PLACES_PER_APP as u64 {
+                let place = Flow {
+                    name: Some(format!("{i}.app{uid}.example")),
+                    ..flow(i, Some(uid))
+                };
+                counts.count(
+                    Some(uid),
+                    second,
+                    [1, 0, 0, 0],
+                    BACKGROUND,
+                    Seen::Flow(&place),
+                );
+                second += 1;
+            }
+        }
+        assert_eq!(counts.places, PLACES);
+        assert!(
+            counts.apps[&Some(0)]
+                .places
+                .iter()
+                .any(|p| own_first_hop(&p.flow))
+        );
+    }
+
+    /// Test 22 (B3, B4): the view under construction gives first hops a cap of their own beside the app's other
+    /// places: a first hop not placed yet shows beside 128 places, and of 129 first hops 128 show, the 128 others
+    /// staying.
+    #[test]
+    fn first_hops_have_a_cap_of_their_own_in_the_view() {
+        let (shared, clock, _) = telling_at(T);
+        {
+            let mut activity = lock(&shared.activity);
+            for i in 0..PLACES_PER_APP as u64 {
+                let place = Flow {
+                    name: Some(format!("{i}.example")),
+                    ..flow(1_000 + i, Some(UID))
+                };
+                activity.counts.count(
+                    Some(UID),
+                    T / 1000,
+                    [1, 0, 0, 0],
+                    BACKGROUND,
+                    Seen::Flow(&place),
+                );
+            }
+        }
+        let bytes = recorded(&shared, through_proxy(1, UID, 1));
+        up_at(&shared, &clock, &bytes, 500, 10);
+        let places = shown_places(&shared, UID, T + 1_000);
+        assert_eq!(places.len(), PLACES_PER_APP + 1);
+        assert!(places.iter().any(|p| own_first_hop(&p.flow)));
+        for n in 2..=u8::try_from(PLACES_PER_APP + 1).unwrap_or(u8::MAX) {
+            let bytes = recorded(&shared, through_proxy(u64::from(n), UID, n));
+            up_at(&shared, &clock, &bytes, 600, 10);
+        }
+        let places = shown_places(&shared, UID, T + 1_000);
+        let hops = places.iter().filter(|p| own_first_hop(&p.flow)).count();
+        assert_eq!(
+            (hops, places.len() - hops),
+            (PLACES_PER_APP, PLACES_PER_APP)
+        );
     }
 }

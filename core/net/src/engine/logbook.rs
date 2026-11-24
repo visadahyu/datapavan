@@ -517,8 +517,8 @@ impl Shared {
     /// last segment written once its seconds' states are told.
     pub(super) fn finish(&self, id: u64) {
         let now = self.log_now();
-        self.proxies_ended(id);
-        let Some(live) = lock(&self.live).remove(&id) else {
+        let boot = self.proxies_ended(id);
+        let Some(live) = self.end_live(id, boot) else {
             return;
         };
         let end = now.max(live.start);
@@ -558,8 +558,8 @@ impl Shared {
     /// start when the last passed before it, in a segment already written.
     pub(super) fn finish_closed(&self, id: u64) {
         let now = self.log_now();
-        self.proxies_ended(id);
-        let Some(live) = lock(&self.live).remove(&id) else {
+        let boot = self.proxies_ended(id);
+        let Some(live) = self.end_live(id, boot) else {
             return;
         };
         let last = live.bytes.last.load(Ordering::Relaxed);
@@ -571,6 +571,24 @@ impl Shared {
             live.start
         };
         self.hold(vec![piece(live, end, false)]);
+    }
+
+    /// Takes the live flow `id` out, as it ended at `boot`, in time since the phone started: an app's own proxy's end
+    /// is noted while `live` is still held, so that no sweep in between finds it neither open nor ended.
+    fn end_live(&self, id: u64, boot: Duration) -> Option<Live> {
+        let mut live = lock(&self.live);
+        let ended = live.remove(&id)?;
+        self.ended(&ended.flow, boot);
+        Some(ended)
+    }
+
+    /// A flow that showed an app's own proxy's first hop ended at `boot`: noted with its first hop, which is how
+    /// "Now" places it once the switch is off, so that its place stays in full for its window (R2).
+    fn ended(&self, flow: &Flow, boot: Duration) {
+        if super::proxied::own_first_hop(flow) {
+            let first_hop = self.first_hop(flow);
+            lock(&self.activity).counts.end(flow.uid, first_hop, boot);
+        }
     }
 
     /// Asks the engine's thread to flush the log ([`Shared::flush`]) and hand its records on, and waits
@@ -639,8 +657,15 @@ impl Shared {
     /// holds to the next one, on a tunnel set up again ([`super::Engine::hand_over`]).
     pub(super) fn finish_all(&self) {
         let now = self.log_now();
-        self.proxies_all_ended();
-        let live: Vec<Live> = lock(&self.live).drain().map(|(_, l)| l).collect();
+        let boot = self.proxies_all_ended();
+        let live: Vec<Live> = {
+            let mut live = lock(&self.live);
+            let ended: Vec<Live> = live.drain().map(|(_, l)| l).collect();
+            for l in &ended {
+                self.ended(&l.flow, boot);
+            }
+            ended
+        };
         let mut pieces: Vec<Piece> = live
             .into_iter()
             .map(|l| {
@@ -721,34 +746,38 @@ impl Shared {
                 flow.proxy = flow.proxy.as_ref().map(|p| Box::new(p.without_asked()));
             }
         };
-        let mut live = lock(&self.live);
-        for live in live.values_mut() {
-            if !live.hidden && !live.unkept && hides(&live.flow) {
-                live.hidden = true;
-                live.flow = without_destination(&live.flow);
-            }
-            strip_asked(&mut live.flow);
-        }
-        let mut activity = lock(&self.activity);
-        for piece in &mut activity.held {
-            if let Of::Flow { flow, hidden, .. } = &mut piece.of {
-                if !*hidden && hides(flow) {
-                    *hidden = true;
-                    *flow = without_destination(flow);
+        {
+            let mut live = lock(&self.live);
+            for live in live.values_mut() {
+                if !live.hidden && !live.unkept && hides(&live.flow) {
+                    live.hidden = true;
+                    live.flow = without_destination(&live.flow);
                 }
-                strip_asked(flow);
+                strip_asked(&mut live.flow);
+            }
+            let mut activity = lock(&self.activity);
+            for piece in &mut activity.held {
+                if let Of::Flow { flow, hidden, .. } = &mut piece.of {
+                    if !*hidden && hides(flow) {
+                        *hidden = true;
+                        *flow = without_destination(flow);
+                    }
+                    strip_asked(flow);
+                }
+            }
+            activity.counts.hide(|uid| self.hides_app(uid));
+            if own_proxies {
+                activity.counts.hide_proxies();
+                // The records gathered for the next batch, which waits 30 s awake and longer across a sleep, as the
+                // logger's timer stands still: stripped while the activity is held, so that none is added meanwhile
+                // unstripped (R6). Those held back for a take-back are stripped as they go on (`to_log`).
+                for record in lock(&self.pending_log).iter_mut() {
+                    super::proxied::strip_for_log(record, &|_| false);
+                }
             }
         }
-        activity.counts.hide(|uid| self.hides_app(uid));
-        if own_proxies {
-            activity.counts.hide_proxies();
-            // The records gathered for the next batch, which waits 30 s awake and longer across a sleep, as the
-            // logger's timer stands still: stripped while the activity is held, so that none is added meanwhile
-            // unstripped (R6). Those held back for a take-back are stripped as they go on (`to_log`).
-            for record in lock(&self.pending_log).iter_mut() {
-                super::proxied::strip_for_log(record, &|_| false);
-            }
-        }
+        // Last: the first hops outside their window leave "Now" at once (R6).
+        self.sweep_first_hops();
     }
 }
 

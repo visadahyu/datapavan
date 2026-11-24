@@ -227,6 +227,37 @@ fn record_flow(record: &crate::log::Record) -> Option<u64> {
     }
 }
 
+/// Whether `flow` went through an app's own proxy, whose first hop the switch decides for (ADR 0052): a SOCKS or
+/// `CONNECT` proxy the server's reply confirmed, or a messenger's inferred one. A plain request in absolute form is
+/// not one: nothing confirms it, so its flow keeps its own address and names as any flow does.
+pub(super) fn own_proxy(flow: &Flow) -> bool {
+    flow.proxy.as_ref().is_some_and(|p| p.kind != Kind::Forward)
+}
+
+/// Whether `flow` shows an app's own proxy's first hop: its address and names, not left out. "Now" guards such a
+/// place against floods of other places (R8), whatever the switch, and shows it only within its window while its
+/// app's first hops are not kept ([`strips`]).
+pub(super) fn own_first_hop(flow: &Flow) -> bool {
+    flow.proxy
+        .as_ref()
+        .is_some_and(|p| p.kind != Kind::Forward && !p.left_out)
+}
+
+/// Whether "Now" shows `flow`'s first hop for its window only, `keeps` saying whose apps' first hops are kept: an
+/// own proxy's first hop of an app whose are not. The window, the table of ends, the sweep and the snapshot's
+/// mark all ask this, never the proxy's fields, so that units B and D widen it here alone.
+pub(super) fn strips(flow: &Flow, keeps: &dyn Fn(Option<u32>) -> bool) -> bool {
+    own_first_hop(flow) && !keeps(flow.uid)
+}
+
+/// Whether `flow` holds where the app asked its proxy to go: a SOCKS, `CONNECT` or plain request's flow with what it
+/// asked for. Only a declared proxy can: an inferred one is named by its own address and hello, the proxy's own.
+pub(super) fn holds_destination(flow: &Flow) -> bool {
+    flow.proxy
+        .as_ref()
+        .is_some_and(|p| p.kind.declared() && p.asked.is_some())
+}
+
 /// What the log may keep of `record`, `keeps` saying whose apps' first hops are kept (R1): unkept, an app's own
 /// proxy's flow keeps its kind and the facts that name nothing (`logbook::without_destination`, the left-out
 /// shape the log already reads), and a plain request keeps its own address and loses only where it asked to go.
@@ -280,6 +311,40 @@ impl Shared {
     pub(super) fn keeps_first_hops(&self) -> impl Fn(Option<u32>) -> bool + use<> {
         let all = self.logs_own_proxies();
         move |_| all
+    }
+
+    /// `flow` with only its first hop (audit-A 4): what was named by where the app asked its proxy to go gives way to
+    /// the proxy's own names, as had the switch been off at its naming. Its name is the proxy's DNS name, else the
+    /// organisation of its network, else none; its DNS mark is the proxy's address's, and no inner hello's ECH or
+    /// resolver stays. A plain request loses only what it asked for; any flow that holds no destination, an
+    /// inferred proxy's with its cover among them, is as it is. Not generic, for the library's size.
+    pub(super) fn first_hop(&self, flow: &Flow) -> Flow {
+        let Some(proxy) = flow.proxy.as_deref().filter(|_| holds_destination(flow)) else {
+            return flow.clone();
+        };
+        let proxy = Box::new(proxy.without_asked());
+        if proxy.kind == Kind::Forward {
+            return Flow {
+                proxy: Some(proxy),
+                ..flow.clone()
+            };
+        }
+        let (name, named_by) = match (&proxy.proxy_name, &proxy.organisation) {
+            (Some(name), _) => (Some(name.clone()), NamedBy::Dns),
+            (None, Some(organisation)) => (Some(organisation.clone()), NamedBy::Organisation),
+            (None, None) => (None, NamedBy::Unknown),
+        };
+        let (dns, resolver) = self.dns_use(flow.destination, proxy.proxy_name.as_deref());
+        Flow {
+            name,
+            named_by,
+            dns_name: None,
+            ech: super::Ech::Absent,
+            dns,
+            resolver,
+            proxy: Some(proxy),
+            ..flow.clone()
+        }
     }
 
     /// Whether `address` is in the maker's own network, for the messenger `family`: `Some(true)` or
@@ -530,8 +595,9 @@ impl Shared {
     }
 
     /// A flow ended: a direct connection's end starts the window of substitution. An inferred flow that ended
-    /// stays within its window of take-back, for its records held back.
-    pub(super) fn proxies_ended(&self, id: u64) {
+    /// stays within its window of take-back, for its records held back. The time since the phone started, as read
+    /// for it, which also starts the window of an own proxy's first hop in "Now" (`logbook`): one reading for both.
+    pub(super) fn proxies_ended(&self, id: u64) -> Duration {
         let now = self.clock.since_boot();
         let mut state = lock(&self.proxies);
         for direct in state.direct.values_mut() {
@@ -539,10 +605,12 @@ impl Shared {
                 direct.last = Some(now);
             }
         }
+        now
     }
 
-    /// Every flow ended, as when the engine stops: none can be taken back after.
-    pub(super) fn proxies_all_ended(&self) {
+    /// Every flow ended, as when the engine stops: none can be taken back after. The time since the phone started,
+    /// as [`Shared::proxies_ended`] gives it, read once for every flow.
+    pub(super) fn proxies_all_ended(&self) -> Duration {
         let now = self.clock.since_boot();
         let mut state = lock(&self.proxies);
         state.inferred.clear();
@@ -552,6 +620,15 @@ impl Shared {
                 direct.last = Some(now);
             }
         }
+        now
+    }
+
+    /// Forgets the flows named an inferred proxy whose window of take-back ended at `now`, in time since the phone
+    /// started. Each holds the flow as it was before its naming, its first hop with it, and the hello kept as a
+    /// cover: memory then holds them no longer than "Now" shows them (audit-A 8). No take-back comes past the
+    /// window ([`Shared::went_directly`] forgets them so first), so nothing else changes.
+    pub(super) fn prune_inferred(&self, now: Duration) {
+        lock(&self.proxies).inferred.retain(|_, i| i.until > now);
     }
 
     /// Whether the messenger `uid` connected to its maker directly within the window, or does now.
@@ -2862,5 +2939,19 @@ mod tests {
                         && !p.left_out)),
             "{plain:?}"
         );
+    }
+
+    /// Test 19 (W11): the inferred flows past their window of take-back leave memory at the next sweep, as a
+    /// reading's: they hold the flow as it was before its naming, first hop and all.
+    #[test]
+    fn the_inferred_flows_past_their_window_leave_memory_at_a_sweep() {
+        let (shared, clock) = engine_at(false);
+        telegram(&shared);
+        let (proxy, bytes) = open(&shared, UID, at([93, 184, 216, 34], 443));
+        relay(&shared, proxy, &bytes, &[&obfuscated()]);
+        assert_eq!(lock(&shared.proxies).inferred.len(), 1);
+        clock.pass(11 * 60_000);
+        shared.tell(&super::super::activity::tests::told(T, T + 1_000, &[]));
+        assert!(lock(&shared.proxies).inferred.is_empty());
     }
 }

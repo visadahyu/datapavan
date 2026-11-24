@@ -97,6 +97,13 @@ impl ManualClock {
         self.wall
             .store(wall_ms, std::sync::atomic::Ordering::SeqCst);
     }
+
+    /// The time since start can no longer be read: from now on it is the longest time there is, as
+    /// [`SystemClock`] answers then. Not to be passed after.
+    pub(crate) fn fail_boot(&self) {
+        self.boot
+            .store(u64::MAX, std::sync::atomic::Ordering::SeqCst);
+    }
 }
 
 #[cfg(test)]
@@ -106,7 +113,10 @@ impl Clock for ManualClock {
     }
 
     fn since_boot(&self) -> Duration {
-        Duration::from_millis(self.boot.load(std::sync::atomic::Ordering::SeqCst))
+        match self.boot.load(std::sync::atomic::Ordering::SeqCst) {
+            u64::MAX => Duration::MAX,
+            ms => Duration::from_millis(ms),
+        }
     }
 }
 
