@@ -7,6 +7,14 @@ does not come back. A flake is fixed by making the check wait for the state it r
 a message that names what it waited for, or by retrying the action that prepares the state, never by loosening
 what the check asserts. A flake that comes back gets a new row, and its earlier fix is looked at again.
 
+What CI fetches from outside can also move while nothing in the repository changes, and fails a run as a flake
+does: on 2026-11-24 a new RustSec advisory, a package build Alpine had dropped and a plugin marker the repositories
+did not give. Each such failure in CI gets its row here too. `scripts/check.sh prepush` finds some of them before a
+push, in a minute or two and with no emulator (CONTRIBUTING.md, "Setup and checks"): a new advisory or a yanked
+crate, a lab pin the image's sources do not hold, a module the repositories do not give now. One it finds before
+any push needs no row. A repository's blip during CI's own run is beyond it; for Gradle's, CI's build job retries
+its resolution before the gates (`scripts/check.sh resolve`), and a warning of a retry there is logged as a flake.
+
 The emulator scripts' comments name earlier flakes where they were fixed (CI, 2026-11-11 to 2026-11-13). This
 log starts on 2026-11-14.
 
