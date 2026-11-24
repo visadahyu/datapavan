@@ -319,3 +319,57 @@ The words of the allow and the pause are checked with real users under ADR 0046'
   bytes); against `main` after part 2a's fix round (1,772,296, 1,312,792 and 2,017,976), blocking adds 55,712, 38,688
   and 64,224 bytes. **x86_64 has 14,952 bytes left**: the next unit that grows the engine needs a size pass first, or
   the maintainer's word on the gate (ADR 0035, question 3).
+- **The size pass** (2026-11-24, before the next units grow the engine; build settings only, the engine's code
+  untouched). At `fb15505` the library was 1,828,328 bytes on arm64-v8a, 1,351,800 on armeabi-v7a and 2,082,648 on
+  x86_64, 14,504 under the gate (448 bytes fewer than above, from the units merged since). *Method:* each variant
+  built as Gradle builds it (cargo-ndk, the same flags and environment, platform 29) and stripped as AGP strips it
+  (`llvm-strip --strip-unneeded`), which gives the gate's figures to the byte, on all three ABIs; where the bytes are,
+  from the sections (`llvm-readelf -S`) and from each function's size by crate in an unstripped build (`llvm-nm -S
+  --size-sort`). On x86_64 the code is 1,681,866 bytes (the engine 564 KB, `core` 157 KB, tokio 154 KB, hashbrown
+  113 KB, `alloc` 106 KB, `std` 104 KB, the JNI functions with the engine inlined into them 84 KB, aws-lc 71 KB,
+  `std`'s backtrace symbolizer 67 KB, `jni` 67 KB), the unwind tables 159,312 bytes and their index 24,652. *The
+  speed:* the engine's own measures in release builds on the development machine, pinned to four threads, each setting
+  alternated with the other six times (`per_packet_cost`, a count, the live view, an answer among 4,000 peers), and
+  the W2 CPU check (`scripts/network-lab/measure.sh`) on the Android 15 emulator with release Rust
+  (`-Pdatapavan.rustRelease=true`), before and after in turn, five times each. Beside them ran another project's
+  database work and, for a minute or two, the engine's tests, clippy and a Gradle build in other checkouts. The
+  netlab tests and the `dns` shard build the engine in Cargo's dev profile, which none of the kept settings touch:
+  they are functional gates here, and passed (the netlab's 66 tests; the `dns` shard on the Android 15 emulator, its
+  lab's ODoH p50 9 ms and p95 48 ms, with Gradle builds of other checkouts beside it for part of the run), as did the
+  network shard's check of the release build (`scripts/verify-network-release.sh`) on the emulator.
+  **Kept: x86_64's release library is linked without `.eh_frame_hdr`** (`core/network-jni/build.rs`), the sorted
+  index of its unwind tables (24,652 bytes; leaving it out saves 24,848). The code is the same, 404,415 instructions
+  before and after in the same order, 24,768 bytes lower, a whole number of 64-byte lines, so its speed should not
+  move, and it did not: the engine's CPU per MB moved in the CPU check was 23.5 ms before and 23.6 after (medians; the
+  before runs spread from 23.5 to 23.9, and one at 18.8), downloads at 96 and 89 Mbit/s, uploads at 93 and 92, four
+  parallel downloads at 99 and 100, and the p50 of a connection and of a round trip 2.2 and 2.1 ms, 0.75 and 0.83 ms.
+  The tables themselves stay, and Android's unwinder reads them without the index: `debuggerd -b` on the running
+  engine, on the emulator, unwound the engine's thread through its six frames in the library to the thread's start,
+  with the index and without, each frame at the same place 24,768 bytes lower; `scripts/check.sh android` now fails
+  if x86_64's library loses its `.eh_frame` or arm64's its index. Only release builds: nothing in them unwinds its own
+  stack, since a panic aborts, while a debug build turns a panic into a Java exception (the `jni` crate's
+  `catch_unwind`), through the unwinder linked into the library, which looks for the tables through the index.
+  **The library: 1,828,328 bytes on arm64-v8a, 1,351,800 on armeabi-v7a and 2,057,800 on x86_64; x86_64 has 39,352
+  bytes left**, 24,848 more; arm64 and armv7 keep the index, with 268,824 and 745,352 bytes left. **Advanced's APK
+  no longer carries GotaTun's own cdylib** either: GotaTun declares one, cargo-ndk copied it beside the engine, and
+  nothing loaded it (324,064 bytes on x86_64, 304,968 on arm64-v8a and 11,808 on armeabi-v7a, about 640 KB of the
+  APK). Both cargo-ndk tasks keep only their crate's library now, and the APK check fails on any native library an
+  edition does not name; the release bundle, built from the same libraries, holds the same ones (read by hand, not
+  by the check). GotaTun's cdylib is still built on every build and thrown away: Cargo cannot change a dependency's
+  crate type.
+  **Rejected** (bytes saved on arm64 / armv7 / x86_64): opt-level `z` for the whole library, 227,800 / 181,620 /
+  168,832, which costs speed on the packet path and beside it (medians of `s` against `z`: a count 13.35 → 15.7 ns,
+  an answer among 4,000 peers 171.5 → 284.5 ns, the live view 1.02 → 1.76 ms, and the engine's CPU for a datagram
+  sent directly 4.80 → 5.00 µs at 1,280 bytes and 4.58 → 4.93 µs at 100, through WireGuard 4.68 → 4.85 µs at 1,280
+  and 4.65 → 4.53 µs at 100, within the noise of a measure in 10 ms ticks);
+  `z` for the dependencies alone, which grows the library by 48,488 / 42,500 / 57,208 bytes, and for all of them but
+  the packet path's (tokio, GotaTun, `bytes`, aws-lc), which grows it by 12,728 / 2,888 / 18,352; `z` for the bridge
+  alone, the link's root, 1,664 / 7,460 / 1,280, since each function keeps its own crate's level through the
+  link-time optimisation; lld's `-O2`, 0 / 64 / 64. **In reserve, not applied:** `--icf=all`, 12,976 / 6,272 /
+  11,728, which also folds constant data and can break aws-lc's C where it compares the addresses of functions or
+  tables (`--icf=safe` folds nothing here: Rust's objects carry no address-significance table); `-C
+  force-unwind-tables=no`, 50,736 / 4,864 / 0; the index left out on arm64 too, 24,976. **For the engine's builder**
+  (code, not settings): hashbrown's maps instantiated per type (113 KB on x86_64), the largest futures
+  (`udp::open_udp`'s 42 KB, `Engine::start_with`'s 29 KB), and `std`'s backtrace symbolizer (67 KB), which only a
+  nightly `build-std` drops. No free setting is left for the next pass: what remains is code. Not measured: arm64 and
+  armv7 on a phone, which this pass did not touch; nothing kept changes their code.

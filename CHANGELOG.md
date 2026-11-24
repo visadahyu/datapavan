@@ -68,6 +68,7 @@ All notable changes to this project are documented here. The format follows
 
 ### Fixed
 
+- Datapavan Advanced's APK no longer carries a native library nothing used: GotaTun's own, which the build copied beside the network part's engine, which already holds GotaTun inside it. The APK, which holds all three ABIs, is about 640 KB smaller (the library was 324 KB on x86_64, 305 KB on arm64 and 12 KB on armv7, stored uncompressed), and the build's check of each APK now fails on any native library it does not expect (ADR 0053, the size pass).
 - Datapavan Advanced's network part no longer stops, taking its tunnel with it, when the phone moves between Wi-Fi and mobile data, or loses its network, within a minute of a lookup over DNS over TLS. It closed its DoT connections on Android's main thread, where Android refuses network traffic. The connections of the network before are now closed on the network part's own thread, and none is kept for the new network; a DoT server that takes the connection but never completes its TLS handshake no longer holds a lookup without end; and lookups to one DoT server open one connection at a time. `scripts/verify-dns.sh` brings such a change about with a DoT connection open, and a unit test covers each part.
 
 ### Security
