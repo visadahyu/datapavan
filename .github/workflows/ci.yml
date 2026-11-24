@@ -208,10 +208,11 @@ jobs:
       # Gradle's dependencies (docs/ci-flakes.md: the Compose plugin's marker did not resolve on 2026-11-20, -23 and -24).
       # Restored on every run; saved only by main, in the weekly run, the one run of main whose build job builds, since
       # main's other runs take the branch's pass. A branch's own entries could serve no other branch and would only fill
-      # the repository's cache. That run builds Advanced's debug APK alone, so the entry holds every plugin, which any
-      # build resolves, the failing marker among them, and that build's dependencies; lint, the tests and the release
-      # builds still fetch the rest. Dependency verification still checks every artifact read from it
-      # (android/gradle/verification-metadata.xml), and the key names Gradle's version, whose cache layout it is.
+      # the repository's cache. The step after this one resolves every plugin and every module of both editions, in the
+      # weekly run too, so the entry holds all of them, lint's and the tests' included; only AAPT2's binary and lint's
+      # Play SDK Index are fetched by the build itself. Dependency verification still checks every artifact read from it
+      # (android/gradle/verification-metadata.xml), and the key names Gradle's version, whose cache layout it is, and
+      # what the resolution reads.
       - name: Restore Gradle's dependencies
         id: gradle-modules
         uses: actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
@@ -220,9 +221,16 @@ jobs:
             ~/.gradle/caches/modules-2
             !~/.gradle/caches/modules-2/*.lock
             !~/.gradle/caches/modules-2/gc.properties
-          key: gradle-modules-${{ runner.os }}-${{ hashFiles('android/gradle/wrapper/gradle-wrapper.properties', 'android/gradle/verification-metadata.xml', 'android/gradle/libs.versions.toml', 'android/*.gradle.kts', 'android/*/build.gradle.kts') }}
+          key: gradle-modules-${{ runner.os }}-${{ hashFiles('android/gradle/wrapper/gradle-wrapper.properties', 'android/gradle/verification-metadata.xml', 'android/gradle/libs.versions.toml', 'android/*.gradle.kts', 'android/*/build.gradle.kts', 'scripts/prepush-resolve.init.gradle.kts') }}
           restore-keys: |
             gradle-modules-${{ runner.os }}-
+
+      # What the gates and builds resolve, fetched before them, each try up to three times 30 s apart (scripts/check.sh
+      # resolve): a repository's blip, such as the marker's, is retried here with a warning on the run, rather than
+      # failing a gate. A warning here goes to docs/ci-flakes.md as a flake would.
+      - name: Gradle's plugins and dependencies
+        timeout-minutes: 15
+        run: scripts/check.sh resolve
 
       # The engine's network lab (core/net/tests/netlab.rs, ADR 0044) needs unprivileged user namespaces
       # with a tun device. Ubuntu 24.04 restricts them through AppArmor by default; on this throwaway
@@ -266,7 +274,7 @@ jobs:
             ~/.gradle/caches/modules-2
             !~/.gradle/caches/modules-2/*.lock
             !~/.gradle/caches/modules-2/gc.properties
-          key: gradle-modules-${{ runner.os }}-${{ hashFiles('android/gradle/wrapper/gradle-wrapper.properties', 'android/gradle/verification-metadata.xml', 'android/gradle/libs.versions.toml', 'android/*.gradle.kts', 'android/*/build.gradle.kts') }}
+          key: gradle-modules-${{ runner.os }}-${{ hashFiles('android/gradle/wrapper/gradle-wrapper.properties', 'android/gradle/verification-metadata.xml', 'android/gradle/libs.versions.toml', 'android/*.gradle.kts', 'android/*/build.gradle.kts', 'scripts/prepush-resolve.init.gradle.kts') }}
 
       # The WireGuard lab's references: the kernel's module, which a container cannot load, and the peers' image,
       # built from pinned sources (spikes/wireguard-core/peer/Dockerfile) and kept in the Actions cache, so that a
