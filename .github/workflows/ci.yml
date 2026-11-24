@@ -225,9 +225,10 @@ jobs:
           restore-keys: |
             gradle-modules-${{ runner.os }}-
 
-      # What the gates and builds resolve, fetched before them, each try up to three times 30 s apart (scripts/check.sh
-      # resolve): a repository's blip, such as the marker's, is retried here with a warning on the run, rather than
-      # failing a gate. A warning here goes to docs/ci-flakes.md as a flake would.
+      # What the gates and builds resolve, fetched before them, tried up to three times, 60 s then 180 s apart, each failed
+      # try followed by what the repositories answer for the modules it names (scripts/check.sh resolve): a repository's
+      # blip, such as the marker's, is retried here with a warning on the run, rather than failing a gate. A warning here
+      # goes to docs/ci-flakes.md as a flake would.
       - name: Gradle's plugins and dependencies
         timeout-minutes: 15
         run: scripts/check.sh resolve

@@ -18,7 +18,8 @@
 #   scripts/check.sh advanced-debug
 #                             Advanced's debug APK alone, for the wireguard emulator shard of CI's weekly run
 #   scripts/check.sh resolve  Gradle's plugins and dependencies of both editions, resolved and fetched, nothing built,
-#                             tried up to three times 30 s apart: CI's build job runs it before its gates
+#                             tried up to three times, 60 s then 180 s apart, saying what the repositories answer after
+#                             each failed try: CI's build job runs it before its gates
 #   scripts/check.sh prepush  right before a push, three things CI's run fetches from outside that can move while the
 #                             repository stands still: cargo-deny at CI's version, its advisory database and crates.io's
 #                             yanked list fetched afresh; every lab image's install steps, the installs simulated
@@ -284,26 +285,54 @@ gradle_resolve() {
             -Pdatapavan.edition=advanced --project-cache-dir .gradle-advanced :app:prepushResolve)
 }
 
-# CI's build job, before its gates: what they resolve, fetched first and tried up to three times, 30 s apart, the later
-# tries asking the repositories again rather than trusting what the first one kept. A repository's blip during the run,
-# the Compose plugin's marker of 2026-11-20, -23 and -24 (docs/ci-flakes.md), is so retried where it happens, with a
-# warning on the run, rather than failing a gate. In the weekly run of main it also fills the cache entry that main
-# saves with every module of both editions.
+# What each repository answers now for the modules that the failed resolution in the file $1 names: Gradle reports a
+# plugin's marker as "not found" whatever the repository answered, at every log level, so the run asks the two itself
+# (a HEAD of each module's POM: an HTTP status, the address that gave it, the time).
+repository_answers() {
+    local coordinates coordinate group artifact version base url
+    coordinates=$(grep -oE "(plugin artifact '|Could not (find|resolve) )[A-Za-z0-9_.-]+:[A-Za-z0-9_.-]+:[A-Za-z0-9_.+-]+" "$1" |
+        grep -oE "[A-Za-z0-9_.-]+:[A-Za-z0-9_.-]+:[A-Za-z0-9_.+-]+$" | sed 's/\.$//' | sort -u | head -n 5 || true)
+    for coordinate in $coordinates; do
+        IFS=: read -r group artifact version <<<"$coordinate"
+        for base in https://dl.google.com/dl/android/maven2 https://repo.maven.apache.org/maven2; do
+            url="$base/${group//.//}/$artifact/$version/$artifact-$version.pom"
+            echo "  $url: $(curl -sS -o /dev/null -I --max-time 20 -w '%{http_code} from %{remote_ip} in %{time_total} s' "$url" 2>&1 || true)" >&2
+        done
+    done
+}
+
+# CI's build job, before its gates: what they resolve, fetched first and tried up to three times, so that a
+# repository's blip during the run (the Compose plugin's marker, docs/ci-flakes.md) is retried where it happens, with a
+# warning on the run, rather than failing a gate. Three tries 30 s apart did not ride out the marker's fourth failure,
+# so the waits are 60 s, then 180 s. The second try asks again only for what is missing, since an error answer is not
+# kept and a refresh would ask again for every module, which a rate limit would only make worse; the third asks the
+# repositories again for everything, since Gradle keeps a 404 as "missing". After each failed try the run says what the
+# repositories answer for the modules it names (repository_answers). In the weekly run of main it also fills the cache
+# entry that main saves with every module of both editions.
 resolve_gate() {
     echo "== Android: Gradle's plugins and dependencies of both editions, resolved before the gates"
-    local try
+    local try wait log
+    log=$(mktemp)
     for try in 1 2 3; do
-        if [ "$try" = 1 ]; then
-            gradle_resolve && return 0
+        if [ "$try" -lt 3 ]; then
+            gradle_resolve >"$log" 2>&1 && break
         else
-            gradle_resolve --refresh-dependencies && return 0
+            gradle_resolve --refresh-dependencies >"$log" 2>&1 && break
         fi
-        [ "$try" -lt 3 ] || break
-        echo "${GITHUB_ACTIONS:+::warning::}Gradle's plugins and dependencies did not resolve (try $try of 3): again in 30 s" >&2
-        sleep 30
+        cat "$log" >&2
+        echo "What the repositories answer now:" >&2
+        repository_answers "$log"
+        if [ "$try" -eq 3 ]; then
+            rm -f "$log"
+            echo "Gradle's plugins and dependencies did not resolve in three tries" >&2
+            return 1
+        fi
+        wait=$((try == 1 ? 60 : 180))
+        echo "${GITHUB_ACTIONS:+::warning::}Gradle's plugins and dependencies did not resolve (try $try of 3): again in $wait s" >&2
+        sleep "$wait"
     done
-    echo "Gradle's plugins and dependencies did not resolve in three tries" >&2
-    return 1
+    cat "$log"
+    rm -f "$log"
 }
 
 # Right before a push, three things CI's run will fetch from outside that can move while nothing in the repository
