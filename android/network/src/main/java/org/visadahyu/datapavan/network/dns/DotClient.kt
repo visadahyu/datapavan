@@ -37,6 +37,27 @@ import javax.net.ssl.SSLSocket
  * ever. A query that a change (or the idle timer) cut is asked once more on a fresh connection, on the network now:
  * every outcome the engine knows counts in its ladder, so a refusal from the network before, read after the engine
  * started afresh on the new one, would hold DoT there.
+ *
+ * A kept connection can also die with no word: a path, a NAT or a censor drops its flow, or a NAT or the server forgets
+ * it and answers the next query with a reset. A query's timeout retires the connection when nothing was heard on it
+ * since that query went out: DoT is one TCP stream, in order, so every later answer would be stuck behind the same gap
+ * (while a frame that did come, an answer late or not, shows a live stream and one answer late at the server: RFC 7766,
+ * section 7, lets answers come in any order). The query that timed out reads TIMEOUT, having had most of the engine's
+ * wait; the ones still waiting are asked once more on a fresh connection. A timed-out query's ID stays taken on its
+ * connection until its late answer comes or the connection ends, so that no later query is handed that answer (RFC 7766,
+ * 6.2.1: no reuse of an in-flight ID); a connection that owes more than [MAX_LATE] answers is retired as well.
+ *
+ * A connection that had served, cut by a reset, an end of stream, a failed write or any other TLS failure, has what it
+ * still waited for asked once more too (RFC 7766, 6.2.4: clients retry the queries a closed connection left unanswered;
+ * RFC 7858, 3.4: DoT clients must handle abrupt closes and retry), and only the fresh connection's outcome counts. A reset
+ * there reads TAMPERED, as on any connection that never carried an answer, which is where a censor that blocks DoT
+ * strikes. Tampering that strikes a stream already flowing, and spares the fresh one, is so given up as a signal: the
+ * price of never holding DoT for a stale connection, while the names keep resolving. Without this, a dead connection took
+ * every lookup until its idle timer, which each lookup put off, and a stale one's reset held DoT for 360 s (the engine's
+ * `HOLD_TAMPERED`).
+ *
+ * The service's stop ([closeAll] without again) ends a run: nothing asked in it is asked again after it, on whichever
+ * connection it waited, one already being retired included.
  */
 internal class DotClient(
     private val socketFor: (Exchanger.Through?) -> Socket,
@@ -60,6 +81,9 @@ internal class DotClient(
     private val lock = Any()
     private val random = SecureRandom()
 
+    /** The service's runs, raised by each stop: an exchange of an earlier run is refused, never asked again. */
+    private val runs = AtomicInteger()
+
     /**
      * Asks [query] of `server:port` at [addresses], with [pins] (none: Android's roots alone), directly or through
      * [through]; the reply goes to [Engine.nativeExchanged]. A connection serves only exchanges with the same addresses
@@ -67,7 +91,7 @@ internal class DotClient(
      */
     fun ask(ticket: Long, server: String, port: Int, addresses: List<InetAddress>, pins: List<String>, through: Exchanger.Through?, query: ByteArray) {
         if (query.size < 12) return reply(ticket, Exchanger.REFUSED, null)
-        val exchange = Exchange(ticket, server, port, addresses, pins, through, query, again = true)
+        val exchange = Exchange(ticket, server, port, addresses, pins, through, query, runs.get(), again = true)
         work.execute { carry(exchange) }
     }
 
@@ -82,6 +106,7 @@ internal class DotClient(
     fun closeAll(again: Boolean = true) {
         val closing = mutableListOf<Connection>()
         synchronized(lock) {
+            if (!again) runs.incrementAndGet()
             for (key in connections.keys) {
                 connections.remove(key)?.let {
                     it.mark(again)
@@ -99,6 +124,8 @@ internal class DotClient(
 
     /** [exchange] on the connection for its key, or on the one being opened for it, or on one it opens. On [work]. */
     private fun carry(exchange: Exchange) {
+        // Asked in a run the service's stop ended: whatever asks it again (a change, a retirement, a cut connection).
+        if (exchange.run != runs.get()) return reply(exchange.ticket, Exchanger.REFUSED, null)
         // Read before any socket is made, which binds to the network beneath now (the service changes that first).
         val now = generation()
         var started: Open? = null
@@ -227,11 +254,13 @@ internal class DotClient(
         val pins: List<String>,
         val through: Exchanger.Through?,
         val query: ByteArray,
+        /** The service's run it was asked in ([runs]). */
+        val run: Int,
         val again: Boolean,
     ) {
         val key = "$server $port ${through?.proxy} $addresses $pins"
 
-        fun once() = Exchange(ticket, server, port, addresses, pins, through, query, again = false)
+        fun once() = Exchange(ticket, server, port, addresses, pins, through, query, run, again = false)
     }
 
     /** An open in flight, begun on the network of [generation] for [first], and the exchanges that wait for it. */
@@ -243,10 +272,22 @@ internal class DotClient(
         var again = true
     }
 
-    /** A query sent on a connection and its timer. */
-    private class Waiting(val exchange: Exchange) {
+    /** A query sent on a connection, its timer, and the frames the connection had [heard][Connection.heard] before it went out. */
+    private class Waiting(val exchange: Exchange, val heard: Int) {
         @Volatile
         var timer: ScheduledFuture<*>? = null
+    }
+
+    /** How a connection's end treats the queries it still waits for; it only rises, in this order. */
+    private enum class Closing {
+        /** This side did not close it: asked once more if the connection had [served][Connection.heard], else answered. */
+        NONE,
+
+        /** This side closed it (a change, the idle timer, its silence): asked once more on a fresh connection. */
+        AGAIN,
+
+        /** The service stopped: answered, never asked again. */
+        STOP,
     }
 
     /** One DoT connection and its reader. */
@@ -256,9 +297,23 @@ internal class DotClient(
         var open = true
             private set
 
-        /** Set when this side closed it (a change, the idle timer): the queries it still waits for are asked again. */
+        /** Whether and why this side closed it, set before [open] goes false, under this connection's monitor. */
         @Volatile
-        private var again = false
+        private var closing = Closing.NONE
+
+        /** Retired for its silence: what cannot be asked again reads TIMEOUT, what the connection ended by. */
+        @Volatile
+        private var silent = false
+
+        /** The IDs of queries that timed out on it, whose answers may still come: drawn for no other query meanwhile. */
+        private val late = ConcurrentHashMap.newKeySet<Int>()
+
+        /**
+         * The DNS frames read on it, an answer to a query that waits or not (a late one shows the stream flows too). The
+         * reader alone writes it.
+         */
+        @Volatile
+        private var heard = 0
 
         private val output: OutputStream = socket.outputStream
         private val waiting = ConcurrentHashMap<Int, Waiting>()
@@ -275,15 +330,23 @@ internal class DotClient(
          * waiting and answers it, or this finds the connection closed and takes it back.
          */
         fun send(exchange: Exchange): Boolean {
-            val entry = Waiting(exchange)
+            val entry = Waiting(exchange, heard)
             var id: Int
             do {
                 id = random.nextInt(0x10000)
-            } while (waiting.putIfAbsent(id, entry) != null)
+            } while (id in late || waiting.putIfAbsent(id, entry) != null)
             if (!open) return !waiting.remove(id, entry)
             val sent = id
             entry.timer = timers.schedule({
-                if (waiting.remove(sent, entry)) reply(exchange.ticket, Exchanger.TIMEOUT, null)
+                // Taken before the ID is freed, so that no query draws it while its answer may still come.
+                late += sent
+                if (waiting.remove(sent, entry)) {
+                    reply(exchange.ticket, Exchanger.TIMEOUT, null)
+                    // Nothing heard since it went out: the stream is dead or stalled, not one answer slow.
+                    if (heard == entry.heard || late.size > MAX_LATE) retire(silent = true)
+                } else {
+                    late -= sent
+                }
             }, Exchanger.CALL_MS, TimeUnit.MILLISECONDS)
             val query = exchange.query
             val framed = ByteArray(query.size + 2)
@@ -307,10 +370,27 @@ internal class DotClient(
 
         /** Takes no more queries: no I/O, for [closeAll] on the main thread. [again]: what waits is asked again. */
         fun mark(again: Boolean) {
-            // Before [open]: whoever sees the connection closed sees why.
-            this.again = again
-            open = false
-            synchronized(this) { idle?.cancel(false) }
+            synchronized(this) {
+                // Before [open]: whoever sees the connection closed sees why. A stop is never undone by a later mark.
+                val why = if (again) Closing.AGAIN else Closing.STOP
+                if (why > closing) closing = why
+                open = false
+                idle?.cancel(false)
+            }
+        }
+
+        /**
+         * Takes it out and closes it, as a change does: what waits on it is asked once more on a fresh connection.
+         * [silent]: for its silence, so that what cannot be asked again reads TIMEOUT.
+         */
+        private fun retire(silent: Boolean = false) {
+            synchronized(this) {
+                if (!open) return
+                if (silent) this.silent = true
+            }
+            connections.remove(key, this)
+            mark(again = true)
+            work.execute(::shut)
         }
 
         /** Closes the socket, which writes TLS's close_notify: on [work] or the reader's thread, never the main one. */
@@ -332,9 +412,15 @@ internal class DotClient(
                     val length = input.readUnsignedShort()
                     val answer = ByteArray(length)
                     input.readFully(answer)
+                    heard++
                     if (length < 2) continue
                     val id = ((answer[0].toInt() and 0xff) shl 8) or (answer[1].toInt() and 0xff)
-                    val entry = waiting.remove(id) ?: continue
+                    val entry = waiting.remove(id)
+                    if (entry == null) {
+                        // A late answer, to a query that timed out: its ID is free again.
+                        late -= id
+                        continue
+                    }
                     entry.timer?.cancel(false)
                     answer[0] = 0
                     answer[1] = 0
@@ -351,11 +437,23 @@ internal class DotClient(
             }
         }
 
-        /** Answers [entry] with [outcome], or asks it once more on a fresh connection where this side closed it. */
+        /**
+         * Answers [entry] with [outcome], or asks it once more on a fresh connection: where this side closed the
+         * connection for a change, its idle timer or its silence, or where the peer or the path cut one that had served.
+         */
         private fun settle(entry: Waiting, outcome: Int) {
             entry.timer?.cancel(false)
             val exchange = entry.exchange
-            if (again && exchange.again) work.execute { carry(exchange.once()) } else reply(exchange.ticket, outcome, null)
+            val again = when (closing) {
+                Closing.AGAIN -> true
+                Closing.STOP -> false
+                Closing.NONE -> heard > 0
+            }
+            if (again && exchange.again) {
+                work.execute { carry(exchange.once()) }
+            } else {
+                reply(exchange.ticket, if (silent && closing == Closing.AGAIN) Exchanger.TIMEOUT else outcome, null)
+            }
         }
 
         /** Closes the connection after [Exchanger.IDLE_SECONDS] with nothing sent or received. */
@@ -370,11 +468,14 @@ internal class DotClient(
             if (!open) return
             if (waiting.isNotEmpty()) return rearm()
             // As a change closes it: a query that raced the timer onto it is asked again on a fresh one.
-            connections.remove(key, this)
-            mark(again = true)
-            work.execute(::shut)
+            retire()
         }
     }
 
     private fun reply(ticket: Long, outcome: Int, body: ByteArray?) = replies(ticket, outcome, body)
+
+    private companion object {
+        /** The answers a connection may owe, its queries timed out, before it is retired: a server that leaves so many unanswered is not well. */
+        const val MAX_LATE = 64
+    }
 }

@@ -22,11 +22,12 @@ import java.util.concurrent.atomic.AtomicBoolean
 import java.util.concurrent.atomic.AtomicInteger
 import javax.net.ssl.KeyManagerFactory
 import javax.net.ssl.SSLContext
-import javax.net.ssl.SSLServerSocket
+import javax.net.ssl.SSLSocket
 import org.junit.After
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNotNull
 import org.junit.Assert.assertNotSame
+import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
 import org.junit.Test
 
@@ -71,16 +72,40 @@ class DotClientTest {
     private fun certificate(name: String): X509Certificate =
         File(certs, "$name.pem").inputStream().use { CertificateFactory.getInstance("X.509").generateCertificate(it) as X509Certificate }
 
-    /** A DoT server on the loopback with the lab's certificate; [answering]: whether connection N answers. */
-    private fun server(answering: (Int) -> Boolean = { true }): ServerSocket {
+    /** What a test server's connection does with one query it read. */
+    private enum class Act {
+        ANSWER,
+
+        /** Reads it and never answers. */
+        HOLD,
+
+        /** Resets the connection beneath TLS, with no close_notify: what a NAT or a server that forgot the flow sends. */
+        RESET,
+
+        /** Closes the connection as TLS does, close_notify and FIN: a server's own close. */
+        CLOSE,
+
+        /** Answers it 3.5 s later, after the client's time for it, while the connection goes on. */
+        LATE,
+    }
+
+    /**
+     * A DoT server on the loopback with the lab's certificate: TCP accepted, then TLS on it as a server, so that a test
+     * can reset the plain socket beneath. [act]: what connection N does with its query K, both from 1.
+     */
+    private fun server(act: (Int, Int) -> Act = { _, _ -> Act.ANSWER }): ServerSocket {
         val pem = File(certs, "dot.key").readText().lines().filter { !it.startsWith("-----") }.joinToString("")
         val key = KeyFactory.getInstance("EC").generatePrivate(PKCS8EncodedKeySpec(Base64.getDecoder().decode(pem)))
         val store = KeyStore.getInstance(KeyStore.getDefaultType()).apply { load(null) }
         store.setKeyEntry("dot", key, CharArray(0), arrayOf(certificate("dot"), certificate("ca")))
         val keys = KeyManagerFactory.getInstance(KeyManagerFactory.getDefaultAlgorithm()).apply { init(store, CharArray(0)) }
         val tls = SSLContext.getInstance("TLS").apply { init(keys.keyManagers, null, null) }
-        val server = tls.serverSocketFactory.createServerSocket(0, 50, InetAddress.getLoopbackAddress()) as SSLServerSocket
-        listen(server) { socket, n -> serve(socket, n, answering(n)) }
+        val server = ServerSocket(0, 50, InetAddress.getLoopbackAddress())
+        listen(server) { raw, n ->
+            val socket = tls.socketFactory.createSocket(raw, raw.inetAddress.hostAddress, raw.port, true) as SSLSocket
+            socket.useClientMode = false
+            serve(socket, raw, n) { k -> act(n, k) }
+        }
         return server
     }
 
@@ -104,27 +129,54 @@ class DotClientTest {
     }
 
     /**
-     * Reads each query on [socket], connection [n], and answers it if [answering]: with its ID, and one byte more, the
-     * connection's number, which tells which connection answered.
+     * Reads each query on [socket], connection [n] over [raw], and does with its Kth what [act] says: an answer has its
+     * ID, and one byte more, the connection's number, which tells which connection answered.
      */
-    private fun serve(socket: Socket, n: Int, answering: Boolean) {
+    private fun serve(socket: SSLSocket, raw: Socket, n: Int, act: (Int) -> Act) {
         try {
             val input = DataInputStream(socket.getInputStream())
             val out = socket.getOutputStream()
+            var k = 0
+            val answer = { query: ByteArray ->
+                val framed = (query + byteArrayOf(n.toByte())).let { byteArrayOf((it.size shr 8).toByte(), it.size.toByte()) + it }
+                synchronized(out) {
+                    out.write(framed)
+                    out.flush()
+                }
+            }
             while (true) {
                 val query = ByteArray(input.readUnsignedShort()).also(input::readFully)
                 asked.put(n)
-                if (!answering) continue
-                val answer = query + byteArrayOf(n.toByte())
-                out.write(byteArrayOf((answer.size shr 8).toByte(), answer.size.toByte()) + answer)
-                out.flush()
+                when (act(++k)) {
+                    Act.ANSWER -> answer(query)
+                    Act.LATE -> Thread {
+                        try {
+                            Thread.sleep(Exchanger.CALL_MS + 500)
+                            answer(query)
+                        } catch (_: Exception) {
+                        }
+                    }.apply { isDaemon = true }.start()
+                    Act.HOLD -> {}
+                    Act.RESET -> {
+                        raw.setSoLinger(true, 0)
+                        raw.close()
+                        return
+                    }
+                    Act.CLOSE -> {
+                        socket.close()
+                        return
+                    }
+                }
             }
         } catch (_: Exception) {
         }
     }
 
-    /** A plain socket that records the thread of each write to it and of its close: TLS's close_notify is a write. */
-    private inner class Recording : Socket() {
+    /**
+     * A plain socket that records the thread of each write to it and of its close: TLS's close_notify is a write.
+     * [closing] runs as it is closed, before the close itself.
+     */
+    private inner class Recording(private val closing: () -> Unit = {}) : Socket() {
         override fun getOutputStream(): OutputStream {
             val raw = super.getOutputStream()
             return object : FilterOutputStream(raw) {
@@ -143,6 +195,7 @@ class DotClientTest {
         override fun close() {
             events += "close" to Thread.currentThread()
             closes.put(Thread.currentThread())
+            closing()
             super.close()
         }
     }
@@ -171,6 +224,17 @@ class DotClientTest {
         assertEquals(query.size + 1, body?.size)
         return body!!.last().toInt()
     }
+
+    /** The next reply gives [ticket] the outcome [outcome], with no answer. */
+    private fun failed(ticket: Long, outcome: Int) {
+        val (got, how, body) = reply()
+        assertEquals(ticket, got)
+        assertEquals(outcome, how)
+        assertNull(body)
+    }
+
+    /** No reply more comes within half a second: none was answered twice. */
+    private fun noMoreReplies() = assertNull("a reply more", replies.poll(500, TimeUnit.MILLISECONDS))
 
     /** Nothing of the client's sockets was written or closed on [caller]'s thread. */
     private fun noIoOn(caller: Thread) {
@@ -210,7 +274,7 @@ class DotClientTest {
     @Test
     fun aQueryInFlightAtTheChangeIsAnsweredWithinItsBound() {
         // The first connection reads the query and never answers; the next one answers.
-        val server = server { n -> n > 1 }
+        val server = server { n, _ -> if (n > 1) Act.ANSWER else Act.HOLD }
         val client = client()
         ask(client, 3, server)
         assertEquals(1, asked.poll(10, TimeUnit.SECONDS))
@@ -324,5 +388,169 @@ class DotClientTest {
         assertTrue("ended $took ms after the lookups", took < Exchanger.CALL_MS + 2_000)
         assertEquals("one open for the ten", 1, accepted.size - before)
         assertEquals(0 to 0, client.counts())
+    }
+
+    @Test
+    fun aSilentConnectionIsRetiredAtItsFirstTimeoutAndWhatWaitsOnItAskedOnAFreshOne() {
+        // Connection 1 answers its first query, then reads and never answers: a flow that a path, a NAT or a censor
+        // dropped without a reset. Connection 2 answers.
+        val server = server { n, k -> if (n == 1 && k > 1) Act.HOLD else Act.ANSWER }
+        val client = client()
+        ask(client, 1, server)
+        assertEquals(1, answered(1))
+        asked.clear()
+        ask(client, 2, server)
+        assertEquals(1, asked.poll(10, TimeUnit.SECONDS))
+        // Later, so that lookup 3's own time runs well after lookup 2's, under load too.
+        Thread.sleep(1_500)
+        ask(client, 3, server)
+        assertEquals("lookup 3 on the silent connection", 1, asked.poll(10, TimeUnit.SECONDS))
+        // Lookup 2 runs out its time; lookup 3, which waited on the same connection, is asked on a fresh one.
+        failed(2, Exchanger.TIMEOUT)
+        assertEquals("by the fresh connection", 2, answered(3))
+        // The fresh connection is the one kept.
+        ask(client, 4, server)
+        assertEquals(2, answered(4))
+        assertEquals(2, accepted.size)
+        noMoreReplies()
+    }
+
+    @Test
+    fun aStopRightAfterARetirementAsksNothingAgain() {
+        // As above, but the retirement's close of connection 1 is held until the service has stopped: what waited on
+        // it must not be asked again in a run that ended.
+        val server = server { n, k -> if (n == 1 && k > 1) Act.HOLD else Act.ANSWER }
+        val closing = CountDownLatch(1)
+        val stopped = CountDownLatch(1)
+        val first = AtomicBoolean(true)
+        val client = client {
+            if (first.getAndSet(false)) {
+                Recording {
+                    closing.countDown()
+                    stopped.await(10, TimeUnit.SECONDS)
+                }
+            } else {
+                Recording()
+            }
+        }
+        ask(client, 1, server)
+        assertEquals(1, answered(1))
+        asked.clear()
+        ask(client, 2, server)
+        assertEquals(1, asked.poll(10, TimeUnit.SECONDS))
+        Thread.sleep(1_500)
+        ask(client, 3, server)
+        assertEquals(1, asked.poll(10, TimeUnit.SECONDS))
+        failed(2, Exchanger.TIMEOUT)
+        assertTrue("the retirement closes the socket", closing.await(10, TimeUnit.SECONDS))
+        client.closeAll(again = false)
+        stopped.countDown()
+        failed(3, Exchanger.REFUSED)
+        noMoreReplies()
+        assertEquals("no fresh connection", 1, accepted.size)
+    }
+
+    @Test
+    fun aLateAnswerMatchedToNothingShowsTheConnectionLives() {
+        // Query 1 is answered after its time, query 2 at once, query 3 never: when query 3 runs out its time, query 1's
+        // late answer, which no query waits for any more, is what was heard since query 3 went out.
+        val server = server { _, k ->
+            when (k) {
+                1 -> Act.LATE
+                3 -> Act.HOLD
+                else -> Act.ANSWER
+            }
+        }
+        val client = client()
+        ask(client, 1, server)
+        assertEquals(1, asked.poll(10, TimeUnit.SECONDS))
+        ask(client, 2, server)
+        assertEquals(1, answered(2))
+        Thread.sleep(1_000)
+        asked.clear()
+        ask(client, 3, server)
+        assertEquals(1, asked.poll(10, TimeUnit.SECONDS))
+        failed(1, Exchanger.TIMEOUT)
+        failed(3, Exchanger.TIMEOUT)
+        ask(client, 4, server)
+        assertEquals("on the same connection", 1, answered(4))
+        assertEquals(1, accepted.size)
+        noMoreReplies()
+    }
+
+    @Test
+    fun oneLateAnswerOnALiveConnectionRetiresNothing() {
+        // The server never answers the first query and answers every other at once: one name slow upstream, on a
+        // connection that works. RFC 7766 (section 7) lets answers come in any order.
+        val server = server { _, k -> if (k == 1) Act.HOLD else Act.ANSWER }
+        val client = client()
+        ask(client, 1, server)
+        assertEquals(1, asked.poll(10, TimeUnit.SECONDS))
+        ask(client, 2, server)
+        assertEquals(1, answered(2))
+        failed(1, Exchanger.TIMEOUT)
+        ask(client, 3, server)
+        assertEquals("on the same connection", 1, answered(3))
+        assertEquals(1, accepted.size)
+        noMoreReplies()
+    }
+
+    @Test
+    fun aResetOrACloseOnAConnectionThatServedIsAskedAgainAndOnlyTheFreshOneCounts() {
+        // A reset: what a NAT or a server that forgot the flow sends to the next query on a kept connection. A close:
+        // a server's idle close that met the query on its way. Neither is the way failing.
+        assertEquals("by the fresh connection", 2, answered(servedThenCut(Act.RESET, 10, fresh = Act.ANSWER)))
+        assertEquals("by the fresh connection", 2, answered(servedThenCut(Act.CLOSE, 20, fresh = Act.ANSWER)))
+        noMoreReplies()
+        // The fresh connection resets too: its outcome is what counts, and nothing is asked a third time.
+        val before = accepted.size
+        failed(servedThenCut(Act.RESET, 30, fresh = Act.RESET), Exchanger.TAMPERED)
+        noMoreReplies()
+        assertEquals("two connections, not three", 2, accepted.size - before)
+    }
+
+    /**
+     * A client and a server whose first connection answers lookup [first] and does [cut] with the next one, which
+     * this asks and returns; every later connection does [fresh].
+     */
+    private fun servedThenCut(cut: Act, first: Long, fresh: Act): Long {
+        val server = server { n, k ->
+            when {
+                n > 1 -> fresh
+                k == 1 -> Act.ANSWER
+                else -> cut
+            }
+        }
+        val client = client()
+        ask(client, first, server)
+        assertEquals(1, answered(first))
+        ask(client, first + 1, server)
+        return first + 1
+    }
+
+    @Test
+    fun aResetOnAFreshConnectionCountsAsTampering() {
+        // Where a censor that blocks DoT strikes: the connection never carried an answer.
+        val server = server { _, _ -> Act.RESET }
+        val client = client()
+        ask(client, 1, server)
+        failed(1, Exchanger.TAMPERED)
+        noMoreReplies()
+        assertEquals("not asked again", 1, accepted.size)
+    }
+
+    @Test
+    fun theStopAsksNothingAgainOnAConnectionThatServed() {
+        val server = server { _, k -> if (k == 1) Act.ANSWER else Act.HOLD }
+        val client = client()
+        ask(client, 1, server)
+        assertEquals(1, answered(1))
+        asked.clear()
+        ask(client, 2, server)
+        assertEquals(1, asked.poll(10, TimeUnit.SECONDS))
+        client.closeAll(again = false)
+        failed(2, Exchanger.REFUSED)
+        noMoreReplies()
+        assertEquals("no fresh connection", 1, accepted.size)
     }
 }
