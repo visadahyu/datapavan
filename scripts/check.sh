@@ -19,12 +19,12 @@
 #                             Advanced's debug APK alone, for the wireguard emulator shard of CI's weekly run
 #   scripts/check.sh resolve  Gradle's plugins and dependencies of both editions, resolved and fetched, nothing built,
 #                             tried up to three times 30 s apart: CI's build job runs it before its gates
-#   scripts/check.sh prepush  right before a push, what CI's run fetches from outside, which can move while the
+#   scripts/check.sh prepush  right before a push, three things CI's run fetches from outside that can move while the
 #                             repository stands still: cargo-deny at CI's version, its advisory database and crates.io's
 #                             yanked list fetched afresh; every lab image's install steps, the installs simulated
 #                             (scripts/lab-pins.py, Docker); Gradle's plugins and dependencies of both editions, asked of
-#                             the repositories again. No build, no emulator, a minute or two. LABPINS=skip leaves out the
-#                             lab images and says so
+#                             the repositories again. No build, no emulator, a minute or two; each part is reported, and
+#                             the check fails if any did. LABPINS=skip leaves out the lab images and says so
 set -euo pipefail
 
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
@@ -306,13 +306,17 @@ resolve_gate() {
     return 1
 }
 
-# Right before a push, what CI's run will fetch from outside, which can move while nothing in the repository changes.
-# What each part finds: a new RustSec advisory or a yanked crate (cargo-deny, CI's failure of 2026-11-24); a lab pin the
-# image's sources do not hold, before the emulator job meets it (Alpine dropped one that day; the labs now read fixed
-# Debian snapshots, so this finds a pin edited wrong, or the snapshot service down); a plugin or a library the
-# repositories do not give now. A blip of a repository during CI's own run is beyond it: resolve_gate retries that in
-# CI. Lint's Play SDK Index, which CI's lint reads, and AAPT2's binary, which the build fetches, are left out.
+# Right before a push, three things CI's run will fetch from outside that can move while nothing in the repository
+# changes. What each part finds: a new RustSec advisory or a yanked crate (cargo-deny, CI's failure of 2026-11-24); a lab
+# pin the image's sources do not hold, before CI meets it (Alpine dropped one that day; the labs now read fixed Debian
+# snapshots, so this finds a pin edited wrong, or the snapshot service down); a plugin or a library the repositories do
+# not give now. A blip of a repository during CI's own run is beyond it: resolve_gate retries Gradle's in CI. Left out,
+# most fixed by a checksum or a digest and so able to blip but not to drift: lint's Play SDK Index, which CI's lint reads;
+# AAPT2's binary; what the lab images' build stages fetch (odoh-server-go's git clone at a commit, which can drift if its
+# history is rewritten, the crates and Go modules) and their base images; the Android SDK's packages, Gradle's
+# distribution, the Rust toolchain and the emulator's system image.
 prepush_gates() {
+    local failed=0
     # CI's own command at CI's own version, its warnings of crates in two versions left to CI's log: the advisory
     # database's format moves, and two versions of cargo-deny can read it differently.
     echo "== Pre-push: cargo-deny as CI runs it, its advisory database and crates.io's yanked list fetched afresh"
@@ -323,18 +327,20 @@ prepush_gates() {
     if [ -z "$want" ] || [ "$have" != "$want" ]; then
         echo "cargo-deny is ${have:-missing} here and ${want:-not named} in CI (ci.yml's CARGO_DENY_VERSION):" \
             "cargo install cargo-deny --version $want --locked" >&2
-        return 1
+        failed=1
+    else
+        (cd "$ROOT/core" && cargo deny --log-level error --locked check) || failed=1
     fi
-    (cd "$ROOT/core" && cargo deny --log-level error --locked check)
     echo "== Pre-push: every lab image's install steps, run as written with the installs simulated (scripts/lab-pins.py)"
     if [ "${LABPINS:-}" = skip ]; then
         echo "!! LABPINS=skip: the lab images' packages were NOT CHECKED" >&2
     else
-        python3 -I "$ROOT/scripts/lab-pins.py"
+        python3 -I "$ROOT/scripts/lab-pins.py" || failed=1
     fi
     # Asked of the repositories again, never answered from the cache alone, which would pass here whatever they hold.
     echo "== Pre-push: Gradle's plugins and dependencies, Basic and Advanced, asked of the repositories again"
-    gradle_resolve --refresh-dependencies
+    gradle_resolve --refresh-dependencies || failed=1
+    [ "$failed" -eq 0 ]
 }
 
 case "$WHAT" in

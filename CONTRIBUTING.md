@@ -28,13 +28,14 @@ local emulators before a push, and `scripts/batch-merge.sh` brings several appro
 for one CI run before main moves to it.
 
 Right before a push, run `scripts/check.sh prepush`: in a minute or two, with no build and no emulator, it reads
-what CI's run will fetch from outside, which can move while the repository stands still. cargo-deny, at CI's
+three things CI's run fetches from outside that can move while the repository stands still. cargo-deny, at CI's
 version and with its advisory database fetched afresh, finds a new RustSec advisory or a yanked crate. Every lab
 image's install steps, run as written with the installs simulated (`scripts/lab-pins.py`, which needs Docker),
-find a pin the image's sources do not hold, before the emulator job meets it. Gradle's plugins and dependencies
+find a pin the image's sources do not hold, before CI meets it. Gradle's plugins and dependencies
 of both editions, asked of the repositories again, find a module they do not give now. A repository's blip during
 CI's own run is beyond it: CI's build job resolves Gradle's modules before its gates and retries a failure there
 (`scripts/check.sh resolve`), and anything else of the kind goes to [docs/ci-flakes.md](docs/ci-flakes.md).
+`scripts/check.sh` names what the check leaves out, most of it fixed by a checksum or a digest.
 
 ## Rules for code
 

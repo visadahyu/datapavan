@@ -7,11 +7,13 @@
     scripts/lab-pins.py --self-test  its reading of made-up Dockerfiles and of every real one, without Docker
 
 On 2026-11-24 Alpine rebuilt python3 3.14.10 as r2 and dropped r1, and CI's dns shard could not build the DNS lab's
-image (docs/ci-flakes.md, run 45354185822). Nothing in the repository had changed. This reads every tracked
-Dockerfile and runs the install steps of each stage (a RUN with `apt-get install`, `apt install` or `apk add`) as
+image (docs/ci-flakes.md, run 45354185822). Nothing in the repository had changed. This reads every Dockerfile of the
+commit to be pushed (HEAD, as git has it: a working copy that differs is named, and checked as committed) and runs the
+install steps of each stage (a RUN with `apt-get install`, `apt install` or `apk add`) as
 the build runs them: in a container of the stage's base image, by its digest, with the stage's ARG defaults and ENV
-values, each step its own `/bin/sh -c`. Shims put first on the PATH turn the install into a simulated one
-(`apt-get -s`, `apt -s`, `apk add --simulate`) and the retries' `sleep` into two seconds, so that the step's own
+values, each step its own `/bin/sh -c`. Shims in a folder of their own, put first on the PATH, turn the install into a
+simulated one (`apt-get -s`, `apt -s`, `apk add --simulate`) and the retries' `sleep` into two seconds, so that the
+step's own
 sources (the Debian snapshot its image names), options, retries and pins are what is checked, and nothing is
 installed: the package index is fetched, and every package and version must resolve with its dependencies.
 
@@ -22,13 +24,17 @@ form it does not read: a parser directive, a heredoc, an exec-form or flagged (`
 instruction it does not know.
 
 What it does not see, by its way of working:
-- a command after the install, in the same step, that runs what was to be installed fails here though the build
-  passes: a false failure, never a false pass (none of today's steps has one);
-- an install called by its full path (`/usr/bin/apt-get`) passes the shims and really installs: slower, still right;
+- a command after the install, in the same step or in a later install step of the stage, that needs what was to be
+  installed fails here though the build passes: a false failure, never a false pass (none of today's stages has one);
+- an install called by its full path (`/usr/bin/apt-get`) passes the shims and really installs, and a stage whose
+  installs are all so called fails here as having simulated nothing: call them by name;
 - a simulated install fetches no package, so a file missing from the archive behind a listed version passes (the
   snapshot keeps every file it lists);
 - CI keeps the proxy lab's and the WireGuard peer's layers in its cache, so a pin broken here fails CI there only once
-  that cache moves: still a break, found before it lands.
+  that cache moves: still a break, found before it lands;
+- what the build stages fetch (a git clone at a commit, crates, Go modules, all fixed by checksums but the clone) and
+  the base images of stages with no install step are not read; `FROM --platform` is read past, so the packages
+  resolved are this machine's architecture's.
 
 Part of `scripts/check.sh prepush`; `scripts/check.sh data` runs `--self-test`, so that a Dockerfile this cannot read
 fails CI rather than going unchecked here.
@@ -59,19 +65,21 @@ DIGEST = re.compile(r"@sha256:[0-9a-f]{64}$")
 # A parser directive, read by Docker from the first lines only (`# syntax=`, `# escape=`, `# check=`).
 DIRECTIVE = re.compile(r"^#\s*(syntax|escape|check)\s*=", re.IGNORECASE)
 
-# Run in the container before the steps: the shims, then each step as Docker runs a RUN, `/bin/sh -c`, in order.
+# Run in the container before the steps: the shims, in a folder put first on the PATH whatever the image's own order,
+# then each step as Docker runs a RUN, `/bin/sh -c`, in order.
 SETUP = r"""set -eu
-mkdir -p /usr/local/bin
+mkdir -p /lab-pins/bin
 for tool in apt-get apt apk; do
     real=$(command -v "$tool") || continue
     case "$tool" in apk) verb=add flag=--simulate ;; *) verb=install flag=-s ;; esac
     printf '#!/bin/sh\nfor a in "$@"; do if [ "$a" = %s ]; then echo "simulated: %s $*" >&2; exec %s %s "$@"; fi; done\nexec %s "$@"\n' \
-        "$verb" "$tool" "$real" "$flag" "$real" >"/usr/local/bin/$tool"
-    chmod 755 "/usr/local/bin/$tool"
+        "$verb" "$tool" "$real" "$flag" "$real" >"/lab-pins/bin/$tool"
+    chmod 755 "/lab-pins/bin/$tool"
 done
 real=$(command -v sleep)
-printf '#!/bin/sh\nexec %s 2\n' "$real" >/usr/local/bin/sleep
-chmod 755 /usr/local/bin/sleep
+printf '#!/bin/sh\nexec %s 2\n' "$real" >/lab-pins/bin/sleep
+chmod 755 /lab-pins/bin/sleep
+export PATH="/lab-pins/bin:$PATH"
 i=1
 while [ "$i" -le "$LAB_PINS_STEPS" ]; do
     eval "step=\$LAB_PINS_STEP_$i"
@@ -80,7 +88,8 @@ while [ "$i" -le "$LAB_PINS_STEPS" ]; do
 done
 """
 
-# Each step's bound: an index fetch of a few megabytes and a resolution take seconds.
+# Each container's bound, its image's pull and all its stage's steps: an index fetch of a few megabytes and a
+# resolution take seconds.
 STEP_SECONDS = 180
 
 
@@ -201,22 +210,37 @@ def read(path, text):
     return [s for s in stages if s.steps], problems
 
 
+def git(*arguments):
+    """git's output for `arguments` in the repository; exits with git's own message if it cannot."""
+    try:
+        done = subprocess.run(["git", "-C", str(ROOT), *arguments], capture_output=True, text=True)
+    except FileNotFoundError:
+        sys.exit("lab-pins.py reads the Dockerfiles from git, and git is not here")
+    if done.returncode != 0:
+        sys.exit(f"lab-pins.py: git {' '.join(arguments)}: {done.stderr.strip()}")
+    return done.stdout
+
+
 def dockerfiles():
-    """Every tracked Dockerfile, as git has it."""
-    listed = subprocess.run(
-        ["git", "-C", str(ROOT), "ls-files", "-z"], check=True, capture_output=True, text=True
-    ).stdout.split("\0")
-    return sorted(p for p in listed if p and re.search(r"(^|/)(Dockerfile[^/]*|[^/]*\.Dockerfile)$", p))
+    """Every Dockerfile of HEAD, the commit a push sends."""
+    listed = git("ls-tree", "-r", "-z", "--name-only", "HEAD").split("\0")
+    return sorted(p for p in listed if p and re.search(r"(^|/)(Dockerfile|[^/]*\.Dockerfile)$", p))
 
 
 def everything():
-    """The install stages of every tracked Dockerfile, and every problem found reading them."""
+    """The install stages of every Dockerfile as HEAD has it, every problem found reading them, and the files whose
+    working copy differs, or that git does not hold yet."""
     stages, problems = [], []
     for path in dockerfiles():
-        found, wrong = read(path, (ROOT / path).read_text())
+        found, wrong = read(path, git("show", f"HEAD:{path}"))
         stages += found
         problems += wrong
-    return stages, problems
+    unsaved = [
+        line[3:]
+        for line in git("status", "--porcelain", "--untracked-files=all").splitlines()
+        if re.search(r"(^|/)(Dockerfile|[^/]*\.Dockerfile)$", line[3:])
+    ]
+    return stages, problems, unsaved
 
 
 def run(stage, number):
@@ -232,15 +256,18 @@ def run(stage, number):
     command += ["--entrypoint", "/bin/sh", stage.image, "-c", SETUP]
     try:
         done = subprocess.run(command, capture_output=True, text=True, timeout=STEP_SECONDS)
-    except subprocess.TimeoutExpired:
+    except subprocess.TimeoutExpired as late:
         subprocess.run(["docker", "rm", "-f", name], capture_output=True)
-        return False, f"over {STEP_SECONDS} s"
+        said = "".join(part.decode(errors="replace") if isinstance(part, bytes) else part or "" for part in (late.stdout, late.stderr))
+        return False, f"{said}\nover {STEP_SECONDS} s"
     return done.returncode == 0, done.stdout + done.stderr
 
 
 def check():
     """Runs every install stage, four at a time, and says what each resolved or how it failed."""
-    stages, problems = everything()
+    stages, problems, unsaved = everything()
+    for path in unsaved:
+        print(f"  note: {path} is not as HEAD has it: checked as committed, which is what a push sends")
     for problem in problems:
         print(problem, file=sys.stderr)
     if problems:
@@ -249,6 +276,7 @@ def check():
         print("Docker is not running here: the lab images' pins need it (LABPINS=skip to leave them out)", file=sys.stderr)
         return 1
     failed = 0
+    names = [f"datapavan-prepush-{os.getpid()}-{n}" for n in range(1, len(stages) + 1)]
     pool = concurrent.futures.ThreadPoolExecutor(max_workers=4)
     try:
         futures = {pool.submit(run, stage, n): stage for n, stage in enumerate(stages, 1)}
@@ -266,12 +294,10 @@ def check():
                 why = "" if ok else ", which failed"
                 print(f"{label}: its install steps{why}{'' if simulated else ' simulated nothing'}:", file=sys.stderr)
                 print("\n".join(output.splitlines()[-25:]), file=sys.stderr)
-    except KeyboardInterrupt:
-        pool.shutdown(wait=False, cancel_futures=True)
-        names = [f"datapavan-prepush-{os.getpid()}-{n}" for n in range(1, len(stages) + 1)]
+    finally:
+        # However it ended (Ctrl-C included): no run starts after this, and none of this check's containers stays.
+        pool.shutdown(wait=True, cancel_futures=True)
         subprocess.run(["docker", "rm", "-f", *names], capture_output=True)
-        raise
-    pool.shutdown()
     return failed
 
 
@@ -344,7 +370,8 @@ def self_test():
     assert directed == ["directed:1: a parser directive, which this check does not read"], directed
     assert not INSTALL.search("apt-get update && echo install"), "an install after another command"
     assert INSTALL.search("apt-get -o A=b install -y x") and INSTALL.search("apk --no-cache add x")
-    real, wrong = everything()
+    assert INSTALL.search("apt install -y x"), "apt's own form"
+    real, wrong, _ = everything()
     assert not wrong, wrong
     assert real, "no install step in any tracked Dockerfile"
     print(f"lab-pins.py: self-test passed ({len(real)} install stages in {len(dockerfiles())} Dockerfiles)")
@@ -355,7 +382,7 @@ def main():
     if sys.argv[1:] == ["--self-test"]:
         return self_test()
     if sys.argv[1:] == ["--list"]:
-        stages, problems = everything()
+        stages, problems, _ = everything()
         for stage in stages:
             for line, step in stage.steps:
                 print(f"{stage.path}:{line} ({stage.image}): {step}")
