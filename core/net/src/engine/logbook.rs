@@ -767,9 +767,39 @@ impl Shared {
         {
             let mut live = lock(&self.live);
             let mut activity = lock(&self.activity);
+            // The own proxies of these apps, by flow, as the records gathered before their naming are to name them: a
+            // segment cut between a request and a slow reply was written as an ordinary flow's (review A, engine,
+            // finding 2).
+            let own_proxy = |flow: &Flow| {
+                (super::proxied::own_proxy(flow) && of(flow.uid))
+                    .then(|| {
+                        flow.proxy
+                            .as_deref()
+                            .map(|p| (flow.id, p.without_destination()))
+                    })
+                    .flatten()
+            };
+            let unnamed: HashMap<u64, super::Proxied> = live
+                .values()
+                .filter(|l| !l.hidden)
+                .filter_map(|l| own_proxy(&l.flow))
+                .chain(activity.held.iter().filter_map(|piece| match &piece.of {
+                    Of::Flow {
+                        flow,
+                        hidden: false,
+                        ..
+                    } => own_proxy(flow),
+                    _ => None,
+                }))
+                .collect();
             self.to_first_hops(&mut live, &mut activity, of);
             for record in lock(&self.pending_log).iter_mut() {
                 super::proxied::strip_for_log(record, &|uid| !of(uid));
+                if let crate::log::Record::Segment { flow, .. } = record
+                    && let Some(proxy) = unnamed.get(&flow.id)
+                {
+                    super::proxied::strip_unnamed(record, proxy);
+                }
             }
             let keeps = self.keeps_first_hops();
             self.sweep(&mut live, &mut activity, boot, &keeps);

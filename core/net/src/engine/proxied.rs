@@ -263,6 +263,20 @@ pub(super) fn holds_destination(flow: &Flow) -> bool {
         .is_some_and(|p| p.kind.declared() && p.asked.is_some())
 }
 
+/// Gives a record that names no proxy, written before its flow was named one, the log's left-out shape with `proxy`:
+/// its kind and the facts that name nothing, so that the history says it went through one (finding 27). A segment cut
+/// between a request and a slow reply is such a record, written as an ordinary flow's.
+pub(super) fn strip_unnamed(record: &mut crate::log::Record, proxy: &Proxied) {
+    if let crate::log::Record::Segment { flow, .. } = record
+        && flow.proxy.is_none()
+    {
+        *flow = super::logbook::without_destination(&Flow {
+            proxy: Some(Box::new(proxy.clone())),
+            ..flow.clone()
+        });
+    }
+}
+
 /// What the log may keep of `record`, `keeps` saying whose apps' first hops are kept (R1): unkept, an app's own
 /// proxy's flow keeps its kind and the facts that name nothing (`logbook::without_destination`, the left-out
 /// shape the log already reads), and a plain request keeps its own address and loses only where it asked to go.
@@ -1072,16 +1086,18 @@ impl Shared {
         if let Some(before) = before {
             activity.counts.rename_place(flow.uid, before, &flow);
         }
-        if own && !kept {
-            for record in lock(&self.pending_log).iter_mut() {
-                if let crate::log::Record::Segment { flow: written, .. } = record
-                    && written.id == opened.id
-                {
-                    // Given the named flow's proxy, so that the history says it went through one.
-                    *written = super::logbook::without_destination(&Flow {
-                        proxy: flow.proxy.clone(),
-                        ..written.clone()
-                    });
+        if own
+            && !kept
+            && let Some(proxy) = flow.proxy.as_deref()
+        {
+            // Those held back for a take-back too: a messenger's segment cut before its inference can settle, and
+            // be held back, between `infer`'s window and this naming (review A, engine, finding 3). In `to_log`'s
+            // order: `held_back`, then `pending_log`.
+            let mut back = lock(&self.held_back);
+            let mut pending = lock(&self.pending_log);
+            for record in back.records.iter_mut().chain(pending.iter_mut()) {
+                if record_flow(record) == Some(opened.id) {
+                    strip_unnamed(record, proxy);
                 }
             }
         }
@@ -3535,6 +3551,70 @@ mod tests {
                     .as_ref()
                     .is_some_and(|p| p.trackers == [49]),
             "{places:?}"
+        );
+    }
+
+    /// E7 (review A, engine, finding 2): a quarter hour cuts a SOCKS5 flow's segment before the server's reply, with the
+    /// switch on, so that it waits for the log as an ordinary flow's; the reply confirms the proxy, kept; then the
+    /// switch goes off before the batch is taken. The batch's record of it is stripped, with the proxy's kind.
+    #[test]
+    fn turning_the_switch_off_strips_a_segment_cut_before_its_naming() {
+        let (shared, clock) = engine_at(true);
+        learn(&shared, "203.0.113.5", "proxy.example.net");
+        let (opened, bytes) = open(&shared, UID, at([203, 0, 113, 5], 1080));
+        let mut sniff = Sniff::new(true, false);
+        let handshake = Mutex::new(Handshake::default());
+        for read in &socks5_reads() {
+            for found in sniff.feed(read) {
+                shared.found(opened, found, &handshake);
+            }
+            bytes.up(&shared, read.len(), read.len() + 40);
+        }
+        cut_and_tell(&shared, &clock);
+        shared.replied(opened, SOCKS5_REPLY, &handshake);
+        assert!(
+            of_flow(&lock(&shared.pending_log), opened.id)
+                .iter()
+                .any(|f| f.proxy.is_none() && f.name.as_deref() == Some("proxy.example.net")),
+            "written as an ordinary flow's"
+        );
+        switch(&shared, false);
+        let written = of_flow(&taken(&shared), opened.id);
+        assert!(
+            !written.is_empty()
+                && written.iter().all(
+                    |f| left_out(f) && f.proxy.as_ref().is_some_and(|p| p.kind == Kind::Socks5)
+                ),
+            "{written:?}"
+        );
+    }
+
+    /// Review A, engine, finding 3: a messenger's segment cut before its inference, held back for the take-back before
+    /// the naming, is stripped by an unkept naming as the batch's are, with the proxy's kind.
+    #[test]
+    fn an_unkept_naming_strips_a_segment_held_back_before_it() {
+        let shared = engine(false);
+        telegram(&shared);
+        learn(&shared, "93.184.216.34", "cdn.example.net");
+        let (proxy, bytes) = open(&shared, UID, at([93, 184, 216, 34], 443));
+        // As if a reading had settled the segment, and `to_log` held it back, between `infer`'s window and its naming.
+        lock(&shared.held_back).records.push_back(Record::Segment {
+            flow: live(&shared, proxy.id),
+            start: T,
+            end: T + 1_000,
+            bytes: [10, 0, 50, 0],
+            continues: true,
+            state: crate::states::Placed::Unknown(crate::states::Unknown::NotTold),
+        });
+        relay(&shared, proxy, &bytes, &[&obfuscated()]);
+        let held = held_back_of(&shared, proxy.id);
+        assert!(
+            !held.is_empty()
+                && held
+                    .iter()
+                    .all(|f| left_out(f)
+                        && f.proxy.as_ref().is_some_and(|p| p.kind == Kind::MtProto)),
+            "{held:?}"
         );
     }
 }
