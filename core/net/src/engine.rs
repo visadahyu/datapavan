@@ -909,6 +909,11 @@ pub struct Handover {
     direct: proxied::DirectInstants,
     /// Tracker blocking's setting (W8, part 3a); what it counted and tied stays behind.
     blocking: BlockSetting,
+    /// The last flow number given: the next engine goes on from it, so that a number names one flow for the whole
+    /// run. The segments handed over in `activity`, and the matches by number since unit A of the proxy record (a
+    /// segment cut before its naming, a first hop held past its flow), would otherwise mistake an old flow for a new
+    /// one of the same number (review A, engine, finding 4).
+    next_id: u64,
 }
 
 /// What the engine's thread and its controller share.
@@ -1117,6 +1122,7 @@ impl Engine {
             mut proxies,
             direct,
             mut blocking,
+            next_id,
         } = handover.unwrap_or_else(|| Handover {
             chain: None,
             upstream_dns: None,
@@ -1130,6 +1136,7 @@ impl Engine {
             proxies: ProxySetting::default(),
             direct: Vec::new(),
             blocking: BlockSetting::default(),
+            next_id: 0,
         });
         let waiting = activity::Waiting::of_held(&activity.held);
         if let Some(setting) = setting {
@@ -1162,7 +1169,7 @@ impl Engine {
             organisations,
             resolvers: Resolvers::bundled(),
             owners: Owners::bundled(),
-            next_id: AtomicU64::new(0),
+            next_id: AtomicU64::new(next_id),
             clock,
             engine_thread: std::sync::OnceLock::new(),
             quarter: AtomicU64::new(quarter),
@@ -1314,6 +1321,7 @@ impl Engine {
             proxies,
             direct,
             blocking: shared.blocking(),
+            next_id: shared.next_id.load(Ordering::Relaxed),
         }
     }
 

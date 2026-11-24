@@ -2642,7 +2642,7 @@ pub(super) mod tests {
         };
         clock.pass(60_000);
         let handover = engine.hand_over();
-        let (mut next, _app) = start(Some(handover))?;
+        let (next, _app) = start(Some(handover))?;
         assert_eq!(
             full(&next),
             Some(true),
@@ -2650,7 +2650,19 @@ pub(super) mod tests {
         );
         clock.pass(9 * 60_000);
         assert_eq!(full(&next), Some(false), "and ends there");
-        next.stop();
+        // The next engine's flows go on numbering from the last one's (review A, engine, finding 4).
+        let last = next
+            .shared
+            .begin(SocketAddr::from(([198, 51, 100, 9], 443)), Some(UID))
+            .id;
+        let handover = next.hand_over();
+        let (mut third, _app) = start(Some(handover))?;
+        let id = third
+            .shared
+            .begin(SocketAddr::from(([198, 51, 100, 9], 443)), Some(UID))
+            .id;
+        assert_eq!(id, last + 1, "one number names one flow for the whole run");
+        third.stop();
         Ok(())
     }
 
