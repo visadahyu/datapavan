@@ -181,13 +181,16 @@ class NetworkVpnService : VpnService() {
 
         override fun onAvailable(network: Network) {
             if (network != current) {
+                // The network first, then its generation, then the exchanger: an exchange that reads the new generation
+                // binds its sockets to the new network, and what one that read the old generation opens is never kept
+                // (the DoT crash's audit, finding 1).
+                current = network
                 networkGeneration++
                 exchanger.networkChanged()
                 exchanger.warm()
                 // The search domains of the network before go with it, before this one's arrive (review S-C1).
                 tellDnsNetwork(null, "")
             }
-            current = network
             setUnderlyingNetworks(arrayOf(network))
         }
 
@@ -223,9 +226,10 @@ class NetworkVpnService : VpnService() {
 
         override fun onLost(network: Network) {
             if (network != current) return
+            // In the same order as onAvailable's.
+            current = null
             networkGeneration++
             exchanger.networkChanged()
-            current = null
             setUnderlyingNetworks(null)
             Engine.nativeNetworkChanged("", true)
             told = null
@@ -1058,6 +1062,8 @@ class NetworkVpnService : VpnService() {
         tracker?.stop()
         tracker = null
         Engine.nativeStop()
+        // The encrypted resolver's connections go with the run, closed off the main thread: the engine is gone.
+        exchanger.stop()
         // Stopping the engine forgot its tunnels: the next start sets them again.
         tunnelsSet.clear()
         routesSet = emptyList()
@@ -1535,7 +1541,14 @@ class NetworkVpnService : VpnService() {
      * kept. `dns-network-resolver ADDRESS:PORT|android` asks the network's resolver there in plain DNS, for the lab, in
      * place of Android's resolver of the network ([org.visadahyu.datapavan.network.dns.Exchanger.networkResolverForTests]).
      * `dns-times-clear` forgets the durations the engine kept, so that the dump's `dns-latency` lines read only the
-     * exchanges after it (the speed budget's check, ADR 0039), and prints `dns-times-cleared`.
+     * exchanges after it (the speed budget's check, ADR 0039), and prints `dns-times-cleared`. For the DoT crash's
+     * check: `dns-network-changed` raises the network beneath's generation, then tells the exchanger the network
+     * changed ([org.visadahyu.datapavan.network.dns.Exchanger.networkChanged]), on the dump's own thread, which is the
+     * main one, as onAvailable does on a new network (the network itself stays), and prints `dns-network-changed done`;
+     * an open in flight then is not kept, and the next exchange opens a connection of the new generation.
+     * `dot-connections` prints `dot-connections OPEN OPENING`, the DoT connections that take queries and the DoT opens
+     * in flight;
+     * `network-generation` prints `network-generation N`, the network beneath's generation.
      */
     private fun debugDns(args: List<String>, writer: PrintWriter) {
         fun after(command: String, n: Int) = args.indexOf(command).takeIf { it >= 0 }?.let { args.drop(it + 1).take(n) }
@@ -1544,6 +1557,18 @@ class NetworkVpnService : VpnService() {
             Engine.nativeDnsTimesClear()
             writer.println("dns-times-cleared")
         }
+        if ("dns-network-changed" in args) {
+            // On this thread, the main one, on purpose: closing a DoT connection here is what crashed the network part.
+            // As onAvailable does, but for the network itself: a debug build has no other one to set.
+            networkGeneration++
+            exchanger.networkChanged()
+            writer.println("dns-network-changed done")
+        }
+        if ("dot-connections" in args) {
+            val (open, opening) = exchanger.dotConnections()
+            writer.println("dot-connections $open $opening")
+        }
+        if ("network-generation" in args) writer.println("network-generation $networkGeneration")
         var changed = "dns-apply" in args
         after("dns-strict", 1)?.let {
             settings.strict = it.firstOrNull() == "on"

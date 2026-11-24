@@ -66,6 +66,10 @@ All notable changes to this project are documented here. The format follows
   - **The About page says which edition this is,** and what the others are: Basic never has internet access, Basic on Google Play has the same checks and is signed by Google, and Advanced uses the internet only for the user's own apps' traffic and the servers they choose, so Basic can check it from outside. It names what Advanced adds: a log of each app's connections, tracker blocking and encrypted DNS. In the app the network part has no name of its own: Advanced's screen for it is called "Network", and the audit's tab of each app's data use is now "Data use", as Android's "Data usage" is, with its launcher shortcut. Basic's page "Is this copy genuine?" and its store text say "Genuine Datapavan Basic". The release rehearsal checks Basic's signed APK against an allowlist of its own as well.
 - The emulator check of the network switch brings mobile data up before Advanced's VPN starts, and restarts the emulator's radios if it does not come; on CI it was sometimes not up at all when the switch came.
 
+### Fixed
+
+- Datapavan Advanced's network part no longer stops, taking its tunnel with it, when the phone moves between Wi-Fi and mobile data, or loses its network, within a minute of a lookup over DNS over TLS. It closed its DoT connections on Android's main thread, where Android refuses network traffic. The connections of the network before are now closed on the network part's own thread, and none is kept for the new network; a DoT server that takes the connection but never completes its TLS handshake no longer holds a lookup without end; and lookups to one DoT server open one connection at a time. `scripts/verify-dns.sh` brings such a change about with a DoT connection open, and a unit test covers each part.
+
 ### Security
 
 - The hardware check, after six independent reviews (ADR 0040, decisions 5 and 7):

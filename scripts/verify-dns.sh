@@ -307,6 +307,47 @@ dump dns-choice preset lab-dot >/dev/null
 expect "the DoT preset answers" "$(lookup probe.dnslab.test)" 10.53.4.4
 dump dns-choice doh "https://doh.dnslab.test:${FRONT_doh##*:}/dns-query" 10.0.2.2 >/dev/null
 expect "the user's own DoH resolver answers" "$(lookup probe.dnslab.test)" 10.53.3.3
+
+# 3a. The network beneath changes while a DoT connection is open (the DoT crash, docs/ci-flakes.md, CI run 45033044776).
+# Closing a TLS socket writes its close notice, and the network part's callbacks run on the main thread, where Android
+# refuses network I/O: the process crashed with its tunnel whenever a switch came within a minute of a DoT lookup.
+# A real switch reaches this only when the lookup, the idle timer and Android's choice of network line up, so the
+# debug build's `dns-network-changed` runs the callbacks' own call, on the main thread as Android runs dump, with a
+# connection certainly open. "Only this resolver" keeps every lookup on DoT, and the DoT server's own log proves it.
+dump dns-only on >/dev/null
+# dns-choice takes the words after it: last in its call.
+dump dns-choice preset lab-dot >/dev/null
+dot_mark=$(mark dot)
+name=$(fresh)
+lookup "$name" >/dev/null
+asked dot "$name" "$dot_mark" || fail "only the DoT preset: the lab's DoT server was not asked $name ($(way))"
+dot_open() { sed -n 's/^ *dot-connections \([0-9]*\) [0-9]*$/\1/p' <<<"$(dump dot-connections)"; }
+[ "$(dot_open)" -ge 1 ] 2>/dev/null || fail "no DoT connection open before the change: '$(dump dot-connections | grep dot-connections)'"
+# pidof fails when no such process runs: that is what the check reads, so it must not end the script unsaid.
+pid_before=$(adb shell pidof "$PKG:network" | tr -d '\r' || true)
+[ -n "$pid_before" ] || fail "the network part's process ($PKG:network) is not running before the change"
+crashes_before=$(adb logcat -d -b crash 2>/dev/null | grep -c "$PKG" || true)
+# The count is read in the same dump call, right after the change: the connections of the network before must be out
+# at once. Read later, any app's lookup (every app goes through the tunnel here) could have opened a new one, rightly.
+after_change=$(dump dns-network-changed dot-connections || true)
+changed=$(grep -c '^ *dns-network-changed done$' <<<"$after_change" || true)
+open_after=$(sed -n 's/^ *dot-connections \([0-9]*\) [0-9]*$/\1/p' <<<"$after_change")
+sleep 2
+pid_after=$(adb shell pidof "$PKG:network" | tr -d '\r' || true)
+[ "$changed" = 1 ] && [ -n "$pid_after" ] && [ "$pid_after" = "$pid_before" ] ||
+    fail "the network part did not survive a change of the network beneath with a DoT connection open (process $pid_before, now ${pid_after:-none})"
+[ "$(adb logcat -d -b crash 2>/dev/null | grep -c "$PKG" || true)" = "$crashes_before" ] ||
+    fail "the network part crashed at the change: $(adb logcat -d -b crash 2>/dev/null | grep -A3 "$PKG" | tail -4)"
+vpn_up || fail "the tunnel went down at the change of the network beneath"
+[ "$open_after" = 0 ] ||
+    fail "the DoT connections of the network before still took queries right after the change: '$(grep dot-connections <<<"$after_change")'"
+dot_mark=$(mark dot)
+name=$(fresh)
+lookup "$name" >/dev/null
+asked dot "$name" "$dot_mark" || fail "after the change, the lab's DoT server was not asked $name ($(way))"
+[ "$(dot_open)" -ge 1 ] 2>/dev/null || fail "after the change, no new DoT connection: '$(dump dot-connections | grep dot-connections)'"
+echo "ok: the network beneath changed with a DoT connection open: the network part kept running, closed it, and opened a new one"
+dump dns-only off >/dev/null
 dump dns-choice odoh >/dev/null
 
 # 3b. The speed budget (ADR 0039, "The speed budget of direct apps' names"): the network part's own cost of each way in

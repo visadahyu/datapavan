@@ -100,7 +100,7 @@ class Exchanger(
     }
     private val work = Executors.newCachedThreadPool { task -> Thread(task, "network-dns").apply { isDaemon = true } }
     private val trust: X509TrustManager by lazy { given ?: SystemTrust.android(host.extraRoots) }
-    private val dot by lazy { DotClient(::socketFor, ::sslFor, timers, work, ::reply) }
+    private val dot by lazy { DotClient(::socketFor, ::sslFor, timers, work, ::reply) { host.generation } }
 
     /**
      * One exchange, as the engine hands it ([Engine]'s bridge, `Platform::exchange`): returns at once, and replies
@@ -176,13 +176,29 @@ class Exchanger(
         if (!sent) reply(ticket, REFUSED, null)
     }
 
-    /** The network beneath changed: the clients of the one before, their connections and TLS sessions go. */
+    /**
+     * The network beneath changed: the clients of the one before, their connections and TLS sessions go. The network's
+     * callbacks call it on the main thread, where Android forbids network I/O, and closing a TLS connection writes its
+     * close_notify: nothing here closes a socket on the caller's thread ([DotClient.closeAll]).
+     */
     fun networkChanged() {
-        val old = clients.values.toList()
-        clients.clear()
+        val old = synchronized(clients) { clients.values.toList().also { clients.clear() } }
         work.execute { old.forEach { it.connectionPool.evictAll() } }
         dot.closeAll()
     }
+
+    /**
+     * The service stopped: the idle connections of every client and the DoT connections are closed, off the caller's
+     * thread (the main one), and no query they cut is asked again.
+     */
+    fun stop() {
+        val pools = synchronized(clients) { clients.values.map { it.connectionPool }.distinct() }
+        work.execute { pools.forEach { it.evictAll() } }
+        dot.closeAll(again = false)
+    }
+
+    /** The debug builds' dump: the DoT connections that take queries, and the DoT opens in flight. */
+    internal fun dotConnections(): Pair<Int, Int> = dot.counts()
 
     /** A tool, for an exchange through it. */
     data class Through(val proxy: InetSocketAddress, val user: ByteArray, val password: ByteArray) {
@@ -199,11 +215,24 @@ class Exchanger(
                 post(body.toRequestBody(type.toMediaType()))
             }
         }.build()
-        client(through, server, known).newCall(request).enqueue(
+        val generation = host.generation
+        val client = client(through, server, known, generation)
+        client.newCall(request).enqueue(
             object : Callback {
-                override fun onFailure(call: Call, e: IOException) = reply(ticket, outcomeOf(e), null)
+                override fun onFailure(call: Call, e: IOException) {
+                    reply(ticket, outcomeOf(e), null)
+                    leftBehind(client, generation)
+                }
 
                 override fun onResponse(call: Call, response: Response) {
+                    try {
+                        answer(response)
+                    } finally {
+                        leftBehind(client, generation)
+                    }
+                }
+
+                private fun answer(response: Response) {
                     response.use {
                         // The whole body, never more than a DNS message can be: a longer one is refused unread.
                         val bytes = try {
@@ -221,21 +250,42 @@ class Exchanger(
     }
 
     /**
-     * The client for the network beneath now, directly or through [through], that reaches [server] only at [known]:
-     * one per network, tool and set of addresses, all sharing the network's connection pool and TLS context. A
-     * connection serves only clients of its own addresses (OkHttp's `Address` holds the [Dns]).
+     * After an exchange on [client], built for the network of [generation]: once that network is gone, the connection
+     * the exchange left in its pool goes too, rather than idling there on the network before ([networkChanged] evicted
+     * the pool before this exchange's connection returned to it).
      */
-    private fun client(through: Through?, server: String, known: List<InetAddress>): OkHttpClient {
-        val base = client(through)
-        return clients.getOrPut("${host.generation} ${through?.proxy} $server $known") {
-            base.newBuilder().dns(KnownOnly(server, known)).build()
-        }
+    private fun leftBehind(client: OkHttpClient, generation: Int) {
+        if (host.generation != generation) work.execute { client.connectionPool.evictAll() }
     }
 
-    /** The client for the network beneath now, directly or through [through], that knows no server's address. */
-    private fun client(through: Through?): OkHttpClient {
-        val key = "${host.generation} ${through?.proxy}"
-        return clients.getOrPut(key) {
+    /**
+     * The client for the network of [generation], directly or through [through], that reaches [server] only at
+     * [known]: one per network, tool and set of addresses, all sharing the network's connection pool and TLS context. A
+     * connection serves only clients of its own addresses (OkHttp's `Address` holds the [Dns]).
+     */
+    private fun client(through: Through?, server: String, known: List<InetAddress>, generation: Int): OkHttpClient {
+        val key = "$generation ${through?.proxy} $server $known"
+        clients[key]?.let { return it }
+        return kept(key, generation, client(through, generation).newBuilder().dns(KnownOnly(server, known)).build())
+    }
+
+    /**
+     * [built] for [key], kept for the exchanges to come only while the network beneath is still the one of
+     * [generation]: one built while the network changed serves the exchange it was built for, and no other, as a DoT
+     * connection opened while the network changed does ([DotClient]). Under the same lock as [networkChanged]'s clear,
+     * so that none is kept after it.
+     */
+    private fun kept(key: String, generation: Int, built: OkHttpClient): OkHttpClient = synchronized(clients) {
+        if (host.generation != generation) built else clients.putIfAbsent(key, built) ?: built
+    }
+
+    /** The client for the network of [generation], directly or through [through], that knows no server's address. */
+    private fun client(through: Through?, generation: Int = host.generation): OkHttpClient {
+        val key = "$generation ${through?.proxy}"
+        clients[key]?.let { return it }
+        return kept(
+            key,
+            generation,
             OkHttpClient.Builder()
                 .protocols(listOf(Protocol.HTTP_2, Protocol.HTTP_1_1))
                 .dns(KnownOnly("", emptyList()))
@@ -250,8 +300,8 @@ class Exchanger(
                 .followSslRedirects(false)
                 .cache(null)
                 .addNetworkInterceptor(Bare())
-                .build()
-        }
+                .build(),
+        )
     }
 
     /** One TLS context per client: its session cache lives and dies with the network it began on. */
