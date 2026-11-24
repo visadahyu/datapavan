@@ -914,6 +914,9 @@ pub struct Handover {
     /// segment cut before its naming, a first hop held past its flow), would otherwise mistake an old flow for a new
     /// one of the same number (review A, engine, finding 4).
     next_id: u64,
+    /// The flows taken back or substituted, whose records the log keeps left out while their apps' first hops are
+    /// not kept: their segments waiting for their states cross with `activity`.
+    taken_back: proxied::TakenBack,
 }
 
 /// What the engine's thread and its controller share.
@@ -1123,6 +1126,7 @@ impl Engine {
             direct,
             mut blocking,
             next_id,
+            taken_back,
         } = handover.unwrap_or_else(|| Handover {
             chain: None,
             upstream_dns: None,
@@ -1137,6 +1141,7 @@ impl Engine {
             direct: Vec::new(),
             blocking: BlockSetting::default(),
             next_id: 0,
+            taken_back: proxied::TakenBack::default(),
         });
         let waiting = activity::Waiting::of_held(&activity.held);
         if let Some(setting) = setting {
@@ -1197,7 +1202,7 @@ impl Engine {
             resolver: resolver::Resolver::default(),
             messengers: Messengers::bundled(),
             proxies: Mutex::default(),
-            held_back: Mutex::default(),
+            held_back: Mutex::new(proxied::HeldBack::carrying(taken_back)),
             blocks: Mutex::default(),
             blocking_set: AtomicU64::new(0),
         });
@@ -1305,6 +1310,7 @@ impl Engine {
                 state.direct_instants(shared.clock.since_boot()),
             )
         };
+        let taken_back = lock(&shared.held_back).take_taken_back();
         Handover {
             chain: lock(&shared.chain).clone(),
             upstream_dns: *lock(&shared.upstream_dns),
@@ -1322,6 +1328,7 @@ impl Engine {
             direct,
             blocking: shared.blocking(),
             next_id: shared.next_id.load(Ordering::Relaxed),
+            taken_back,
         }
     }
 

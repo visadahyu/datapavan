@@ -39,6 +39,10 @@ const HELD_BACK: usize = 1024;
 /// The most inferred flows remembered for their window of take-back.
 const INFERRED: usize = 4096;
 
+/// The most flows remembered as taken back or substituted, for their records ([`TakenBack`]); past it the oldest is
+/// forgotten, and a record of it that comes later still is written as it is.
+const TAKEN_BACK: usize = 4096;
+
 /// The most messenger apps whose direct connections are remembered, and the most of their flows open at once.
 const MESSENGER_APPS: usize = 64;
 const OPEN_DIRECT: usize = 4096;
@@ -141,6 +145,8 @@ struct Inferred {
     before: Option<Flow>,
     hello: Option<Hello>,
     until: Duration,
+    /// Its proxy as the log keeps it with the switch off, for its records once it is taken back ([`TakenBack`]).
+    proxy: Proxied,
 }
 
 /// The names a messenger app looked up through the network part, as keyed hashes, each until the names' shortest
@@ -188,6 +194,54 @@ pub(super) type DirectInstants = Vec<(u32, Duration)>;
 pub(super) struct HeldBack {
     until: HashMap<u64, Duration>,
     records: std::collections::VecDeque<crate::log::Record>,
+    taken_back: TakenBack,
+}
+
+impl HeldBack {
+    /// None held back, with the flows taken back or substituted that an engine before handed over: their segments
+    /// waiting for their states cross with them.
+    pub(super) fn carrying(taken_back: TakenBack) -> Self {
+        Self {
+            taken_back,
+            ..Self::default()
+        }
+    }
+
+    /// The flows taken back or substituted, for the next engine.
+    pub(super) fn take_taken_back(&mut self) -> TakenBack {
+        std::mem::take(&mut self.taken_back)
+    }
+
+    /// The flows taken back or substituted.
+    pub(super) fn taken_back(&self) -> &TakenBack {
+        &self.taken_back
+    }
+}
+
+/// The flows a messenger's direct connection took the name of its proxy back from, or that it never named for
+/// substitution, by flow, each with the proxy it was or would have been named as the log keeps it with the switch off
+/// (its kind, the facts that name nothing, the trackers' marks). While the app's first hops are not kept, their
+/// records reach the log so, as every own proxy's: no proxy's address or cover in the history with the switch off
+/// (the maintainer, 2026-11-24, review A's major 1; ADR 0052). The flow itself is shown in "Now" as it is. A mark
+/// that the inference was taken back needs a flag of the log's next version (unit B). Bounded by [`TAKEN_BACK`],
+/// the oldest forgotten first.
+#[derive(Default)]
+pub(super) struct TakenBack {
+    proxies: HashMap<u64, Proxied>,
+    order: std::collections::VecDeque<u64>,
+}
+
+impl TakenBack {
+    fn insert(&mut self, id: u64, proxy: Proxied) {
+        if self.proxies.insert(id, proxy).is_none() {
+            self.order.push_back(id);
+            if self.order.len() > TAKEN_BACK
+                && let Some(oldest) = self.order.pop_front()
+            {
+                self.proxies.remove(&oldest);
+            }
+        }
+    }
 }
 
 /// The shape of a messenger's first bytes.
@@ -278,9 +332,15 @@ pub(super) fn strip_unnamed(record: &mut crate::log::Record, proxy: &Proxied) {
 }
 
 /// What the log may keep of `record`, `keeps` saying whose apps' first hops are kept (R1): unkept, an app's own
-/// proxy's flow keeps its kind and the facts that name nothing (`logbook::without_destination`, the left-out
-/// shape the log already reads), and a plain request keeps its own address and loses only where it asked to go.
-pub(super) fn strip_for_log(record: &mut crate::log::Record, keeps: &dyn Fn(Option<u32>) -> bool) {
+/// proxy's flow keeps its kind and the facts that name nothing (`logbook::without_destination`, the left-out shape
+/// the log already reads), a plain request keeps its own address and loses only where it asked to go, and a flow
+/// taken back or substituted ([`TakenBack`]) keeps what it was or would have been named, as left out. `keeps` is
+/// where unit C's choice for one app keeps such records whole.
+pub(super) fn strip_for_log(
+    record: &mut crate::log::Record,
+    keeps: &dyn Fn(Option<u32>) -> bool,
+    taken_back: &TakenBack,
+) {
     let crate::log::Record::Segment { flow, .. } = record else {
         return;
     };
@@ -295,7 +355,12 @@ pub(super) fn strip_for_log(record: &mut crate::log::Record, keeps: &dyn Fn(Opti
             }
         }
         Some(proxy) if !proxy.left_out => *flow = super::logbook::without_destination(flow),
-        _ => {}
+        Some(_) => {}
+        None => {
+            if let Some(proxy) = taken_back.proxies.get(&flow.id) {
+                strip_unnamed(record, proxy);
+            }
+        }
     }
 }
 
@@ -452,7 +517,10 @@ impl Shared {
     /// Takes back the name of the flow `inferred`: it becomes what it would have been had the app's direct
     /// connection come first (the fix round's S-M2). Its name, address and place in "Now" come back, un-hidden
     /// where only the proxy left them out, and the hello kept as a cover names it as any hello does; the segments
-    /// that wait for their states, and the records held back from the log, are rewritten so.
+    /// that wait for their states, and the records held back from the log, are rewritten so. But the log keeps no
+    /// proxy's address or cover of it with the switch off (the maintainer, 2026-11-24): a record stripped as it
+    /// entered stays so, and the others reach the log left out as it was named while its app's first hops are not
+    /// kept ([`TakenBack`]).
     fn take_back(&self, inferred: &Inferred) {
         let id = inferred.opened.id;
         let inferred_proxy = |flow: &Flow| flow.proxy.as_ref().is_some_and(|p| !p.kind.declared());
@@ -539,13 +607,16 @@ impl Shared {
                 activity.counts.rename_place(restored.uid, was, restored);
             }
         }
+        self.taken_back(id, inferred.proxy.clone());
         let mut back = lock(&self.held_back);
         back.until.remove(&id);
         for record in &mut back.records {
             let crate::log::Record::Segment { flow, .. } = record else {
                 continue;
             };
-            if flow.id == id {
+            // A record stripped as it entered the log stays so: what was not logged is not logged after a take-back
+            // either (the maintainer, 2026-11-24).
+            if flow.id == id && !flow.proxy.as_ref().is_some_and(|p| p.left_out) {
                 let mut hidden = false;
                 rewrite(flow, &mut hidden);
                 if hidden {
@@ -571,26 +642,27 @@ impl Shared {
         let HeldBack {
             until,
             records: held,
+            taken_back,
         } = &mut *back;
         let mut kept = std::collections::VecDeque::with_capacity(held.len());
         for mut record in held.drain(..) {
             if record_flow(&record).is_some_and(|id| until.contains_key(&id)) {
                 kept.push_back(record);
             } else {
-                strip_for_log(&mut record, &keeps);
+                strip_for_log(&mut record, &keeps, taken_back);
                 pending.push(record);
             }
         }
         for mut record in records.drain(..) {
             // Before it is held back too: a record made while the switch is off is never kept whole, even if the
             // switch is turned on before its window ends.
-            strip_for_log(&mut record, &keeps);
+            strip_for_log(&mut record, &keeps, taken_back);
             if record_flow(&record).is_some_and(|id| until.contains_key(&id)) {
                 kept.push_back(record);
                 if kept.len() > HELD_BACK
                     && let Some(mut oldest) = kept.pop_front()
                 {
-                    strip_for_log(&mut oldest, &keeps);
+                    strip_for_log(&mut oldest, &keeps, taken_back);
                     pending.push(oldest);
                 }
             } else {
@@ -607,9 +679,29 @@ impl Shared {
         back.until.clear();
         let mut pending = lock(&self.pending_log);
         let keeps = self.keeps_first_hops();
-        for mut record in back.records.drain(..) {
-            strip_for_log(&mut record, &keeps);
+        let HeldBack {
+            records,
+            taken_back,
+            ..
+        } = &mut *back;
+        for mut record in records.drain(..) {
+            strip_for_log(&mut record, &keeps, taken_back);
             pending.push(record);
+        }
+    }
+
+    /// The flow `id` was taken back, or never named its messenger's proxy for substitution: its records reach the log as
+    /// `proxy`, left out, while its app's first hops are not kept ([`TakenBack`]), those already gathered for the next
+    /// batch too.
+    fn taken_back(&self, id: u64, proxy: Proxied) {
+        let mut back = lock(&self.held_back);
+        back.taken_back.insert(id, proxy);
+        let mut pending = lock(&self.pending_log);
+        let keeps = self.keeps_first_hops();
+        for record in pending.iter_mut() {
+            if record_flow(record) == Some(id) {
+                strip_for_log(record, &keeps, &back.taken_back);
+            }
         }
     }
 
@@ -987,34 +1079,8 @@ impl Shared {
             return false;
         };
         self.log_now();
-        if self.went_directly_lately(uid) {
-            Counters::add(&self.counters.proxies_substituted, 1);
-            return false;
-        }
-        Counters::add(&self.counters.proxies_inferred, 1);
         let cover = hello.filter(|h| !h.name.is_empty()).map(|h| h.name.clone());
         let current = self.flow_of(opened.id);
-        let until = self.clock.since_boot().saturating_add(SUBSTITUTION);
-        {
-            let mut state = lock(&self.proxies);
-            if state.inferred.len() >= INFERRED {
-                let now = self.clock.since_boot();
-                state.inferred.retain(|_, i| i.until > now);
-            }
-            if state.inferred.len() < INFERRED {
-                state.inferred.insert(
-                    opened.id,
-                    Inferred {
-                        uid,
-                        opened: *opened,
-                        before: current.clone(),
-                        hello: hello.cloned(),
-                        until,
-                    },
-                );
-                lock(&self.held_back).until.insert(opened.id, until);
-            }
-        }
         let proxy_name = current
             .as_ref()
             .filter(|f| f.named_by == NamedBy::Dns)
@@ -1036,6 +1102,35 @@ impl Shared {
             left_out: false,
             trackers: self.marks(&hosts),
         };
+        if self.went_directly_lately(uid) {
+            Counters::add(&self.counters.proxies_substituted, 1);
+            // Named live as any flow is; logged as a flow taken back is (the maintainer, 2026-11-24).
+            self.taken_back(opened.id, proxied.without_destination());
+            return false;
+        }
+        Counters::add(&self.counters.proxies_inferred, 1);
+        let until = self.clock.since_boot().saturating_add(SUBSTITUTION);
+        {
+            let mut state = lock(&self.proxies);
+            if state.inferred.len() >= INFERRED {
+                let now = self.clock.since_boot();
+                state.inferred.retain(|_, i| i.until > now);
+            }
+            if state.inferred.len() < INFERRED {
+                state.inferred.insert(
+                    opened.id,
+                    Inferred {
+                        uid,
+                        opened: *opened,
+                        before: current.clone(),
+                        hello: hello.cloned(),
+                        until,
+                        proxy: proxied.without_destination(),
+                    },
+                );
+                lock(&self.held_back).until.insert(opened.id, until);
+            }
+        }
         // An inferred proxy holds no destination: its flow is named by its own address and hello either way.
         self.name_proxied(opened, current.as_ref(), |flow, _| {
             flow.proxy = Some(Box::new(proxied.clone()));
@@ -3039,7 +3134,9 @@ mod tests {
                     .any(|p| p.flow.name.as_deref() == Some("cdn.example.net")),
                 "{places:?}"
             );
-            // Every record of it the log gets says what it is, and nothing of a proxy.
+            // With the switch on, every record of it the log gets says what it is, and nothing of a proxy. With it
+            // off, every one keeps the kind and the facts it was inferred with, and no address or name (the
+            // maintainer, 2026-11-24): what was not logged is not logged after a take-back either.
             shared.finish(cdn.id);
             shared.flush();
             let records = taken(&shared);
@@ -3051,12 +3148,22 @@ mod tests {
                 })
                 .collect();
             assert!(of_cdn.len() >= 2, "{logs} {of_cdn:?}");
-            assert!(
-                of_cdn.iter().all(|f| f.proxy.is_none()
-                    && f.name.as_deref() == Some("cdn.example.net")
-                    && f.destination == at([93, 184, 216, 34], 443)),
-                "{logs} {of_cdn:?}"
-            );
+            if logs {
+                assert!(
+                    of_cdn.iter().all(|f| f.proxy.is_none()
+                        && f.name.as_deref() == Some("cdn.example.net")
+                        && f.destination == at([93, 184, 216, 34], 443)),
+                    "{of_cdn:?}"
+                );
+            } else {
+                assert!(
+                    of_cdn.iter().all(|f| left_out(f)
+                        && f.proxy
+                            .as_ref()
+                            .is_some_and(|p| p.kind == Kind::MtProto && p.outside_maker)),
+                    "{of_cdn:?}"
+                );
+            }
         }
     }
 
@@ -3615,6 +3722,125 @@ mod tests {
                     .all(|f| left_out(f)
                         && f.proxy.as_ref().is_some_and(|p| p.kind == Kind::MtProto)),
             "{held:?}"
+        );
+    }
+
+    /// The maintainer's decision of 2026-11-24 on review A's major 1: with the switch off, a fake-TLS proxy taken back
+    /// by a direct connection is shown in "Now" as the flow it is, named by its hello, and the log gets no proxy's
+    /// address and no cover of it: its records held back keep the kind they were stripped with, and its records after
+    /// the take-back are left out as it would have been named. With the switch on, the log gets it whole, as before.
+    #[test]
+    fn a_take_back_writes_no_proxys_address_or_cover_with_the_switch_off() {
+        for logs in [false, true] {
+            let (shared, clock) = engine_at(logs);
+            telegram(&shared);
+            looked_up(&shared, UID, "web.example.org", [93, 184, 216, 99]);
+            let (proxy, bytes) = open(&shared, UID, at([93, 184, 216, 34], 443));
+            relay(
+                &shared,
+                proxy,
+                &bytes,
+                &[&crate::tls::tests::hello("www.google.com", 1000)],
+            );
+            cut_and_tell(&shared, &clock);
+            let (main, direct) = open(&shared, UID, at([149, 154, 167, 51], 443));
+            relay(&shared, main, &direct, &[&obfuscated()]);
+            let flow = live(&shared, proxy.id);
+            assert_eq!(
+                (flow.proxy.is_none(), flow.name.as_deref()),
+                (true, Some("www.google.com")),
+                "shown as the flow it is"
+            );
+            bytes.up(&shared, 500, 540);
+            shared.finish(proxy.id);
+            shared.flush();
+            let records = taken(&shared);
+            let written = of_flow(&records, proxy.id);
+            assert!(written.len() >= 2, "{logs} {written:?}");
+            let batch = crate::log::batch(&records);
+            if logs {
+                assert!(
+                    written
+                        .iter()
+                        .all(|f| f.proxy.is_none() && f.destination == at([93, 184, 216, 34], 443)),
+                    "{written:?}"
+                );
+            } else {
+                assert!(
+                    written.iter().all(|f| left_out(f)
+                        && f.proxy.as_ref().is_some_and(|p| p.kind == Kind::MtProto)),
+                    "{written:?}"
+                );
+                assert!(!holds(&batch, b"www.google.com") && !holds(&batch, &[93, 184, 216, 34]));
+            }
+        }
+    }
+
+    /// The same rule for substitution (the maintainer, 2026-11-24): with the switch off, a connection a messenger makes
+    /// with its proxy's shape while it goes directly is named live as any flow is, by the name its hello sent, and the
+    /// log gets it as it would have been named, left out: neither the address nor that name.
+    #[test]
+    fn a_substituted_flow_writes_no_address_or_cover_with_the_switch_off() {
+        let shared = engine(false);
+        telegram(&shared);
+        looked_up(&shared, UID, "web.example.org", [93, 184, 216, 99]);
+        let (main, direct) = open(&shared, UID, at([149, 154, 167, 51], 443));
+        relay(&shared, main, &direct, &[&obfuscated()]);
+        let (flow, bytes) = open(&shared, UID, at([93, 184, 216, 34], 443));
+        relay(
+            &shared,
+            flow,
+            &bytes,
+            &[&crate::tls::tests::hello("www.google.com", 1000)],
+        );
+        let named = live(&shared, flow.id);
+        assert_eq!(
+            (named.proxy.is_none(), named.name.as_deref()),
+            (true, Some("www.google.com")),
+            "named live as any flow is"
+        );
+        assert_eq!(shared.counters.snapshot()[64], 1, "substituted");
+        shared.finish(flow.id);
+        shared.flush();
+        let records = taken(&shared);
+        let written = of_flow(&records, flow.id);
+        assert!(
+            !written.is_empty()
+                && written.iter().all(|f| left_out(f)
+                    && f.proxy
+                        .as_ref()
+                        .is_some_and(|p| p.kind == Kind::MtProto && p.outside_maker)),
+            "{written:?}"
+        );
+        assert!(!holds(&crate::log::batch(&records), b"www.google.com"));
+        // The direct connection itself is no proxy's, and is logged as it is.
+        assert!(
+            of_flow(&records, main.id)
+                .iter()
+                .all(|f| f.proxy.is_none() && !f.destination.ip().is_unspecified())
+        );
+    }
+
+    /// A record stripped as it entered the log, held back for the take-back, stays stripped once it is taken back, even
+    /// with the switch turned on before it goes on: it was made while the switch was off (E5, the maintainer's decision
+    /// of 2026-11-24).
+    #[test]
+    fn a_take_back_leaves_a_record_stripped_as_it_entered() {
+        let (shared, clock) = engine_at(false);
+        let id = inferred_and_ended(&shared);
+        switch(&shared, true);
+        let (main, direct) = open(&shared, UID, at([149, 154, 167, 51], 443));
+        relay(&shared, main, &direct, &[&obfuscated()]);
+        clock.pass(11 * 60_000);
+        another_record(&shared);
+        let written = of_flow(&taken(&shared), id);
+        assert!(
+            !written.is_empty()
+                && written
+                    .iter()
+                    .all(|f| left_out(f)
+                        && f.proxy.as_ref().is_some_and(|p| p.kind == Kind::MtProto)),
+            "{written:?}"
         );
     }
 }

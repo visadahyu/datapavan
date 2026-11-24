@@ -793,8 +793,9 @@ impl Shared {
                 }))
                 .collect();
             self.to_first_hops(&mut live, &mut activity, of);
+            let back = lock(&self.held_back);
             for record in lock(&self.pending_log).iter_mut() {
-                super::proxied::strip_for_log(record, &|uid| !of(uid));
+                super::proxied::strip_for_log(record, &|uid| !of(uid), back.taken_back());
                 if let crate::log::Record::Segment { flow, .. } = record
                     && let Some(proxy) = unnamed.get(&flow.id)
                 {
