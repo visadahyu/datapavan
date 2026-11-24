@@ -234,19 +234,28 @@ grep -q "log-destinations off" <<<"$(dump log-destinations off)" || fail "the sw
 sleep 1
 fixture "$FIXTURE" socks5 echoed "${lab[@]}" --es port "$PROXYLAB_PORT"
 fixture "$FIXTURE.telegram" obfuscated sent --es host "$HOST" --es port "$PROXYLAB_PORT_MTG"
-sleep 1
+# "Now" names both flows once the network part has read their first bytes and inferred Telegram's proxy (CI, run
+# 45157535067, attempt 2: read one second after the fixture, before it had, and the log's negative check below had
+# passed only because nothing was registered yet). So wait for the two lines asserted here; only then are the log's
+# checks about records that exist.
+socks_now() { grep -qE "^$APP_UID socks5:read:pl:-:- 0\.0\.0\.0:0 " <<<"$(dump | sed -n 's/^ *activity-proxy //p')"; }
+telegram_now() { grep -qE "^$TELEGRAM_UID mtproto:inferred:ol:-:- 0\.0\.0\.0:0 " <<<"$(dump | sed -n 's/^ *activity-proxy //p')"; }
+within 15 socks_now ||
+    fail "with the switch off, \"Now\" did not hold the SOCKS5 proxy's kind alone within 15 s: $(dump | sed -n 's/^ *activity-proxy //p')"
+within 15 telegram_now ||
+    fail "with the switch off, \"Now\" did not hold Telegram's proxy's kind alone within 15 s: $(dump | sed -n 's/^ *activity-proxy //p')"
 dump log-flush >/dev/null
 log=$(dump log-today | sed -n 's/^ *log-record //p')
 grep -qE "^tcp $APP_UID 0\.0\.0\.0:0 .* - .*proxy=socks5:read:pl:-:-$" <<<"$log" ||
     fail "with the switch off, the log does not hold the SOCKS5 proxy's kind alone"
 # An inferred proxy's records wait ten minutes, its window of take-back, before the log gets them (ADR 0052, the fix
-# round's F2): none of Telegram's is in the log yet, though the flush wrote everything else.
+# round's F2): none of Telegram's is in the log yet, though the flush wrote everything else. Every TCP flow of the
+# Telegram fixture in this check went to its MTProto proxy, so none may be there at all, marked or not: a record
+# written before the flow was named would carry it unmarked.
 ! grep -qE "^tcp $TELEGRAM_UID .*proxy=mtproto" <<<"$log" ||
     fail "the log got a record of Telegram's inferred proxy within its window of take-back"
-now=$(dump | sed -n 's/^ *activity-proxy //p')
-grep -qE "^$APP_UID socks5:read:pl:-:- 0\.0\.0\.0:0 " <<<"$now" || fail "with the switch off, \"Now\" does not hold the kind alone: $now"
-grep -qE "^$TELEGRAM_UID mtproto:inferred:ol:-:- 0\.0\.0\.0:0 " <<<"$now" ||
-    fail "with the switch off, \"Now\" does not hold Telegram's proxy's kind alone: $now"
+! grep -qE "^tcp $TELEGRAM_UID " <<<"$log" ||
+    fail "the log got a record of a Telegram flow to its inferred proxy, unmarked, within the window of take-back: $(grep -E "^tcp $TELEGRAM_UID " <<<"$log" | head -2)"
 echo "ok: with the switch off, the log and \"Now\" keep the proxy's kind alone, and an inferred one's records wait for their window"
 
 # No password anywhere the network part writes or Android logs.

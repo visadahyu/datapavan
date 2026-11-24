@@ -154,6 +154,12 @@ for _ in $(seq 1 10); do
     sleep 1
 done
 [ "$state" = on ] || fail "the switch did not turn blocking on"
+# "blocking on" comes from the settings at once; the browsers and the covered apps come from the facts the handover
+# publishes after the engine has the table, a moment later (CI, run 45033044776, attempt 1: the browser line was read
+# before it). Wait for the handover, then read once, so that "not published yet" stays apart from "published without
+# the browser". The blocked lookup below needs the same handover.
+handed_over() { grep -qE '^ *blocking on .* covered [1-9][0-9]*$' <<<"$(dump)"; }
+within 10 handed_over || fail "the network part did not publish what blocking covers within 10 s of blocking on: $(dump | grep -E '^ *blocking ' | head -1)"
 line=$(dump | grep -E '^ *blocking on ' | head -1)
 grep -qE 'table [1-9][0-9]* ' <<<"$line" || fail "the network part holds no graded table: $line"
 grep -qE "^ *blocking-browser $BROWSER\$" <<<"$(dump)" || fail "the fixture's browser is not told as a browser"

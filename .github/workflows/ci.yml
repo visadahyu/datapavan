@@ -205,6 +205,25 @@ jobs:
           GH_TOKEN: ${{ github.token }}
         run: scripts/ci-fetch.sh
 
+      # Gradle's dependencies (docs/ci-flakes.md: the Compose plugin's marker did not resolve on 2026-11-20, -23 and -24).
+      # Restored on every run; saved only by main, in the weekly run, the one run of main whose build job builds, since
+      # main's other runs take the branch's pass. A branch's own entries could serve no other branch and would only fill
+      # the repository's cache. That run builds Advanced's debug APK alone, so the entry holds every plugin, which any
+      # build resolves, the failing marker among them, and that build's dependencies; lint, the tests and the release
+      # builds still fetch the rest. Dependency verification still checks every artifact read from it
+      # (android/gradle/verification-metadata.xml), and the key names Gradle's version, whose cache layout it is.
+      - name: Restore Gradle's dependencies
+        id: gradle-modules
+        uses: actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: |
+            ~/.gradle/caches/modules-2
+            !~/.gradle/caches/modules-2/*.lock
+            !~/.gradle/caches/modules-2/gc.properties
+          key: gradle-modules-${{ runner.os }}-${{ hashFiles('android/gradle/wrapper/gradle-wrapper.properties', 'android/gradle/verification-metadata.xml', 'android/gradle/libs.versions.toml', 'android/*.gradle.kts', 'android/*/build.gradle.kts') }}
+          restore-keys: |
+            gradle-modules-${{ runner.os }}-
+
       # The engine's network lab (core/net/tests/netlab.rs, ADR 0044) needs unprivileged user namespaces
       # with a tun device. Ubuntu 24.04 restricts them through AppArmor by default; on this throwaway
       # runner the restriction is lifted, and the tun module loaded if it is not. The lab's test of Android's
@@ -239,6 +258,16 @@ jobs:
         timeout-minutes: 30
         run: scripts/check.sh advanced-debug
 
+      - name: Save Gradle's dependencies
+        if: github.ref == 'refs/heads/main' && steps.gradle-modules.outputs.cache-hit != 'true'
+        uses: actions/cache/save@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: |
+            ~/.gradle/caches/modules-2
+            !~/.gradle/caches/modules-2/*.lock
+            !~/.gradle/caches/modules-2/gc.properties
+          key: gradle-modules-${{ runner.os }}-${{ hashFiles('android/gradle/wrapper/gradle-wrapper.properties', 'android/gradle/verification-metadata.xml', 'android/gradle/libs.versions.toml', 'android/*.gradle.kts', 'android/*/build.gradle.kts') }}
+
       # The WireGuard lab's references: the kernel's module, which a container cannot load, and the peers' image,
       # built from pinned sources (spikes/wireguard-core/peer/Dockerfile) and kept in the Actions cache, so that a
       # run fetches nothing when the Dockerfile has not changed. A runner without the module fails here, with its
@@ -256,7 +285,10 @@ jobs:
         timeout-minutes: 5
         uses: docker/setup-buildx-action@f87e5991a6d7451dcb8d9637bfbc97413f497069 # v4.4.1
 
-      # Each fetch inside the build is tried three times; the build itself twice, a minute apart.
+      # Each fetch inside the build is tried three times; the build itself twice, a minute apart. Only main writes the
+      # image's cache, in the weekly run that carries the WireGuard checks; branches read it. Each branch's own writes
+      # served that branch alone and filled the repository's cache, which then evicted main's entries. The proxy lab's
+      # image, which main never builds, keeps writing per branch: without that it would be built anew on every run.
       - name: The lab's peer image
         id: peer-image
         if: needs.scope.outputs.wireguard == 'true'
@@ -268,7 +300,7 @@ jobs:
           load: true
           tags: datapavan-wglab-peer:latest
           cache-from: type=gha,scope=wglab-peer
-          cache-to: type=gha,scope=wglab-peer,mode=max
+          cache-to: ${{ github.ref == 'refs/heads/main' && 'type=gha,scope=wglab-peer,mode=max' || '' }}
 
       - name: The lab's peer image, after a minute
         if: needs.scope.outputs.wireguard == 'true' && steps.peer-image.outcome == 'failure'
@@ -284,7 +316,7 @@ jobs:
           load: true
           tags: datapavan-wglab-peer:latest
           cache-from: type=gha,scope=wglab-peer
-          cache-to: type=gha,scope=wglab-peer,mode=max
+          cache-to: ${{ github.ref == 'refs/heads/main' && 'type=gha,scope=wglab-peer,mode=max' || '' }}
 
       - name: WireGuard lab against the kernel's WireGuard and wireguard-go
         if: needs.scope.outputs.wireguard == 'true'
