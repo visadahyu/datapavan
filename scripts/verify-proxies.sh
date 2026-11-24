@@ -221,7 +221,7 @@ done
 echo "ok: Signal's own fronting and its captcha are not named a proxy, and its fronting takes the proxy's name back"
 
 # "Now" and the log hold the same: the destination asked for and the proxy's kind.
-now=$(dump | sed -n 's/^ *activity-proxy //p')
+now=$(dump | sed -n 's/^ *activity-proxy //p') || fail "the network part's dump could not be read"
 grep -qE "^$APP_UID socks5:read:p:inner\.proxylab\.test@443:- ${HOST//./\\.}:$PROXYLAB_PORT named-by=1 inner\.proxylab\.test 10m=[0-9]+/[0-9]+$" <<<"$now" ||
     fail "\"Now\" does not hold the SOCKS5 proxy as named: $now"
 grep -qE "^$TELEGRAM_UID mtproto:inferred:o:-:- " <<<"$now" || fail "\"Now\" does not hold Telegram's proxy: $now"
@@ -249,10 +249,14 @@ ten_minutes() {
         for (i = 1; i <= NF; i++) if ($i ~ /^10m=/) { split(substr($i, 5), b, "/"); sum += b[1] + b[2] }
     } END { print sum + 0 }'
 }
-socks_before=$(ten_minutes "$SOCKS_HOP")
-telegram_before=$(ten_minutes "$TELEGRAM_HOP")
+# Each failing step says so: under set -e an assignment from a failed command would end the check with no word of its
+# own (review A, rest, note 7).
+socks_before=$(ten_minutes "$SOCKS_HOP") || fail "the network part's dump could not be read"
+telegram_before=$(ten_minutes "$TELEGRAM_HOP") || fail "the network part's dump could not be read"
 # As verify-network.sh reads the phone's time: toybox's date has whole seconds.
-off_since=$(($(adb shell date +%s </dev/null | tr -d '\r') * 1000))
+phone_time=$(adb shell date +%s </dev/null | tr -d '\r') || fail "the phone's time could not be read"
+[[ $phone_time =~ ^[0-9]+$ ]] || fail "the phone's time could not be read: ${phone_time:-nothing}"
+off_since=$((phone_time * 1000))
 fixture "$FIXTURE" socks5 echoed "${lab[@]}" --es port "$PROXYLAB_PORT"
 fixture "$FIXTURE.telegram" obfuscated sent --es host "$HOST" --es port "$PROXYLAB_PORT_MTG"
 # "Now" counts both flows once the network part has read their first bytes and inferred Telegram's proxy (CI, run
@@ -267,7 +271,8 @@ within 15 telegram_now ||
 none_asked_now || fail "with the switch off, \"Now\" holds where an app asked its proxy to go: $(proxies_now)"
 # C1 through the whole app: the newest kept flow of the fixture to the SOCKS5 proxy is named neither by what it asked
 # for nor by the hello inside.
-newest=$(proxies | awk -v port="$HOST:$PROXYLAB_PORT" -v uid="$APP_UID" '$1 == "tcp" && $3 == port && $4 == uid { line = $0 } END { print line }')
+newest=$(proxies | awk -v port="$HOST:$PROXYLAB_PORT" -v uid="$APP_UID" '$1 == "tcp" && $3 == port && $4 == uid { line = $0 } END { print line }') ||
+    fail "the network part's kept flows could not be read"
 [[ $newest =~ \ socks5\ read\ p\ -\ -\ -\ -$ ]] ||
     fail "with the switch off, the request or the inner hello named the SOCKS5 flow: ${newest:-none}"
 dump log-flush >/dev/null
