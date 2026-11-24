@@ -251,6 +251,9 @@ dependencies {
  * The cargo environment is controlled: inherited flags that could change the output are dropped, and
  * absolute paths (the cargo registry, the workspace) are remapped, so the library neither leaks the
  * builder's home directory nor differs between machines.
+ *
+ * Only the crate's own library is kept: cargo-ndk copies every cdylib the build makes, a dependency's too
+ * (network/build.gradle.kts's task says what that cost Advanced until the size pass, ADR 0053).
  */
 abstract class CargoNdkTask : DefaultTask() {
     @get:InputFiles
@@ -259,6 +262,10 @@ abstract class CargoNdkTask : DefaultTask() {
 
     @get:Internal
     abstract val workspaceDir: DirectoryProperty
+
+    /** The file name of the crate's library, the one file kept for each ABI. */
+    @get:Input
+    abstract val library: Property<String>
 
     @get:Input
     abstract val abis: ListProperty<String>
@@ -311,6 +318,13 @@ abstract class CargoNdkTask : DefaultTask() {
             workingDir = workspaceDir.get().asFile
             setEnvironment(environment)
             commandLine(args)
+        }
+        abis.get().forEach { abi ->
+            val kept = out.resolve("$abi/${library.get()}")
+            if (!kept.isFile) throw GradleException("cargo-ndk left no ${library.get()} for $abi in $out")
+            kept.parentFile.listFiles().orEmpty().filter { it != kept }.forEach { other ->
+                if (!other.delete()) throw GradleException("could not remove $other from the native libraries")
+            }
         }
     }
 }
@@ -811,6 +825,7 @@ androidComponents {
             sources.from(fileTree(rustWorkspace) { exclude("target/**", "fuzz/**") })
             sources.from(rootProject.layout.projectDirectory.file("../rust-toolchain.toml"))
             workspaceDir.set(rustWorkspace)
+            library.set("libdatapavan.so")
             abis.set(shippedAbis)
             platformLevel.set(variant.minSdk.apiLevel)
             release.set(variant.buildType == "release")
