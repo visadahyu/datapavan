@@ -72,9 +72,11 @@ Read again when a screen or a page is added or changed:
 
 ## The latest TalkBack walk
 
-On 2026-11-23, with TalkBack 17.0 at its default settings on Android 17 (an emulator), with Datapavan Advanced set to
-English, Persian and Arabic on a phone set to English: 18 screens in each language, 54 in all, about 4,450 utterances.
-TalkBack stayed on throughout, so what it says on arriving at a screen is part of the record. The screens:
+On 2026-11-24, with TalkBack 17.0 at its default settings on Android 17 (an emulator), with Datapavan Advanced set to
+English, Persian and Arabic on a phone set to English: 18 screens in each language, 54 in all, about 3,450 utterances.
+TalkBack stayed on throughout, so what it says on arriving at a screen is part of the record. Each screen was walked
+item by item until TalkBack came round to its first items again, except the licences, a list of some hundred parts
+alike, walked for its first 80 steps. The screens:
 
 - Datapavan Basic's screens, which Advanced carries: the summary, the apps, phone and data use tabs, the settings and
   their five pages, the strict review, the journal, an app's page, the guided check and the plan;
@@ -98,9 +100,9 @@ What the walk found:
   - Every screen has headings: 80 in all.
 - **Each screen is said by name as it opens:** the window's title, or the pane's name for the audit's screens shown in
   place of another.
-- **Datapavan's text is read in its own language.** With Datapavan in Persian, 714 utterances of Persian text were
-  handed to the speech engine as Persian and 17 as English. Those 17 were screens' names and TalkBack's hints for
-  actions, which Android takes as plain text: a known gap, below. Arabic was the same, 712 to 17. Before part 2 of
+- **Datapavan's text is read in its own language.** With Datapavan in Persian, 552 utterances of Persian text were
+  handed to the speech engine as Persian and 17 as English. Those 17 were screens' names (11) and TalkBack's hints for
+  actions (6), which Android takes as plain text: a known gap, below. Arabic was the same, 552 to 17. Before part 2 of
   this work, every one went as English.
 - **Fixed on the way:**
   - screen titles that were not headings;

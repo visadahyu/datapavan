@@ -107,7 +107,7 @@ click() {
 }
 
 # The screen on display: what TalkBack said on arriving (since the record began), the tree, then a swipe to the next
-# item at a time, until TalkBack comes round to the item it said after the first swipe, two swipes bring nothing new,
+# item at a time, until TalkBack comes round to items it said before, two swipes bring nothing new within 9 s each,
 # or WALK_MAX swipes (default 80). The record of the screen begins with the step that led to it: call begin before.
 begin() { adb logcat -c; }
 walk() {
@@ -122,6 +122,13 @@ walk() {
         tell next
         sleep 1.5
         after=$(spoken)
+        # A long item, a licence read whole, keeps TalkBack busy past the wait, and it goes on to the next item some
+        # seconds later (seen on the data sources page, 2026-11-24): a swipe is quiet only if nothing comes within 9 s.
+        for _ in 1 2 3 4 5 6; do
+            [ "$after" = "$before" ] || break
+            sleep 1.25
+            after=$(spoken)
+        done
         if [ "$after" = "$before" ]; then quiet=$((quiet + 1)); else quiet=0; fi
         if [ "$quiet" -ge 2 ]; then reason=quiet; break; fi
         now=$(said_last)
