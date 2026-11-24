@@ -802,12 +802,15 @@ async fn resolve(
     asked: &Asked,
     tool: Option<&Arc<Chain>>,
 ) -> Option<(Vec<u8>, Step)> {
-    // Through the tool: every step, in order, none held (the tool's network is not the network beneath).
-    let plan = if tool.is_some() {
-        config.setup(false).steps_through_tool()
+    // Through the tool: every step, in order, none held (the tool's network is not the network beneath), and
+    // nothing recorded. Directly, the ladder's epoch with its plan: what each step gives is recorded only while the
+    // network is the one it was planned on (Ladder::epoch).
+    let (plan, epoch) = if tool.is_some() {
+        (config.setup(false).steps_through_tool(), None)
     } else {
         let setup = config.setup(shared.chain().is_some());
-        lock(&shared.resolver.ladder).plan(&setup, Instant::now())
+        let ladder = lock(&shared.resolver.ladder);
+        (ladder.plan(&setup, Instant::now()), Some(ladder.epoch()))
     };
     let through = tool.map(|chain| Through {
         proxy: chain.proxy,
@@ -855,8 +858,12 @@ async fn resolve(
                 let Ok((step, got)) = done else { continue };
                 match got {
                     Ok(answer) => {
-                        if tool.is_none() {
-                            told(shared, |l| l.answered(step));
+                        if let Some(epoch) = epoch {
+                            told(shared, |l| {
+                                if l.epoch() == epoch {
+                                    l.answered(step);
+                                }
+                            });
                         }
                         let counter = match step {
                             Step::Pair(_) | Step::PairThroughTool(_) => &shared.resolver.counts.odoh,
@@ -869,8 +876,11 @@ async fn resolve(
                         return Some((answer, step));
                     }
                     Err(failure) => {
-                        if tool.is_none() {
-                            lock(&shared.resolver.ladder).failed(step, failure, Instant::now());
+                        if let Some(epoch) = epoch {
+                            let mut ladder = lock(&shared.resolver.ladder);
+                            if ladder.epoch() == epoch {
+                                ladder.failed(step, failure, Instant::now());
+                            }
                         }
                         if running.is_empty() && next < plan.len() {
                             start(&mut running, plan[next]);
@@ -1924,6 +1934,64 @@ mod tests {
         assert_eq!(
             config("refresh 1 3").refresh,
             Some((Duration::from_secs(1), Duration::from_secs(3)))
+        );
+    }
+
+    /// The DoT crash's review, note 5: a lookup planned on the network before a change, whose ways fail and answer
+    /// only after it, records nothing on the new network's ladder: nothing held, nothing learned, no way now.
+    #[tokio::test(flavor = "current_thread")]
+    async fn a_lookup_across_a_change_of_network_records_nothing_on_the_new_one() {
+        let (shared, fake) = resolving("");
+        fake.does(Carry::Odoh, Does::Fail(Failure::Tampered));
+        *lock(&fake.late_relay) = Some(("relay-a.test".into(), 300));
+        let lookup = {
+            let shared = Arc::clone(&shared);
+            tokio::spawn(async move {
+                answer(&shared, &app_query("a.example.com", 1), false, None).await
+            })
+        };
+        tokio::time::sleep(Duration::from_millis(100)).await;
+        shared.resolver.network_moved();
+        let Ok(found) = lookup.await else {
+            unreachable!("the lookup ends")
+        };
+        let (address, _) = read(found);
+        assert!(address.is_some(), "the app still gets its answer");
+        assert_eq!(
+            fake.seen(Carry::Doh).len(),
+            1,
+            "the pairs failed, then a target's DoH answered"
+        );
+        let ladder = lock(&shared.resolver.ladder);
+        assert_eq!(ladder.held(Instant::now()), 0, "no hold on the new network");
+        assert_eq!(ladder.now(), Now::Unknown, "no way learned there");
+    }
+
+    /// The plan's audit, finding 2: the user chooses another resolver while a lookup still waits on the old one,
+    /// whose reset comes after: the new choice is not held for it.
+    #[tokio::test(flavor = "current_thread")]
+    async fn the_old_choices_late_failure_does_not_hold_the_new_one() {
+        let (shared, fake) = resolving("choice preset pdot");
+        fake.does(Carry::Dot, Does::Fail(Failure::Tampered));
+        *lock(&fake.late_relay) = Some(("p.test".into(), 300));
+        let lookup = {
+            let shared = Arc::clone(&shared);
+            tokio::spawn(async move {
+                answer(&shared, &app_query("a.example.com", 1), false, None).await
+            })
+        };
+        tokio::time::sleep(Duration::from_millis(100)).await;
+        shared.resolver.set(Some(lab_config("choice preset pdoh")));
+        let Ok(found) = lookup.await else {
+            unreachable!("the lookup ends")
+        };
+        let (address, _) = read(found);
+        assert!(address.is_some(), "the app still gets its answer");
+        assert_eq!(fake.seen(Carry::Dot).len(), 1, "the old choice was asked");
+        assert_eq!(
+            lock(&shared.resolver.ladder).held(Instant::now()),
+            0,
+            "the new choice is not held"
         );
     }
 

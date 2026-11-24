@@ -16,7 +16,9 @@
 //! keeps blocking after it struck (FOCI 2025: up to 360 s). While Android says the network beneath is not
 //! validated (a captive portal), no failure counts. A change of network clears every hold and everything
 //! learned: what the network part learns lives in memory only, for the network it is on, and is never keyed by a
-//! network's name (a list of networks where encrypted DNS failed would be evidence in a phone search).
+//! network's name (a list of networks where encrypted DNS failed would be evidence in a phone search). An attempt
+//! planned before such a change and ended after it records nothing: it was asked on the network before, or ran out
+//! there what was left of its time ([`Ladder::epoch`]).
 
 use std::time::{Duration, Instant};
 
@@ -167,6 +169,8 @@ pub struct Ladder {
     learned: [Option<Step>; 5],
     validated: bool,
     now: Now,
+    /// Raised by each [`Ladder::reset`] and [`Ladder::forget`].
+    epoch: u64,
 }
 
 impl Default for Ladder {
@@ -176,6 +180,7 @@ impl Default for Ladder {
             learned: [None; 5],
             validated: true,
             now: Now::Unknown,
+            epoch: 0,
         }
     }
 }
@@ -260,8 +265,10 @@ impl Ladder {
     }
 
     /// `step` is another now (the user chose another resolver): its hold and what was learned of it go, and it
-    /// is no longer the way now.
+    /// is no longer the way now. What an attempt planned before learns as it ends goes too ([`Ladder::epoch`]): the
+    /// old resolver's late failure would hold the one the user just chose, often because the old one failed.
     pub fn forget(&mut self, step: Step) {
+        self.epoch = self.epoch.wrapping_add(1);
         self.release(step);
         if self.learned(step.rung()) == Some(step) {
             self.learned[step.rung() as usize] = None;
@@ -304,11 +311,22 @@ impl Ladder {
         self.validated
     }
 
-    /// The network beneath changed, or the ways themselves did: every hold and everything learned goes.
+    /// The network beneath changed, or the ways themselves did: every hold and everything learned goes, and so
+    /// does what an attempt planned before learns as it ends ([`Ladder::epoch`]).
     pub fn reset(&mut self) {
         self.holds.clear();
         self.learned = [None; 5];
         self.now = Now::Unknown;
+        self.epoch = self.epoch.wrapping_add(1);
+    }
+
+    /// Which [`Ladder::reset`] or [`Ladder::forget`] the ladder is at. A lookup reads it with its [`Ladder::plan`], and records what each
+    /// attempt gave ([`Ladder::failed`], [`Ladder::answered`]) only while it is the same: a reply that comes after a
+    /// change of network is of the network before, or of a query asked again on the new one with what was left of
+    /// its time, and says nothing of the ways there (the DoT crash's review, note 5, 2026-11-24).
+    #[must_use]
+    pub fn epoch(&self) -> u64 {
+        self.epoch
     }
 
     /// Which way answered last.
@@ -337,6 +355,24 @@ mod tests {
             presets: vec![3, 5],
             strict: false,
         }
+    }
+
+    #[test]
+    fn a_reset_or_a_forgotten_step_raises_the_epoch_and_nothing_else_does() {
+        let mut ladder = Ladder::default();
+        let at = Instant::now();
+        let first = ladder.epoch();
+        ladder.failed(Step::Pair(0), Failure::Tampered, at);
+        ladder.answered(Step::Pair(1));
+        ladder.release(Step::Pair(0));
+        ladder.fell_back(at);
+        ladder.set_validated(false);
+        assert_eq!(ladder.epoch(), first);
+        ladder.reset();
+        let second = ladder.epoch();
+        assert_ne!(second, first);
+        ladder.forget(Step::Choice);
+        assert_ne!(ladder.epoch(), second);
     }
 
     #[test]
