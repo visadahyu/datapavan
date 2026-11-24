@@ -10,7 +10,9 @@
 //! proxy whether its address is outside the maker's network and the cover name its hello sent, which never names
 //! the flow. Never a credential: `crate::proxies` skips them unread, and the bytes they passed through are zeroed
 //! when dropped (`Sniff`). An app's own proxy is circumvention, as chaining is: its address and the destination
-//! asked for are kept only while "Log where these apps connect" is on; otherwise its flows keep the kind alone.
+//! asked for are logged only while "Log where these apps connect" is on; otherwise the log keeps the kind alone,
+//! "Now" shows the first hop, the proxy's own address and names, while the connection is open and for ten minutes
+//! after it ends (`now::SHOWN`), and nothing the app sends names its flow by where it asked to go (C1).
 
 use super::{Counters, Flow, NamedBy, Opened, Shared, lock};
 use crate::messengers::{Family, Role};
@@ -57,14 +59,17 @@ pub struct Proxied {
     /// For an inferred proxy: whether its address is outside the maker's own network (Telegram's published
     /// ranges, Meta's networks).
     pub outside_maker: bool,
-    /// Where the app asked the proxy to go, and the port: a declared proxy's, while its destination is kept.
+    /// Where the app asked the proxy to go, and the port: a declared proxy's, only while "Log where these apps
+    /// connect" is on, live and in the log alike (C1).
     pub asked: Option<(Asked, u16)>,
-    /// The proxy's own name, the DNS name its address had, while its destination is kept.
+    /// The proxy's own name, the DNS name its address had: part of its first hop, which "Now" shows whatever the
+    /// switch says, for its window while it is off, and the log keeps only while it is on.
     pub proxy_name: Option<String>,
-    /// The organisation behind the proxy's network, from the organisation table, while it is kept.
+    /// The organisation behind the proxy's network, from the organisation table: part of its first hop, as
+    /// `proxy_name` is.
     pub organisation: Option<String>,
     /// For a hello an inferred proxy sent with a name no DNS answer tied to its address: that name, a cover,
-    /// which names nothing, while the destination is kept.
+    /// which names nothing: part of its first hop, as `proxy_name` is.
     pub cover: Option<String>,
     /// Whether the flow's own address and names were left out, as "Log where these apps connect" says (the
     /// fix round of W8 part 2a): a confirmed SOCKS or `CONNECT` proxy's flow, or an inferred one's.
@@ -658,20 +663,36 @@ impl Shared {
         ids
     }
 
-    /// Adds the trackers `name` at `port` matches to the proxied flow `id`'s, live and kept.
+    /// Adds the trackers `name` at `port` matches to the proxied flow `id`'s, live and kept. The places its bytes
+    /// were counted under take the new marks too: a place keys on the proxy, and one left behind would lose its
+    /// flow's match, and so its first hop, while the flow is still open.
     pub(super) fn mark_proxied(&self, id: u64, name: &str, port: u16) {
         let found = self.marks(&[(name.to_owned(), port)]);
         if found.is_empty() {
             return;
         }
-        self.change_flow(id, |flow| {
+        let mark = |flow: &mut Flow| {
             if let Some(proxy) = flow.proxy.as_mut() {
                 proxy.trackers.extend(&found);
                 proxy.trackers.sort_unstable();
                 proxy.trackers.dedup();
                 proxy.trackers.truncate(MAX_TRACKERS);
             }
-        });
+        };
+        if self.keep_flows > 0
+            && let Some(flow) = lock(&self.flows).iter_mut().rev().find(|f| f.id == id)
+        {
+            mark(flow);
+        }
+        if let Some(live) = lock(&self.live).get_mut(&id) {
+            let was = live.flow.clone();
+            mark(&mut live.flow);
+            if live.flow != was {
+                lock(&self.activity)
+                    .counts
+                    .rename_place(was.uid, &was, &live.flow);
+            }
+        }
     }
 
     /// The names a flow carries, with its port, for its trackers' marks: its name where one names a host (not
@@ -693,8 +714,9 @@ impl Shared {
     }
 
     /// The app's bytes declared a proxy request, and for SOCKS or `CONNECT` the server's reply confirmed it
-    /// ([`Handshake`]): the flow is named by the destination asked for, its proxy kept beside it, or only the
-    /// proxy's kind while "Log where these apps connect" is off. A plain request goes to [`Shared::forwarded`].
+    /// ([`Handshake`]): the flow is named by the destination asked for, its proxy kept beside it; or, while "Log
+    /// where these apps connect" is off, it keeps its own address and names, its first hop, and gains its proxy
+    /// without what was asked (C1). A plain request goes to [`Shared::forwarded`].
     pub(super) fn declared(&self, opened: &Opened, request: &Request) {
         if request.kind == Kind::Forward {
             return self.forwarded(opened, request);
@@ -736,13 +758,16 @@ impl Shared {
             trackers: self.marks(&hosts),
         };
         let network = organisation.map(|(network, _)| network);
-        let hide = !self.logs_own_proxies();
-        self.name_proxied(opened, current.as_ref(), hide, |flow| {
-            flow.name = Some(name.clone());
-            flow.named_by = NamedBy::Proxy;
-            flow.dns_name = None;
+        self.name_proxied(opened, current.as_ref(), |flow, kept| {
             flow.network = network;
-            flow.proxy = Some(Box::new(proxied.clone()));
+            if kept {
+                flow.name = Some(name.clone());
+                flow.named_by = NamedBy::Proxy;
+                flow.dns_name = None;
+                flow.proxy = Some(Box::new(proxied.clone()));
+            } else {
+                flow.proxy = Some(Box::new(proxied.without_asked()));
+            }
         });
     }
 
@@ -781,13 +806,12 @@ impl Shared {
             left_out: false,
             trackers: self.marks(&hosts),
         };
-        let proxied = if self.logs_own_proxies() {
-            proxied
-        } else {
-            proxied.without_asked()
-        };
-        self.name_proxied(opened, None, false, |flow| {
-            flow.proxy = Some(Box::new(proxied.clone()));
+        self.name_proxied(opened, None, |flow, kept| {
+            flow.proxy = Some(Box::new(if kept {
+                proxied.clone()
+            } else {
+                proxied.without_asked()
+            }));
         });
     }
 
@@ -998,44 +1022,41 @@ impl Shared {
             left_out: false,
             trackers: self.marks(&hosts),
         };
-        let hide = !self.logs_own_proxies();
-        self.name_proxied(opened, current.as_ref(), hide, |flow| {
+        // An inferred proxy holds no destination: its flow is named by its own address and hello either way.
+        self.name_proxied(opened, current.as_ref(), |flow, _| {
             flow.proxy = Some(Box::new(proxied.clone()));
         });
         true
     }
 
-    /// Applies `name` to the flow `opened`, live and kept, and, where `hide` says (a confirmed or inferred
-    /// proxy while "Log where these apps connect" is off), leaves its destination out at once: of its open
-    /// segment, of the segments that wait for their states, and of the live view, where the place its first
-    /// bytes were counted under, `before`, goes ([`super::logbook`]).
-    fn name_proxied(
-        &self,
-        opened: &Opened,
-        before: Option<&Flow>,
-        hide: bool,
-        name: impl Fn(&mut Flow),
-    ) {
+    /// Applies `name` to the flow `opened`, live and kept, with whether its app's first hops are kept, read once
+    /// `live` is locked: a switch turned off after that is seen by the `hide_chained` that follows it, never
+    /// between the two (audit-A 2). An own proxy named so is `unkept`, so that no hello names it later. The
+    /// segments that wait for their states are named alike, and the place its first bytes were counted under,
+    /// `before`, becomes its place. Unkept, the records already gathered for the log are stripped too: a segment a
+    /// quarter hour cut between the request and a slow reply was written as an ordinary flow's (finding 27). One
+    /// closure from each caller, so that this is built once for each (the library's size).
+    fn name_proxied(&self, opened: &Opened, before: Option<&Flow>, name: impl Fn(&mut Flow, bool)) {
+        let mut live = lock(&self.live);
+        let kept = self.keeps_first_hops()(opened.uid);
+        // The kept flows are locked after `live`, as `flow_of` locks them.
         if self.keep_flows > 0
             && let Some(flow) = lock(&self.flows)
                 .iter_mut()
                 .rev()
                 .find(|f| f.id == opened.id)
         {
-            name(flow);
+            name(flow, kept);
         }
-        let mut live = lock(&self.live);
         let Some(live) = live.get_mut(&opened.id) else {
             return;
         };
-        if live.hidden || live.unkept {
+        if live.hidden {
             return;
         }
-        name(&mut live.flow);
-        if hide {
-            live.unkept = true;
-            live.flow = super::logbook::without_destination(&live.flow);
-        }
+        name(&mut live.flow, kept);
+        let own = own_proxy(&live.flow);
+        live.unkept |= own && !kept;
         let flow = live.flow.clone();
         let mut activity = lock(&self.activity);
         for piece in &mut activity.held {
@@ -1046,23 +1067,23 @@ impl Shared {
                 && !*hidden
             {
                 *held = flow.clone();
-                *hidden = hide;
             }
         }
         if let Some(before) = before {
-            activity.counts.forget_place(flow.uid, before);
+            activity.counts.rename_place(flow.uid, before, &flow);
         }
-    }
-
-    /// Changes the flow `id`, live and kept, as a later fact changes it.
-    fn change_flow(&self, id: u64, change: impl Fn(&mut Flow)) {
-        if self.keep_flows > 0
-            && let Some(flow) = lock(&self.flows).iter_mut().rev().find(|f| f.id == id)
-        {
-            change(flow);
-        }
-        if let Some(live) = lock(&self.live).get_mut(&id) {
-            change(&mut live.flow);
+        if own && !kept {
+            for record in lock(&self.pending_log).iter_mut() {
+                if let crate::log::Record::Segment { flow: written, .. } = record
+                    && written.id == opened.id
+                {
+                    // Given the named flow's proxy, so that the history says it went through one.
+                    *written = super::logbook::without_destination(&Flow {
+                        proxy: flow.proxy.clone(),
+                        ..written.clone()
+                    });
+                }
+            }
         }
     }
 
@@ -1070,7 +1091,7 @@ impl Shared {
     fn flow_of(&self, id: u64) -> Option<Flow> {
         lock(&self.live)
             .get(&id)
-            .filter(|l| !l.hidden && !l.unkept)
+            .filter(|l| !l.hidden)
             .map(|l| l.flow.clone())
             .or_else(|| lock(&self.flows).iter().rev().find(|f| f.id == id).cloned())
     }
@@ -1603,73 +1624,562 @@ mod tests {
         assert_eq!(shared.counters.snapshot()[61..63], [1, 1]);
     }
 
+    /// Whether `haystack` holds `needle` anywhere.
+    fn holds(haystack: &[u8], needle: &[u8]) -> bool {
+        haystack.windows(needle.len()).any(|w| w == needle)
+    }
+
+    /// SOCKS5's handshake with the synthetic secret, asking for `asked:443`, then a hello for `inner` inside.
+    fn socks5_asking(asked: &str, inner: &str) -> Vec<Vec<u8>> {
+        let mut reads = socks5_reads();
+        let mut request = vec![5, 1, 0, 3, u8::try_from(asked.len()).unwrap_or(0)];
+        request.extend_from_slice(asked.as_bytes());
+        request.extend_from_slice(&443u16.to_be_bytes());
+        reads[2] = request;
+        reads[3] = crate::tls::tests::hello(inner, 1000);
+        reads
+    }
+
+    /// A TLS record of a hello for `name` that offers ECH.
+    fn ech_hello(name: &str) -> Vec<u8> {
+        let handshake = crate::tls::tests::handshake(name, true);
+        let mut record = vec![22, 3, 1];
+        record.extend_from_slice(&u16::try_from(handshake.len()).unwrap_or(0).to_be_bytes());
+        record.extend_from_slice(&handshake);
+        record
+    }
+
+    /// Test 1: with the switch off, the log keeps of each own proxy's flow its kind, the facts that name nothing
+    /// and its trackers' marks: of SOCKS5 with a password, of `CONNECT`, and of an inferred `MTProto` with a cover,
+    /// written once its ten minutes passed. Nothing of the first hop, of what was asked or of an inner hello.
     #[test]
-    fn with_the_switch_off_an_apps_own_proxy_keeps_only_its_kind() {
+    fn with_the_switch_off_a_proxys_records_keep_its_kind_alone() {
+        let messenger = UID + 2;
+        let (shared, clock) = engine_at(false);
+        shared.set_proxies(ProxySetting {
+            messengers: vec![(Family::Telegram, messenger)],
+            ..ProxySetting::default()
+        });
+        with_trackers(&shared);
+        learn(&shared, "203.0.113.5", "proxy.example.net");
+        let (socks, bytes) = open(&shared, UID, at([203, 0, 113, 5], 1080));
+        let reads = socks5_asking("example.com", "inner.example");
+        let reads: Vec<&[u8]> = reads.iter().map(Vec::as_slice).collect();
+        relay_replied(&shared, socks, &bytes, &reads, SOCKS5_REPLY);
+        let (connect, bytes) = open(&shared, UID, at([203, 0, 113, 7], 3128));
+        relay_replied(
+            &shared,
+            connect,
+            &bytes,
+            &[b"CONNECT ads.tracker.example:443 HTTP/1.1\r\n\r\n"],
+            CONNECTED,
+        );
+        looked_up(&shared, messenger, "web.example.org", [93, 184, 216, 99]);
+        let (mtproto, bytes) = open(&shared, messenger, at([93, 184, 216, 34], 443));
+        relay(
+            &shared,
+            mtproto,
+            &bytes,
+            &[&crate::tls::tests::hello("www.google.com", 1000)],
+        );
+        assert_eq!(
+            live(&shared, mtproto.id)
+                .proxy
+                .and_then(|p| p.cover)
+                .as_deref(),
+            Some("www.google.com")
+        );
+        for id in [socks.id, connect.id, mtproto.id] {
+            shared.finish(id);
+        }
+        shared.flush();
+        clock.pass(11 * 60_000);
+        another_record(&shared);
+        let records = taken(&shared);
+        let batch = crate::log::batch(&records);
+        for hidden in [
+            &b"proxy.example.net"[..],
+            b"example.com",
+            b"inner.example",
+            b"www.google.com",
+            b"tracker",
+            &[203, 0, 113, 5],
+            &[203, 0, 113, 7],
+            &[93, 184, 216, 34],
+        ] {
+            assert!(!holds(&batch, hidden), "{hidden:?}");
+        }
+        assert!(!holds_secret(&batch));
+        for (id, kind, password, trackers) in [
+            (socks.id, Kind::Socks5, true, vec![]),
+            (connect.id, Kind::Connect, false, vec![49]),
+            (mtproto.id, Kind::MtProto, false, vec![]),
+        ] {
+            let written = of_flow(&records, id);
+            assert!(
+                !written.is_empty()
+                    && written.iter().all(|f| left_out(f)
+                        && f.proxy.as_ref().is_some_and(|p| {
+                            p.kind == kind && p.password == password && p.trackers == trackers
+                        })),
+                "{kind:?} {written:?}"
+            );
+        }
+    }
+
+    /// Test 8: with the switch off, "Now" shows an app's own proxy's first hop in full: its address and port, the
+    /// DNS name its address had and its network's organisation, with nothing asked and nothing left out; and a
+    /// messenger's cover, which the log never gets.
+    #[test]
+    fn with_the_switch_off_now_shows_a_proxys_first_hop_in_full() {
+        let shared = engine(false);
+        learn(&shared, "93.184.216.5", "proxy.example.net");
+        let (opened, bytes) = open(&shared, UID, at([93, 184, 216, 5], 1080));
+        let reads = socks5_reads();
+        let reads: Vec<&[u8]> = reads.iter().map(Vec::as_slice).collect();
+        relay_replied(&shared, opened, &bytes, &reads, SOCKS5_REPLY);
+        let flow = live(&shared, opened.id);
+        assert_eq!(flow.destination, at([93, 184, 216, 5], 1080));
+        assert_eq!(
+            (flow.name.as_deref(), flow.named_by),
+            (Some("proxy.example.net"), NamedBy::Dns)
+        );
+        let proxy = flow.proxy.unwrap_or_else(|| unreachable!("confirmed"));
+        assert_eq!(proxy.proxy_name.as_deref(), Some("proxy.example.net"));
+        assert_eq!(proxy.organisation.as_deref(), Some("Example Net, Inc."));
+        assert!(proxy.asked.is_none() && !proxy.left_out && proxy.password);
+        let snapshot = crate::snapshot::encode(&shared.now_view(T + 1_000));
+        assert!(holds(&snapshot, b"proxy.example.net") && holds(&snapshot, &[93, 184, 216, 5]));
+        assert!(!holds(&snapshot, b"example.com") && !holds_secret(&snapshot));
+        // A messenger's cover is shown live, and kept out of the log.
+        let (shared, clock) = engine_at(false);
+        telegram(&shared);
+        looked_up(&shared, UID, "web.example.org", [93, 184, 216, 99]);
+        let (proxy, bytes) = open(&shared, UID, at([93, 184, 216, 34], 443));
+        relay(
+            &shared,
+            proxy,
+            &bytes,
+            &[&crate::tls::tests::hello("www.google.com", 1000)],
+        );
+        assert_eq!(
+            live(&shared, proxy.id)
+                .proxy
+                .and_then(|p| p.cover)
+                .as_deref(),
+            Some("www.google.com")
+        );
+        let snapshot = crate::snapshot::encode(&shared.now_view(T + 1_000));
+        assert!(holds(&snapshot, b"www.google.com") && holds(&snapshot, &[93, 184, 216, 34]));
+        shared.finish(proxy.id);
+        shared.flush();
+        clock.pass(11 * 60_000);
+        another_record(&shared);
+        let records = taken(&shared);
+        assert_ne!(of_flow(&records, proxy.id).len(), 0);
+        assert!(!holds(&crate::log::batch(&records), b"www.google.com"));
+    }
+
+    /// Test 9 (C1): with the switch off, neither the request nor the hello inside the proxy names the flow, live
+    /// or kept, in "Now" or in the log: of SOCKS5 and `CONNECT` with an inner hello for `inner.example`, and of a
+    /// `CONNECT` on port 443 whose inner hello names a known resolver and offers ECH. The flow keeps its own
+    /// names, and the DNS mark, resolver and ECH of the proxy's own address; the trackers are marked. With the
+    /// switch on, the inner hello names it, as before.
+    #[test]
+    fn neither_the_request_nor_the_inner_hello_names_the_flow_while_the_switch_is_off() {
+        let shared = engine(false);
+        with_trackers(&shared);
+        learn(&shared, "203.0.113.5", "proxy.example.net");
+        let (socks, bytes) = open(&shared, UID, at([203, 0, 113, 5], 1080));
+        let reads = socks5_asking("example.com", "inner.example");
+        let reads: Vec<&[u8]> = reads.iter().map(Vec::as_slice).collect();
+        relay_replied(&shared, socks, &bytes, &reads, SOCKS5_REPLY);
+        let (connect, bytes) = open(&shared, UID, at([203, 0, 113, 7], 3128));
+        relay_replied(
+            &shared,
+            connect,
+            &bytes,
+            &[
+                b"CONNECT ads.tracker.example:443 HTTP/1.1\r\n\r\n",
+                &crate::tls::tests::hello("inner.example", 1000),
+            ],
+            CONNECTED,
+        );
+        let (resolver, bytes) = open(&shared, UID, at([203, 0, 113, 8], 443));
+        relay_replied(
+            &shared,
+            resolver,
+            &bytes,
+            &[
+                b"CONNECT doh.sample.example:443 HTTP/1.1\r\n\r\n",
+                &ech_hello("doh.sample.example"),
+            ],
+            CONNECTED,
+        );
+        let named = [
+            "inner.example",
+            "example.com",
+            "ads.tracker.example",
+            "doh.sample.example",
+        ];
+        for (id, own) in [
+            (socks.id, Some("proxy.example.net")),
+            (connect.id, None),
+            (resolver.id, None),
+        ] {
+            let kept = lock(&shared.flows)
+                .iter()
+                .rev()
+                .find(|f| f.id == id)
+                .cloned()
+                .unwrap_or_else(|| unreachable!("kept"));
+            for flow in [live(&shared, id), kept] {
+                assert_eq!(flow.name.as_deref(), own, "{flow:?}");
+                assert!(
+                    !matches!(flow.named_by, NamedBy::Proxy | NamedBy::Tls),
+                    "{flow:?}"
+                );
+                assert_eq!(
+                    (flow.ech, flow.dns, flow.resolver.as_deref()),
+                    (Ech::Absent, DnsUse::None, None),
+                    "the proxy's own: {flow:?}"
+                );
+                assert!(flow.proxy.as_ref().is_some_and(|p| p.asked.is_none()));
+                assert!(
+                    named.iter().all(|n| !format!("{flow:?}").contains(n)),
+                    "{flow:?}"
+                );
+            }
+        }
+        assert_eq!(
+            live(&shared, connect.id).proxy.map(|p| p.trackers),
+            Some(vec![49]),
+            "the destination asked for marks it"
+        );
+        let snapshot = crate::snapshot::encode(&shared.now_view(T + 1_000));
+        for id in [socks.id, connect.id, resolver.id] {
+            shared.finish(id);
+        }
+        shared.flush();
+        let batch = crate::log::batch(&taken(&shared));
+        for name in named {
+            assert!(
+                !holds(&snapshot, name.as_bytes()) && !holds(&batch, name.as_bytes()),
+                "{name}"
+            );
+        }
+        // The switch on: the inner hello names the flow, as before unit A.
+        let shared = engine(true);
+        let (socks, bytes) = open(&shared, UID, at([203, 0, 113, 5], 1080));
+        relay_replied(&shared, socks, &bytes, &reads, SOCKS5_REPLY);
+        let flow = live(&shared, socks.id);
+        assert_eq!(
+            (flow.name.as_deref(), flow.named_by),
+            (Some("inner.example"), NamedBy::Tls)
+        );
+        assert!(flow.proxy.is_some_and(|p| p.asked.is_some()));
+    }
+
+    /// Test 10 (R6f): a flow named without its destination stays so after the switch is turned on: the inner hello
+    /// read after renames nothing, and its next record holds its first hop, with nothing asked.
+    #[test]
+    fn a_hello_after_the_switch_is_turned_on_does_not_name_an_unkept_flow() {
         let shared = engine(false);
         learn(&shared, "203.0.113.5", "proxy.example.net");
         let (opened, bytes) = open(&shared, UID, at([203, 0, 113, 5], 1080));
         let reads = socks5_reads();
-        // The greeting's bytes are counted under the proxy's own name first, before the request names it.
-        relay_replied(
-            &shared,
-            opened,
-            &bytes,
-            &[&reads[0], &reads[1], &reads[2], &reads[3]],
-            SOCKS5_REPLY,
-        );
-        let flow = live(&shared, opened.id);
-        assert!(flow.destination.ip().is_unspecified() && flow.name.is_none());
-        let proxy = flow
-            .proxy
-            .clone()
-            .unwrap_or_else(|| unreachable!("its kind is kept"));
-        assert_eq!((proxy.kind, proxy.password), (Kind::Socks5, true));
-        assert!(
-            proxy.asked.is_none() && proxy.proxy_name.is_none() && proxy.organisation.is_none()
-        );
-        let view = shared.now_view(T + 1_000);
-        let places: Vec<_> = view.apps.iter().flat_map(|a| a.places.iter()).collect();
-        assert_eq!(places.len(), 1, "{places:?}");
-        assert!(places[0].flow.name.is_none() && places[0].flow.proxy.is_some());
-        let snapshot = crate::snapshot::encode(&view);
-        for hidden in [&b"proxy.example.net"[..], b"example.com", &[203, 0, 113, 5]] {
-            assert!(
-                !snapshot.windows(hidden.len()).any(|w| w == hidden),
-                "{hidden:?}"
-            );
+        let mut sniff = Sniff::new(true, false);
+        let handshake = Mutex::new(Handshake::default());
+        for read in &reads[..3] {
+            for found in sniff.feed(read) {
+                shared.found(opened, found, &handshake);
+            }
         }
+        shared.replied(opened, SOCKS5_REPLY, &handshake);
+        switch(&shared, true);
+        for found in sniff.feed(&reads[3]) {
+            shared.found(opened, found, &handshake);
+        }
+        bytes.up(&shared, 100, 140);
+        let flow = live(&shared, opened.id);
+        assert_eq!(
+            (flow.name.as_deref(), flow.named_by),
+            (Some("proxy.example.net"), NamedBy::Dns),
+            "{flow:?}"
+        );
+        assert!(lock(&shared.live).get(&opened.id).is_some_and(|l| l.unkept));
         shared.finish(opened.id);
         shared.flush();
-        let log = crate::log::batch(&taken(&shared));
-        assert!(!log.windows(11).any(|w| w == b"example.com") && !holds_secret(&log));
+        let written = of_flow(&taken(&shared), opened.id);
+        assert!(
+            !written.is_empty()
+                && written
+                    .iter()
+                    .all(|f| f.destination == at([203, 0, 113, 5], 1080)
+                        && f.proxy.as_ref().is_some_and(|p| {
+                            p.proxy_name.as_deref() == Some("proxy.example.net")
+                                && p.asked.is_none()
+                                && !p.left_out
+                        })),
+            "{written:?}"
+        );
     }
 
+    /// Test 7 (E6, finding 27): a quarter hour cuts a SOCKS5 flow's segment between its request and a slow reply,
+    /// and the states are told, so that the record waits for the log as an ordinary flow's, with the proxy's
+    /// address and name. The reply then confirms the proxy with the switch off: the record is stripped, with the
+    /// proxy's kind.
     #[test]
-    fn turning_the_switch_off_leaves_an_open_proxied_flows_destination_out() {
-        let shared = engine(true);
-        let (opened, bytes) = open(&shared, UID, at([203, 0, 113, 5], 3128));
+    fn a_record_written_before_a_slow_reply_is_stripped_once_it_confirms_the_proxy() {
+        let (shared, clock) = engine_at(false);
+        learn(&shared, "203.0.113.5", "proxy.example.net");
+        let (opened, bytes) = open(&shared, UID, at([203, 0, 113, 5], 1080));
+        let mut sniff = Sniff::new(true, false);
+        let handshake = Mutex::new(Handshake::default());
+        for read in &socks5_reads() {
+            for found in sniff.feed(read) {
+                shared.found(opened, found, &handshake);
+            }
+            bytes.up(&shared, read.len(), read.len() + 40);
+        }
+        cut_and_tell(&shared, &clock);
+        {
+            let pending = lock(&shared.pending_log);
+            let written = of_flow(&pending, opened.id);
+            assert!(
+                !written.is_empty()
+                    && written.iter().all(
+                        |f| f.proxy.is_none() && f.name.as_deref() == Some("proxy.example.net")
+                    ),
+                "{written:?}"
+            );
+        }
+        shared.replied(opened, SOCKS5_REPLY, &handshake);
+        let written = of_flow(&taken(&shared), opened.id);
+        assert!(
+            !written.is_empty()
+                && written.iter().all(
+                    |f| left_out(f) && f.proxy.as_ref().is_some_and(|p| p.kind == Kind::Socks5)
+                ),
+            "{written:?}"
+        );
+    }
+    /// Test 23 (R6a to R6d, R6g): turning the switch off sets every open flow, held segment and place of "Now" back to
+    /// its first hop at once, with the proxy's own DNS mark, resolver and ECH; Signal's proxy keeps its name, its
+    /// own; a place whose flow ended two minutes ago stays in full, and one twenty minutes ago is stripped, in
+    /// memory before any view. Neither destination asked for is anywhere after, from the live flows to the log.
+    #[test]
+    #[allow(clippy::too_many_lines)]
+    fn turning_the_switch_off_sets_every_flow_back_to_its_first_hop() {
+        let (shared, clock) = engine_at(true);
+        let since = |from, until| {
+            let mut reading = super::super::activity::tests::told(
+                from,
+                until,
+                &[(from, until, crate::states::State::InUse)],
+            );
+            reading.screen = crate::states::Screen::On(Some(T));
+            reading
+        };
+        // Two places whose flows end twenty and two minutes before the switch goes off.
+        for (n, wait) in [(11u8, 18), (12, 2)] {
+            use super::super::clock::Clock;
+            let (flow, bytes) = open(&shared, UID, at([203, 0, 113, n], 3128));
+            relay_replied(
+                &shared,
+                flow,
+                &bytes,
+                &[format!("CONNECT ended{n}.example:443 HTTP/1.1\r\n\r\n").as_bytes()],
+                CONNECTED,
+            );
+            let now = clock.wall_ms();
+            clock.pass(2_000);
+            shared.tell(&since(now - 1_000, clock.wall_ms()));
+            shared.finish(flow.id);
+            clock.pass(wait * 60_000);
+        }
+        learn(&shared, "203.0.113.5", "socks.proxy.test");
+        let (open_flow, bytes) = open(&shared, UID, at([203, 0, 113, 5], 1080));
+        let mut request = vec![5, 1, 0, 5, 1, 0, 3, 11];
+        request.extend_from_slice(b"example.org");
+        request.extend_from_slice(&443u16.to_be_bytes());
         relay_replied(
             &shared,
-            opened,
+            open_flow,
             &bytes,
-            &[b"CONNECT example.org:443 HTTP/1.1\r\n\r\n"],
+            &[&request],
+            &[5, 0, 5, 0, 0, 1, 0, 0, 0, 0, 0, 0],
+        );
+        let (held, bytes) = open(&shared, UID, at([203, 0, 113, 6], 3128));
+        relay_replied(
+            &shared,
+            held,
+            &bytes,
+            &[b"CONNECT example.net:443 HTTP/1.1\r\n\r\n"],
             CONNECTED,
         );
+        shared.finish(held.id);
+        let (resolver, bytes) = open(&shared, UID, at([203, 0, 113, 8], 443));
+        relay_replied(
+            &shared,
+            resolver,
+            &bytes,
+            &[
+                b"CONNECT doh.sample.example:443 HTTP/1.1\r\n\r\n",
+                &ech_hello("doh.sample.example"),
+            ],
+            CONNECTED,
+        );
+        let before = live(&shared, resolver.id);
         assert_eq!(
-            live(&shared, opened.id).name.as_deref(),
+            (before.dns, before.resolver.as_deref(), before.ech),
+            (DnsUse::Encrypted, Some("sample"), Ech::Offered),
+            "named by its inner hello while the switch is on"
+        );
+        let messenger = UID + 3;
+        let mut setting = lock(&shared.proxies).setting().clone();
+        setting.messengers = vec![(Family::Signal, messenger)];
+        shared.set_proxies(setting);
+        let (signal, bytes) = open(&shared, messenger, at([93, 184, 216, 40], 443));
+        relay(
+            &shared,
+            signal,
+            &bytes,
+            &[&crate::tls::tests::hello("relay.signal-proxy.test", 1000)],
+        );
+        assert_eq!(
+            live(&shared, open_flow.id).name.as_deref(),
             Some("example.org")
         );
-        shared.tunnels.set(&TunnelSetting::default());
-        shared.hide_chained();
-        let flow = live(&shared, opened.id);
-        assert!(flow.name.is_none() && flow.proxy.is_some_and(|p| p.asked.is_none()));
-        assert!(shared.now_view(T + 1_000).apps.iter().all(|a| {
-            a.places
+        switch(&shared, false);
+        // The open flows hold their first hop, with the proxy's own marks.
+        let flow = live(&shared, open_flow.id);
+        assert_eq!(
+            (flow.destination, flow.name.as_deref(), flow.named_by),
+            (
+                at([203, 0, 113, 5], 1080),
+                Some("socks.proxy.test"),
+                NamedBy::Dns
+            )
+        );
+        assert!(
+            lock(&shared.live)
+                .get(&open_flow.id)
+                .is_some_and(|l| l.unkept)
+        );
+        let flow = live(&shared, resolver.id);
+        assert_eq!(
+            (
+                flow.name.as_deref(),
+                flow.named_by,
+                flow.dns,
+                flow.resolver.as_deref(),
+                flow.ech
+            ),
+            (None, NamedBy::Unknown, DnsUse::None, None, Ech::Absent),
+            "{flow:?}"
+        );
+        assert!(flow.proxy.is_some_and(|p| p.asked.is_none()));
+        let flow = live(&shared, signal.id);
+        assert_eq!(
+            (flow.name.as_deref(), flow.named_by),
+            (Some("relay.signal-proxy.test"), NamedBy::Tls),
+            "Signal's proxy is named by its own hello"
+        );
+        // The segment held for its states.
+        let pieces: Vec<Flow> = lock(&shared.activity)
+            .held
+            .iter()
+            .filter_map(|p| match &p.of {
+                super::super::activity::Of::Flow { flow, .. } if flow.id == held.id => {
+                    Some(flow.clone())
+                }
+                _ => None,
+            })
+            .collect();
+        assert!(
+            !pieces.is_empty()
+                && pieces.iter().all(|f| own_first_hop(f)
+                    && !holds_destination(f)
+                    && f.destination == at([203, 0, 113, 6], 3128)
+                    && f.name.is_none()),
+            "its first hop, in full for its window: {pieces:?}"
+        );
+        // The places, read in memory before any view sweeps: the recent one in full, the old one stripped.
+        {
+            let places = lock(&shared.activity).counts.places_of(Some(UID));
+            let recent = places
                 .iter()
-                .all(|p| p.flow.destination.ip().is_unspecified())
-        }));
+                .find(|f| f.destination == at([203, 0, 113, 12], 3128))
+                .unwrap_or_else(|| unreachable!("placed: {places:?}"));
+            assert!(
+                own_first_hop(recent) && !holds_destination(recent),
+                "two minutes after its end: {recent:?}"
+            );
+            assert!(
+                places
+                    .iter()
+                    .all(|f| f.destination != at([203, 0, 113, 11], 3128))
+                    && places.iter().any(|f| f.destination.ip().is_unspecified()),
+                "twenty minutes after its end, stripped: {places:?}"
+            );
+        }
+        // Nowhere: the live flows, the segments held, "Now", the log.
+        let gone = [&b"example.org"[..], b"example.net", b"ended11", b"ended12"];
+        let seen = format!(
+            "{:?}{pieces:?}",
+            lock(&shared.live)
+                .values()
+                .map(|l| &l.flow)
+                .collect::<Vec<_>>()
+        );
+        let snapshot = crate::snapshot::encode(&shared.now_view(T + 1_000));
+        for id in [open_flow.id, resolver.id, signal.id] {
+            shared.finish(id);
+        }
+        shared.flush();
+        clock.pass(11 * 60_000);
+        another_record(&shared);
+        let batch = crate::log::batch(&taken(&shared));
+        for name in gone {
+            assert!(
+                !holds(seen.as_bytes(), name) && !holds(&snapshot, name) && !holds(&batch, name),
+                "{}",
+                String::from_utf8_lossy(name)
+            );
+        }
     }
 
+    /// Test 24 (R6e): turning the switch on names no open flow anew: a first hop stays one, and its next record
+    /// holds its address and the proxy's name, with nothing asked.
+    #[test]
+    fn turning_the_switch_on_names_no_open_flow_anew() {
+        let shared = engine(false);
+        learn(&shared, "203.0.113.5", "proxy.example.net");
+        let (opened, bytes) = open(&shared, UID, at([203, 0, 113, 5], 1080));
+        let reads = socks5_reads();
+        let reads: Vec<&[u8]> = reads.iter().map(Vec::as_slice).collect();
+        relay_replied(&shared, opened, &bytes, &reads, SOCKS5_REPLY);
+        switch(&shared, true);
+        let flow = live(&shared, opened.id);
+        assert_eq!(flow.name.as_deref(), Some("proxy.example.net"));
+        assert!(flow.proxy.is_some_and(|p| p.asked.is_none()));
+        bytes.up(&shared, 100, 140);
+        shared.finish(opened.id);
+        shared.flush();
+        let written = of_flow(&taken(&shared), opened.id);
+        assert!(
+            !written.is_empty()
+                && written
+                    .iter()
+                    .all(|f| f.destination == at([203, 0, 113, 5], 1080)
+                        && f.proxy.as_ref().is_some_and(|p| {
+                            p.proxy_name.as_deref() == Some("proxy.example.net")
+                                && p.asked.is_none()
+                        })),
+            "{written:?}"
+        );
+    }
     #[test]
     fn androids_proxy_setting_is_told_from_an_apps_own() {
         let shared = engine(true);
@@ -2104,52 +2614,66 @@ mod tests {
         );
     }
 
-    /// The place a proxied flow's first bytes were counted under, before its request named it, goes: it named the
-    /// proxy, not the destination, and while "Log where these apps connect" is off it would show the proxy's name.
+    /// Test 25 (N1, N2): the place a proxied flow's first bytes were counted under, by the proxy's own name with no
+    /// proxy yet, becomes the named flow's once its request is confirmed, its bytes kept: with the switch off its
+    /// first hop's, with the switch on the destination's; and a second flow's is merged into the first's.
     #[test]
-    fn the_place_the_first_bytes_were_counted_under_goes_once_the_request_names_the_flow() {
-        let (mut shared, clock, _) = telling_at(T);
-        shared.tunnels.set(&TunnelSetting::default());
-        learn(&shared, "203.0.113.5", "proxy.example.net");
-        let (opened, bytes) = open(&shared, UID, at([203, 0, 113, 5], 1080));
-        let reads = socks5_reads();
-        relay(&shared, opened, &bytes, &[&reads[0]]);
-        clock.set(T + 1_500);
-        shared.tell(&super::super::activity::tests::told(
-            T,
-            T + 1_000,
-            &[(T, T + 1_000, crate::states::State::InUse)],
-        ));
-        let named = |shared: &Shared| -> Vec<Option<String>> {
-            shared
-                .now_view(T + 1_500)
-                .apps
-                .iter()
-                .flat_map(|a| a.places.iter().map(|p| p.flow.name.clone()))
-                .collect()
-        };
-        assert_eq!(
-            named(&shared),
-            vec![Some("proxy.example.net".to_owned())],
-            "placed under the proxy's name"
-        );
-        // The rest of the handshake, in the same flow's sniff: a new one reads it from the start.
-        let mut sniff = Sniff::new(true, false);
-        for read in &reads {
-            for found in sniff.feed(read) {
-                if let Found::Request(request) = found {
-                    shared.declared(&opened, &request);
+    fn the_place_the_first_bytes_were_counted_under_becomes_the_named_flows() {
+        for logs in [false, true] {
+            let (shared, clock, _) = telling_at(T);
+            shared.tunnels.set(&TunnelSetting {
+                log_destinations: logs,
+                ..TunnelSetting::default()
+            });
+            learn(&shared, "203.0.113.5", "proxy.example.net");
+            let reads = socks5_reads();
+            let greeting = reads[0].len() as u64;
+            let places = |shared: &Shared| -> Vec<(Option<String>, bool, u64)> {
+                shared
+                    .now_view(T + 3_500)
+                    .apps
+                    .iter()
+                    .flat_map(|a| a.places.iter())
+                    .map(|p| (p.flow.name.clone(), p.flow.proxy.is_some(), p.bytes[2][0]))
+                    .collect()
+            };
+            let name = if logs {
+                "example.com"
+            } else {
+                "proxy.example.net"
+            };
+            for (k, at_ms) in [(1u64, 0u64), (2, 2_000)] {
+                let (opened, bytes) = open(&shared, UID, at([203, 0, 113, 5], 1080));
+                clock.set(T + at_ms);
+                relay(&shared, opened, &bytes, &[&reads[0]]);
+                clock.set(T + at_ms + 1_500);
+                shared.tell(&super::super::activity::tests::told(
+                    T,
+                    T + at_ms + 1_000,
+                    &[(T, T + at_ms + 1_000, crate::states::State::InUse)],
+                ));
+                let before = places(&shared);
+                assert!(
+                    before.contains(&(Some("proxy.example.net".to_owned()), false, greeting)),
+                    "placed under the proxy's name: {before:?}"
+                );
+                // The rest of the handshake, in the same flow's sniff: a new one reads it from the start.
+                let mut sniff = Sniff::new(true, false);
+                for read in &reads {
+                    for found in sniff.feed(read) {
+                        if let Found::Request(request) = found {
+                            shared.declared(&opened, &request);
+                        }
+                    }
                 }
+                assert_eq!(
+                    places(&shared),
+                    vec![(Some(name.to_owned()), true, greeting * k)],
+                    "{logs} {k}"
+                );
             }
         }
-        assert!(
-            !named(&shared).contains(&Some("proxy.example.net".to_owned())),
-            "{:?}",
-            named(&shared)
-        );
-        let _ = &mut shared;
     }
-
     /// One destination reached directly and through a proxy is two places in "Now".
     #[test]
     fn a_destination_reached_through_a_proxy_is_a_place_apart() {
@@ -2248,8 +2772,9 @@ mod tests {
         }
     }
 
-    /// A proxy the server confirmed, with the switch off: its flow is left out, and keeps its trackers' marks
-    /// as the company only, in the live flow, the log and the snapshot, never a name or an address.
+    /// A proxy the server confirmed, with the switch off: its first hop is shown live, by the server's own name, and
+    /// keeps its trackers' marks; the log keeps the marks as the company only, never a name or an address, and
+    /// nothing the request asked for is anywhere.
     #[test]
     fn a_confirmed_proxy_with_the_switch_off_keeps_its_trackers_mark() {
         let shared = engine(false);
@@ -2264,12 +2789,14 @@ mod tests {
             CONNECTED,
         );
         let flow = live(&shared, opened.id);
-        assert!(flow.destination.ip().is_unspecified() && flow.name.is_none());
+        assert_eq!(flow.destination, at([203, 0, 113, 9], 443));
+        assert_eq!(flow.name.as_deref(), Some("sdk.tracker.example"));
         let proxy = flow.proxy.unwrap_or_else(|| unreachable!("confirmed"));
-        assert!(proxy.left_out && proxy.asked.is_none() && proxy.proxy_name.is_none());
+        assert!(!proxy.left_out && proxy.asked.is_none());
+        assert_eq!(proxy.proxy_name.as_deref(), Some("sdk.tracker.example"));
         assert_eq!(proxy.trackers, vec![49]);
         let snapshot = crate::snapshot::encode(&shared.now_view(T + 1_000));
-        assert!(!snapshot.windows(7).any(|w| w == b"tracker"));
+        assert!(holds(&snapshot, b"sdk.tracker.example") && !holds(&snapshot, b"www.google.com"));
         shared.finish(opened.id);
         shared.flush();
         let records = taken(&shared);
@@ -2283,6 +2810,7 @@ mod tests {
             !crate::log::batch(&records)
                 .windows(7)
                 .any(|w| w == b"tracker")
+                && !holds(&crate::log::batch(&records), b"www.google.com")
         );
         // The destination asked for marks it too, and the inner hello's name, though neither names it.
         let shared = engine(false);
@@ -2448,9 +2976,9 @@ mod tests {
             let (cdn, bytes) = open(&shared, UID, at([93, 184, 216, 34], 443));
             relay(&shared, cdn, &bytes, &[&obfuscated()]);
             assert!(live(&shared, cdn.id).proxy.is_some());
-            assert_eq!(
-                live(&shared, cdn.id).destination.ip().is_unspecified(),
-                !logs
+            assert!(
+                !live(&shared, cdn.id).destination.ip().is_unspecified(),
+                "its first hop, either way"
             );
             // A quarter hour cuts its segment, whose states are told: the log does not get it yet.
             cut_and_tell(&shared, &clock);
@@ -2953,5 +3481,47 @@ mod tests {
         clock.pass(11 * 60_000);
         shared.tell(&super::super::activity::tests::told(T, T + 1_000, &[]));
         assert!(lock(&shared.proxies).inferred.is_empty());
+    }
+
+    /// A tracker the inner hello names marks the flow after its first seconds were placed: the place takes the mark
+    /// with its flow, so that the open flow still matches it and its first hop stays in full.
+    #[test]
+    fn a_mark_from_the_inner_hello_keeps_the_place_with_its_flow() {
+        use super::super::clock::Clock;
+        let (shared, clock) = engine_at(false);
+        with_trackers(&shared);
+        learn(&shared, "203.0.113.5", "proxy.example.net");
+        let (opened, bytes) = open(&shared, UID, at([203, 0, 113, 5], 1080));
+        let mut sniff = Sniff::new(true, false);
+        let handshake = Mutex::new(Handshake::default());
+        let reads = socks5_reads();
+        for read in &reads[..3] {
+            for found in sniff.feed(read) {
+                shared.found(opened, found, &handshake);
+            }
+            bytes.up(&shared, read.len(), read.len() + 40);
+        }
+        shared.replied(opened, SOCKS5_REPLY, &handshake);
+        clock.set(T + 1_500);
+        shared.tell(&super::super::activity::tests::told(
+            T,
+            T + 1_000,
+            &[(T, T + 1_000, crate::states::State::InUse)],
+        ));
+        for found in sniff.feed(&crate::tls::tests::hello("cdn.tracker.example", 1000)) {
+            shared.found(opened, found, &handshake);
+        }
+        let view = shared.now_view(clock.wall_ms());
+        let places: Vec<_> = view.apps.iter().flat_map(|a| a.places.iter()).collect();
+        assert!(
+            places.len() == 1
+                && own_first_hop(&places[0].flow)
+                && places[0]
+                    .flow
+                    .proxy
+                    .as_ref()
+                    .is_some_and(|p| p.trackers == [49]),
+            "{places:?}"
+        );
     }
 }

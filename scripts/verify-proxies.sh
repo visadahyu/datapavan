@@ -9,8 +9,10 @@
 # ones by the destination asked for, read from the connection once the proxy's reply confirmed them, a plain request
 # keeping its own name, Android's setting told apart; the inferred ones with the cover name naming nothing, the
 # fake-TLS one only once the network part saw the app's lookups; Signal's own fronting and captcha names are not a
-# proxy. "Now" and the log hold the same, and with the switch "Log where apps connect through your tool, WireGuard or a
-# proxy" off only the kind; that switch is on the network screen, though the phone has no tool and no tunnel. No
+# proxy. "Now" and the log hold the same while the switch "Log where apps connect through your tool, WireGuard or a
+# proxy" is on. With it off, "Now" holds the proxy's address, its first hop, and nothing the app asked it for, and the
+# log only its kind; the window that ends a first hop in "Now" ten minutes after its connection is the engine's tests'
+# to check, never a wait here. That switch is on the network screen, though the phone has no tool and no tunnel. No
 # password or user name reaches the network part's dump, the log, the device's log or its crash buffer.
 #
 # The false positives that need a maker's own network (a Telegram CDN data centre beside its ranges, WhatsApp's link
@@ -220,7 +222,7 @@ echo "ok: Signal's own fronting and its captcha are not named a proxy, and its f
 
 # "Now" and the log hold the same: the destination asked for and the proxy's kind.
 now=$(dump | sed -n 's/^ *activity-proxy //p')
-grep -qE "^$APP_UID socks5:read:p:inner\.proxylab\.test@443:- ${HOST//./\\.}:$PROXYLAB_PORT named-by=1 inner\.proxylab\.test$" <<<"$now" ||
+grep -qE "^$APP_UID socks5:read:p:inner\.proxylab\.test@443:- ${HOST//./\\.}:$PROXYLAB_PORT named-by=1 inner\.proxylab\.test 10m=[0-9]+/[0-9]+$" <<<"$now" ||
     fail "\"Now\" does not hold the SOCKS5 proxy as named: $now"
 grep -qE "^$TELEGRAM_UID mtproto:inferred:o:-:- " <<<"$now" || fail "\"Now\" does not hold Telegram's proxy: $now"
 dump log-flush >/dev/null
@@ -229,25 +231,54 @@ grep -qE "^tcp $APP_UID ${HOST//./\\.}:$PROXYLAB_PORT .* inner\.proxylab\.test .
     fail "the log does not hold the SOCKS5 proxy as named"
 echo "ok: \"Now\" and the log hold the proxies as named"
 
-# The switch off: the next proxied flows keep their kind alone, in "Now" and in the log, marked as left out.
+# The switch off. At once, "Now" holds nothing an app asked its proxy for (R6); the first hops stay for their window.
 grep -q "log-destinations off" <<<"$(dump log-destinations off)" || fail "the switch \"Log where apps connect ...\" was not turned off"
-sleep 1
+proxies_now() { dump | sed -n 's/^ *activity-proxy //p'; }
+none_asked_now() { ! grep -q "inner\.proxylab\.test" <<<"$(proxies_now)"; }
+within 5 none_asked_now || fail "with the switch off, \"Now\" still holds where an app asked its proxy to go: $(proxies_now)"
+# The flows of the part before reached the same first hops, which stay in "Now" for their ten minutes, so the flows
+# opened now are told apart by the bytes they add there (audit-A 1), and in the log by when their records start.
+SOCKS_HOP="^$APP_UID socks5:read:p:-:- ${HOST//./\\.}:$PROXYLAB_PORT named-by=4 - 10m="
+TELEGRAM_HOP="^$TELEGRAM_UID mtproto:inferred:o:-:- ${HOST//./\\.}:$PROXYLAB_PORT_MTG "
+# The bytes up and down in the last 10 minutes of the "Now" lines that match the pattern $1, all together. One awk,
+# no grep: under pipefail a grep that finds nothing would end the script (the pattern goes by the environment, which
+# awk reads without turning its backslashes into escapes).
+ten_minutes() {
+    proxies_now | PATTERN="$1" awk '$0 ~ ENVIRON["PATTERN"] {
+        for (i = 1; i <= NF; i++) if ($i ~ /^10m=/) { split(substr($i, 5), b, "/"); sum += b[1] + b[2] }
+    } END { print sum + 0 }'
+}
+socks_before=$(ten_minutes "$SOCKS_HOP")
+telegram_before=$(ten_minutes "$TELEGRAM_HOP")
+# As verify-network.sh reads the phone's time: toybox's date has whole seconds.
+off_since=$(($(adb shell date +%s </dev/null | tr -d '\r') * 1000))
 fixture "$FIXTURE" socks5 echoed "${lab[@]}" --es port "$PROXYLAB_PORT"
 fixture "$FIXTURE.telegram" obfuscated sent --es host "$HOST" --es port "$PROXYLAB_PORT_MTG"
-# "Now" names both flows once the network part has read their first bytes and inferred Telegram's proxy (CI, run
-# 45157535067, attempt 2: read one second after the fixture, before it had, and the log's negative check below had
-# passed only because nothing was registered yet). So wait for the two lines asserted here; only then are the log's
-# checks about records that exist.
-socks_now() { grep -qE "^$APP_UID socks5:read:pl:-:- 0\.0\.0\.0:0 " <<<"$(dump | sed -n 's/^ *activity-proxy //p')"; }
-telegram_now() { grep -qE "^$TELEGRAM_UID mtproto:inferred:ol:-:- 0\.0\.0\.0:0 " <<<"$(dump | sed -n 's/^ *activity-proxy //p')"; }
+# "Now" counts both flows once the network part has read their first bytes and inferred Telegram's proxy (CI, run
+# 45157535067, attempt 2: read one second after the fixture, before it had). So wait for the two first hops' bytes to
+# grow; only then are the log's checks about records that exist.
+socks_now() { [ "$(ten_minutes "$SOCKS_HOP")" -gt "$socks_before" ]; }
+telegram_now() { [ "$(ten_minutes "$TELEGRAM_HOP")" -gt "$telegram_before" ]; }
 within 15 socks_now ||
-    fail "with the switch off, \"Now\" did not hold the SOCKS5 proxy's kind alone within 15 s: $(dump | sed -n 's/^ *activity-proxy //p')"
+    fail "with the switch off, \"Now\" did not show the SOCKS5 proxy's first hop for the new flow within 15 s: $(proxies_now)"
 within 15 telegram_now ||
-    fail "with the switch off, \"Now\" did not hold Telegram's proxy's kind alone within 15 s: $(dump | sed -n 's/^ *activity-proxy //p')"
+    fail "with the switch off, \"Now\" did not show Telegram's proxy's first hop for the new flow within 15 s: $(proxies_now)"
+none_asked_now || fail "with the switch off, \"Now\" holds where an app asked its proxy to go: $(proxies_now)"
+# C1 through the whole app: the newest kept flow of the fixture to the SOCKS5 proxy is named neither by what it asked
+# for nor by the hello inside.
+newest=$(proxies | awk -v port="$HOST:$PROXYLAB_PORT" -v uid="$APP_UID" '$1 == "tcp" && $3 == port && $4 == uid { line = $0 } END { print line }')
+[[ $newest =~ \ socks5\ read\ p\ -\ -\ -\ -$ ]] ||
+    fail "with the switch off, the request or the inner hello named the SOCKS5 flow: ${newest:-none}"
 dump log-flush >/dev/null
 log=$(dump log-today | sed -n 's/^ *log-record //p')
 grep -qE "^tcp $APP_UID 0\.0\.0\.0:0 .* - .*proxy=socks5:read:pl:-:-$" <<<"$log" ||
     fail "with the switch off, the log does not hold the SOCKS5 proxy's kind alone"
+# No record of the fixture's SOCKS5 proxy with its first hop starts after the switch went off, a second's margin
+# allowed for the phone's whole seconds.
+kept=$(SINCE="$off_since" APP="$APP_UID" awk '$1 == "tcp" && $2 == ENVIRON["APP"] && /proxy=socks5:read:p:/ {
+    for (i = 1; i <= NF; i++) if ($i ~ /^at=/) { split(substr($i, 4), t, "-"); if (t[1] + 1000 >= ENVIRON["SINCE"] + 0) print t[1] }
+}' <<<"$log")
+[ -z "$kept" ] || fail "with the switch off, the log got a record of the SOCKS5 proxy with its first hop (at=${kept%%$'\n'*})"
 # An inferred proxy's records wait ten minutes, its window of take-back, before the log gets them (ADR 0052, the fix
 # round's F2): none of Telegram's is in the log yet, though the flush wrote everything else. Every TCP flow of the
 # Telegram fixture in this check went to its MTProto proxy, so none may be there at all, marked or not: a record
@@ -256,7 +287,7 @@ grep -qE "^tcp $APP_UID 0\.0\.0\.0:0 .* - .*proxy=socks5:read:pl:-:-$" <<<"$log"
     fail "the log got a record of Telegram's inferred proxy within its window of take-back"
 ! grep -qE "^tcp $TELEGRAM_UID " <<<"$log" ||
     fail "the log got a record of a Telegram flow to its inferred proxy, unmarked, within the window of take-back: $(grep -E "^tcp $TELEGRAM_UID " <<<"$log" | head -2)"
-echo "ok: with the switch off, the log and \"Now\" keep the proxy's kind alone, and an inferred one's records wait for their window"
+echo "ok: with the switch off, \"Now\" shows the proxies' first hops and nothing asked, the log keeps their kind alone, and an inferred one's records wait for their window"
 
 # No password anywhere the network part writes or Android logs.
 shown="$(dump)

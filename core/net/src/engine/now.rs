@@ -24,7 +24,7 @@
 
 use super::activity::{Mark, Of};
 use super::logbook::without_destination;
-use super::proxied::own_first_hop;
+use super::proxied::{holds_destination, own_first_hop};
 use super::{Flow, NamedBy, Network, Shared, lock};
 use crate::snapshot::{AppNow, COLUMNS, OFF, PlaceNow, Snapshot, WINDOWS as VIEW_WINDOWS, Ways};
 use crate::states::Placed;
@@ -414,23 +414,22 @@ impl Counts {
         }
     }
 
-    /// Forgets the place a flow was counted under before a later fact named it otherwise: a proxy its bytes
-    /// declared, or a messenger's inferred (ADR 0052). The app keeps its bytes.
-    pub(super) fn forget_place(&mut self, uid: Option<u32>, before: &Flow) {
-        if let Some(app) = self.apps.get_mut(&uid) {
-            let had = app.places.len();
-            app.places.retain(|place| !same_place(&place.flow, before));
-            self.places -= had - app.places.len();
-        }
-    }
-
-    /// Counts the place a flow was counted under, `from`, as the place `to` from now on, as a messenger's proxy
-    /// taken back makes its flow what it would have been (ADR 0052, the fix round's S-M2): its bytes stay, and
+    /// Counts the place a flow was counted under, `from`, as the place `to` from now on: as a proxy its bytes
+    /// declared, or a messenger's inferred, names it (ADR 0052), or a messenger's proxy taken back makes it what
+    /// it would have been (the fix round's S-M2). Its bytes stay, merged into a place that already is `to`, and
     /// what was said of it goes.
     pub(super) fn rename_place(&mut self, uid: Option<u32>, from: &Flow, to: &Flow) {
-        if let Some(app) = self.apps.get_mut(&uid) {
-            for place in app.places.iter_mut().filter(|p| same_place(&p.flow, from)) {
-                place.flow = to.clone();
+        let Some(app) = self.apps.get_mut(&uid) else {
+            return;
+        };
+        let mut at = 0;
+        while at < app.places.len() {
+            let flow = &app.places[at].flow;
+            if same_place(flow, from) && !same_place(flow, to) && rename(&mut app.places, at, to) {
+                // Merged: the place now at `at` is another, read next.
+                self.places -= 1;
+            } else {
+                at += 1;
             }
         }
     }
@@ -473,6 +472,15 @@ impl Counts {
         {
             self.ended.swap_remove(oldest);
         }
+    }
+
+    /// The flows of the app `uid`'s places, read with no view, which sweeps.
+    #[cfg(test)]
+    pub(super) fn places_of(&self, uid: Option<u32>) -> Vec<Flow> {
+        self.apps
+            .get(&uid)
+            .map(|app| app.places.iter().map(|p| p.flow.clone()).collect())
+            .unwrap_or_default()
     }
 
     /// Whether an end of the app `uid` whose window still runs at `boot` is the place `flow`'s.
@@ -522,21 +530,30 @@ impl Counts {
         ended.retain(|end| end.at.saturating_add(SHOWN) > boot);
     }
 
-    /// Leaves out every app's own proxies that still show where they went, as "Log where these apps connect"
-    /// turned off asks (ADR 0052); the apps keep their bytes.
-    pub(super) fn hide_proxies(&mut self) {
-        for app in self.apps.values_mut() {
-            let had = app.places.len();
-            app.places.retain_mut(|place| match &place.flow.proxy {
-                // A plain request's place keeps its own address and names, and loses what it asked for.
-                Some(p) if p.kind == crate::proxies::Kind::Forward => {
-                    place.flow.proxy = Some(Box::new(p.without_asked()));
-                    true
+    /// Sets every place of the apps `of` names that holds where an app asked its proxy to go back to its first hop,
+    /// `to_first_hop` (`Shared::first_hop`), as "Log where these apps connect" turned off asks (R6): a place that
+    /// comes to be one already there is merged into it, and a plain request's keeps its own address and names. The
+    /// first hops then stay for their window.
+    pub(super) fn first_hops(
+        &mut self,
+        of: &dyn Fn(Option<u32>) -> bool,
+        to_first_hop: &dyn Fn(&Flow) -> Flow,
+    ) {
+        for (&uid, app) in &mut self.apps {
+            if !of(uid) {
+                continue;
+            }
+            let mut at = 0;
+            while at < app.places.len() {
+                if holds_destination(&app.places[at].flow) {
+                    let first_hop = to_first_hop(&app.places[at].flow);
+                    if rename(&mut app.places, at, &first_hop) {
+                        self.places -= 1;
+                        continue;
+                    }
                 }
-                Some(_) => place.flow.destination.ip().is_unspecified(),
-                None => true,
-            });
-            self.places -= had - app.places.len();
+                at += 1;
+            }
         }
     }
 
@@ -768,12 +785,12 @@ impl Shared {
             .filter(|chain| !chain.log_destinations)
             .map(|chain| chain.tool);
         let (view, head, mut found) = {
-            let live = lock(&self.live);
+            let mut live = lock(&self.live);
             let mut activity = lock(&self.activity);
             activity.counts.forget_old(now);
             // A first hop whose window ended is not drawn (R2). The switch is read under `live`, as naming reads it.
             let keeps = self.keeps_first_hops();
-            activity.expire_first_hops(boot, &keeps, &live);
+            self.sweep(&mut live, &mut activity, boot, &keeps);
             let counts = &activity.counts;
             let off = counts.off.as_ref().map(|off| (off.from, off.until));
             let mut view = View::new(now, counts.session, off, counts.cleared);
@@ -2592,6 +2609,11 @@ mod tests {
         let clock = super::super::clock::ManualClock::at(T);
         let mut shared = shared_with(platform);
         shared.clock = clock.clone();
+        // "Log where these apps connect" on: only then does a place hold where an app asked its proxy to go.
+        shared.tunnels.set(&crate::engine::TunnelSetting {
+            log_destinations: true,
+            ..crate::engine::TunnelSetting::default()
+        });
         let bytes = open(&shared, 1);
         // A second app's flow through a SOCKS5 proxy its bytes declared (version 4, ADR 0052).
         let Some(proxied) = shared.record(Flow {
@@ -3075,6 +3097,93 @@ mod tests {
         assert_eq!(
             (hops, places.len() - hops),
             (PLACES_PER_APP, PLACES_PER_APP)
+        );
+    }
+
+    /// Test 26 (BK): while a first hop is not kept, the next sweep sets back to its first hop whatever still holds
+    /// where an app asked its proxy to go: a place made so directly, and a live flow, then `unkept`.
+    #[test]
+    fn the_sweep_sets_back_what_still_holds_a_destination() {
+        let (shared, clock, _) = telling_at(T);
+        let hop = through_proxy(1, UID, 5);
+        let asked = Flow {
+            name: Some("example.org".into()),
+            named_by: NamedBy::Proxy,
+            proxy: hop.proxy.clone().map(|p| {
+                Box::new(crate::engine::Proxied {
+                    asked: Some((crate::proxies::Asked::Name("example.org".into()), 443)),
+                    ..*p
+                })
+            }),
+            ..hop
+        };
+        lock(&shared.activity).counts.count(
+            Some(UID),
+            T / 1000,
+            [10, 0, 0, 0],
+            IN_USE,
+            Seen::Flow(&asked),
+        );
+        let bytes = recorded(
+            &shared,
+            Flow {
+                id: 2,
+                ..asked.clone()
+            },
+        );
+        up_at(&shared, &clock, &bytes, 500, 10);
+        let places = shown_places(&shared, UID, T + 1_000);
+        assert!(
+            places.len() == 1
+                && !holds_destination(&places[0].flow)
+                && places[0].flow.name.as_deref() == Some("proxy-5.example.net"),
+            "{places:?}"
+        );
+        let live = lock(&shared.live);
+        assert!(!holds_destination(&live[&2].flow) && live[&2].unkept);
+    }
+
+    /// Test 27 (P1): clearing the live view, as ADR 0047's profile does at each screen-off, forgets every first hop
+    /// shown in full, their organisations and the table of ends; a held segment's seconds from before the clear
+    /// stay out; an open flow's next bytes show its first hop again, as this screen-on's.
+    #[test]
+    fn clearing_the_live_view_forgets_every_full_first_hop() {
+        let (shared, clock, _) = telling_at(T);
+        let ended = recorded(&shared, through_proxy(1, UID, 5));
+        let open = recorded(&shared, through_proxy(2, UID, 6));
+        let held = recorded(&shared, through_proxy(3, UID, 7));
+        up_at(&shared, &clock, &ended, 500, 10);
+        up_at(&shared, &clock, &open, 500, 10);
+        clock.set(T + 1_500);
+        shared.tell(&on_since(T, T + 1_000, T));
+        up_at(&shared, &clock, &held, 1_600, 30);
+        shared.finish(1);
+        shared.finish(3);
+        assert_eq!(shown_places(&shared, UID, T + 2_000).len(), 3);
+        {
+            let activity = lock(&shared.activity);
+            assert!(!activity.counts.ended.is_empty() && !activity.counts.organisations.is_empty());
+        }
+        lock(&shared.activity).counts.clear(T + 2_000);
+        {
+            let activity = lock(&shared.activity);
+            assert!(activity.counts.ended.is_empty(), "no end");
+            assert!(activity.counts.organisations.is_empty(), "no organisation");
+            assert!(activity.counts.places_of(Some(UID)).is_empty(), "no place");
+        }
+        let snapshot = shared.now_view(T + 2_000);
+        assert!(snapshot.apps.is_empty(), "{:?}", snapshot.apps);
+        let encoded = crate::snapshot::encode(&snapshot);
+        for n in [5, 6, 7] {
+            assert!(!encoded.windows(4).any(|w| w == [203, 0, 113, n]), "{n}");
+        }
+        up_at(&shared, &clock, &open, 2_500, 40);
+        let places = shown_places(&shared, UID, T + 3_000);
+        assert!(
+            places.len() == 1
+                && places[0].flow.destination == SocketAddr::from(([203, 0, 113, 6], 1080))
+                && own_first_hop(&places[0].flow),
+            "{places:?}"
         );
     }
 }

@@ -182,6 +182,7 @@ impl Shared {
         // ECH public name differs by design and is left out.
         if !hidden
             && let Some(live) = lock(&self.live).get(&id)
+            && !live.unkept
             && live.flow.named_by == NamedBy::Dns
             && let Some(dns) = &live.flow.name
         {
@@ -214,20 +215,26 @@ impl Shared {
                 flow.named_by = by;
             }
         };
-        let mut hidden_proxy = false;
+        let (mut hidden_proxy, mut unkept) = (false, false);
         if let Some(live) = lock(&self.live).get_mut(&id) {
-            if live.hidden || live.unkept {
+            if live.hidden {
                 hidden_proxy = live.flow.proxy.is_some();
+            } else if live.unkept {
+                // C1: an app's own proxy named without where it was asked to go is named by no hello after, the
+                // inner one included, live or kept. Read under the lock that names, so that a switch turned off
+                // in between cannot let the hello name it.
+                unkept = true;
             } else {
                 apply(&mut live.flow);
             }
         }
         // A proxied flow left out for "Log where these apps connect" takes no name, but the trackers its hello
         // names still mark it, as its company only (ADR 0052, the fix round's S-M1).
-        if hidden_proxy {
+        if hidden_proxy || unkept {
             self.mark_proxied(id, &own, opened.port);
         }
-        if self.keep_flows > 0
+        if !unkept
+            && self.keep_flows > 0
             && let Some(flow) = lock(&self.flows).iter_mut().rev().find(|f| f.id == id)
         {
             apply(flow);
@@ -247,7 +254,7 @@ impl Shared {
     ) -> Renaming {
         let from_live = lock(&self.live)
             .get(&opened.id)
-            .filter(|live| !live.hidden && !live.unkept)
+            .filter(|live| !live.hidden)
             .map(|live| {
                 (
                     live.flow.destination,

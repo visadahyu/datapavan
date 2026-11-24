@@ -891,17 +891,31 @@ impl Shared {
         }
     }
 
+    /// The sweep of apps' own proxies' first hops at `boot`, in time since the phone started (R2), with `live` and
+    /// the activity held by the caller, in that order, and `keeps` read under `live`, as naming reads it. First,
+    /// as a backstop, whatever still holds where an app asked its proxy to go, of an app whose first hops are not
+    /// kept, goes back to its first hop (audit-A 2); then the first hops whose window ended are stripped.
+    pub(super) fn sweep(
+        &self,
+        live: &mut HashMap<u64, Live>,
+        activity: &mut Activity,
+        boot: Duration,
+        keeps: &dyn Fn(Option<u32>) -> bool,
+    ) {
+        self.to_first_hops(live, activity, &|uid| !keeps(uid));
+        activity.expire_first_hops(boot, keeps, live);
+    }
+
     /// The sweep, taking `live` and then the activity as [`Shared::settle`] does, and the boot clock and the switch
     /// once; then, with those let go, the inferred flows past their window, under the proxies' own lock. Where no
     /// first hop is shown it is one pass over the places and the segments held that finds none.
     pub(super) fn sweep_first_hops(&self) {
         let boot = self.clock.since_boot();
         {
-            let live = lock(&self.live);
+            let mut live = lock(&self.live);
             let mut activity = lock(&self.activity);
-            // Read under `live`, as naming reads it.
             let keeps = self.keeps_first_hops();
-            activity.expire_first_hops(boot, &keeps, &live);
+            self.sweep(&mut live, &mut activity, boot, &keeps);
         }
         self.prune_inferred(boot);
     }
@@ -2557,6 +2571,86 @@ pub(super) mod tests {
         // No destination; and not through the tool, which that flow never went through (review b2, N3).
         assert_eq!(places(&engine), Some((0, false)));
         engine.stop();
+        Ok(())
+    }
+
+    /// Test 18 (W8): the table of ends goes to the next engine with the counts it times, and the window goes on
+    /// there: a first hop shown in full stays so until ten minutes after its end, then is stripped.
+    #[test]
+    fn the_table_of_ends_goes_to_the_next_engine() -> std::io::Result<()> {
+        use super::super::clock::Clock;
+        use super::super::{Addresses, Config, Engine, Handover, Limits};
+        let clock = ManualClock::at(T);
+        let start = |handover: Option<Handover>| -> std::io::Result<(Engine, std::os::unix::net::UnixDatagram)> {
+            let (engine_end, app) = std::os::unix::net::UnixDatagram::pair()?;
+            engine_end.set_nonblocking(true)?;
+            let platform = Arc::new(Engined {
+                clock: clock.clone(),
+                batches: std::sync::Mutex::default(),
+            });
+            let config = Config {
+                mtu: 1_500,
+                keep_flows: 0,
+                addresses: Addresses::COMMON,
+                limits: Limits::default(),
+            };
+            let engine = Engine::start_with(
+                std::os::fd::OwnedFd::from(engine_end),
+                config,
+                platform,
+                None,
+                (handover, None),
+            )?;
+            Ok((engine, app))
+        };
+        let hop = Flow {
+            destination: SocketAddr::from(([203, 0, 113, 5], 1080)),
+            name: Some("proxy.example.net".into()),
+            proxy: Some(Box::new(crate::engine::Proxied {
+                kind: crate::proxies::Kind::Socks5,
+                setting: false,
+                password: false,
+                outside_maker: false,
+                asked: None,
+                proxy_name: Some("proxy.example.net".into()),
+                organisation: None,
+                cover: None,
+                left_out: false,
+                trackers: Vec::new(),
+            })),
+            ..flow(1, Some(UID))
+        };
+        let (engine, _app) = start(None)?;
+        {
+            let mut activity = lock(&engine.shared.activity);
+            activity
+                .counts
+                .count(Some(UID), T / 1000, [10, 0, 0, 0], IN_USE, Seen::Flow(&hop));
+            activity
+                .counts
+                .end(Some(UID), hop.clone(), clock.since_boot());
+        }
+        let full = |engine: &Engine| {
+            engine
+                .shared
+                .now_view(clock.wall_ms())
+                .apps
+                .iter()
+                .find(|a| a.uid == Some(UID))
+                .and_then(|a| a.places.first())
+                .map(|p| super::super::proxied::own_first_hop(&p.flow))
+        };
+        clock.pass(60_000);
+        let handover = engine.hand_over();
+        let (mut next, _app) = start(Some(handover))?;
+        assert_eq!(
+            full(&next),
+            Some(true),
+            "the window goes on in the next engine"
+        );
+        clock.pass(9 * 60_000);
+        assert_eq!(full(&next), Some(false), "and ends there");
+        next.stop();
         Ok(())
     }
 

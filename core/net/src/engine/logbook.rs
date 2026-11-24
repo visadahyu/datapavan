@@ -38,7 +38,7 @@ use super::{Counters, DnsUse, Ech, Flow, LOG_DELAY, NamedBy, Outcome, Shared, lo
 use crate::log;
 use crate::packet;
 use crate::states::Placed;
-use std::collections::VecDeque;
+use std::collections::{HashMap, VecDeque};
 use std::sync::atomic::{AtomicBool, AtomicU64, Ordering};
 use std::sync::{Arc, Mutex};
 use std::time::Duration;
@@ -722,62 +722,89 @@ pub(super) fn without_destination(flow: &Flow) -> Flow {
 }
 
 impl Shared {
-    /// The chain was set anew (`Engine::chain`): the flows it now sends through the tool with their
-    /// destinations left out, as when "Log where these apps connect" is turned off, lose them at once,
-    /// in their open segments, in the segments that wait for their states, and in the live view, which
-    /// keeps of such an app only its bytes, marked as through the tool (ADR 0046, decision 6, item 5).
-    /// A flow opened while the switch was on adds no destination after. What the log already wrote stays,
-    /// for the retention the user chose.
+    /// The chain was set anew (`Engine::chain`), or the tunnels and their switch (`Engine::tunnels`), as each
+    /// change of "Log where these apps connect" is: the flows it now sends through the tool with their
+    /// destinations left out lose them at once, in their open segments, in the segments that wait for their
+    /// states, and in the live view, which keeps of such an app only its bytes, marked as through the tool (ADR
+    /// 0046, decision 6, item 5). A flow opened while the switch was on adds no destination after. What the log
+    /// already wrote stays, for the retention the user chose. Apps' own proxies then follow the switch
+    /// ([`Shared::leave_out_first_hops`]).
     pub(super) fn hide_chained(&self) {
-        // An app's own proxy follows the same switch (ADR 0052): a confirmed or inferred one's flow is left out
-        // whole; a plain request's keeps its own address and names, and loses only what it asked for.
-        let own_proxies = !self.logs_own_proxies();
-        let forwarded = |flow: &Flow| {
-            flow.proxy
-                .as_ref()
-                .is_some_and(|p| p.kind == crate::proxies::Kind::Forward)
-        };
-        let hides = |flow: &Flow| {
-            self.hides(flow.uid, flow.destination)
-                || own_proxies && flow.proxy.is_some() && !forwarded(flow)
-        };
-        let strip_asked = |flow: &mut Flow| {
-            if own_proxies && forwarded(flow) {
-                flow.proxy = flow.proxy.as_ref().map(|p| Box::new(p.without_asked()));
-            }
-        };
+        // Read before `live` is locked: this always follows the change of the setting it reads.
+        let keeps = self.keeps_first_hops();
         {
             let mut live = lock(&self.live);
             for live in live.values_mut() {
-                if !live.hidden && !live.unkept && hides(&live.flow) {
+                if !live.hidden && self.hides(live.flow.uid, live.flow.destination) {
                     live.hidden = true;
                     live.flow = without_destination(&live.flow);
                 }
-                strip_asked(&mut live.flow);
             }
             let mut activity = lock(&self.activity);
             for piece in &mut activity.held {
-                if let Of::Flow { flow, hidden, .. } = &mut piece.of {
-                    if !*hidden && hides(flow) {
-                        *hidden = true;
-                        *flow = without_destination(flow);
-                    }
-                    strip_asked(flow);
+                if let Of::Flow { flow, hidden, .. } = &mut piece.of
+                    && !*hidden
+                    && self.hides(flow.uid, flow.destination)
+                {
+                    *hidden = true;
+                    *flow = without_destination(flow);
                 }
             }
             activity.counts.hide(|uid| self.hides_app(uid));
-            if own_proxies {
-                activity.counts.hide_proxies();
-                // The records gathered for the next batch, which waits 30 s awake and longer across a sleep, as the
-                // logger's timer stands still: stripped while the activity is held, so that none is added meanwhile
-                // unstripped (R6). Those held back for a take-back are stripped as they go on (`to_log`).
-                for record in lock(&self.pending_log).iter_mut() {
-                    super::proxied::strip_for_log(record, &|_| false);
-                }
+        }
+        self.leave_out_first_hops(&|uid| !keeps(uid));
+    }
+
+    /// The apps `of` names keep their own proxies' first hops no longer (R6): every flow of theirs that holds where
+    /// it asked its proxy to go goes back to its first hop at once, open, held for its states and in "Now", the
+    /// open ones `unkept`; the records gathered for the next batch, which waits 30 s awake and longer across a
+    /// sleep as the logger's timer stands still, are stripped while the activity is held, so that none is added
+    /// unstripped meanwhile; and the sweep strips the first hops outside their window. Those held back for a
+    /// take-back, and the segments held, keep their first hop until they reach the log, which strips it then.
+    /// Unit C calls it for one app.
+    pub(super) fn leave_out_first_hops(&self, of: &dyn Fn(Option<u32>) -> bool) {
+        let boot = self.clock.since_boot();
+        {
+            let mut live = lock(&self.live);
+            let mut activity = lock(&self.activity);
+            self.to_first_hops(&mut live, &mut activity, of);
+            for record in lock(&self.pending_log).iter_mut() {
+                super::proxied::strip_for_log(record, &|uid| !of(uid));
+            }
+            let keeps = self.keeps_first_hops();
+            self.sweep(&mut live, &mut activity, boot, &keeps);
+        }
+        self.prune_inferred(boot);
+    }
+
+    /// Sets every flow of the apps `of` names that holds where it asked its proxy to go back to its first hop
+    /// (`first_hop`): live, the open ones then `unkept` so that no hello names them again, held for their states,
+    /// and placed in "Now". R6's conversion, and the sweep's backstop.
+    pub(super) fn to_first_hops(
+        &self,
+        live: &mut HashMap<u64, Live>,
+        activity: &mut super::activity::Activity,
+        of: &dyn Fn(Option<u32>) -> bool,
+    ) {
+        for live in live.values_mut() {
+            if !live.hidden && of(live.flow.uid) && super::proxied::holds_destination(&live.flow) {
+                live.unkept |= super::proxied::own_proxy(&live.flow);
+                live.flow = self.first_hop(&live.flow);
             }
         }
-        // Last: the first hops outside their window leave "Now" at once (R6).
-        self.sweep_first_hops();
+        for piece in &mut activity.held {
+            if let Of::Flow {
+                flow,
+                hidden: false,
+                ..
+            } = &mut piece.of
+                && of(flow.uid)
+                && super::proxied::holds_destination(flow)
+            {
+                *flow = self.first_hop(flow);
+            }
+        }
+        activity.counts.first_hops(of, &|flow| self.first_hop(flow));
     }
 }
 

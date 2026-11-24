@@ -4571,15 +4571,46 @@ fn an_apps_own_proxies_are_named_and_no_password_is_kept() -> Outcome {
             );
             assert!(!holds(&logged, SECRET), "no password in the log");
 
-            // "Log where these apps connect" off: the next proxy keeps its kind alone, in the log too.
+            // "Log where these apps connect" off: the next proxy keeps its first hop, its own address, and is named
+            // neither by its request nor by the hello inside it (C1); the log keeps its kind alone.
+            let before = LOGGED.lock().map_err(|e| e.to_string())?.len();
             engine.tunnels(&datapavan_net::TunnelSetting::default());
             let mut hidden = app_connect(socks).await?;
             hidden_request(&mut hidden, &auth).await?;
+            let inner = client_hello("inner.hidden.test");
+            step(&mut hidden, &inner, &inner).await?;
+            let flow = flow_to(&engine, socks, |f| {
+                f.proxy.as_ref().is_some_and(|p| p.asked.is_none())
+            })
+            .await?;
+            assert_eq!(flow.destination, socks, "its own address");
+            assert!(
+                flow.name
+                    .as_deref()
+                    .is_none_or(|n| n != "hidden.example" && n != "inner.hidden.test"),
+                "named by where it was asked to go: {flow:?}"
+            );
+            assert!(
+                !matches!(
+                    flow.named_by,
+                    datapavan_net::NamedBy::Proxy | datapavan_net::NamedBy::Tls
+                ),
+                "{flow:?}"
+            );
+            let proxy = flow.proxy.ok_or("no proxy kept")?;
+            assert!(proxy.password && !proxy.left_out, "{proxy:?}");
             drop(hidden);
             tokio::time::sleep(Duration::from_millis(300)).await;
             engine.flush_log();
             let logged = LOGGED.lock().map_err(|e| e.to_string())?.clone();
+            let since = logged.get(before..).unwrap_or_default();
+            assert!(!since.is_empty(), "the flow's records were written");
             assert!(!holds(&logged, b"hidden.example"), "not once it is off");
+            assert!(!holds(&logged, b"inner.hidden.test"), "nor its inner hello");
+            assert!(
+                !holds(since, &SERVER.octets()),
+                "nor the proxy's address, once the switch is off"
+            );
             assert!(!holds(&logged, SECRET), "no password in the log");
             assert!(
                 !format!("{:?}", engine.flows()).contains("hunter2"),

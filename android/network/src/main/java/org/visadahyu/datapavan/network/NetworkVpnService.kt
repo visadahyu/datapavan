@@ -1477,12 +1477,16 @@ class NetworkVpnService : VpnService() {
                     "tool=${if (app.isTool) 1 else 0} through-tool=${if (app.throughTool) 1 else 0} " +
                     "places=${app.destinations.size} $bytes",
             )
-            // An app's own proxies as "Now" holds them (ADR 0052): its kind, what was asked and the proxy's name where kept.
+            // An app's own proxies as "Now" holds them (ADR 0052): its kind, what was asked and the proxy's name where kept,
+            // and the place's bytes up and down in the last 10 minutes, by which scripts/verify-proxies.sh tells a flow
+            // opened after the switch went off from an earlier one that reached the same first hop.
             for (place in app.destinations) {
                 val proxy = place.proxy ?: continue
+                val tenMinutes = org.visadahyu.datapavan.network.activity.Snapshot.TEN_MINUTES * 2
                 writer.println(
                     "activity-proxy ${app.uid ?: "-"} ${proxyWords(proxy)} ${place.address.hostAddress}:${place.port} " +
-                        "named-by=${place.namedBy} ${place.name.ifEmpty { "-" }}",
+                        "named-by=${place.namedBy} ${place.name.ifEmpty { "-" }} " +
+                        "10m=${place.bytes[tenMinutes]}/${place.bytes[tenMinutes + 1]}",
                 )
             }
         }
