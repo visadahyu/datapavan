@@ -160,7 +160,17 @@ chaining is, and must follow the same switch.
      - *A cut before the reply.* A quarter hour's cut can fall between a request and a slow reply, and the cut segment
        is then an ordinary flow's, with the proxy's address and name. When the reply confirms the proxy with the switch
        off, that flow's records still in the batch are stripped too, each given the proxy's kind, so that the history
-       says it was a proxy. The batch waits at least 30 s, so this closes nearly every case (a limit below).
+       says it was a proxy. The batch waits at least 30 s, so this closes nearly every case (a limit below). Turning
+       the switch off strips such a record of a flow already named, and so does a naming of a segment held back for
+       a messenger's take-back before it.
+     - *A take-back, and substitution* (the maintainer, 2026-11-24, after unit A's review, engine, major 1:
+       «تایید شد», "approved"). A flow named a messenger's proxy and taken back (F2), or never named so for
+       substitution, is shown in "Now" as the flow it is. While the switch is off, the log keeps of it what it keeps of an own proxy
+       flow: a record stripped as it entered stays so, and its other records are stripped as it was, or would have
+       been, named. No proxy's address and no cover reaches the history with the switch off. The record keeps the
+       kind, the time, the bytes and the trackers. The mark that the inference was taken back needs a flag of the
+       log's next version, and comes with unit B. Unit C's choice for one app keeps such records whole where the user
+       picks it.
    - **R2, live.** With the switch off, "Now" shows the first hop of every own proxy flow: its address and port, DNS
      name, organisation and network, and for an inferred proxy its cover line. The flow is placed under the proxy
      server's own name. The destination is never live while the switch is off: live flows never hold it (C1), and the
@@ -267,7 +277,9 @@ chaining is, and must follow the same switch.
     from its behaviour, not from its documentation: where it did, its proxy would not be named (a false negative).
   - **The take-back's window** (F2): ten minutes after a naming; a direct connection later, as when the user turns the
     proxy off, takes nothing back, as the proxy was real until then. Past 1,024 held-back records, the oldest is
-    written as it is.
+    written as it is. Past 4,096 flows taken back or substituted, the oldest is forgotten, and a record of it that
+    comes later still is written as it is. Until unit B, a taken-back flow's records say, left out, what it was
+    inferred to be, with no mark that it was taken back (decision 8, R1).
   - **Signal's window after a third party** (F7): ten minutes; a 3-D Secure challenge longer than that, or a page
     Signal opens without a listed host before it, is named its proxy while Signal goes through one.
   - **The packet path is not zeroed** (S-m6): the tunnel's packet buffer, the fragment reassembler and a held Fast Open
@@ -280,8 +292,10 @@ chaining is, and must follow the same switch.
     Waiting segments, places and the table of ends hold it until the first sweep after their window: at the next
     reading of the apps' states, so at most a minute with the screen off, and while the phone sleeps, until it wakes
     and the first reading or view comes, about 5 s after the screen comes on. Held-back records made while the switch
-    was on hold it until they go on to the batch. A dump of the process's memory in that time holds it. Stripped
-    strings are not zeroed: the engine zeroes only credentials.
+    was on hold it until they go on to the batch. The view's cache of an address's organisation can hold a first hop's
+    address past its place, until the next change of the switch, an overflow of the cache or a clear (unit A's
+    review, engine, note 8). A dump of the process's memory in that time holds it. Stripped strings are not zeroed:
+    the engine zeroes only credentials.
   - **A batch already handed on** (decision 8, R1): a segment cut between a request and a slow reply, in a batch the
     logger already handed to the network part before the reply confirmed the proxy, stays as written, with the proxy's
     address and name.
@@ -363,8 +377,8 @@ reason.
   as any flow's does, with only the destination asked for following the switch. That would close F1's residual limit,
   but departs from the maintainer's rule of 2026-11-19 for the tool's own row (ADR 0046): the servers follow the
   switch. The maintainer's decision of 2026-11-22 resolved it (decision 8): every app's own proxy is shown in "Now"
-  with its first hop in full, whatever the switch; the destination asked for, and the first hop in the log, follow
-  it.
+  with its first hop in full, whatever the switch, while the connection is open and for ten minutes after it ends;
+  the destination asked for, and the first hop in the log, follow it.
 
 The minors and nits, as done: SOCKS4's printable user ID and SOCKS5's plausible methods (security m1); obfuscated2's
 high-bit bound and text rule (m2); the fake-TLS cover that resolves to its proxy, an accepted limit (m4); the profile's

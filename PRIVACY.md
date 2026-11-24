@@ -1,7 +1,7 @@
 # Privacy policy
 
 - **Effective:** 2026-11-07
-- **Updated:** 2026-11-20, with Datapavan Advanced's lines for 0.2.0, which is not yet released
+- **Updated:** 2026-11-24, with Datapavan Advanced's lines for 0.2.0, which is not yet released
 - **Responsible:** the Datapavan maintainer (mehdashti), until the Visadahyu Foundation is established
 
 **Datapavan collects no data about you.**

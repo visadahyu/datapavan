@@ -168,9 +168,10 @@ the organisations looked up, keeps only the moment the screen came on, and keeps
 before it that is placed later. It cannot clear the flows still open, which the engine needs to carry them, nor
 what waits for the log, which retention "none" under the profile already keeps from being written. What it cannot
 reach holds an app's own proxy's first hop, its address, name and network (ADR 0052, decision 8): the open flows
-while they are open, and the segments that wait for their apps' states until a sweep strips them, at the next reading
+while they are open, the segments that wait for their apps' states until a sweep strips them, at the next reading
 of the states after their ten minutes, at most a minute later with the screen off, and after a sleep at the first
-reading once the phone wakes. An open flow's bytes after the clear show its first hop again, as this screen-on
+reading once the phone wakes, and the records a messenger's proxy holds back that were made while the switch was on,
+until they go on to the log's next batch. An open flow's bytes after the clear show its first hop again, as this screen-on
 session's. W9 calls it at
 each screen-off **and at each screen-on**, before the view can open (review c1 of W5's third part, engine,
 finding 7): a clear at the screen-off alone leaves the window while the screen was off,
