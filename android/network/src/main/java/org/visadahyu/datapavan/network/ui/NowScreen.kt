@@ -427,9 +427,7 @@ private fun Destinations(context: Context, app: Snapshot.App, window: Int, view:
     for (place in shown) {
         HorizontalDivider(Modifier.padding(vertical = 4.dp))
         val bytes = stringResource(R.string.now_destination_bytes, size(context, place.bytes[window * 2]), size(context, place.bytes[window * 2 + 1]))
-        val proxy = place.proxy?.let {
-            proxyFacts(it, place.address, place.port, place.asn, view.groups[app.uid], view.companies, place.shownOnly)
-        }
+        val proxy = placeProxyFacts(place, view.groups[app.uid], view.companies)
         if (proxy != null && !proxy.kept) {
             // A proxy's flow the engine left out for the switch: its kind, how the network part knows, and the facts
             // that name nothing (ADR 0052), with the link to the switch.
@@ -547,6 +545,13 @@ internal fun proxyFacts(
     groupName = { companies?.name(it) ?: it },
     shownOnly = shownOnly,
 )
+
+/**
+ * The facts of a place's proxy in "Now", if it went through one, with the engine's mark of a first hop shown there
+ * only, as a pure function the JVM tests hold from the snapshot's destination to its row.
+ */
+internal fun placeProxyFacts(place: Snapshot.Destination, appGroup: String?, companies: Companies?): ProxyFacts.Facts? =
+    place.proxy?.let { proxyFacts(it, place.address, place.port, place.asn, appGroup, companies, place.shownOnly) }
 
 /** A proxy's kind, as the sentences set it in. */
 internal fun proxyKind(kind: ProxyFacts.Kind): Int = when (kind) {

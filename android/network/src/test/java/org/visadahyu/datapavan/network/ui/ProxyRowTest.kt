@@ -89,6 +89,31 @@ class ProxyRowTest {
         }
     }
 
+    /**
+     * Review A, rest, minor 3: the snapshot's mark reaches the row "Now" draws, from the destination as the snapshot
+     * reads it: shown only, the row ends with why and links to the switch; not, it does not.
+     */
+    @Test
+    fun theSnapshotsMarkReachesTheRow() {
+        val proxy = LogRecord.Proxy(LogRecord.PROXY_SOCKS5, proxyName = "proxy.example.net", organisation = "Hetzner Online GmbH")
+        val place = { shownOnly: Boolean ->
+            org.visadahyu.datapavan.network.activity.Snapshot.Destination(
+                protocol = 6, namedBy = 0, ech = 0, dns = 0, cameIn = false, address = hetzner, port = 1080, asn = 0,
+                network = 0, name = "proxy.example.net", dnsName = "", resolver = "", organisation = "",
+                bytes = List(6) { 1L }, proxy = proxy, shownOnly = shownOnly,
+            )
+        }
+        val shown = checkNotNull(placeProxyFacts(place(true), null, null))
+        assertEquals(true, shown.shownOnly)
+        val row = proxyRow(shown, past = false)
+        assertEquals(R.string.now_proxy_live_only, row.lines.last().text)
+        assertTrue(row.toSwitch)
+        val kept = checkNotNull(placeProxyFacts(place(false), null, null))
+        assertEquals(false to false, kept.shownOnly to proxyRow(kept, past = false).toSwitch)
+        assertEquals(true, proxyFacts(proxy, hetzner, 1080, 0, null, null, shownOnly = true).shownOnly)
+        assertEquals(null, placeProxyFacts(place(false).copy(proxy = null), null, null))
+    }
+
     /** With the switch on, a declared proxy and an inferred one say how the network part knows in their first line. */
     @Test
     fun aProxyKeptSaysWhereAndHowItIsKnown() {

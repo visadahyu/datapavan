@@ -1115,8 +1115,9 @@ microsocks, tinyproxy and mtg on a network with no way out) and the emulator's `
 `PROXYLAB_REQUIRED=1`. The proxy-like behaviour flags are part 2b: their thresholds need sessions of real apps on the
 A40 and the maintainer's word. The proxy record's unit A, on `proxy-record`, 2026-11-24 (ADR 0052, decision 8, as the
 maintainer decided on 2026-11-22): with the switch off, "Now" shows where an app's own proxy is while the connection
-is open and for ten minutes after it ends, on the time since the phone started, and the log keeps only its kind and
-the facts that name nothing, while where the app asked it to go is neither shown nor logged.
+is open and for ten minutes after it ends, on the time since the phone started, and the log keeps its kind, the
+trackers' marks and the facts that name nothing, while where the app asked it to go is neither shown nor logged (a
+plain request to an HTTP proxy, and SOCKS5's `UDP ASSOCIATE`, keep their server's address until unit B).
 
 Its fix round, on `watch-w8b-fix`, 2026-11-21, after one review round of two reviewers, with the coordinator's
 decisions written into ADR 0052: a SOCKS or `CONNECT` proxy is named only once the server's reply confirms it, and a
