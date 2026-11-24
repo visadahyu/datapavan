@@ -742,6 +742,12 @@ impl Shared {
         activity.counts.hide(|uid| self.hides_app(uid));
         if own_proxies {
             activity.counts.hide_proxies();
+            // The records gathered for the next batch, which waits 30 s awake and longer across a sleep, as the
+            // logger's timer stands still: stripped while the activity is held, so that none is added meanwhile
+            // unstripped (R6). Those held back for a take-back are stripped as they go on (`to_log`).
+            for record in lock(&self.pending_log).iter_mut() {
+                super::proxied::strip_for_log(record, &|_| false);
+            }
         }
     }
 }

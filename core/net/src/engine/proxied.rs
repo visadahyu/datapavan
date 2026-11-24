@@ -227,6 +227,28 @@ fn record_flow(record: &crate::log::Record) -> Option<u64> {
     }
 }
 
+/// What the log may keep of `record`, `keeps` saying whose apps' first hops are kept (R1): unkept, an app's own
+/// proxy's flow keeps its kind and the facts that name nothing (`logbook::without_destination`, the left-out
+/// shape the log already reads), and a plain request keeps its own address and loses only where it asked to go.
+pub(super) fn strip_for_log(record: &mut crate::log::Record, keeps: &dyn Fn(Option<u32>) -> bool) {
+    let crate::log::Record::Segment { flow, .. } = record else {
+        return;
+    };
+    if keeps(flow.uid) {
+        return;
+    }
+    match flow.proxy.as_deref() {
+        Some(proxy) if proxy.kind == Kind::Forward => {
+            if proxy.asked.is_some() {
+                let unasked = proxy.without_asked();
+                flow.proxy = Some(Box::new(unasked));
+            }
+        }
+        Some(proxy) if !proxy.left_out => *flow = super::logbook::without_destination(flow),
+        _ => {}
+    }
+}
+
 impl Shared {
     /// Sets what the network part tells for the proxies ([`ProxySetting`]); the open flows keep how they were named.
     pub(super) fn set_proxies(&self, setting: ProxySetting) {
@@ -249,6 +271,15 @@ impl Shared {
     /// it is told.
     pub(super) fn logs_own_proxies(&self) -> bool {
         self.tunnels.logs_destinations()
+    }
+
+    /// Whose apps' own proxies keep their first hop and where they were asked to go, as the switch reads at this
+    /// moment: every app's while "Log where these apps connect" is on. Each caller reads it once, under the lock
+    /// that orders it against a change of the switch, and asks it for each flow's app; the one place a choice
+    /// for single apps can join it (unit C's R3).
+    pub(super) fn keeps_first_hops(&self) -> impl Fn(Option<u32>) -> bool + use<> {
+        let all = self.logs_own_proxies();
+        move |_| all
     }
 
     /// Whether `address` is in the maker's own network, for the messenger `family`: `Some(true)` or
@@ -442,30 +473,40 @@ impl Shared {
     }
 
     /// The records the log gets now: those of flows named an inferred proxy within their window of take-back
-    /// are held back ([`HeldBack`]), and those whose window passed go first, in their order.
+    /// are held back ([`HeldBack`]), and those whose window passed go first, in their order. Each is stripped as
+    /// it enters, and again as it goes on from being held back ([`strip_for_log`]): what the log keeps of an app's
+    /// own proxy follows the switch as the record reaches it, however long it waited.
     pub(super) fn to_log(&self, records: &mut Vec<crate::log::Record>) {
         let now = self.clock.since_boot();
         let mut back = lock(&self.held_back);
         let mut pending = lock(&self.pending_log);
+        // Read once both are locked: a switch turned off before this is seen here, and one turned off after it
+        // strips `pending_log` itself (`hide_chained`), so no record slips between the two (audit-A 2).
+        let keeps = self.keeps_first_hops();
         back.until.retain(|_, until| *until > now);
         let HeldBack {
             until,
             records: held,
         } = &mut *back;
         let mut kept = std::collections::VecDeque::with_capacity(held.len());
-        for record in held.drain(..) {
+        for mut record in held.drain(..) {
             if record_flow(&record).is_some_and(|id| until.contains_key(&id)) {
                 kept.push_back(record);
             } else {
+                strip_for_log(&mut record, &keeps);
                 pending.push(record);
             }
         }
-        for record in records.drain(..) {
+        for mut record in records.drain(..) {
+            // Before it is held back too: a record made while the switch is off is never kept whole, even if the
+            // switch is turned on before its window ends.
+            strip_for_log(&mut record, &keeps);
             if record_flow(&record).is_some_and(|id| until.contains_key(&id)) {
                 kept.push_back(record);
                 if kept.len() > HELD_BACK
-                    && let Some(oldest) = kept.pop_front()
+                    && let Some(mut oldest) = kept.pop_front()
                 {
+                    strip_for_log(&mut oldest, &keeps);
                     pending.push(oldest);
                 }
             } else {
@@ -476,10 +517,16 @@ impl Shared {
     }
 
     /// Hands the log every record held back, as when the engine stops: no flow of it can be taken back after.
+    /// Each is stripped as the switch says now, read once `pending_log` is locked, as in [`Shared::to_log`].
     pub(super) fn release_held_back(&self) {
         let mut back = lock(&self.held_back);
         back.until.clear();
-        lock(&self.pending_log).extend(back.records.drain(..));
+        let mut pending = lock(&self.pending_log);
+        let keeps = self.keeps_first_hops();
+        for mut record in back.records.drain(..) {
+            strip_for_log(&mut record, &keeps);
+            pending.push(record);
+        }
     }
 
     /// A flow ended: a direct connection's end starts the window of substitution. An inferred flow that ended
@@ -2620,6 +2667,200 @@ mod tests {
                 && f.destination == at([93, 184, 216, 34], 443)
                 && f.name.as_deref() == Some("cdn.example.net")),
             "{waiting:?}"
+        );
+    }
+
+    /// The records of the flow `id` among `records`.
+    fn of_flow(records: &[Record], id: u64) -> Vec<Flow> {
+        records
+            .iter()
+            .filter_map(|r| match r {
+                Record::Segment { flow, .. } if flow.id == id => Some(flow.clone()),
+                _ => None,
+            })
+            .collect()
+    }
+
+    /// Whether a record's flow has the log's left-out shape: the proxy's kind and the facts that name nothing,
+    /// with no address, port, name or network, and nothing of the proxy that names a place.
+    fn left_out(flow: &Flow) -> bool {
+        flow.destination.ip().is_unspecified()
+            && flow.destination.port() == 0
+            && flow.name.is_none()
+            && flow.dns_name.is_none()
+            && flow.network.is_none()
+            && flow.proxy.as_ref().is_some_and(|p| {
+                p.left_out
+                    && p.asked.is_none()
+                    && p.proxy_name.is_none()
+                    && p.organisation.is_none()
+                    && p.cover.is_none()
+            })
+    }
+
+    /// The records held back for a take-back, of the flow `id`.
+    fn held_back_of(shared: &Shared, id: u64) -> Vec<Flow> {
+        of_flow(
+            &lock(&shared.held_back)
+                .records
+                .iter()
+                .cloned()
+                .collect::<Vec<_>>(),
+            id,
+        )
+    }
+
+    /// Telegram's proxy inferred on a flow to Example Net's network, ended, and its records written: held back for
+    /// their window of take-back.
+    fn inferred_and_ended(shared: &Shared) -> u64 {
+        telegram(shared);
+        let (proxy, bytes) = open(shared, UID, at([93, 184, 216, 34], 443));
+        relay(shared, proxy, &bytes, &[&obfuscated()]);
+        shared.finish(proxy.id);
+        shared.flush();
+        assert!(
+            of_flow(&taken(shared), proxy.id).is_empty(),
+            "held back for the window"
+        );
+        assert_ne!(held_back_of(shared, proxy.id).len(), 0, "held back");
+        proxy.id
+    }
+
+    /// Another app's flow, ended and written once the clock moved on: `to_log` runs, and lets go what waited.
+    fn another_record(shared: &Shared) {
+        let (other, bytes) = open(shared, UID + 1, at([198, 51, 100, 7], 443));
+        bytes.up(shared, 10, 50);
+        shared.finish(other.id);
+        shared.flush();
+    }
+
+    fn switch(shared: &Shared, on: bool) {
+        shared.tunnels.set(&TunnelSetting {
+            log_destinations: on,
+            ..TunnelSetting::default()
+        });
+        shared.hide_chained();
+    }
+
+    /// E1: with the switch off, an app's own proxy's records are stripped where they enter the log.
+    #[test]
+    fn with_the_switch_off_a_proxys_record_is_stripped_where_it_enters_the_log() {
+        let shared = engine(false);
+        learn(&shared, "203.0.113.5", "proxy.example.net");
+        let (opened, bytes) = open(&shared, UID, at([203, 0, 113, 5], 1080));
+        let reads = socks5_reads();
+        let reads: Vec<&[u8]> = reads.iter().map(Vec::as_slice).collect();
+        relay_replied(&shared, opened, &bytes, &reads, SOCKS5_REPLY);
+        shared.finish(opened.id);
+        shared.flush();
+        let written = of_flow(&taken(&shared), opened.id);
+        assert!(
+            !written.is_empty() && written.iter().all(left_out),
+            "{written:?}"
+        );
+    }
+
+    /// E2: records held back whole while the switch was on are stripped as `to_log` lets them go, once it is off.
+    #[test]
+    fn records_held_back_go_on_stripped_once_the_switch_is_off() {
+        let (shared, clock) = engine_at(true);
+        let id = inferred_and_ended(&shared);
+        assert!(
+            held_back_of(&shared, id).iter().all(|f| {
+                f.destination == at([93, 184, 216, 34], 443)
+                    && f.proxy.as_ref().is_some_and(|p| p.organisation.is_some())
+            }),
+            "held back whole while the switch is on"
+        );
+        switch(&shared, false);
+        clock.pass(11 * 60_000);
+        another_record(&shared);
+        let written = of_flow(&taken(&shared), id);
+        assert!(
+            !written.is_empty() && written.iter().all(left_out),
+            "{written:?}"
+        );
+    }
+
+    /// E3: the same as the engine stops, whether it hands over or not: `release_held_back` strips too.
+    #[test]
+    fn records_held_back_are_stripped_when_the_engine_stops_once_the_switch_is_off() {
+        for handing_over in [false, true] {
+            let shared = engine(true);
+            let id = inferred_and_ended(&shared);
+            switch(&shared, false);
+            shared
+                .handing_over
+                .store(handing_over, std::sync::atomic::Ordering::Relaxed);
+            shared.finish_all();
+            let written = of_flow(&taken(&shared), id);
+            assert!(
+                !written.is_empty() && written.iter().all(left_out),
+                "{handing_over} {written:?}"
+            );
+        }
+    }
+
+    /// E5: a record made while the switch is off is held back already stripped, and turning the switch on before
+    /// its window ends restores nothing.
+    #[test]
+    fn a_record_made_while_the_switch_is_off_stays_stripped_after_it_is_turned_on() {
+        let (shared, clock) = engine_at(false);
+        let id = inferred_and_ended(&shared);
+        assert!(held_back_of(&shared, id).iter().all(left_out));
+        switch(&shared, true);
+        clock.pass(11 * 60_000);
+        another_record(&shared);
+        let written = of_flow(&taken(&shared), id);
+        assert!(
+            !written.is_empty() && written.iter().all(left_out),
+            "{written:?}"
+        );
+    }
+
+    /// E4 and F1: turning the switch off strips the records gathered for the next batch: an app's own proxy's to
+    /// its kind, and a plain request's of where it asked to go.
+    #[test]
+    fn turning_the_switch_off_strips_the_batch_the_log_has_not_got_yet() {
+        let shared = engine(true);
+        learn(&shared, "203.0.113.5", "proxy.example.net");
+        let (socks, bytes) = open(&shared, UID, at([203, 0, 113, 5], 1080));
+        let reads = socks5_reads();
+        let reads: Vec<&[u8]> = reads.iter().map(Vec::as_slice).collect();
+        relay_replied(&shared, socks, &bytes, &reads, SOCKS5_REPLY);
+        let (plain, bytes) = open(&shared, UID, at([203, 0, 113, 6], 8080));
+        relay(
+            &shared,
+            plain,
+            &bytes,
+            &[b"GET http://example.org/a HTTP/1.1\r\n\r\n"],
+        );
+        shared.finish(socks.id);
+        shared.finish(plain.id);
+        shared.flush();
+        {
+            let pending = lock(&shared.pending_log);
+            let asked = |id| {
+                of_flow(&pending, id)
+                    .iter()
+                    .all(|f| f.proxy.as_ref().is_some_and(|p| p.asked.is_some()))
+            };
+            assert!(asked(socks.id) && asked(plain.id), "{pending:?}");
+        }
+        switch(&shared, false);
+        let records = taken(&shared);
+        let socks = of_flow(&records, socks.id);
+        assert!(!socks.is_empty() && socks.iter().all(left_out), "{socks:?}");
+        let plain = of_flow(&records, plain.id);
+        assert!(!plain.is_empty(), "{records:?}");
+        assert!(
+            plain
+                .iter()
+                .all(|f| f.destination == at([203, 0, 113, 6], 8080)
+                    && f.proxy.as_ref().is_some_and(|p| p.kind == Kind::Forward
+                        && p.asked.is_none()
+                        && !p.left_out)),
+            "{plain:?}"
         );
     }
 }
