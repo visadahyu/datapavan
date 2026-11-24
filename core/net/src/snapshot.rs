@@ -1,8 +1,8 @@
 //! What the live view "Now" draws (ADR 0046, decision 2 (d)), as the engine hands it to the network part's Kotlin
 //! side once a second while the view is open: each app's bytes by its state in each window, and the
-//! destinations it reached, from memory only. Version 4, little-endian:
+//! destinations it reached, from memory only. Version 5, little-endian:
 //!
-//! - version (4), when it was taken (milliseconds since 1970, UTC), what the latest reading of the
+//! - version (5), when it was taken (milliseconds since 1970, UTC), what the latest reading of the
 //!   states knew (0 none came yet, 1 the states, 2 nothing: the network part has no usage access, 3 nothing: Android
 //!   gave no events, as before the first unlock after a restart), the end of what was told, the screen
 //!   (0 off, 1 on, 2 not known), when it last came on (0 not known), the window "while the screen was
@@ -17,7 +17,8 @@
 //!   access, no events, told too late, no app, not told): 80 numbers (u64), window by window; then a
 //!   count (u16) of destinations;
 //! - each destination: protocol, where its name came from, ECH, the app's own DNS, flags (bit 0: it
-//!   came in), its address (length 4 or 16, then the bytes) and port, the AS number (0 none) and what its
+//!   came in; bit 1: an app's own proxy's first hop, shown here only, for its window, as its app's are not logged),
+//!   its address (length 4 or 16, then the bytes) and port, the AS number (0 none) and what its
 //!   owner is, then its name, the DNS name beside it where the two differ, the known resolver and the
 //!   organisation behind its network, each a length byte and UTF-8, and its bytes up and down for each
 //!   window: 6 numbers; then its route, as the log writes it: a byte (0 directly, 1 through the tool, 2
@@ -33,7 +34,8 @@
 //!
 //! Version 2 (W5's third part) added the window while the screen was off and the bytes in no state by
 //! why; version 3 (W7, part 1) each destination's route and each app's tunnel; version 4 (W8, part 2a, ADR 0052)
-//! each destination's proxy. Both sides ship in one build, so the Kotlin side reads version 4 only.
+//! each destination's proxy; version 5 (the proxy record's unit A, ADR 0052 decision 9) the flag of a first hop
+//! shown here only. Both sides ship in one build, so the Kotlin side reads version 5 only.
 
 use crate::engine::{Flow, Network};
 use crate::log::{
@@ -42,7 +44,7 @@ use crate::log::{
 use crate::states::{Known, Placed, Screen};
 
 /// The version of the snapshot.
-pub const VERSION: u8 = 4;
+pub const VERSION: u8 = 5;
 
 /// Bytes up and down.
 pub type Ways = [u64; 2];
@@ -111,6 +113,9 @@ pub struct PlaceNow {
     pub organisation: Option<(Network, String)>,
     /// Its bytes up and down, by window.
     pub bytes: [Ways; 3],
+    /// Whether it is an app's own proxy's first hop that "Now" shows only for its window, its app's first hops not
+    /// being logged (ADR 0052, R2): the engine decides it, so that the screens say so without the rule.
+    pub shown_only: bool,
 }
 
 /// The snapshot in its stored form.
@@ -162,7 +167,7 @@ pub fn encode(snapshot: &Snapshot) -> Vec<u8> {
             out.push(named_by_code(flow.named_by));
             out.push(ech_code(flow.ech));
             out.push(dns_code(flow.dns));
-            out.push(u8::from(flow.came_in));
+            out.push(u8::from(flow.came_in) | u8::from(place.shown_only) << 1);
             push_address(&mut out, flow.destination);
             let network = place.organisation.as_ref().map(|o| o.0).or(flow.network);
             push_network(&mut out, network);
@@ -223,6 +228,7 @@ mod tests {
                 "Edgecast".into(),
             )),
             bytes: [[1, 2], [3, 4], [5, 6]],
+            shown_only: false,
         }
     }
 
@@ -251,7 +257,7 @@ mod tests {
             }],
         };
         let out = encode(&snapshot);
-        let mut expected = vec![4];
+        let mut expected = vec![5];
         expected.extend_from_slice(&1_000u64.to_le_bytes());
         expected.push(2);
         expected.extend_from_slice(&900u64.to_le_bytes());
@@ -290,6 +296,14 @@ mod tests {
         expected.push(0);
         expected.extend_from_slice(&0u32.to_le_bytes());
         assert_eq!(out, expected);
+        // Version 5: a first hop shown here only sets the destination's flags' bit 1, beside bit 0, came in.
+        let flags = 1 + 8 + 1 + 8 + 1 + 3 * 8 + 4 + 4 + 1 + 1 + 80 * 8 + 2 + 4;
+        assert_eq!(out[flags], 0b01);
+        let mut shown = snapshot;
+        shown.apps[0].places[0].shown_only = true;
+        let out = encode(&shown);
+        assert_eq!(out[flags], 0b11);
+        assert_eq!(out.len(), expected.len());
     }
 
     /// An app with no UID, a state not told yet, the tool, nothing known, the screen off: each in its

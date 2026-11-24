@@ -1484,7 +1484,8 @@ class NetworkVpnService : VpnService() {
                 val proxy = place.proxy ?: continue
                 val tenMinutes = org.visadahyu.datapavan.network.activity.Snapshot.TEN_MINUTES * 2
                 writer.println(
-                    "activity-proxy ${app.uid ?: "-"} ${proxyWords(proxy)} ${place.address.hostAddress}:${place.port} " +
+                    "activity-proxy ${app.uid ?: "-"} ${proxyWords(proxy, place.shownOnly)} " +
+                        "${place.address.hostAddress}:${place.port} " +
                         "named-by=${place.namedBy} ${place.name.ifEmpty { "-" }} " +
                         "10m=${place.bytes[tenMinutes]}/${place.bytes[tenMinutes + 1]}",
                 )
@@ -1899,11 +1900,15 @@ class NetworkVpnService : VpnService() {
      * whether the flow came in, and the app's state (ADR 0046) last, so that the fields before keep their
      * places, and the record's start and end, in milliseconds since 1970, after them.
      */
-    /** A proxy as the debug builds' dump writes it: `kind:how:flags:asked:proxy-name`, `-` for none; no credential is kept. */
-    private fun proxyWords(proxy: LogRecord.Proxy): String {
+    /**
+     * A proxy as the debug builds' dump writes it: `kind:how:flags:asked:proxy-name`, `-` for none; no credential is
+     * kept. The flag `v`, a first hop "Now" shows only, is given by the caller: a record of the log never has it.
+     */
+    private fun proxyWords(proxy: LogRecord.Proxy, shownOnly: Boolean = false): String {
         val kind = listOf("-", "socks5", "socks4", "connect", "forward", "mtproto", "whatsapp", "signal").getOrElse(proxy.kind) { "?" }
         val flags = listOfNotNull(
             "s".takeIf { proxy.setting }, "p".takeIf { proxy.password }, "o".takeIf { proxy.outsideMaker }, "l".takeIf { proxy.leftOut },
+            "v".takeIf { shownOnly },
         ).joinToString("").ifEmpty { "-" }
         val asked = if (proxy.askedPort >= 0) "${proxy.asked}@${proxy.askedPort}" else "-"
         return "$kind:${if (proxy.declared) "read" else "inferred"}:$flags:$asked:${proxy.proxyName.ifEmpty { "-" }}"

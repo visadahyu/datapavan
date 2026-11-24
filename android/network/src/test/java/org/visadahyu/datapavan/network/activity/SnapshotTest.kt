@@ -71,18 +71,50 @@ class SnapshotTest {
         assertEquals(listOf(1_000L, 1_000L, 1_000L, 1_000L, 900L, 1_000L), web.bytes)
         assertNull(web.proxy)
 
-        // Version 4: a destination through a SOCKS5 proxy its bytes declared (ADR 0052).
+        // Version 4: a destination through a SOCKS5 proxy its bytes declared (ADR 0052); version 5: as "Now" shows it
+        // with the switch off, its first hop, named by the proxy's DNS name, nothing asked, and shown there only.
         val proxied = snapshot.apps[2].destinations.single()
-        assertEquals("example.org" to 5, proxied.name to proxied.namedBy)
+        assertEquals("proxy.example.net" to 0, proxied.name to proxied.namedBy)
         assertEquals("203.0.113.5" to 1080, proxied.address.hostAddress to proxied.port)
         assertEquals(
             org.visadahyu.datapavan.network.log.LogRecord.Proxy(
-                org.visadahyu.datapavan.network.log.LogRecord.PROXY_SOCKS5, password = true, asked = "example.org",
-                askedPort = 443, proxyName = "proxy.example.net", organisation = "Hetzner Online GmbH",
-                trackers = listOf(312),
+                org.visadahyu.datapavan.network.log.LogRecord.PROXY_SOCKS5, password = true,
+                proxyName = "proxy.example.net", organisation = "Hetzner Online GmbH", trackers = listOf(312),
             ),
             proxied.proxy,
         )
+        assertEquals(true, proxied.shownOnly)
+        assertEquals(listOf(false, false), listOf(encrypted.shownOnly, web.shownOnly))
+    }
+
+    /**
+     * Version 5: a destination's flags' bit 1 says "shown here only", read only on an app's own proxy's first hop kept
+     * whole. On a destination with no proxy, one left out, or a plain request, which the engine never marks so, and any
+     * bit above it, the snapshot is refused.
+     */
+    @Test
+    fun readsAFirstHopShownOnlyAndRefusesTheBitElsewhere() {
+        val header = 1 + 8 + 1 + 8 + 1 + 3 * 8 + 4
+        val app = 4 + 1 + 1 + Snapshot.WINDOWS * Snapshot.COLUMNS * 2 * 8 + 2
+        // The flags byte of the first app's destination, which has no proxy, and of the third app's, a first hop.
+        val noProxy = header + app + 4
+        val third = header + (0..1).sumOf { app + destinationsOf(it) + 4 } + app + 4
+        val proxied = checkNotNull(Snapshot.parse(fixture)).apps[2].destinations.single()
+        val kind = fixture.size - 4 - proxyBytes(proxied.proxy)
+        val set = { bytes: ByteArray, at: Int, value: Int -> bytes.copyOf().also { it[at] = value.toByte() } }
+        assertEquals(0b10, fixture[third].toInt())
+        assertEquals(false, Snapshot.parse(set(fixture, third, 0))?.apps?.get(2)?.destinations?.single()?.shownOnly)
+        assertNull("no proxy", Snapshot.parse(set(fixture, noProxy, fixture[noProxy].toInt() or 0b10)))
+        assertNull("left out", Snapshot.parse(set(fixture, kind + 1, fixture[kind + 1].toInt() or 16)))
+        val forward = org.visadahyu.datapavan.network.log.LogRecord.PROXY_FORWARD
+        assertNull("a plain request", Snapshot.parse(set(fixture, kind, forward)))
+        assertEquals(
+            forward,
+            Snapshot.parse(set(set(fixture, kind, forward), third, 0))?.apps?.get(2)?.destinations?.single()?.proxy?.kind,
+        )
+        for (bit in 2..7) {
+            assertNull("bit $bit", Snapshot.parse(set(fixture, third, 0b10 or (1 shl bit))))
+        }
     }
 
     /**
@@ -223,7 +255,8 @@ class SnapshotTest {
         assertNull("version 1", Snapshot.parse(fixture.copyOf().also { it[0] = 1 }))
         assertNull("version 2", Snapshot.parse(fixture.copyOf().also { it[0] = 2 }))
         assertNull("version 3", Snapshot.parse(fixture.copyOf().also { it[0] = 3 }))
-        assertNull(Snapshot.parse(fixture.copyOf().also { it[0] = 5 }))
+        assertNull("version 4", Snapshot.parse(fixture.copyOf().also { it[0] = 4 }))
+        assertNull(Snapshot.parse(fixture.copyOf().also { it[0] = 6 }))
         assertNull("no engine runs", Snapshot.parse(ByteArray(0)))
     }
 }

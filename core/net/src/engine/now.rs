@@ -784,7 +784,7 @@ impl Shared {
             .chain()
             .filter(|chain| !chain.log_destinations)
             .map(|chain| chain.tool);
-        let (view, head, mut found) = {
+        let (view, head, mut found, keeps) = {
             let mut live = lock(&self.live);
             let mut activity = lock(&self.activity);
             activity.counts.forget_old(now);
@@ -833,7 +833,7 @@ impl Shared {
                     }
                 }
             }
-            (view, head, found)
+            (view, head, found, keeps)
         };
         self.prune_inferred(boot);
         self.look_up(&view, &mut found);
@@ -853,6 +853,9 @@ impl Shared {
                             found.get(&flow.destination.ip()).cloned().flatten()
                         };
                         PlaceNow {
+                            // The engine alone decides it, with the switch it swept by, so that no screen
+                            // repeats the rule (ADR 0052, decision 9).
+                            shown_only: super::proxied::strips(&flow, &keeps),
                             flow,
                             organisation,
                             bytes,
@@ -2609,23 +2612,20 @@ mod tests {
         let clock = super::super::clock::ManualClock::at(T);
         let mut shared = shared_with(platform);
         shared.clock = clock.clone();
-        // "Log where these apps connect" on: only then does a place hold where an app asked its proxy to go.
-        shared.tunnels.set(&crate::engine::TunnelSetting {
-            log_destinations: true,
-            ..crate::engine::TunnelSetting::default()
-        });
         let bytes = open(&shared, 1);
-        // A second app's flow through a SOCKS5 proxy its bytes declared (version 4, ADR 0052).
+        // A second app's flow through a SOCKS5 proxy its bytes declared (version 4, ADR 0052), as "Now" shows it
+        // with "Log where these apps connect" off: its first hop, named by the proxy's DNS name, nothing asked,
+        // shown there only (version 5).
         let Some(proxied) = shared.record(Flow {
             destination: SocketAddr::from(([203, 0, 113, 5], 1080)),
-            name: Some("example.org".into()),
-            named_by: NamedBy::Proxy,
+            name: Some("proxy.example.net".into()),
+            named_by: NamedBy::Dns,
             proxy: Some(Box::new(crate::engine::Proxied {
                 kind: crate::proxies::Kind::Socks5,
                 setting: false,
                 password: true,
                 outside_maker: false,
-                asked: Some((crate::proxies::Asked::Name("example.org".into()), 443)),
+                asked: None,
                 proxy_name: Some("proxy.example.net".into()),
                 organisation: Some("Hetzner Online GmbH".into()),
                 cover: None,
@@ -2702,7 +2702,7 @@ mod tests {
         assert_eq!(bytes_of(&snapshot, None)[0][8], [50, 0], "no app");
         let mut text = String::from(
             "# The network part's live view: one snapshot as the engine writes it (core/net/src/snapshot.rs,\n\
-             # version 4), in hex. Written by the engine's test the_kotlin_sides_snapshot_fixture_is_what_the_engine_writes\n\
+             # version 5), in hex. Written by the engine's test the_kotlin_sides_snapshot_fixture_is_what_the_engine_writes\n\
              # (core/net/src/engine/now.rs), which fails when the engine writes otherwise; run it with\n\
              # DATAPAVAN_WRITE_FIXTURE=1 to write it anew. Read by SnapshotTest. Not edited by hand.\n",
         );
@@ -2988,9 +2988,11 @@ mod tests {
         shared.tell(&on_since(T, T + 1_000, T));
         shared.finish(1);
         clock.pass(20 * MINUTE);
-        assert!(own_first_hop(
-            &shown_places(&shared, UID, clock.wall_ms())[0].flow
-        ));
+        let places = shown_places(&shared, UID, clock.wall_ms());
+        assert!(
+            own_first_hop(&places[0].flow) && !places[0].shown_only,
+            "{places:?}"
+        );
         assert!(own_first_hop(&counted_places(&shared, UID)[0]));
     }
 

@@ -7,7 +7,7 @@ import org.visadahyu.datapavan.network.log.AppState
 
 /**
  * What the live view "Now" draws (ADR 0046, decision 2 (d)), as the engine hands it over
- * ([org.visadahyu.datapavan.network.Engine.nativeActivity]; core/net/src/snapshot.rs, version 4): each app
+ * ([org.visadahyu.datapavan.network.Engine.nativeActivity]; core/net/src/snapshot.rs, version 5): each app
  * that sent or received in a window, with its bytes by state, those in no state by why, the window while
  * the screen was off, the destinations it reached with each one's route and proxy, and the WireGuard tunnel it went
  * through with its destinations not kept (W7). From the engine's memory only; nothing of it is kept. Both
@@ -97,10 +97,15 @@ data class Snapshot(
         val tunnel: Long = 0,
         /** The proxy it went through, read from the connection or inferred (version 4; ADR 0052); null for none. */
         val proxy: org.visadahyu.datapavan.network.log.LogRecord.Proxy? = null,
+        /**
+         * Whether it is an app's own proxy's first hop that "Now" shows only for its window, its app's first hops not
+         * being logged (version 5; ADR 0052, R2): the engine decides it, so the screen repeats no rule.
+         */
+        val shownOnly: Boolean = false,
     )
 
     companion object {
-        const val VERSION: Byte = 4
+        const val VERSION: Byte = 5
 
         const val NOTHING_YET = 0
         const val STATES = 1
@@ -189,7 +194,9 @@ data class Snapshot(
             val namedBy = b.get().toInt() and 0xff
             val ech = b.get().toInt() and 0xff
             val dns = b.get().toInt() and 0xff
-            val flags = b.get().toInt()
+            val flags = b.get().toInt() and 0xff
+            // Bit 0, came in; bit 1 (version 5), shown here only. No other.
+            require(flags and 0xfc == 0)
             val address = InetAddress.getByAddress(ByteArray(b.get().toInt() and 0xff).also { b.get(it) })
             val port = b.short.toInt() and 0xffff
             val asn = b.int.toLong() and 0xffffffffL
@@ -205,9 +212,16 @@ data class Snapshot(
             require(via <= org.visadahyu.datapavan.network.log.LogRecord.VIA_TUNNEL)
             require((via == org.visadahyu.datapavan.network.log.LogRecord.VIA_TUNNEL) == (tunnel != 0L))
             val proxy = org.visadahyu.datapavan.network.log.LogRecord.Proxy.read(b)
+            // Shown here only is an app's own proxy's first hop, kept whole: never with no proxy, left out, or a plain
+            // request, which the engine never marks so.
+            val shownOnly = flags and 2 != 0
+            require(
+                !shownOnly || proxy != null && !proxy.leftOut &&
+                    proxy.kind != org.visadahyu.datapavan.network.log.LogRecord.PROXY_FORWARD,
+            )
             return Destination(
                 protocol, namedBy, ech, dns, flags and 1 != 0, address, port, asn, network,
-                name, dnsName, resolver, organisation, bytes, via, tunnel, proxy,
+                name, dnsName, resolver, organisation, bytes, via, tunnel, proxy, shownOnly,
             )
         }
 

@@ -1748,7 +1748,13 @@ mod tests {
         assert_eq!(proxy.proxy_name.as_deref(), Some("proxy.example.net"));
         assert_eq!(proxy.organisation.as_deref(), Some("Example Net, Inc."));
         assert!(proxy.asked.is_none() && !proxy.left_out && proxy.password);
-        let snapshot = crate::snapshot::encode(&shared.now_view(T + 1_000));
+        let view = shared.now_view(T + 1_000);
+        let places: Vec<_> = view.apps.iter().flat_map(|a| a.places.iter()).collect();
+        assert!(
+            places.len() == 1 && places[0].shown_only,
+            "shown here only: {places:?}"
+        );
+        let snapshot = crate::snapshot::encode(&view);
         assert!(holds(&snapshot, b"proxy.example.net") && holds(&snapshot, &[93, 184, 216, 5]));
         assert!(!holds(&snapshot, b"example.com") && !holds_secret(&snapshot));
         // A messenger's cover is shown live, and kept out of the log.
@@ -1769,7 +1775,14 @@ mod tests {
                 .as_deref(),
             Some("www.google.com")
         );
-        let snapshot = crate::snapshot::encode(&shared.now_view(T + 1_000));
+        let view = shared.now_view(T + 1_000);
+        assert!(
+            view.apps
+                .iter()
+                .flat_map(|a| a.places.iter())
+                .all(|p| p.shown_only)
+        );
+        let snapshot = crate::snapshot::encode(&view);
         assert!(holds(&snapshot, b"www.google.com") && holds(&snapshot, &[93, 184, 216, 34]));
         shared.finish(proxy.id);
         shared.flush();

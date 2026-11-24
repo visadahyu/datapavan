@@ -238,8 +238,9 @@ none_asked_now() { ! grep -q "inner\.proxylab\.test" <<<"$(proxies_now)"; }
 within 5 none_asked_now || fail "with the switch off, \"Now\" still holds where an app asked its proxy to go: $(proxies_now)"
 # The flows of the part before reached the same first hops, which stay in "Now" for their ten minutes, so the flows
 # opened now are told apart by the bytes they add there (audit-A 1), and in the log by when their records start.
-SOCKS_HOP="^$APP_UID socks5:read:p:-:- ${HOST//./\\.}:$PROXYLAB_PORT named-by=4 - 10m="
-TELEGRAM_HOP="^$TELEGRAM_UID mtproto:inferred:o:-:- ${HOST//./\\.}:$PROXYLAB_PORT_MTG "
+# The flag `v`: shown there only, for its window, as the switch is off.
+SOCKS_HOP="^$APP_UID socks5:read:pv:-:- ${HOST//./\\.}:$PROXYLAB_PORT named-by=4 - 10m="
+TELEGRAM_HOP="^$TELEGRAM_UID mtproto:inferred:ov:-:- ${HOST//./\\.}:$PROXYLAB_PORT_MTG "
 # The bytes up and down in the last 10 minutes of the "Now" lines that match the pattern $1, all together. One awk,
 # no grep: under pipefail a grep that finds nothing would end the script (the pattern goes by the environment, which
 # awk reads without turning its backslashes into escapes).
