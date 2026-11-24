@@ -804,7 +804,7 @@ async fn resolve(
 ) -> Option<(Vec<u8>, Step)> {
     // Through the tool: every step, in order, none held (the tool's network is not the network beneath), and
     // nothing recorded. Directly, the ladder's epoch with its plan: what each step gives is recorded only while the
-    // network is the one it was planned on (Ladder::epoch).
+    // network is the one it was planned on (Ladder::epoch), and while `config` is still the resolver's (current).
     let (plan, epoch) = if tool.is_some() {
         (config.setup(false).steps_through_tool(), None)
     } else {
@@ -858,7 +858,7 @@ async fn resolve(
                 let Ok((step, got)) = done else { continue };
                 match got {
                     Ok(answer) => {
-                        if let Some(epoch) = epoch {
+                        if let Some(epoch) = epoch.filter(|_| current(shared, config)) {
                             told(shared, |l| {
                                 if l.epoch() == epoch {
                                     l.answered(step);
@@ -876,7 +876,7 @@ async fn resolve(
                         return Some((answer, step));
                     }
                     Err(failure) => {
-                        if let Some(epoch) = epoch {
+                        if let Some(epoch) = epoch.filter(|_| current(shared, config)) {
                             let mut ladder = lock(&shared.resolver.ladder);
                             if ladder.epoch() == epoch {
                                 ladder.failed(step, failure, Instant::now());
@@ -892,6 +892,17 @@ async fn resolve(
         }
     }
     None
+}
+
+/// Whether `config` is still the resolver's. A lookup can read it before the user chooses another resolver and plan
+/// after: its steps are then the old choice's, while the ladder's epoch is already the new one's, and `Step::Choice`
+/// names the new resolver (the review round's finding 3). Read before the ladder's lock, never under it: `set` swaps
+/// the config before it raises the epoch, so a swap that comes between this and that lock is seen there.
+fn current(shared: &Shared, config: &Arc<DnsConfig>) -> bool {
+    shared
+        .resolver
+        .config()
+        .is_some_and(|now| Arc::ptr_eq(&now, config))
 }
 
 impl Setup {
@@ -1951,6 +1962,8 @@ mod tests {
             })
         };
         tokio::time::sleep(Duration::from_millis(100)).await;
+        let held = |shared: &Arc<Shared>| lock(&shared.resolver.ladder).held(Instant::now());
+        assert_eq!(held(&shared), 0, "nothing came back before the change");
         shared.resolver.network_moved();
         let Ok(found) = lookup.await else {
             unreachable!("the lookup ends")
@@ -1981,12 +1994,37 @@ mod tests {
             })
         };
         tokio::time::sleep(Duration::from_millis(100)).await;
+        let held = |shared: &Arc<Shared>| lock(&shared.resolver.ladder).held(Instant::now());
+        assert_eq!(held(&shared), 0, "nothing came back before the change");
         shared.resolver.set(Some(lab_config("choice preset pdoh")));
         let Ok(found) = lookup.await else {
             unreachable!("the lookup ends")
         };
         let (address, _) = read(found);
         assert!(address.is_some(), "the app still gets its answer");
+        assert_eq!(fake.seen(Carry::Dot).len(), 1, "the old choice was asked");
+        assert_eq!(
+            lock(&shared.resolver.ladder).held(Instant::now()),
+            0,
+            "the new choice is not held"
+        );
+    }
+
+    /// The review round's finding 3: a lookup that read the config before the user chose another resolver, and plans
+    /// after, asks the old choice; its failure does not hold the new one.
+    #[tokio::test(flavor = "current_thread")]
+    async fn a_lookup_with_the_config_before_a_new_choice_records_nothing() {
+        let (shared, fake) = resolving("choice preset pdot");
+        fake.does(Carry::Dot, Does::Fail(Failure::Tampered));
+        let Some(old) = shared.resolver.config() else {
+            unreachable!("a config")
+        };
+        shared.resolver.set(Some(lab_config("choice preset pdoh")));
+        let Some(asked) = hygiene::read(&app_query("a.example.com", 1)) else {
+            unreachable!("a query")
+        };
+        let found = resolve(&shared, &old, &asked, None).await;
+        assert!(found.is_some(), "a later step answers");
         assert_eq!(fake.seen(Carry::Dot).len(), 1, "the old choice was asked");
         assert_eq!(
             lock(&shared.resolver.ladder).held(Instant::now()),
