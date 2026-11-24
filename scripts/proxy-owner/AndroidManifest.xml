@@ -1,0 +1,28 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+    The proxy record's measurements 7.1 and 7.2 (scripts/measure-proxy-settings.sh): a test-only device owner of this
+    project's own that sets Android's proxy settings without the Settings screens: the emulator's Wi-Fi network's own
+    proxy (a host and port, or a PAC URL), and the global proxy a device owner recommends. The script makes it the
+    device owner on a freshly booted emulator with no account, and takes that away when it is done; testOnly, so that
+    adb may. It sends nothing itself and logs only what it set. Emulators only; never shipped.
+-->
+<manifest xmlns:android="http://schemas.android.com/apk/res/android"
+    package="org.visadahyu.datapavan.proxyowner">
+
+    <uses-permission android:name="android.permission.ACCESS_WIFI_STATE" />
+    <uses-permission android:name="android.permission.CHANGE_WIFI_STATE" />
+    <!-- Android lists saved Wi-Fi networks only to an app that may read where the phone is. -->
+    <uses-permission android:name="android.permission.ACCESS_COARSE_LOCATION" />
+    <uses-permission android:name="android.permission.ACCESS_FINE_LOCATION" />
+
+    <application android:label="Datapavan proxy owner" android:hasCode="true" android:testOnly="true">
+        <receiver android:name="org.visadahyu.datapavan.proxyowner.OwnerReceiver"
+            android:permission="android.permission.BIND_DEVICE_ADMIN" android:exported="true">
+            <meta-data android:name="android.app.device_admin" android:resource="@xml/device_admin" />
+            <intent-filter>
+                <action android:name="android.app.action.DEVICE_ADMIN_ENABLED" />
+            </intent-filter>
+        </receiver>
+        <activity android:name="org.visadahyu.datapavan.proxyowner.OwnerActivity" android:exported="true" />
+    </application>
+</manifest>
