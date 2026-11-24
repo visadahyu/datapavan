@@ -129,7 +129,13 @@ internal class DotClient(
         // Read before any socket is made, which binds to the network beneath now (the service changes that first).
         val now = generation()
         var started: Open? = null
+        var stopped = false
         val kept = synchronized(lock) {
+            // Again under the lock, under which the stop raises the run: what this puts in [opens] a later stop withdraws.
+            if (exchange.run != runs.get()) {
+                stopped = true
+                return@synchronized null
+            }
             connections[exchange.key]?.takeIf { it.open } ?: run {
                 val inFlight = opens[exchange.key]
                 if (inFlight != null) {
@@ -141,6 +147,7 @@ internal class DotClient(
                 null
             }
         }
+        if (stopped) return reply(exchange.ticket, Exchanger.REFUSED, null)
         if (kept != null) return send(kept, exchange)
         started?.let { open(exchange.key, it) }
     }
@@ -334,7 +341,13 @@ internal class DotClient(
             var id: Int
             do {
                 id = random.nextInt(0x10000)
-            } while (id in late || waiting.putIfAbsent(id, entry) != null)
+                var taken = waiting.putIfAbsent(id, entry) != null
+                // A timed-out query's ID goes into [late] before its slot is freed, so it is seen here once the slot is ours.
+                if (!taken && id in late) {
+                    waiting.remove(id, entry)
+                    taken = true
+                }
+            } while (taken)
             if (!open) return !waiting.remove(id, entry)
             val sent = id
             entry.timer = timers.schedule({
@@ -362,8 +375,9 @@ internal class DotClient(
                 }
                 rearm()
             } catch (e: IOException) {
-                if (waiting.remove(id, entry)) settle(entry, Exchanger.outcomeOf(e))
+                // Closed first, so that a query asked again cannot land on this connection.
                 shut()
+                if (waiting.remove(id, entry)) settle(entry, Exchanger.outcomeOf(e))
             }
             return true
         }

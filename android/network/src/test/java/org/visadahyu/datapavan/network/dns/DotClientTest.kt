@@ -200,13 +200,13 @@ class DotClientTest {
         }
     }
 
-    private fun client(socket: () -> Socket = { Recording() }) = DotClient(
+    private fun client(now: () -> Int = generation::get, socket: () -> Socket = { Recording() }) = DotClient(
         { socket() },
         { SSLContext.getInstance("TLS").apply { init(null, arrayOf(SystemTrust.manager(listOf(certificate("ca")))), null) } },
         timers,
         work,
         { ticket, outcome, body -> replies.put(Triple(ticket, outcome, body)) },
-        generation::get,
+        now,
     )
 
     private val query = byteArrayOf(0, 0, 1, 0, 0, 1, 0, 0, 0, 0, 0, 0) + "\u0005probe\u0006dnslab\u0004test\u0000".toByteArray() + byteArrayOf(0, 1, 0, 1)
@@ -451,6 +451,45 @@ class DotClientTest {
     }
 
     @Test
+    fun aStopWhileALookupIsOnItsWayToTheLockOpensNothing() {
+        // The lookup has passed the run's first check and reads the network's generation when the service stops.
+        val server = server()
+        val reading = CountDownLatch(1)
+        val stopped = CountDownLatch(1)
+        val first = AtomicBoolean(true)
+        val client = client(now = {
+            if (first.getAndSet(false)) {
+                reading.countDown()
+                stopped.await(10, TimeUnit.SECONDS)
+            }
+            generation.get()
+        })
+        ask(client, 1, server)
+        assertTrue("the lookup reads the generation", reading.await(10, TimeUnit.SECONDS))
+        client.closeAll(again = false)
+        stopped.countDown()
+        failed(1, Exchanger.REFUSED)
+        noMoreReplies()
+        assertEquals("no connection after the stop", 0, accepted.size)
+    }
+
+    @Test
+    fun aConnectionThatOwesTooManyAnswersIsRetired() {
+        // Connection 1 never answers one query in two, and answers the others at once, so that it is never silent: once
+        // it owes more than 64 answers, past their time, it is retired, and the next lookup opens connection 2.
+        val server = server { n, k -> if (n == 1 && k % 2 == 1) Act.HOLD else Act.ANSWER }
+        val client = client()
+        val tickets = 100L until 240L
+        for (ticket in tickets) ask(client, ticket, server)
+        val got = List(tickets.count()) { replies.poll(Exchanger.CALL_MS + 5_000, TimeUnit.MILLISECONDS) ?: error("no reply") }
+        assertEquals("each lookup answered once", tickets.toSet(), got.map { it.first }.toSet())
+        ask(client, 1, server)
+        assertEquals("by a fresh connection", 2, answered(1))
+        assertEquals(2, accepted.size)
+        noMoreReplies()
+    }
+
+    @Test
     fun aLateAnswerMatchedToNothingShowsTheConnectionLives() {
         // Query 1 is answered after its time, query 2 at once, query 3 never: when query 3 runs out its time, query 1's
         // late answer, which no query waits for any more, is what was heard since query 3 went out.
@@ -466,7 +505,8 @@ class DotClientTest {
         assertEquals(1, asked.poll(10, TimeUnit.SECONDS))
         ask(client, 2, server)
         assertEquals(1, answered(2))
-        Thread.sleep(1_000)
+        // Query 3 goes out 1.5 s before query 1's late answer comes, and runs out its time 1.5 s after it.
+        Thread.sleep(2_000)
         asked.clear()
         ask(client, 3, server)
         assertEquals(1, asked.poll(10, TimeUnit.SECONDS))
