@@ -836,6 +836,15 @@ impl Shared {
             }
         }
         activity.counts.first_hops(of, &|flow| self.first_hop(flow));
+        // The flows debug builds keep, so that their dump holds no destination either (review A, engine, note 7);
+        // none in a release. A leaf lock: nothing is taken while it is held.
+        if self.keep_flows > 0 {
+            for flow in lock(&self.flows).iter_mut() {
+                if of(flow.uid) && super::proxied::holds_destination(flow) {
+                    *flow = self.first_hop(flow);
+                }
+            }
+        }
     }
 }
 

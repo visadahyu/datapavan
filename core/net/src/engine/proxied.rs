@@ -794,9 +794,21 @@ impl Shared {
             let was = live.flow.clone();
             mark(&mut live.flow);
             if live.flow != was {
-                lock(&self.activity)
-                    .counts
-                    .rename_place(was.uid, &was, &live.flow);
+                let mut activity = lock(&self.activity);
+                activity.counts.rename_place(was.uid, &was, &live.flow);
+                // The segments cut since its naming too, so that its end, which has the marks, matches them, and the
+                // sweep does not strip them at once (review A, engine, note 11).
+                for piece in &mut activity.held {
+                    if let super::activity::Of::Flow {
+                        flow,
+                        hidden: false,
+                        ..
+                    } = &mut piece.of
+                        && flow.id == id
+                    {
+                        mark(flow);
+                    }
+                }
             }
         }
     }
@@ -2250,12 +2262,14 @@ mod tests {
         }
         // Nowhere: the live flows, the segments held, "Now", the log.
         let gone = [&b"example.org"[..], b"example.net", b"ended11", b"ended12"];
+        // The flows a debug build keeps too (review A, engine, note 7).
         let seen = format!(
-            "{:?}{pieces:?}",
+            "{:?}{pieces:?}{:?}",
             lock(&shared.live)
                 .values()
                 .map(|l| &l.flow)
-                .collect::<Vec<_>>()
+                .collect::<Vec<_>>(),
+            lock(&shared.flows)
         );
         let snapshot = crate::snapshot::encode(&shared.now_view(T + 1_000));
         for id in [open_flow.id, resolver.id, signal.id] {
@@ -3841,6 +3855,78 @@ mod tests {
                     .all(|f| left_out(f)
                         && f.proxy.as_ref().is_some_and(|p| p.kind == Kind::MtProto)),
             "{written:?}"
+        );
+    }
+
+    /// Review A, engine, note 11: a segment cut between the confirmation and the inner hello takes the marks the hello
+    /// adds, as the live flow does, so that its end matches it.
+    #[test]
+    fn a_mark_from_the_inner_hello_reaches_the_segments_held() {
+        use super::super::clock::Clock;
+        let (shared, clock) = engine_at(false);
+        with_trackers(&shared);
+        learn(&shared, "203.0.113.5", "proxy.example.net");
+        let (opened, bytes) = open(&shared, UID, at([203, 0, 113, 5], 1080));
+        let mut sniff = Sniff::new(true, false);
+        let handshake = Mutex::new(Handshake::default());
+        let reads = socks5_reads();
+        for read in &reads[..3] {
+            for found in sniff.feed(read) {
+                shared.found(opened, found, &handshake);
+            }
+            bytes.up(&shared, read.len(), read.len() + 40);
+        }
+        shared.replied(opened, SOCKS5_REPLY, &handshake);
+        // A quarter hour cuts the segment, whose states are not told yet: it is held.
+        let now = clock.wall_ms();
+        let next =
+            (now / super::super::logbook::SEGMENT_MS + 1) * super::super::logbook::SEGMENT_MS;
+        clock.pass(next - now + 1_000);
+        shared.log_now();
+        for found in sniff.feed(&crate::tls::tests::hello("cdn.tracker.example", 1000)) {
+            shared.found(opened, found, &handshake);
+        }
+        let held: Vec<Flow> = lock(&shared.activity)
+            .held
+            .iter()
+            .filter_map(|p| match &p.of {
+                super::super::activity::Of::Flow { flow, .. } if flow.id == opened.id => {
+                    Some(flow.clone())
+                }
+                _ => None,
+            })
+            .collect();
+        assert!(
+            !held.is_empty()
+                && held
+                    .iter()
+                    .all(|f| f.proxy.as_ref().is_some_and(|p| p.trackers == [49])),
+            "{held:?}"
+        );
+    }
+
+    /// Review A, engine, note 10: an inner hello that names a known resolver moves no counter of the app's own
+    /// encrypted DNS for a flow it does not name (C1).
+    #[test]
+    fn an_inner_hello_that_names_nothing_moves_no_dns_counter() {
+        let shared = engine(false);
+        let (resolver, bytes) = open(&shared, UID, at([203, 0, 113, 8], 443));
+        let before = shared.counters.snapshot()[17];
+        relay_replied(
+            &shared,
+            resolver,
+            &bytes,
+            &[
+                b"CONNECT doh.sample.example:443 HTTP/1.1\r\n\r\n",
+                &ech_hello("doh.sample.example"),
+            ],
+            CONNECTED,
+        );
+        assert_eq!(live(&shared, resolver.id).dns, DnsUse::None);
+        assert_eq!(
+            shared.counters.snapshot()[17],
+            before,
+            "the flow's own DNS is as it was"
         );
     }
 }

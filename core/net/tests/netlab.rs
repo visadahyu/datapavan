@@ -4574,13 +4574,16 @@ fn an_apps_own_proxies_are_named_and_no_password_is_kept() -> Outcome {
             // "Log where these apps connect" off: the next proxy keeps its first hop, its own address, and is named
             // neither by its request nor by the hello inside it (C1); the log keeps its kind alone.
             let before = LOGGED.lock().map_err(|e| e.to_string())?.len();
+            // The flows kept so far: the earlier ones to the same proxy are set back to their first hop as the switch
+            // goes off, so only a newer one is the next proxy's.
+            let newest = engine.flows().iter().map(|f| f.id).max().unwrap_or(0);
             engine.tunnels(&datapavan_net::TunnelSetting::default());
             let mut hidden = app_connect(socks).await?;
             hidden_request(&mut hidden, &auth).await?;
             let inner = client_hello("inner.hidden.test");
             step(&mut hidden, &inner, &inner).await?;
             let flow = flow_to(&engine, socks, |f| {
-                f.proxy.as_ref().is_some_and(|p| p.asked.is_none())
+                f.id > newest && f.proxy.as_ref().is_some_and(|p| p.asked.is_none())
             })
             .await?;
             assert_eq!(flow.destination, socks, "its own address");

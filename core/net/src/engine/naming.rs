@@ -158,9 +158,12 @@ impl Shared {
             Some((dns, _)) if live => *dns == DnsUse::Encrypted,
             _ => resolver.is_some() || opened.dns == DnsUse::Encrypted,
         };
+        // A hello that names nothing (C1, below) moves no flow's mark, so not the counter of them either (review A,
+        // engine, note 10).
+        let unkept = lock(&self.live).get(&id).is_some_and(|l| l.unkept);
         match (opened.dns == DnsUse::Encrypted, encrypted) {
-            (false, true) => Counters::add(&counters.dns_encrypted, 1),
-            (true, false) => Counters::take_back(&counters.dns_encrypted, 1),
+            (false, true) if !unkept => Counters::add(&counters.dns_encrypted, 1),
+            (true, false) if !unkept => Counters::take_back(&counters.dns_encrypted, 1),
             _ => {}
         }
         Counters::add(
