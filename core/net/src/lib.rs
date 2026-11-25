@@ -7,27 +7,6 @@
 //! `datapavan-network-jni` hands it the tunnel's descriptor and answers its questions to Android.
 
 pub mod answers;
-
-/// A new map's hasher keys: `std`'s `RandomState::new`, out of line. Inlined, it took about 100 bytes of the native
-/// library at each map made, 39 times in the engine's start alone (the cold paths' size pass, ADR 0053). Each map
-/// still gets keys of its own, made in the same order as before.
-#[inline(never)]
-#[must_use]
-pub(crate) fn keys() -> std::hash::RandomState {
-    std::hash::RandomState::new()
-}
-
-/// An empty map with keys of its own: `HashMap::new()`, its keys made out of line ([`keys`]).
-#[must_use]
-pub(crate) fn map<K, V>() -> std::collections::HashMap<K, V> {
-    std::collections::HashMap::with_hasher(keys())
-}
-
-/// An empty set with keys of its own: `HashSet::new()`, its keys made out of line ([`keys`]).
-#[must_use]
-pub(crate) fn set<T>() -> std::collections::HashSet<T> {
-    std::collections::HashSet::with_hasher(keys())
-}
 pub mod blocking;
 pub mod catalogue;
 pub mod dns;
@@ -65,3 +44,25 @@ pub use engine::{
     ProxySetting, Resolution, Tally, TunnelSetting, TunnelState, Via,
 };
 pub use owners::NetworkKind;
+
+/// A new map's hasher keys: `std`'s `RandomState::new`, out of line. Inlined, it took about 100 bytes of the native
+/// library at each map made, 39 times in the engine's start alone (the cold paths' size pass, ADR 0053). Each map
+/// still gets keys of its own, made in the same order as before. A query ID to an endpoint's resolver takes its
+/// randomness from such keys too (`engine::tunnels`).
+#[inline(never)]
+#[must_use]
+pub(crate) fn keys() -> std::hash::RandomState {
+    std::hash::RandomState::new()
+}
+
+/// An empty map with keys of its own: `HashMap::new()`, its keys made out of line ([`keys`]).
+#[must_use]
+pub(crate) fn map<K, V>() -> std::collections::HashMap<K, V> {
+    std::collections::HashMap::with_hasher(keys())
+}
+
+/// An empty set with keys of its own: `HashSet::new()`, its keys made out of line ([`keys`]).
+#[must_use]
+pub(crate) fn set<T>() -> std::collections::HashSet<T> {
+    std::collections::HashSet::with_hasher(keys())
+}

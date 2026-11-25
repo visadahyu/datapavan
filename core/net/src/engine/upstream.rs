@@ -33,7 +33,7 @@ pub(super) async fn owner(
     remote: SocketAddr,
 ) -> Option<u32> {
     let platform = Arc::clone(&shared.platform);
-    let uid = super::blocking(move || platform.owner(protocol, local, remote))
+    let uid = super::on_pool(move || platform.owner(protocol, local, remote))
         .await
         .flatten();
     if let Some(uid) = uid {
@@ -53,7 +53,7 @@ async fn where_to(shared: &Arc<Shared>, uid: u32) {
     let platform = Arc::clone(&shared.platform);
     let keeper = Arc::clone(shared);
     let asked = super::spawn_task(async move {
-        let answer = super::blocking(move || platform.route_of_app(uid))
+        let answer = super::on_pool(move || platform.route_of_app(uid))
             .await
             .flatten();
         keeper.tunnels.answered(uid, answer, Instant::now());
@@ -70,7 +70,7 @@ async fn where_to(shared: &Arc<Shared>, uid: u32) {
 pub(super) async fn protect(shared: &Arc<Shared>, fd: BorrowedFd<'_>) -> io::Result<()> {
     let platform = Arc::clone(&shared.platform);
     let owned = fd.try_clone_to_owned()?;
-    if super::blocking(move || platform.protect(owned.as_raw_fd()))
+    if super::on_pool(move || platform.protect(owned.as_raw_fd()))
         .await
         .unwrap_or(false)
     {

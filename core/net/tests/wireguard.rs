@@ -912,21 +912,29 @@ async fn per_packet_cost() -> Outcome {
     Ok(())
 }
 
-/// The CPU time so far, in nanoseconds, from `/proc`'s `schedstat` (the ticks of `stat` are 10 ms, longer than many
-/// opens together): of the engine's thread, and of every thread of the process, the blocking pool's among them, which
-/// asks Android whose a socket is and protects it.
+/// The CPU time so far, in nanoseconds: of the engine's thread, from `/proc`'s `schedstat` (the ticks of `stat` are
+/// 10 ms, longer than many opens together), and of the whole process, from `CLOCK_PROCESS_CPUTIME_ID`, which keeps the
+/// time of threads that have ended. The process's holds the blocking pool's, which asks Android whose a socket is and
+/// protects it, and the measuring side's too: the test's own thread, the sinks, and the server's decryption.
 fn cpu_ns() -> Result<(u64, u64), Box<dyn std::error::Error>> {
-    let (mut engine, mut all) = (None, 0);
+    let mut engine = None;
     for task in std::fs::read_dir("/proc/self/task")? {
         let path = task?.path();
-        let stat = std::fs::read_to_string(path.join("schedstat"))?;
-        let ns: u64 = stat.split(' ').next().ok_or("schedstat")?.parse()?;
-        all += ns;
-        if std::fs::read_to_string(path.join("comm"))?.trim() == "network-engine" {
-            engine = Some(ns);
+        // A thread that ends meanwhile, a blocking worker idle too long, leaves nothing to read.
+        let (Ok(comm), Ok(stat)) = (
+            std::fs::read_to_string(path.join("comm")),
+            std::fs::read_to_string(path.join("schedstat")),
+        ) else {
+            continue;
+        };
+        if comm.trim() == "network-engine" {
+            engine = Some(stat.split(' ').next().ok_or("schedstat")?.parse()?);
         }
     }
-    Ok((engine.ok_or("no engine thread")?, all))
+    let process = nix::time::clock_gettime(nix::time::ClockId::CLOCK_PROCESS_CPUTIME_ID)?;
+    let process =
+        u64::try_from(process.tv_sec())? * 1_000_000_000 + u64::try_from(process.tv_nsec())?;
+    Ok((engine.ok_or("no engine thread")?, process))
 }
 
 /// A lookup of `name`'s address, with the ID `id`.
@@ -951,8 +959,8 @@ fn query(id: u16, name: &str) -> Vec<u8> {
 ///
 /// Prints the median and p90 of the time from the send to the arrival, and the CPU per open of the engine's thread and
 /// of the whole process. Each open hands work to the blocking pool and back, so a few hundred nanoseconds more or less
-/// are below what it resolves; the spread of runs is its resolution. `cargo test --release -- --ignored
-/// opening_a_udp_flow --nocapture`; built for Android too, and run on the emulator.
+/// are below what it resolves; the spread of runs is its resolution. It holds up to 800 sockets at once.
+/// `cargo test --release -- --ignored opening_a_udp_flow --nocapture`; built for Android too, and run on the emulator.
 #[tokio::test(flavor = "current_thread")]
 #[ignore = "a measurement, not a check: run it by name"]
 async fn opening_a_udp_flow() -> Outcome {

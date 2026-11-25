@@ -1032,12 +1032,15 @@ fn lock<T>(mutex: &Mutex<T>) -> MutexGuard<'_, T> {
     mutex.lock().unwrap_or_else(PoisonError::into_inner)
 }
 
-/// A task of the engine's that carries no traffic, boxed: every such task shares this one type, so that tokio's code
-/// for a task (its poll, shutdown and join handle, about 2 KB on x86-64 for each type of task) is in the library once,
-/// not once per kind of task. The resolver's tasks first (W8), then the tasks that open a flow, ask Android, listen
-/// and log (the cold paths' size pass, ADR 0053). It costs each task one allocation more, its future's box, and each
-/// of its polls one indirect call: the tasks that relay traffic, a mapping's, a relay's, a tunnel's, an echo's, keep
-/// their own types.
+/// A task of the engine's that relays no stream of traffic, boxed: every such task shares this one type, so that
+/// tokio's code for a task (its poll, shutdown and join handle, about 2 KB on x86-64 for each type of task) is in the
+/// library once, not once per kind of task. The resolver's tasks first (W8), then the tasks that open a flow, ask
+/// Android or the network part, listen and log (the cold paths' size pass, ADR 0053). Those that answer one lookup
+/// each, the encrypted resolver's (W8) and a chained app's, and the opening of a flow of lookups, run once per DNS
+/// query: Android's resolver sends each from a new port. Each task costs one allocation more, its future's box (tokio
+/// boxes a future larger than 16 KB in a release build itself), and each of its polls one indirect call; for a lookup
+/// that is one allocation more per query, two for a chained app's, beside the question to Android that a query from a
+/// new port asks. The tasks that relay traffic, a mapping's, a relay's, a tunnel's, an echo's, keep their own types.
 type Task = std::pin::Pin<Box<dyn std::future::Future<Output = ()> + Send>>;
 
 /// Spawns `task` as a [`Task`].
@@ -1051,10 +1054,12 @@ fn spawn_task(
 
 /// Runs `job` on the blocking pool, its answer if it ran to its end: as `tokio::task::spawn_blocking(job).await.ok()`,
 /// but as one type of blocking task for every job, so that the pool's code for a task is in the library once, not
-/// once per call to Android (the cold paths' size pass, ADR 0053). The job fills a slot of its own with its answer,
-/// which the caller reads once the job has ended; a caller that stops waiting leaves the job to run on, as before,
-/// and its answer goes with the slot.
-async fn blocking<R: Send + 'static>(job: impl FnOnce() -> R + Send + 'static) -> Option<R> {
+/// once per kind of call to Android (the cold paths' size pass, ADR 0053). The job is handed to the pool when the
+/// future is first polled, as `spawn_blocking`'s is when it is called, which makes no difference where the caller
+/// awaits it at once, as every caller does. The job fills a slot of its own with its answer, which the caller reads
+/// once the job has ended; a caller that stops waiting leaves the job to run on, as before, and its answer goes with
+/// the slot.
+async fn on_pool<R: Send + 'static>(job: impl FnOnce() -> R + Send + 'static) -> Option<R> {
     let slot = Arc::new(Mutex::new(None));
     let filled = Arc::clone(&slot);
     let job: Box<dyn FnOnce() + Send> = Box::new(move || {
@@ -1861,14 +1866,14 @@ mod tests {
         fn log(&self, _: &[u8]) {}
     }
 
-    /// One type of blocking task for every call to Android ([`blocking`], the cold paths' size pass): the job's answer
+    /// One type of blocking task for every call to Android ([`on_pool`], the cold paths' size pass): the job's answer
     /// once it ran, none for a job that panicked, and the pool still answers after one did.
     #[tokio::test(flavor = "current_thread")]
-    async fn a_blocking_job_gives_its_answer_and_none_when_it_panics() {
-        assert_eq!(blocking(|| 7u32).await, Some(7));
-        let panicked: Option<u32> = blocking(|| unreachable!("a job that panics")).await;
+    async fn a_job_on_the_pool_gives_its_answer_and_none_when_it_panics() {
+        assert_eq!(on_pool(|| 7u32).await, Some(7));
+        let panicked: Option<u32> = on_pool(|| unreachable!("a job that panics")).await;
         assert_eq!(panicked, None);
-        assert_eq!(blocking(|| "after").await, Some("after"));
+        assert_eq!(on_pool(|| "after").await, Some("after"));
     }
 
     /// Android protects what Kotlin is handed while it runs: a duplicate of the socket's descriptor, owned by the job
@@ -1920,8 +1925,9 @@ mod tests {
         assert!(waited.is_err(), "the job waits to be let go");
         drop(socket);
         let _ = go.send(());
-        let _ =
+        let ran =
             tokio::task::spawn_blocking(move || ended.recv_timeout(Duration::from_secs(5))).await;
+        assert!(matches!(ran, Ok(Ok(()))), "the job ran once let go");
         let named = lock(&platform.named).clone();
         let Some((fd, path)) = named else {
             unreachable!("the job named its descriptor")
@@ -1932,7 +1938,7 @@ mod tests {
         );
         // Once the job has ended its duplicate is closed: the number names that socket no more.
         let mut closed = false;
-        for _ in 0..100 {
+        for _ in 0..500 {
             if std::fs::read_link(format!("/proc/self/fd/{fd}"))
                 .ok()
                 .as_ref()
