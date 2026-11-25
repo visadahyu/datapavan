@@ -587,18 +587,104 @@ fn mark_unsure(flow: &mut Flow, taken_back: &TakenBack) {
 }
 
 impl Shared {
-    /// Sets what the network part tells for the proxies ([`ProxySetting`]); the open flows keep how they were named.
-    /// The set of chosen apps is built before `proxies` is locked and swapped after it is let go, one lock after the
-    /// other, never one inside the other (unit C, C2). Whether an app left that set, whose kept first hops and
-    /// destinations must then go ([`super::Engine::proxies`]).
     /// [`Shared::set_proxies`], as the network part hands it (`Engine::proxies`): an app that left the user's choice
-    /// loses at once what it kept (R6), as a switch turned off strips.
+    /// loses at once what it kept (R6), as a switch turned off strips; and where Android's setting or the network's
+    /// prefixes changed, a chosen app's open flows have their facts read again ([`Shared::recheck_facts`]).
     pub(super) fn apply_proxies(&self, setting: ProxySetting) {
-        if self.set_proxies(setting) {
+        let facts = {
+            let state = lock(&self.proxies);
+            state.setting.android != setting.android || state.setting.on_link != setting.on_link
+        };
+        let lost = self.set_proxies(setting);
+        // Not short-circuited: the facts are checked again whether or not an app left the set.
+        let rechecked = facts && self.recheck_facts();
+        if lost || rechecked {
             self.leave_out_first_hops();
         }
     }
 
+    /// Android's setting or the network beneath's prefixes changed (review C-engine, major 1): the facts the choice's
+    /// exclusions read were set once, at naming, and a chosen app's open flow named before Android's setting was known,
+    /// or before the prefixes of a network it moved to were, would be covered for its whole life. Each such flow's
+    /// `setting` and `local` are read again, one way only, from false to true, in every copy: live, in "Now"'s places,
+    /// held for its states, kept for debug builds, held back and gathered for the next batch. Whether one changed, for
+    /// the pass that then strips it. The facts are read with no lock held, as naming reads them.
+    fn recheck_facts(&self) -> bool {
+        let keeps = self.keeps_first_hops();
+        if keeps.apps.apps.is_empty() {
+            return false;
+        }
+        let chosen: Vec<(u64, std::net::SocketAddr, bool, bool)> = lock(&self.live)
+            .values()
+            .filter(|l| !l.hidden && own_proxy(&l.flow))
+            .filter_map(|l| {
+                let proxy = l.flow.proxy.as_deref()?;
+                keeps.apps.covers(l.flow.uid, proxy).then_some((
+                    l.flow.id,
+                    l.flow.destination,
+                    proxy.setting,
+                    proxy.local,
+                ))
+            })
+            .collect();
+        let changed: Vec<(u64, bool, bool)> = chosen
+            .into_iter()
+            .filter_map(|(id, destination, setting, local)| {
+                let now_setting = setting || self.android_setting(destination);
+                let now_local = local || self.local(destination.ip());
+                (now_setting != setting || now_local != local).then_some((
+                    id,
+                    now_setting,
+                    now_local,
+                ))
+            })
+            .collect();
+        if changed.is_empty() {
+            return false;
+        }
+        let of = |id: u64| changed.iter().find(|c| c.0 == id).map(|&(_, s, l)| (s, l));
+        let set = |flow: &mut Flow| {
+            if let (Some((setting, local)), Some(proxy)) = (of(flow.id), flow.proxy.as_deref_mut())
+            {
+                proxy.setting |= setting;
+                proxy.local |= local;
+            }
+        };
+        {
+            let mut live = lock(&self.live);
+            let mut activity = lock(&self.activity);
+            for (&id, live) in live.iter_mut() {
+                if of(id).is_some() {
+                    let was = live.flow.clone();
+                    set(&mut live.flow);
+                    activity.counts.rename_place(was.uid, &was, &live.flow);
+                }
+            }
+            for piece in &mut activity.held {
+                if let super::activity::Of::Flow { flow, .. } = &mut piece.of {
+                    set(flow);
+                }
+            }
+        }
+        if self.keep_flows > 0 {
+            for flow in lock(&self.flows).iter_mut() {
+                set(flow);
+            }
+        }
+        let mut back = lock(&self.held_back);
+        let mut pending = lock(&self.pending_log);
+        for record in back.records.iter_mut().chain(pending.iter_mut()) {
+            if let crate::log::Record::Segment { flow, .. } = record {
+                set(flow);
+            }
+        }
+        true
+    }
+
+    /// Sets what the network part tells for the proxies ([`ProxySetting`]); the open flows keep how they were named.
+    /// The set of chosen apps is built before `proxies` is locked and swapped after it is let go, one lock after the
+    /// other, never one inside the other (unit C, C2). Whether an app left that set, whose kept first hops and
+    /// destinations must then go ([`super::Engine::proxies`]).
     pub(super) fn set_proxies(&self, setting: ProxySetting) -> bool {
         let logged = Arc::new(LoggedApps::of(&setting));
         {
@@ -5197,25 +5283,51 @@ mod tests {
     /// stripped. Another chosen app's flow is untouched.
     #[test]
     fn turning_the_choice_off_strips_its_app_at_once() {
-        let shared = &engine(false);
+        let (shared, clock) = engine_at(false);
+        let shared = &shared;
         learn(shared, "203.0.113.5", "proxy.example.net");
         choose(shared, &[UID, UID + 1]);
         let off = socks5_of(shared, UID, [203, 0, 113, 5]);
         let stays = socks5_of(shared, UID + 1, [203, 0, 113, 5]);
         assert_eq!(live(shared, off.id).name.as_deref(), Some("example.com"));
+        // A segment of the open flow, cut at a quarter hour, waits for the next batch with what it asked for.
+        cut_and_tell(shared, &clock);
+        let pending_of = |id: u64| -> Vec<Flow> {
+            lock(&shared.pending_log)
+                .iter()
+                .filter_map(|r| match r {
+                    Record::Segment { flow, .. } if flow.id == id => Some(flow.clone()),
+                    _ => None,
+                })
+                .collect()
+        };
+        assert!(
+            pending_of(off.id)
+                .iter()
+                .any(|f| f.proxy.as_ref().is_some_and(|p| p.asked.is_some())),
+            "a pending record holds the destination before"
+        );
         let mut setting = lock(&shared.proxies).setting().clone();
         setting.logged = vec![UID + 1];
         shared.apply_proxies(setting);
+        assert!(!pending_of(off.id).is_empty());
+        assert!(
+            pending_of(off.id)
+                .iter()
+                .all(|f| f.proxy.as_ref().is_some_and(|p| p.asked.is_none())),
+            "and none after"
+        );
+        assert!(
+            pending_of(stays.id)
+                .iter()
+                .all(|f| f.proxy.as_ref().is_some_and(|p| p.asked.is_some())),
+            "another chosen app's records keep theirs"
+        );
         let back = live(shared, off.id);
         assert_eq!(back.name.as_deref(), Some("proxy.example.net"), "{back:?}");
         assert!(back.proxy.as_ref().is_some_and(|p| p.asked.is_none()));
         assert!(lock(&shared.live).get(&off.id).is_some_and(|l| l.unkept));
         assert_eq!(live(shared, stays.id).name.as_deref(), Some("example.com"));
-        assert!(lock(&shared.pending_log).iter().all(|r| match r {
-            Record::Segment { flow, .. } if flow.id == off.id =>
-                flow.proxy.as_ref().is_some_and(|p| p.asked.is_none()),
-            _ => true,
-        }));
     }
 
     /// Unit C, test 7: turning the choice on names no open flow anew: an unkept flow's later hello does not name it.
@@ -5475,5 +5587,117 @@ mod tests {
                 );
             }
         }
+    }
+
+    /// Review C-engine major 1: a chosen app's open flow named before Android's setting named its proxy, or before the
+    /// prefixes of the network it moved to made it local, is covered no longer once they do: its facts are read again,
+    /// and it goes back to its first hop at once, live and in the records gathered for the next batch.
+    #[test]
+    fn a_chosen_apps_flow_is_stripped_once_its_proxy_is_known_to_be_the_setting_or_local() {
+        use crate::local::{OnLink, Transport};
+        for local in [false, true] {
+            let (shared, clock) = engine_at(false);
+            learn(&shared, "203.0.113.5", "proxy.example.net");
+            choose(&shared, &[UID]);
+            let flow = socks5_of(&shared, UID, [203, 0, 113, 5]);
+            assert_eq!(live(&shared, flow.id).name.as_deref(), Some("example.com"));
+            cut_and_tell(&shared, &clock);
+            let mut setting = lock(&shared.proxies).setting().clone();
+            if local {
+                setting.on_link =
+                    OnLink::new([(IpAddr::from([203, 0, 113, 0]), 24)], Transport::Wifi);
+            } else {
+                setting.android = vec![("203.0.113.5".into(), 1080)];
+            }
+            shared.apply_proxies(setting);
+            let back = live(&shared, flow.id);
+            assert_eq!(
+                back.name.as_deref(),
+                Some("proxy.example.net"),
+                "local {local}: {back:?}"
+            );
+            assert!(
+                back.proxy
+                    .as_ref()
+                    .is_some_and(|p| p.asked.is_none() && if local { p.local } else { p.setting })
+            );
+            assert!(lock(&shared.live).get(&flow.id).is_some_and(|l| l.unkept));
+            assert!(lock(&shared.pending_log).iter().all(|r| match r {
+                Record::Segment { flow: f, .. } if f.id == flow.id => {
+                    f.proxy.as_ref().is_some_and(|p| p.asked.is_none())
+                }
+                _ => true,
+            }));
+        }
+    }
+
+    /// Review C-engine minor 2: the pass that runs when another app leaves the set reads the choice for each of its
+    /// loops, so that a still-chosen app keeps its destination everywhere: live, in "Now"'s place, in a segment held for
+    /// its state, in the record gathered for the next batch, and in the copy debug builds keep.
+    #[test]
+    fn another_apps_leaving_keeps_a_chosen_apps_destination_everywhere() {
+        let (shared, clock) = engine_at(false);
+        learn(&shared, "203.0.113.5", "proxy.example.net");
+        choose(&shared, &[UID, UID + 1]);
+        let open_one = socks5_of(&shared, UID, [203, 0, 113, 5]);
+        // A segment of the open flow, cut and told, waits for the next batch; then a flow ends, and its last segment
+        // is held for its state, which no reading has told yet.
+        cut_and_tell(&shared, &clock);
+        let ended = socks5_of(&shared, UID, [203, 0, 113, 5]);
+        shared.finish(ended.id);
+        let held_of = |shared: &Shared| -> Vec<Flow> {
+            lock(&shared.activity)
+                .held
+                .iter()
+                .filter_map(|piece| match &piece.of {
+                    super::super::activity::Of::Flow { flow, .. } if flow.uid == Some(UID) => {
+                        Some(flow.clone())
+                    }
+                    _ => None,
+                })
+                .collect()
+        };
+        assert!(!held_of(&shared).is_empty(), "a segment is held");
+        assert!(
+            lock(&shared.pending_log)
+                .iter()
+                .any(|r| matches!(r, Record::Segment { flow, .. } if flow.id == open_one.id)),
+            "a record is pending"
+        );
+        let mut setting = lock(&shared.proxies).setting().clone();
+        setting.logged = vec![UID];
+        shared.apply_proxies(setting);
+        assert_eq!(
+            live(&shared, open_one.id).name.as_deref(),
+            Some("example.com")
+        );
+        assert!(
+            held_of(&shared)
+                .iter()
+                .all(|f| f.proxy.as_ref().is_some_and(|p| p.asked.is_some())),
+            "held"
+        );
+        assert!(
+            lock(&shared.pending_log).iter().all(|r| match r {
+                Record::Segment { flow, .. } if flow.uid == Some(UID) => {
+                    flow.proxy.as_ref().is_some_and(|p| p.asked.is_some())
+                }
+                _ => true,
+            }),
+            "pending"
+        );
+        assert!(
+            lock(&shared.flows)
+                .iter()
+                .filter(|f| f.uid == Some(UID))
+                .all(|f| f.proxy.as_ref().is_some_and(|p| p.asked.is_some())),
+            "the debug copies"
+        );
+        let now = {
+            use super::super::clock::Clock;
+            clock.wall_ms()
+        };
+        let snapshot = crate::snapshot::encode(&shared.now_view(now));
+        assert!(holds(&snapshot, b"example.com"), "Now's place");
     }
 }

@@ -5157,12 +5157,27 @@ fn a_chosen_apps_proxy_is_logged_and_a_local_one_is_not() -> Outcome {
                 f.id > newest && f.proxy.as_ref().is_some_and(|p| p.asked.is_some())
             })
             .await?;
+            let before = LOGGED.lock().map_err(|e| e.to_string())?.len();
             engine.proxies(datapavan_net::ProxySetting::default());
             flow_to(&engine, socks, |f| {
                 f.id == flow.id && f.proxy.as_ref().is_some_and(|p| p.asked.is_none())
             })
             .await?;
-            drop(open);
+            // The next flow is stripped, and nothing logged after holds the destination (review C-engine minor 3).
+            let mut next = app_connect(socks).await?;
+            hidden_request(&mut next, &auth).await?;
+            flow_to(&engine, socks, |f| {
+                f.id > flow.id && f.proxy.as_ref().is_some_and(|p| p.asked.is_none())
+            })
+            .await?;
+            drop((open, next));
+            let since = logged_since(&engine, before).await?;
+            assert!(!since.is_empty(), "the flows' records were written");
+            assert!(
+                !holds(&since, b"hidden.example"),
+                "not once the choice is off"
+            );
+            assert!(!holds(&since, &SERVER.octets()), "nor the proxy's address");
             Ok(())
         },
     )
