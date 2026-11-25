@@ -78,8 +78,16 @@ class ExchangerTest {
         server.start(InetAddress.getLoopbackAddress(), 0)
     }
 
-    private fun http(exchanger: Exchanger, ticket: Long, carry: Int, server: MockWebServer, pins: String = "", known: String = "127.0.0.1") = exchanger.exchange(
-        ticket, carry, "https://doh.dnslab.test:${server.port}/dns-query", "doh.dnslab.test", known, pins, "",
+    private fun http(
+        exchanger: Exchanger,
+        ticket: Long,
+        carry: Int,
+        server: MockWebServer,
+        pins: String = "",
+        known: String = "127.0.0.1",
+        name: String = "doh.dnslab.test",
+    ) = exchanger.exchange(
+        ticket, carry, "https://$name:${server.port}/dns-query", name, known, pins, "",
         ByteArray(0), ByteArray(0), query,
     )
 
@@ -96,14 +104,15 @@ class ExchangerTest {
         given = SystemTrust.manager(trust),
     )
 
-    /** An exchanger whose network beneath has [route] as its proxy, for generation 0. */
-    private fun exchanger(trust: List<X509Certificate>, route: ResolverProxy?) = Exchanger(
+    /** An exchanger whose network beneath has [route] as its proxy, for generation 0; [opened] counts the ways opened. */
+    private fun exchanger(trust: List<X509Certificate>, route: ResolverProxy?, opened: () -> Unit = {}) = Exchanger(
         object : Exchanger.Host {
             override fun protect(socket: Socket) = true
             override val network: Network? = null
             override val generation = 0
             override val extraRoots = emptyList<X509Certificate>()
             override val resolverProxy = route
+            override fun proxyWayOpened() = opened()
         },
         replies = { ticket, outcome, body -> replies.put(Triple(ticket, outcome, body)) },
         given = SystemTrust.manager(trust),
@@ -154,10 +163,11 @@ class ExchangerTest {
         return proxy
     }
 
-    private fun route(proxy: ServerSocket) = ResolverProxy(
+    private fun route(proxy: ServerSocket, global: Boolean = false) = ResolverProxy(
         0,
         NetworkProxy.Setting("127.0.0.1", proxy.localPort, pac = false, exclusions = emptyList()),
         listOf(InetSocketAddress(InetAddress.getLoopbackAddress(), proxy.localPort)),
+        global,
     )
 
     private val query = byteArrayOf(0, 0, 1, 0, 0, 1, 0, 0, 0, 0, 0, 0) + "\u0005probe\u0006dnslab\u0004test\u0000".toByteArray() + byteArrayOf(0, 1, 0, 1)
@@ -613,6 +623,125 @@ class ExchangerTest {
         http(exchanger(listOf(certificate("ca")), other), 66, Exchanger.CARRY_DOH, server, known = "127.0.0.2")
         assertEquals(Exchanger.OK, reply().second)
         assertTrue(seen.poll(5, TimeUnit.SECONDS)!!.startsWith("CONNECT 127.0.0.2:${server.port} "))
+    }
+
+    /**
+     * The global proxy's review, M1: one server's outage, its direct connections refused again and again, never reaches
+     * the global proxy, whose operator learns nothing; the network's own proxy, with the same failure, is the second way
+     * at once.
+     */
+    @Test
+    fun oneServersOutageNeverReachesTheGlobalProxy() {
+        val server = webServer()
+        val seen = ArrayBlockingQueue<String>(8)
+        val proxy = connectProxy(seen, 200) { "127.0.0.1" }
+        val global = exchanger(listOf(certificate("ca")), route(proxy, global = true))
+        // Nothing listens at 127.0.0.2 or 127.0.0.3: both of the server's addresses refuse.
+        repeat(3) {
+            http(global, 70L + it, Exchanger.CARRY_DOH, server, known = "127.0.0.2,127.0.0.3")
+            assertTrue(reply().second != Exchanger.OK)
+        }
+        assertNull(seen.poll(500, TimeUnit.MILLISECONDS))
+        val network = exchanger(listOf(certificate("ca")), route(proxy))
+        server.enqueue(MockResponse.Builder().code(200).body(Buffer().write(byteArrayOf(1))).build())
+        http(network, 73, Exchanger.CARRY_DOH, server, known = "127.0.0.2")
+        assertEquals(Exchanger.OK, reply().second)
+        assertTrue(seen.poll(5, TimeUnit.SECONDS) != null)
+    }
+
+    /**
+     * A first try that fails at the connection, and a later one that connects, or that connects and then meets a
+     * server's own error, never closes the network: another server's failure after them does not reach the global proxy.
+     */
+    @Test
+    fun aFailedFirstTryThatLaterConnectsNeverReachesTheGlobalProxy() {
+        val server = webServer()
+        val seen = ArrayBlockingQueue<String>(8)
+        val exchanger = exchanger(listOf(certificate("ca")), route(connectProxy(seen, 200) { "127.0.0.1" }, global = true))
+        http(exchanger, 80, Exchanger.CARRY_DOH, server, known = "127.0.0.2")
+        assertTrue(reply().second != Exchanger.OK)
+        server.enqueue(MockResponse.Builder().code(200).body(Buffer().write(byteArrayOf(1))).build())
+        http(exchanger, 81, Exchanger.CARRY_DOH, server)
+        assertEquals(Exchanger.OK, reply().second)
+        http(exchanger, 82, Exchanger.CARRY_DOH, server, known = "127.0.0.3", name = "relay-b.dnslab.test")
+        assertTrue(reply().second != Exchanger.OK)
+        // A server's own error after a connection: the network is open, whatever the answer.
+        server.enqueue(MockResponse.Builder().code(503).build())
+        http(exchanger, 83, Exchanger.CARRY_DOH, server)
+        assertEquals(503, reply().second)
+        http(exchanger, 84, Exchanger.CARRY_DOH, server, known = "127.0.0.4", name = "relay-c.dnslab.test")
+        assertTrue(reply().second != Exchanger.OK)
+        assertNull(seen.poll(500, TimeUnit.MILLISECONDS))
+        assertNull(exchanger.closure(0))
+    }
+
+    /**
+     * Two servers whose direct connections are refused close the network: the exchange that closed it goes through the
+     * global proxy with what is left of its time, the engine is told a way opened, and the next exchanges have the
+     * proxy as their second way, then first once it answered where directly gave nothing.
+     */
+    @Test
+    fun twoServersRefusedOpenTheGlobalProxy() {
+        val server = webServer()
+        val seen = ArrayBlockingQueue<String>(8)
+        val route = route(connectProxy(seen, 200) { "127.0.0.1" }, global = true)
+        val opened = java.util.concurrent.atomic.AtomicInteger()
+        val exchanger = exchanger(listOf(certificate("ca")), route) { opened.incrementAndGet() }
+        http(exchanger, 90, Exchanger.CARRY_DOH, server, known = "127.0.0.2", name = "relay-a.dnslab.test")
+        assertTrue(reply().second != Exchanger.OK)
+        assertNull(seen.poll(300, TimeUnit.MILLISECONDS))
+        assertEquals(0, opened.get())
+        // The second server: closed. Its own exchange goes through the proxy; the lab's certificate names only
+        // doh.dnslab.test, so its TLS there fails, which teaches nothing.
+        http(exchanger, 91, Exchanger.CARRY_DOH, server, known = "127.0.0.3", name = "relay-b.dnslab.test")
+        reply()
+        assertTrue(seen.poll(5, TimeUnit.SECONDS)!!.startsWith("CONNECT 127.0.0.3:${server.port} "))
+        assertTrue(exchanger.closure(0) != null)
+        assertEquals(1, opened.get())
+        assertFalse(route.proxyFirst(closure = exchanger.closure(0)))
+        // The next: directly refused again, then the proxy answers; it comes first in this closing.
+        server.enqueue(MockResponse.Builder().code(200).body(Buffer().write(byteArrayOf(1))).build())
+        http(exchanger, 92, Exchanger.CARRY_DOH, server, known = "127.0.0.4")
+        assertEquals(Exchanger.OK, reply().second)
+        assertTrue(seen.poll(5, TimeUnit.SECONDS)!!.startsWith("CONNECT 127.0.0.4:${server.port} "))
+        assertTrue(route.proxyFirst(closure = exchanger.closure(0)))
+    }
+
+    /**
+     * Any direct connection made opens the network again, a DoT one too: the global proxy is no way until two servers
+     * fail again, and what it learned in the closing before is forgotten.
+     */
+    @Test
+    fun aDirectConnectionOpensTheNetworkAgain() {
+        val server = webServer()
+        val seen = ArrayBlockingQueue<String>(8)
+        val route = route(connectProxy(seen, 200) { "127.0.0.1" }, global = true)
+        val exchanger = exchanger(listOf(certificate("ca")), route)
+        http(exchanger, 100, Exchanger.CARRY_DOH, server, known = "127.0.0.2", name = "relay-a.dnslab.test")
+        reply()
+        http(exchanger, 101, Exchanger.CARRY_DOH, server, known = "127.0.0.3", name = "relay-b.dnslab.test")
+        reply()
+        server.enqueue(MockResponse.Builder().code(200).body(Buffer().write(byteArrayOf(1))).build())
+        http(exchanger, 102, Exchanger.CARRY_DOH, server, known = "127.0.0.4")
+        assertEquals(Exchanger.OK, reply().second)
+        val closing = exchanger.closure(0)
+        assertTrue(closing != null && route.proxyFirst(closure = closing))
+        while (seen.poll(200, TimeUnit.MILLISECONDS) != null) Unit
+        // A DoT connection made directly: open.
+        val dotServer = tlsServer("dot")
+        serveDot(dotServer, 1)
+        dot(exchanger, 103, dotServer)
+        assertEquals(Exchanger.ANSWER, reply().second)
+        assertNull(exchanger.closure(0))
+        http(exchanger, 104, Exchanger.CARRY_DOH, server, known = "127.0.0.5", name = "relay-c.dnslab.test")
+        assertTrue(reply().second != Exchanger.OK)
+        assertNull(seen.poll(500, TimeUnit.MILLISECONDS))
+        // Closed again by two servers: directly first again, what was learned before forgotten.
+        http(exchanger, 105, Exchanger.CARRY_DOH, server, known = "127.0.0.6", name = "relay-d.dnslab.test")
+        reply()
+        val again = exchanger.closure(0)
+        assertTrue(again != null && again != closing)
+        assertFalse(route.proxyFirst(closure = again))
     }
 
     /** A failure that is the server's, on both ways, teaches nothing: the order stays. */

@@ -109,9 +109,11 @@ class NetworkProxyTest {
     }
 
     /**
-     * What a recompute does with each change of either setting: the choice moves between the global proxy, the network's
-     * own and none, and a proxy from the other setting is not the same one, so that the exchanger drops the clients
-     * built for the one before; the same setting read again is, and keeps what it learned.
+     * The choice at each change of either setting, and whether the proxy it gives is the same one as the proxy held,
+     * which [ResolverProxy.same] tells and a recompute keeps, with what it learned: the same values of the same setting
+     * are; other values are not; nor are equal values from the other setting, since the global proxy's ways follow the
+     * network's closing to the resolver and the network's own do not. The recompute itself reads Android's settings and
+     * is measured on the emulator (scripts/measure-proxy-settings.sh, passes 3 and 6).
      */
     @Test
     fun aChangeOfEitherSettingChangesTheChoice() {
@@ -121,16 +123,108 @@ class NetworkProxyTest {
         // The global proxy set, on a network with none.
         val first = NetworkProxy.choose(null, global)
         assertEquals(NetworkProxy.Why.GLOBAL, first.second)
-        val held = ResolverProxy(2, first.first!!, listOf(proxy))
-        assertTrue(held.same(ResolverProxy(2, NetworkProxy.choose(null, global).first!!, listOf(proxy))))
-        // The network gains its own: that one, with its own list, in place of the global one.
+        val held = ResolverProxy(2, first.first!!, listOf(proxy), global = true)
+        assertTrue(held.same(ResolverProxy(2, NetworkProxy.choose(null, global).first!!, listOf(proxy), global = true)))
+        // The network gains its own, with other values: that one, in place of the global one.
         val second = NetworkProxy.choose(network, global)
         assertEquals(NetworkProxy.Why.NETWORK, second.second)
         assertFalse(held.same(ResolverProxy(2, second.first!!, listOf(proxy))))
+        // The network gains its own with the global one's values: still another one.
+        val equal = NetworkProxy.choose(global.copy(), global)
+        assertEquals(global to NetworkProxy.Why.NETWORK, equal)
+        assertFalse(held.same(ResolverProxy(2, equal.first!!, listOf(proxy))))
         // Both gone: none.
         assertEquals(null to NetworkProxy.Why.NONE, NetworkProxy.choose(null, null))
         // The global one becomes a PAC: none.
         assertEquals(null to NetworkProxy.Why.PAC, NetworkProxy.choose(null, global.copy(host = "localhost", port = 41234, pac = true)))
+    }
+
+    /**
+     * The global proxy's review, M1: the network is closed to the resolver only once direct connections to two servers,
+     * at different addresses, failed at the connection itself on one network, with none made since.
+     */
+    @Test
+    fun theNetworkClosesOnlyWhenTwoServersCannotBeReachedAndNothingConnected() {
+        val reach = DirectReach()
+        val now = 1_000_000_000L
+        // One server's outage, on both its addresses: open.
+        assertFalse(reach.failed(4, "relay-a.example", address("192.0.2.1"), now))
+        assertFalse(reach.failed(4, "relay-a.example", address("2001:db8::1"), now + 1))
+        assertNull(reach.closure(4))
+        // A second server: closed, in a closing of its own.
+        assertTrue(reach.failed(4, "relay-b.example", address("192.0.2.2"), now + 2))
+        val closure = reach.closure(4)
+        assertTrue(closure != null)
+        assertNull(reach.closure(5))
+        // More failures keep it closed, the same closing.
+        assertFalse(reach.failed(4, "relay-c.example", address("192.0.2.3"), now + 3))
+        assertEquals(closure, reach.closure(4))
+        // A direct connection made opens it; the next closing has another number.
+        assertTrue(reach.connected(4, now + 4))
+        assertNull(reach.closure(4))
+        assertFalse(reach.connected(4, now + 5))
+        assertFalse(reach.failed(4, "relay-a.example", address("192.0.2.1"), now + 6))
+        assertTrue(reach.failed(4, "relay-b.example", address("192.0.2.2"), now + 7))
+        assertTrue(reach.closure(4) != null && reach.closure(4) != closure)
+    }
+
+    /** A failure begun before a connection was made, as Happy Eyeballs' loser, and an older network's word, say nothing. */
+    @Test
+    fun aFailureWhileAnotherConnectedAndAnOlderNetworksWordSayNothing() {
+        val reach = DirectReach()
+        val now = 1_000_000_000L
+        assertFalse(reach.failed(7, "relay-a.example", address("192.0.2.1"), now))
+        // relay-b's IPv6 try began, its IPv4 one connected, then the IPv6 one was closed.
+        assertFalse(reach.connected(7, now + 20))
+        assertFalse(reach.failed(7, "relay-b.example", address("2001:db8::2"), now + 10))
+        assertFalse(reach.failed(7, "relay-c.example", address("2001:db8::3"), now + 15))
+        assertNull(reach.closure(7))
+        // Failures begun after it count again; the network before's do not, and a new network starts afresh.
+        assertFalse(reach.failed(7, "relay-a.example", address("192.0.2.1"), now + 30))
+        assertFalse(reach.failed(6, "relay-b.example", address("192.0.2.2"), now + 31))
+        assertNull(reach.closure(7))
+        assertFalse(reach.failed(8, "relay-b.example", address("192.0.2.2"), now + 32))
+        assertNull(reach.closure(8))
+        assertNull(reach.closure(7))
+    }
+
+    /**
+     * The global proxy is a way only while the network is closed, and what it learned counts only in that closing; the
+     * network's own proxy is a way whatever the network does.
+     */
+    @Test
+    fun theGlobalProxyIsAWayOnlyWhileTheNetworkIsClosed() {
+        val one = InetSocketAddress(address("10.0.2.2"), 3128)
+        val setting = NetworkProxy.Setting("10.0.2.2", 3128, false, emptyList())
+        val global = ResolverProxy(3, setting, listOf(one), global = true)
+        val start = 1_000_000_000L
+        assertEquals(listOf<InetSocketAddress?>(null), global.ways(start, closure = null))
+        assertEquals(listOf(null, one), global.ways(start, closure = 1))
+        // Learned only while closed.
+        global.answeredBy(one, start, closure = null)
+        assertEquals(listOf(null, one), global.ways(start, closure = 1))
+        global.answeredBy(one, start, closure = 1)
+        assertEquals(listOf(one, null), global.ways(start + 1, closure = 1))
+        assertTrue(global.proxyFirst(start + 1, closure = 1))
+        // Open again, then closed again: what was learned before is forgotten.
+        assertEquals(listOf<InetSocketAddress?>(null), global.ways(start + 2, closure = null))
+        assertEquals(listOf(null, one), global.ways(start + 3, closure = 2))
+        // The network's own proxy: both ways, open or not, as before.
+        val network = ResolverProxy(3, setting, listOf(one))
+        assertEquals(listOf(null, one), network.ways(start, closure = null))
+        network.answeredBy(one, start, closure = null)
+        assertEquals(listOf(one, null), network.ways(start + 1, closure = null))
+        assertFalse(global.same(network))
+    }
+
+    /** The phone's own addresses are every interface's, the loopback's included, as this machine's kernel lists them. */
+    @Test
+    fun thePhonesOwnAddressesAreEveryInterfaces() {
+        val own = NetworkProxy.phoneAddresses()
+        val listed = java.net.NetworkInterface.getNetworkInterfaces().toList().flatMap { it.inetAddresses.toList() }
+        assertTrue(listed.isNotEmpty())
+        assertTrue(own.containsAll(listed))
+        assertTrue(own.any { it.isLoopbackAddress })
     }
 
     @Test

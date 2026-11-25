@@ -5,9 +5,10 @@ import org.visadahyu.datapavan.network.dns.NetworkProxy
 
 /**
  * What the network part read of Android's own proxy settings (the proxy record's unit B, B7; measurements 7.1 and 7.2):
- * the proxy or PAC file set for the whole phone ([global]: a device owner's, a profile's or one set over adb, which
- * Android's own Wi-Fi screens never show), and the current network's own ([network], from its link properties). A pure
- * value the JVM tests hold; [of] reads Android's `ProxyInfo` into it. It keeps no PAC file's address: no line shows it.
+ * the proxy or PAC file set for the whole phone ([global]: a device owner's, or one set by `adb` or by an app granted
+ * `WRITE_SECURE_SETTINGS`, which Android's own Wi-Fi screens never show), and the current network's own ([network], from
+ * its link properties). A pure value the JVM tests hold; [of] reads Android's `ProxyInfo` into it. It keeps no PAC
+ * file's address: no line shows it.
  */
 data class AndroidProxy(val global: Setting? = null, val network: Setting? = null) {
     /** One of Android's proxy settings: a proxy server at [Server.host] and [Server.port], or a PAC file. */

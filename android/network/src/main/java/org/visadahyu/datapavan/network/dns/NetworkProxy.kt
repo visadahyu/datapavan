@@ -10,7 +10,7 @@ import java.util.concurrent.atomic.AtomicInteger
  * direct proxy where it has one; else Android's global proxy, the whole phone's, where it is a direct one (the
  * maintainer's decision of 2026-11-25); never the process's, which Android gives a process at its start and so depends
  * on whether the network part started before its own VPN (measurements 7.1, point 3). Either is only the second way,
- * after directly ([ResolverProxy]).
+ * after directly ([ResolverProxy]), and the global one only on a network closed to the resolver ([DirectReach]).
  *
  * A PAC gives none, and so do a proxy on the loopback, on one of the phone's own addresses or on a link-local one: such
  * a proxy is a tool's or a filter's local port, through which the resolver would loop through the tunnel or reach the
@@ -49,9 +49,10 @@ object NetworkProxy {
      * then leaves out, since the network's own stays the only one where the network has one; else the global one where
      * it is a direct one ([Why.GLOBAL]); else none, [Why.PAC] for a PAC file, the network's or the global one, whatever
      * its host and port (Android reports a PAC as `localhost` and its handler's port, which must never read as a direct
-     * proxy), [Why.NONE] for nothing set. The global one is a third party's, a device owner's or one set over adb, but
-     * as the second way its operator learns of the resolver only where the network lets nothing through directly: the
-     * managed phone whose device owner forces that proxy, who sees the phone's traffic already.
+     * proxy), [Why.NONE] for nothing set. The global one is a third party's (a device owner's, or one set by `adb` or by
+     * an app granted `WRITE_SECURE_SETTINGS`), so it is a way only once the network is closed to the resolver
+     * ([DirectReach]): its operator then learns of the resolver only where the network lets nothing through directly,
+     * such as the managed phone whose device owner forces that proxy and sees the phone's traffic already.
      */
     fun choose(network: Setting?, global: Setting? = null): Pair<Setting?, Why> {
         direct(network)?.let { return it to Why.NETWORK }
@@ -110,6 +111,17 @@ object NetworkProxy {
     fun zoned(address: InetAddress): Boolean = address is Inet6Address && address.scopeId != 0
 
     /**
+     * Every address of the phone's own interfaces as the kernel lists them: the networks' (Wi-Fi, mobile data), a
+     * hotspot's, USB tethering's, Wi-Fi Direct's and the tunnel's, which no network's link properties name all of
+     * (the global proxy's review, m2). Empty when the list cannot be read.
+     */
+    fun phoneAddresses(): Set<InetAddress> = try {
+        java.net.NetworkInterface.getNetworkInterfaces()?.toList().orEmpty().flatMap { it.inetAddresses.toList() }.toSet()
+    } catch (e: java.net.SocketException) {
+        emptySet()
+    }
+
+    /**
      * [Setting] from Android's `ProxyInfo` of the network beneath or the global one, or null for none: a PAC file is told
      * by its URL, which is not `Uri.EMPTY`, before its host and port are read.
      */
@@ -121,36 +133,60 @@ object NetworkProxy {
 }
 
 /**
- * The proxy the resolver may take, the network beneath's own or the global one ([NetworkProxy.choose]), for the network
- * of [generation] only: [setting] as read, and [addresses] usable for it. An exchange tries two ways within one deadline ([ways]): the first, then the other when
- * the first gave no HTTP answer at all. Which comes first is learned only from an answer ([answeredBy]): after the
- * other way answered where the first gave none, that other way comes first on this network for [PREFERRED_MS], then
- * the default order again. A failure alone teaches nothing, since the server, not the way, may have failed.
+ * The proxy the resolver may take, the network beneath's own or the global one ([NetworkProxy.choose], [global]), for
+ * the network of [generation] only: [setting] as read, and [addresses] usable for it. An exchange tries two ways within
+ * one deadline ([ways]): the first, then the other when the first gave no HTTP answer at all. Which comes first is
+ * learned only from an answer ([answeredBy]): after the other way answered where the first gave none, that other way
+ * comes first on this network for [PREFERRED_MS], then the default order again. A failure alone teaches nothing, since
+ * the server, not the way, may have failed.
+ *
+ * The global proxy is a way only while the network is closed to the resolver ([DirectReach.closure]): until then an
+ * exchange goes directly alone, and what it learned counts only in the closing it was learned in, so that a direct
+ * connection made, which opens the network again, forgets it (the global proxy's review, M1). The network's own proxy
+ * is a way whatever the network does with direct connections.
  */
-class ResolverProxy(val generation: Int, val setting: NetworkProxy.Setting, val addresses: List<InetSocketAddress>) {
+class ResolverProxy(
+    val generation: Int,
+    val setting: NetworkProxy.Setting,
+    val addresses: List<InetSocketAddress>,
+    val global: Boolean = false,
+) {
     private val next = AtomicInteger(0)
 
     @Volatile
     private var turnedUntil = NEVER
 
-    /** The two ways of an exchange now, the first first: directly (null) and through the proxy's address in turn. */
-    fun ways(now: Long = System.nanoTime()): List<InetSocketAddress?> {
-        val proxy = addresses[Math.floorMod(next.get(), addresses.size)]
-        val turned = turnedUntil.let { it != NEVER && now - it < 0 }
-        return if (PROXY_FIRST != turned) listOf(proxy, null) else listOf(null, proxy)
+    /** The closing of the network the turn was learned in, for the global proxy. */
+    @Volatile
+    private var turnedIn: Int? = null
+
+    /**
+     * The ways of an exchange now, the first first: directly (null) and through the proxy's address in turn. For the
+     * global proxy, [closure] is the network's closing to the resolver ([DirectReach.closure]): directly alone while it
+     * is open (null).
+     */
+    fun ways(now: Long = System.nanoTime(), closure: Int? = null): List<InetSocketAddress?> {
+        if (global && closure == null) return listOf(null)
+        val turned = turnedUntil.let { it != NEVER && now - it < 0 } && (!global || turnedIn == closure)
+        return if (PROXY_FIRST != turned) listOf(proxy(), null) else listOf(null, proxy())
     }
 
+    /** The proxy's address tried next. */
+    fun proxy(): InetSocketAddress = addresses[Math.floorMod(next.get(), addresses.size)]
+
     /** Whether the proxy comes first now, for the debug dump. */
-    fun proxyFirst(now: Long = System.nanoTime()): Boolean = ways(now).first() != null
+    fun proxyFirst(now: Long = System.nanoTime(), closure: Int? = null): Boolean = ways(now, closure).first() != null
 
     /**
      * The second way [via] answered where the first gave no answer: it comes first on this network for a while. Null
-     * for directly.
+     * for directly. The global proxy learns only while the network is closed to the resolver, in [closure].
      */
-    fun answeredBy(via: InetSocketAddress?, now: Long = System.nanoTime()) {
-        if (via == ways(now).first()) return
+    fun answeredBy(via: InetSocketAddress?, now: Long = System.nanoTime(), closure: Int? = null) {
+        if (global && closure == null) return
+        if (via == ways(now, closure).first()) return
         // The way that answered is the default first one again, or the other, which comes first for a while.
         val defaultFirst = (via != null) == PROXY_FIRST
+        turnedIn = closure
         turnedUntil = if (defaultFirst) NEVER else now + PREFERRED_MS * 1_000_000
     }
 
@@ -160,9 +196,12 @@ class ResolverProxy(val generation: Int, val setting: NetworkProxy.Setting, val 
         if (i >= 0) next.compareAndSet(i, i + 1)
     }
 
-    /** Whether [other] is the same proxy, its addresses in whatever order. */
-    fun same(other: ResolverProxy): Boolean =
-        generation == other.generation && setting == other.setting && addresses.toSet() == other.addresses.toSet()
+    /**
+     * Whether [other] is the same proxy, its addresses in whatever order: of the same setting too, the network's or the
+     * global one, since the global one's ways follow the network's closing and the network's do not.
+     */
+    fun same(other: ResolverProxy): Boolean = generation == other.generation && global == other.global &&
+        setting == other.setting && addresses.toSet() == other.addresses.toSet()
 
     override fun toString(): String = addresses.joinToString(",") { "${it.address.hostAddress}:${it.port}" }
 
@@ -177,6 +216,77 @@ class ResolverProxy(val generation: Int, val setting: NetworkProxy.Setting, val 
 
         /** How long a way learned from an answer comes first, on the same network and setting. */
         const val PREFERRED_MS = 600_000L
+
+        private const val NEVER = Long.MIN_VALUE
+    }
+}
+
+/**
+ * Whether the network beneath is closed to the resolver, for the global proxy's rule (ADR 0042, "Android's proxy"; the
+ * global proxy's review, M1): the global proxy is a way only on a network that lets nothing through directly, so that
+ * its operator learns of the resolver only there.
+ *
+ * Closed once direct connections to at least [SERVERS] servers, at different addresses, failed at the connection itself
+ * on the network of one generation (refused, unreachable, reset, or no TCP connection within the try's time), with no
+ * direct connection made since. A TLS failure, a slow or failed HTTP answer and a server's own error come after a
+ * connection was made, and so open it, as any direct connection made does. A connection that failed while another was
+ * made after it began says nothing, as Happy Eyeballs' loser, closed when the other address won. Each closing has a
+ * number of its own ([closure]), so that what was learned while closed counts only in that closing.
+ */
+class DirectReach {
+    private var generation = Int.MIN_VALUE
+
+    /** The servers whose direct connections failed since the last one made, by address. */
+    private val failed = HashMap<InetAddress, String>()
+
+    private var connectedAt = NEVER
+    private var closed = false
+    private var closings = 0
+
+    /** The number of the network's current closing to the resolver on the network of [generation], or null while open. */
+    @Synchronized
+    fun closure(generation: Int): Int? = if (generation == this.generation && closed) closings else null
+
+    /** A direct connection was made on the network of [generation], at [now]: it is open. Whether it was closed. */
+    @Synchronized
+    fun connected(generation: Int, now: Long = System.nanoTime()): Boolean {
+        if (!at(generation)) return false
+        connectedAt = now
+        failed.clear()
+        return closed.also { closed = false }
+    }
+
+    /**
+     * A direct connection to [server] at [address], begun at [started], failed at the connection itself on the network
+     * of [generation]. Whether this closed the network to the resolver.
+     */
+    @Synchronized
+    fun failed(generation: Int, server: String, address: InetAddress, started: Long): Boolean {
+        if (!at(generation)) return false
+        // Another connection was made while this one was tried: the network was open.
+        if (connectedAt != NEVER && connectedAt - started >= 0) return false
+        failed[address] = server
+        if (closed || failed.values.toSet().size < SERVERS) return false
+        closed = true
+        closings++
+        return true
+    }
+
+    /** Whether [generation] is the current one, after moving to it when it is newer; an older one's word is dropped. */
+    private fun at(generation: Int): Boolean {
+        if (generation < this.generation) return false
+        if (generation > this.generation) {
+            this.generation = generation
+            failed.clear()
+            connectedAt = NEVER
+            closed = false
+        }
+        return true
+    }
+
+    companion object {
+        /** How many servers' direct connections must fail at the connection before the network counts as closed. */
+        const val SERVERS = 2
 
         private const val NEVER = Long.MIN_VALUE
     }

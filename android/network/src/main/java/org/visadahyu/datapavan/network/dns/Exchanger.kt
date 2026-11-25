@@ -9,6 +9,7 @@ import java.net.ConnectException
 import java.net.InetAddress
 import java.net.InetSocketAddress
 import java.net.Socket
+import java.net.SocketAddress
 import java.net.SocketException
 import java.net.UnknownHostException
 import java.security.cert.CertificateException
@@ -86,7 +87,22 @@ class Exchanger(
          * proxy, and this one is reached by [ProxySocket].
          */
         val resolverProxy: ResolverProxy? get() = null
+
+        /**
+         * A way through the resolver's proxy opened where there was none: the encrypted steps that failed without it
+         * may answer now, so the engine's holds on them go ([Engine.nativeDnsWaysChanged]). Any thread.
+         */
+        fun proxyWayOpened() {}
     }
+
+    /** Whether the network beneath lets the resolver connect directly, for the global proxy ([DirectReach]). */
+    private val reach = DirectReach()
+
+    /**
+     * The number of the network's current closing to the resolver on the network of [generation], or null while it
+     * lets the resolver connect directly ([DirectReach]), for the debug dump.
+     */
+    fun closure(generation: Int): Int? = reach.closure(generation)
 
     /**
      * The clients: one per network beneath, tool and way through the network's proxy, and from it one per server's
@@ -109,6 +125,12 @@ class Exchanger(
     /** The screen's checks of a resolver ([probe]): their replies, by their tickets, which are negative. */
     private val probes = ConcurrentHashMap<Long, (Int, ByteArray?) -> Unit>()
     private val probeTickets = java.util.concurrent.atomic.AtomicLong(0)
+
+    /**
+     * The DoT exchanges that go directly, by ticket, with the network's generation: an answer, on a connection kept
+     * from before too, says the network is open to the resolver ([DirectReach]).
+     */
+    private val directDot = ConcurrentHashMap<Long, Int>()
     private val timers: ScheduledExecutorService = Executors.newSingleThreadScheduledExecutor { task ->
         Thread(task, "network-dns-timer").apply { isDaemon = true }
     }
@@ -143,7 +165,10 @@ class Exchanger(
                     CARRY_ODOH -> http(ticket, url, server, known, wanted, through, body, ODOH_TYPE)
                     CARRY_DOH -> http(ticket, url, server, known, wanted, through, body, DOH_TYPE)
                     CARRY_FETCH -> http(ticket, url, server, known, wanted, through, null, null)
-                    CARRY_DOT -> dot.ask(ticket, server, url.substringAfterLast(':').toIntOrNull() ?: DOT_PORT, known, wanted, through, body)
+                    CARRY_DOT -> {
+                        if (through == null) directDot[ticket] = host.generation
+                        dot.ask(ticket, server, url.substringAfterLast(':').toIntOrNull() ?: DOT_PORT, known, wanted, through, body)
+                    }
                     else -> network(ticket, body)
                 }
             } catch (e: RuntimeException) {
@@ -213,6 +238,9 @@ class Exchanger(
             clients.values.toList().also { clients.clear() }
         }
         work.execute { old.forEach { it.connectionPool.evictAll() } }
+        val route = host.resolverProxy ?: return
+        // A way now: the network's own proxy always, the global one while the network is closed to the resolver.
+        if (route.generation == host.generation && (!route.global || reach.closure(route.generation) != null)) host.proxyWayOpened()
     }
 
     /**
@@ -238,10 +266,15 @@ class Exchanger(
 
     /**
      * One exchange over HTTP, within one deadline ([CALL_MS]) for all its tries. With a proxy for the resolver
-     * ([routeFor]), the network beneath's own or the global one, it has two ways, directly and through the proxy ([ResolverProxy.ways]): the first gets at most
-     * [FIRST_WAY_MS], and any failure with no HTTP answer, the proxy's refusal, a stall or a TLS failure alike, sends the
-     * same exchange the other way with what is left. A way learns to come first only from an answer
-     * ([ResolverProxy.answeredBy]), never from a failure, which may be the server's.
+     * ([routeFor]), the network beneath's own or the global one, it has two ways, directly and through the proxy
+     * ([ResolverProxy.ways]): the first gets at most [FIRST_WAY_MS], and any failure with no HTTP answer, the proxy's
+     * refusal, a stall or a TLS failure alike, sends the same exchange the other way with what is left. A way learns to
+     * come first only from an answer ([ResolverProxy.answeredBy]), never from a failure, which may be the server's.
+     *
+     * The global proxy is a way only while the network is closed to the resolver ([DirectReach]): until then the
+     * exchange goes directly alone, with the whole deadline; one whose direct try failed and closed the network, or
+     * found it closed, goes through the proxy with what is left; and the proxy is never the second way after a direct
+     * connection was made since the exchange began.
      */
     private fun http(ticket: Long, url: String, server: String, known: List<InetAddress>, pins: List<String>, through: Through?, body: ByteArray?, type: String?) {
         val request = Request.Builder().url(url).tag(Pins::class.java, Pins(pins)).apply {
@@ -252,7 +285,7 @@ class Exchanger(
         }.build()
         val generation = host.generation
         val route = if (through == null) routeFor(server, generation) else null
-        val ways = route?.ways() ?: listOf(null)
+        val ways = route?.ways(closure = reach.closure(generation)) ?: listOf(null)
         val deadline = System.nanoTime() + CALL_MS * 1_000_000
         attempt(ticket, request, server, known, through, generation, proxyEpoch, route, ways, 0, deadline)
     }
@@ -282,10 +315,21 @@ class Exchanger(
                 override fun onFailure(call: Call, e: IOException) {
                     leftBehind(client, generation, epoch)
                     if (via != null && refusal(e)?.status == 0) route?.unreachable(via)
-                    if (!last && (deadline - System.nanoTime()) / 1_000_000 >= MIN_SECOND_WAY_MS) {
+                    val closed = reach.closure(generation) != null
+                    val global = route != null && route.global
+                    val more = when {
+                        !last -> ways
+                        // Directly alone, the network open when the exchange began: through the global proxy now if
+                        // this failure, or another exchange's, closed it.
+                        route != null && global && closed && i == 0 && ways.size == 1 -> listOf(null, route.proxy())
+                        else -> null
+                    }
+                    // The global proxy is no way once a direct connection was made, whatever the exchange began with.
+                    val allowed = more != null && (more[i + 1] == null || !global || closed)
+                    if (more != null && allowed && (deadline - System.nanoTime()) / 1_000_000 >= MIN_SECOND_WAY_MS) {
                         // On OkHttp's thread: what `exchange` guards against on its own is guarded here too.
                         try {
-                            return attempt(ticket, request, server, known, through, generation, epoch, route, ways, i + 1, deadline)
+                            return attempt(ticket, request, server, known, through, generation, epoch, route, more, i + 1, deadline)
                         } catch (e: RuntimeException) {
                             return reply(ticket, REFUSED, null)
                         }
@@ -295,7 +339,9 @@ class Exchanger(
 
                 override fun onResponse(call: Call, response: Response) {
                     try {
-                        if (i > 0) route?.answeredBy(via)
+                        // An answer directly, on a connection kept from before too, says the network is open.
+                        if (via == null && through == null) reach.connected(generation)
+                        if (i > 0) route?.answeredBy(via, closure = reach.closure(generation))
                         answer(response)
                     } finally {
                         leftBehind(client, generation, epoch)
@@ -347,7 +393,12 @@ class Exchanger(
     private fun client(through: Through?, via: InetSocketAddress?, server: String, known: List<InetAddress>, generation: Int, epoch: Int): OkHttpClient {
         val key = "$generation $epoch ${through?.proxy} ${via ?: "direct"} $server $known"
         clients[key]?.let { return it }
-        return kept(key, generation, epoch, client(through, via, generation, epoch).newBuilder().dns(KnownOnly(server, known)).build())
+        // Sockets of their own, so that a direct one says which server it failed to reach ([DirectReach]).
+        val built = client(through, via, generation, epoch).newBuilder()
+            .dns(KnownOnly(server, known))
+            .socketFactory(Sockets(through, via.takeIf { through == null }, generation, server))
+            .build()
+        return kept(key, generation, epoch, built)
     }
 
     /**
@@ -376,7 +427,7 @@ class Exchanger(
                 .protocols(listOf(Protocol.HTTP_2, Protocol.HTTP_1_1))
                 .proxy(java.net.Proxy.NO_PROXY)
                 .dns(KnownOnly("", emptyList()))
-                .socketFactory(Sockets(through, via.takeIf { through == null }))
+                .socketFactory(Sockets(through, via.takeIf { through == null }, generation))
                 .sslSocketFactory(sslFor().socketFactory, trust)
                 .connectionPool(ConnectionPool(IDLE_CONNECTIONS, IDLE_SECONDS, TimeUnit.SECONDS))
                 .connectTimeout(CONNECT_MS, TimeUnit.MILLISECONDS)
@@ -394,21 +445,31 @@ class Exchanger(
     /** One TLS context per client: its session cache lives and dies with the network it began on. */
     private fun sslFor(): SSLContext = SSLContext.getInstance("TLS").apply { init(null, arrayOf(trust), null) }
 
-    /** A plain socket for [server], protected and bound to the network beneath, or one through the tool. */
-    internal fun socketFor(through: Through?): Socket = Sockets(through, null).createSocket()
+    /**
+     * A plain socket for [server], protected and bound to the network beneath, or one through the tool: DoT's, whose
+     * direct connection made opens the network to the resolver ([DirectReach]), and whose failure, perhaps of port 853
+     * alone, does not close it.
+     */
+    internal fun socketFor(through: Through?): Socket = Sockets(through, null, host.generation).createSocket()
 
     /**
-     * The sockets OkHttp and the DoT client open: directly, through the tool, or through the network beneath's proxy at
-     * [via] ([ProxySocket]), which DoT never takes.
+     * The sockets OkHttp and the DoT client open for the network of [generation]: directly, through the tool, or through
+     * the resolver's proxy at [via] ([ProxySocket]), which DoT never takes. A direct one tells [reach] whether its
+     * connection was made, and for an HTTP exchange's [server] whether it failed at the connection itself.
      */
-    private inner class Sockets(private val through: Through?, private val via: InetSocketAddress?) : SocketFactory() {
+    private inner class Sockets(
+        private val through: Through?,
+        private val via: InetSocketAddress?,
+        private val generation: Int,
+        private val server: String? = null,
+    ) : SocketFactory() {
         override fun createSocket(): Socket {
             // A tool on the loopback is reached as it is; one elsewhere (on the LAN) would loop through the network
             // part's own tunnel, where the network part's UID is: its socket is protected and bound as any other
             // (review S-m2).
             val socket = when {
                 through == null && via != null -> ProxySocket(via, PROXY_MS)
-                through == null -> Socket()
+                through == null -> DirectSocket(generation, server)
                 through.proxy.address.isLoopbackAddress -> return ToolSocket(through.proxy, through.user, through.password)
                 else -> ToolSocket(through.proxy, through.user, through.password)
             }
@@ -429,6 +490,34 @@ class Exchanger(
         override fun createSocket(address: InetAddress?, port: Int, localAddress: InetAddress?, localPort: Int) = unsupported()
 
         private fun unsupported(): Socket = throw SocketException("unconnected sockets only")
+    }
+
+    /**
+     * A direct socket that tells [reach] what became of its connection: made, the network is open to the resolver; failed
+     * at the connection itself (refused, unreachable, reset, or none within the try's time, when the exchange's share
+     * ran out and its socket was closed), one more of [server]'s addresses that could not be reached. DoT's ([server]
+     * null) only opens it.
+     */
+    private inner class DirectSocket(private val generation: Int, private val server: String?) : Socket() {
+        override fun connect(endpoint: SocketAddress?, timeout: Int) {
+            val started = System.nanoTime()
+            try {
+                super.connect(endpoint, timeout)
+            } catch (e: IOException) {
+                val address = (endpoint as? InetSocketAddress)?.address
+                if (server != null && address != null && reach.failed(generation, server, address, started)) closed(generation)
+                throw e
+            }
+            reach.connected(generation)
+        }
+
+        override fun connect(endpoint: SocketAddress?) = connect(endpoint, 0)
+    }
+
+    /** The network of [generation] closed to the resolver: where the global proxy is held for it, a way opened. */
+    private fun closed(generation: Int) {
+        val route = host.resolverProxy ?: return
+        if (route.global && route.generation == generation) host.proxyWayOpened()
     }
 
     /** OkHttp's resolver: [known], the addresses the exchange gave for [server], never a lookup. */
@@ -656,6 +745,7 @@ class Exchanger(
     }
 
     private fun reply(ticket: Long, outcome: Int, body: ByteArray?) {
+        directDot.remove(ticket)?.let { if (outcome == ANSWER) reach.connected(it) }
         if (ticket < 0) probes.remove(ticket)?.invoke(outcome, body) else replies(ticket, outcome, body)
     }
 }
