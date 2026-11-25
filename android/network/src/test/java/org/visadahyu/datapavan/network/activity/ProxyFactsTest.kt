@@ -118,7 +118,7 @@ class ProxyFactsTest {
     @Test
     fun theFallbackGivesTheEnginesAnswerOnItsVectors() {
         val vectors = File("../../core/net/testdata/local-addresses.tsv")
-        org.junit.Assume.assumeTrue("the engine's vectors are not in this tree yet", vectors.isFile)
+        assertTrue("the engine's vectors: $vectors", vectors.isFile)
         val rows = vectors.readLines().filter { it.isNotBlank() && !it.startsWith("#") }.map { it.split('\t') }
             .filter { it.size >= 4 && it[1] == "-" && it[2] == "unknown" }
         assertTrue(rows.toString(), rows.size >= 5)

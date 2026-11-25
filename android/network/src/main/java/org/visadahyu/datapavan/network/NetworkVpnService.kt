@@ -435,6 +435,8 @@ class NetworkVpnService : VpnService() {
         applyProxies()
         // Who tracker blocking covers follows the apps installed, their UIDs and the user's tool (W8, part 3a).
         blocking.apply(full = true)
+        // So do the tools' UIDs, by their signing keys (the proxy record's unit B).
+        refreshTools()
     }
 
     /**
@@ -473,10 +475,11 @@ class NetworkVpnService : VpnService() {
         // apps come into the tunnel under the handler's own UID (measurements 7.2); nor is a proxy on the loopback, which
         // never enters the tunnel. Only a direct proxy's host and port are Android's setting here.
         val direct = proxies.filter { (_, info) ->
-            (info.pacFileUrl == null || info.pacFileUrl == android.net.Uri.EMPTY) && info.host != null && info.port in 1..65535 &&
-                !loopbackHost(info.host)
+            org.visadahyu.datapavan.network.proxy.AndroidProxy.engineLines(listOf(org.visadahyu.datapavan.network.dns.NetworkProxy.of(info))).isNotEmpty()
         }
-        val android = direct.map { (_, info) -> "${info.host} ${info.port}" }.distinct()
+        val android = org.visadahyu.datapavan.network.proxy.AndroidProxy.engineLines(
+            proxies.map { (_, info) -> org.visadahyu.datapavan.network.dns.NetworkProxy.of(info) },
+        )
         // With Private DNS strict, Android's resolver asks its provider over TLS: the network part sees no app's
         // lookups, and a messenger's hello no answer tied is no evidence of its proxy (ADR 0052, fix round's S-M3). Nor
         // does it see the names Android's resolver gives the setting's hosts, so it looks them up itself, through the
@@ -495,6 +498,7 @@ class NetworkVpnService : VpnService() {
             )
         }
         hand(android)
+        publishProxyContext()
         val ticket = ++settingLookups
         val named = direct.filter { (_, info) -> org.visadahyu.datapavan.network.dns.Exchanger.numeric(info.host.removePrefix("[").removeSuffix("]")) == null }
         if (!strict || named.isEmpty()) return
@@ -518,9 +522,35 @@ class NetworkVpnService : VpnService() {
     /** Counts the hand-overs of Android's setting, so that a lookup of its names that ends after a newer one is dropped. Main thread. */
     private var settingLookups = 0
 
-    /** Whether a proxy's host is the phone's own loopback, by name or address. */
-    private fun loopbackHost(host: String): Boolean = host.equals("localhost", ignoreCase = true) ||
-        org.visadahyu.datapavan.network.dns.Exchanger.numeric(host.removePrefix("[").removeSuffix("]"))?.isLoopbackAddress == true
+    /**
+     * What "Now" says of Android's own proxy settings and the PAC handler (the proxy record's unit B, B5 and B7), only
+     * while the tunnel runs: then the process's default network is its own VPN, which has no proxy, so `defaultProxy`
+     * is the whole phone's alone (measurements 7.1, point 1), and the network beneath's is read from its own link.
+     */
+    private fun publishProxyContext() {
+        if (!active) return
+        org.visadahyu.datapavan.network.proxy.ProxyContext.publish(
+            org.visadahyu.datapavan.network.proxy.AndroidProxy.of(connectivity.defaultProxy, current?.let { connectivity.getLinkProperties(it) }?.httpProxy),
+            org.visadahyu.datapavan.network.proxy.PacHandler.uid(packageManager),
+        )
+    }
+
+    /** Computes the circumvention tools' UIDs (the proxy record's unit B, B6) off the main thread, one at a time. */
+    private val toolLookups = java.util.concurrent.Executors.newSingleThreadExecutor { task ->
+        Thread(task, "network-tools").apply { isDaemon = true }
+    }
+
+    /** The tools' UIDs, by their signing keys, for "Now" and the history; a late result after the tunnel stops is dropped. */
+    private fun refreshTools() {
+        try {
+            toolLookups.execute {
+                val tools = org.visadahyu.datapavan.network.chain.Tools.uids(this)
+                main.post { if (active) org.visadahyu.datapavan.network.proxy.ProxyContext.publishTools(tools) }
+            }
+        } catch (e: java.util.concurrent.RejectedExecutionException) {
+            // The service is gone.
+        }
+    }
 
     /**
      * The on-link prefixes of [network], the network beneath, one `address length` a line, and its transport's code (0 none,
@@ -1018,6 +1048,9 @@ class NetworkVpnService : VpnService() {
         active = true
         state.value = true
         tracker = org.visadahyu.datapavan.network.activity.StateTracker(this) { Engine.nativeStates(it) }.also { it.start() }
+        // Read again now that the tunnel is the process's default network: Android's own setting for "Now".
+        publishProxyContext()
+        refreshTools()
         followPackages()
         followProxySetting()
         followBlockingFiles()
@@ -1233,6 +1266,7 @@ class NetworkVpnService : VpnService() {
     }
 
     private fun close() {
+        org.visadahyu.datapavan.network.proxy.ProxyContext.clear()
         if (active) {
             for (callback in listOf(network, ownNetwork)) {
                 try {
@@ -1294,6 +1328,7 @@ class NetworkVpnService : VpnService() {
         close()
         measuring.shutdownNow()
         resolverProxyLookups.shutdownNow()
+        toolLookups.shutdownNow()
         blocking.shutdown()
         super.onDestroy()
     }
