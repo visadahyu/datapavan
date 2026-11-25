@@ -5030,3 +5030,140 @@ fn an_apps_own_socks5_relay_is_tied_to_its_udp_associate() -> Outcome {
         },
     )
 }
+
+/// RFC 1929's sub-negotiation with the synthetic secret, as the lab's apps send it.
+fn socks_auth() -> Vec<u8> {
+    let mut auth = vec![1, 4];
+    auth.extend_from_slice(b"user");
+    auth.push(u8::try_from(SECRET.len()).unwrap_or(0));
+    auth.extend_from_slice(SECRET);
+    auth
+}
+
+/// A connection of the second app ([`SECOND_APP`]), from a port the lab's Android names it for.
+async fn second_app_connect(
+    to: SocketAddr,
+    port: u16,
+) -> Result<TcpStream, Box<dyn std::error::Error>> {
+    let socket = TcpSocket::new_v4()?;
+    socket.bind(SocketAddr::from((Addresses::COMMON.tun4, port)))?;
+    within(
+        &format!("the second app's connection to {to}"),
+        socket.connect(to),
+    )
+    .await
+}
+
+/// What the log got since `before` bytes, once the flows ended and the log was flushed.
+async fn logged_since(
+    engine: &Engine,
+    before: usize,
+) -> Result<Vec<u8>, Box<dyn std::error::Error>> {
+    tokio::time::sleep(Duration::from_millis(300)).await;
+    engine.flush_log();
+    let logged = LOGGED.lock().map_err(|e| e.to_string())?.clone();
+    Ok(logged.get(before..).unwrap_or_default().to_vec())
+}
+
+/// The proxy record's unit C (R3), through the whole engine on Linux's TCP stack, the switch off: the app the user
+/// chose keeps its own proxy's first hop and the destination asked for, live and in the log; another app through the
+/// same proxy keeps neither in the log; a proxy on the user's own network is never covered; and once the choice is
+/// turned off, the open flow goes back to its first hop and the next one is stripped.
+#[test]
+#[ignore = "needs an unprivileged network namespace; scripts/check.sh rust runs it"]
+#[allow(clippy::too_many_lines)]
+fn a_chosen_apps_proxy_is_logged_and_a_local_one_is_not() -> Outcome {
+    lab(
+        "a_chosen_apps_proxy_is_logged_and_a_local_one_is_not",
+        &Limits {
+            close_linger: Duration::from_millis(50),
+            ..Limits::default()
+        },
+        |engine| async move {
+            let chosen = datapavan_net::ProxySetting {
+                logged: vec![APP],
+                ..datapavan_net::ProxySetting::default()
+            };
+            engine.proxies(chosen.clone());
+            let socks = scripted_proxy(SERVER, SOCKS).await?;
+            let auth = socks_auth();
+
+            // The chosen app: named by where it asked to go, and logged so.
+            let before = LOGGED.lock().map_err(|e| e.to_string())?.len();
+            let mut app = app_connect(socks).await?;
+            hidden_request(&mut app, &auth).await?;
+            let inner = client_hello("inner.chosen.test");
+            step(&mut app, &inner, &inner).await?;
+            let flow = flow_to(&engine, socks, |f| {
+                f.named_by == datapavan_net::NamedBy::Tls
+            })
+            .await?;
+            assert_eq!(flow.name.as_deref(), Some("inner.chosen.test"));
+            assert_eq!(
+                flow.proxy.and_then(|p| p.asked),
+                Some((
+                    datapavan_net::proxies::Asked::Name("hidden.example".into()),
+                    443
+                ))
+            );
+            drop(app);
+            let since = logged_since(&engine, before).await?;
+            assert!(
+                holds(&since, b"hidden.example"),
+                "the destination is logged"
+            );
+            assert!(holds(&since, &SERVER.octets()), "and the proxy's address");
+            assert!(!holds(&since, SECRET), "never the password");
+
+            // Another app through the same proxy, at the same time of the choice: neither.
+            let before = LOGGED.lock().map_err(|e| e.to_string())?.len();
+            let mut second = second_app_connect(socks, SECOND_PORTS.start + 7).await?;
+            hidden_request(&mut second, &auth).await?;
+            drop(second);
+            let since = logged_since(&engine, before).await?;
+            assert!(!since.is_empty(), "the second app's records were written");
+            assert!(
+                !holds(&since, b"hidden.example"),
+                "not another app's destination"
+            );
+            assert!(!holds(&since, &SERVER.octets()), "nor its proxy's address");
+
+            // A proxy on the user's own network is never covered.
+            engine.proxies(datapavan_net::ProxySetting {
+                on_link: datapavan_net::local::OnLink::new(
+                    [(IpAddr::V4(Ipv4Addr::new(198, 51, 100, 0)), 24)],
+                    datapavan_net::local::Transport::Wifi,
+                ),
+                ..chosen.clone()
+            });
+            let before = LOGGED.lock().map_err(|e| e.to_string())?.len();
+            let mut local = app_connect(socks).await?;
+            hidden_request(&mut local, &auth).await?;
+            drop(local);
+            let since = logged_since(&engine, before).await?;
+            assert!(!since.is_empty(), "the local proxy's records were written");
+            assert!(
+                !holds(&since, b"hidden.example"),
+                "a local proxy is not covered"
+            );
+            assert!(!holds(&since, &SERVER.octets()), "nor its address");
+
+            // The choice turned off while a flow is open: it goes back to its first hop at once.
+            engine.proxies(chosen.clone());
+            let newest = engine.flows().iter().map(|f| f.id).max().unwrap_or(0);
+            let mut open = app_connect(socks).await?;
+            hidden_request(&mut open, &auth).await?;
+            let flow = flow_to(&engine, socks, |f| {
+                f.id > newest && f.proxy.as_ref().is_some_and(|p| p.asked.is_some())
+            })
+            .await?;
+            engine.proxies(datapavan_net::ProxySetting::default());
+            flow_to(&engine, socks, |f| {
+                f.id == flow.id && f.proxy.as_ref().is_some_and(|p| p.asked.is_none())
+            })
+            .await?;
+            drop(open);
+            Ok(())
+        },
+    )
+}
