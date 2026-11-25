@@ -48,7 +48,8 @@ your unlocked phone can see it, as they can see the rest of the app.
   does not store, and says only that one was sent unencrypted. The records of a connection taken for a messenger's
   proxy wait ten minutes in memory before they are written, so that one Datapavan corrects in that time is written
   correct. A request an app sends to the proxy in Android's settings, written as for a proxy, is kept as an app's own
-  proxy is: its kind and the facts, not the proxy's address, while that switch is off. When tracker blocking refused a
+  proxy is: its kind and the facts, not the proxy's address, while that switch is off. So is an app's UDP through its
+  own SOCKS5 proxy's relay, once that proxy took the app's `UDP ASSOCIATE`. When tracker blocking refused a
   connection, its record says so, with the name of the tracker's software
   package (for example `com.google.firebase:firebase-analytics`), which names a tracker, never a destination, and
   is kept whatever the switch for your tool says.

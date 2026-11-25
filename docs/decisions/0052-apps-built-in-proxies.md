@@ -257,7 +257,7 @@ chaining is, and must follow the same switch.
    - **The other units.** R3, the per-app choice "Keep where APP connects through a proxy": unit C, which accepts this
      record. R4, the facts said whatever the switch, with R7, plain requests to Android's setting: unit B, built
      (decisions 4 and 9). A plain request to a local address keeps its own address, as before (the brief audit's
-     finding 15). SOCKS5's `UDP ASSOCIATE`: unit U. R10, the tool's own row: unit D.
+     finding 15). SOCKS5's `UDP ASSOCIATE`: unit U, built (decision 10). R10, the tool's own row: unit D.
 9. **The records.** The log's records are version 7 (unit B; version 6 was [ADR 0053](0053-tracker-blocking.md)'s,
    which added the blocked outcome and the row's SDK); the live view's snapshot is version 6. Each has a proxy block
    after the route (`log::push_proxy`): the kind, the flags (bit 4: the flow left out; bit 5, from version 7: the
@@ -274,6 +274,30 @@ chaining is, and must follow the same switch.
      addresses' own, IPv4 from `/24`, since a data call may report its default route with no gateway and a wider
      prefix there would take in other subscribers; private addresses on Wi-Fi and
      Ethernet only; CGNAT and `fec0::/10` only by a prefix.
+10. **SOCKS5's `UDP ASSOCIATE`** (the proxy record's unit U, 2026-11-25, after its plan's audit): an app that sends its
+    UDP through its own SOCKS5 proxy, as Telegram's calls through a proxy may, keeps that proxy's address out of the
+    history with the switch off, as for its TCP (R1).
+    - **The request.** Command 3 is read beside `CONNECT`. Its `DST` is the client's own source (RFC 1928, section 6),
+      never a destination: it names nothing, the switch on or off, and the control flow keeps its own server's names.
+    - **The reply.** Once the server confirms, as for `CONNECT`, its bytes are read on, across reads, until the reply's
+      `BND` is whole (at most 266 bytes), by the engine's own fuzzed SOCKS5 parsers, and only then does the reply reach
+      the app.
+    - **The tie.** While the control flow is open, the app's UDP flows that go directly to that flow's own server at
+      `BND.PORT`, and those that come in from that server on any port, are the app's own proxy's, with its first hop.
+      The tie is at the server that confirmed with its own bytes, never at `BND.ADDR`: otherwise an app's server could
+      answer with a third party's address and make the app's plain UDP to it read as a proxy's (R8). `BND.ADDR`
+      elsewhere is counted. Only an app Android named, on a flow read for proxies, ties; never the user's tool's flows
+      nor a chained or tunnelled app's. Apps that share a UID share its associations, as they share everything Android
+      tells of a flow; an SDK Runtime's sandbox has a UID of its own, so its UDP is never tied to its app's proxy.
+    - **The relay's flow.** At its birth it gets the proxy's kind, the relay's names and network, the control flow's
+      setting and password facts, its trackers' marks on the relay's names, and whether it is local; its first
+      datagram's SOCKS5 header adds the marks on the destination it names and, with the switch on, that destination,
+      which then names the flow, through the same naming under the flow's lock as a `CONNECT`'s request.
+    - **Lifetime and bounds.** An association ends with its control flow (RFC 1928, section 6); two on one relay port
+      each count, so that the tie goes only with the last; none is handed over, as a stop ends every flow first. At
+      most 16 for each app and 256 in all, so that no app can push another app's out.
+    - **Records.** No format changes: the relay's flow is an own proxy's flow of kind SOCKS5. Two counters are appended:
+      the associations tied, and the replies whose relay named another address.
 
 ## Consequences
 
@@ -352,15 +376,31 @@ chaining is, and must follow the same switch.
   - **129 names** (unit A's plan audit, finding 21): a named first hop is one place per name, so an app whose one
     server has 129 DNS names can push its own real first hop out of "Now" with first hops of its own, each of them
     shown.
-  - **SOCKS5's `UDP ASSOCIATE`** (unit A's plan audit, finding 22): it is read as no proxy, so its control flow and its
-    relay's UDP flows are ordinary flows, logged with their first hop while the switch is off, as before decision 8.
-    Telling them takes the parser, its fuzz target, and the relay's flows tied to their association: unit U.
+  - **SOCKS5's `UDP ASSOCIATE`** (decision 10, unit U):
+    - *A relay elsewhere.* A reply whose `BND.ADDR` names another address than the control connection's own server
+      ties nothing there: the app's UDP to that address keeps its address in the log with the switch off, as before
+      unit U, and the reply is counted. By default Dante, 3proxy, shadowsocks-libev, Xray, sing-box and gost answer
+      with the address the control connection reached, and shadowsocks-rust with its listening address, zeros when it
+      listens on every address, so their relays are tied; a public address configured apart (3proxy's `-Ni`, Xray's
+      `address`, gost's `publicAddr`) or shadowsocks-rust listening on another address or a name is elsewhere (read
+      from their source, 2026-11-25).
+    - *The first datagram only.* A relay flow's later datagrams to other destinations are neither named nor matched
+      for trackers, which keeps the send path, read for every datagram, as it is: an SDK can avoid its mark after its
+      first datagram, and with the switch on the history names only the first destination.
+    - *Before the reply, and across a restart.* A UDP flow the app begins before its server's reply, as a client that
+      knows a same-port server's relay in advance can, is never tied, since a flow is tied once, at its birth. An
+      association ends with its control connection and is not handed to the next engine: after the tunnel is set up
+      again, the app's UDP to the relay is an ordinary flow until it associates again.
+    - *The bounds.* At most 16 associations for each app and 256 in all are tied at once; past them the oldest of the
+      same app goes, or of the app that holds the most, and its relay's new flows are ordinary flows.
+    - *No emulator check.* microsocks, the proxy lab's SOCKS5 server, answers every command but `CONNECT` with code 7,
+      and the fixture sends no UDP: the network lab's test through the whole engine is unit U's check.
   - The false positives that need a maker's own network (a Telegram CDN data centre beside its ranges, WhatsApp's link
     previews and backups) are checked in the engine's tests and its network lab, not on the emulator, which must reach
     no outside server.
 - **Checks:** unit tests for each parser and rule, fuzzing of the parser (`fuzz_targets/proxies.rs`, synthetic seeds),
   two network-lab tests through the whole engine on Linux's TCP stack (an address of Telegram's ranges on the lab's own
-  loopback), the proxy lab (`scripts/proxylab.sh`: microsocks, tinyproxy, mtg built from v2.3.0 at a pinned commit, on
+  loopback) and unit U's on its UDP too, with a SOCKS5 relay that answers, the proxy lab (`scripts/proxylab.sh`: microsocks, tinyproxy, mtg built from v2.3.0 at a pinned commit, on
   a network with no way out), and the emulator's `proxies` shard (`scripts/verify-proxies.sh`), which CI runs and in
   which a skip fails: the project's own fixture under package names of its own, which only debug builds add to a
   messenger's clients.
