@@ -12,8 +12,12 @@
 # proxy. "Now" and the log hold the same while the switch "Log where apps connect through your tool, WireGuard or a
 # proxy" is on. With it off, "Now" holds the proxy's address, its first hop, and nothing the app asked it for, and the
 # log only its kind; the window that ends a first hop in "Now" ten minutes after its connection is the engine's tests'
-# to check, never a wait here. That switch is on the network screen, though the phone has no tool and no tunnel. No
-# password or user name reaches the network part's dump, the log, the device's log or its crash buffer.
+# to check, never a wait here. That switch is on the network screen, though the phone has no tool and no tunnel. The
+# user's choice for one app (the proxy record's unit C) never covers the lab's local address; on an emulator that `adb
+# root` takes, a rule of its own `nat` table sends the network part's connections to a TEST-NET address to the lab, and
+# there the chosen app's proxy is named and logged with the switch off, until the choice is turned off; an update keeps
+# the choice and a reinstall ends it. No password or user name reaches the network part's dump, the log, the device's
+# log or its crash buffer.
 #
 # The false positives that need a maker's own network (a Telegram CDN data centre beside its ranges, WhatsApp's link
 # previews and backups beside Meta's networks) are checked in the engine's network lab (core/net/tests/netlab.rs) and
@@ -39,9 +43,18 @@ HOST=10.0.2.2
 compose=(docker compose -f "$ROOT/scripts/proxylab/compose.yaml")
 WORK="$(mktemp -d)"
 PROXY_SET=""
+# Unit C's part: whether this check rooted the emulator, and the nat rule it set there.
+ROOTED=""
+DNAT_SET=""
+DNAT_RULE=""
 
 cleanup() {
     local status=$?
+    if [ -n "$DNAT_SET" ]; then adb shell "iptables -w -t nat -D OUTPUT $DNAT_RULE" >/dev/null 2>&1 || true; fi
+    if [ -n "$ROOTED" ]; then
+        adb unroot >/dev/null 2>&1 || true
+        timeout 60 adb wait-for-device >/dev/null 2>&1 || true
+    fi
     if [ -n "$PROXY_SET" ]; then
         adb shell settings put global http_proxy :0 >/dev/null 2>&1 || true
         adb shell settings delete global http_proxy >/dev/null 2>&1 || true
@@ -336,6 +349,163 @@ kept=$(SINCE="$setting_since" APP="$APP_UID" awk '$1 == "tcp" && $2 == ENVIRON["
 }' <<<"$log")
 [ -z "$kept" ] || fail "with the switch off, the log got a record of the plain request to Android's setting with its address (at=${kept%%$'\n'*})"
 echo "ok: with the switch off, a plain request to Android's setting is shown in full in \"Now\" for its window and left out of the log"
+
+# The proxy record's unit C (ADR 0052, decision 8, R3): the user's choice for one app, "Log where APP connects through a
+# proxy", made through the debug builds' dump as the screens make it (every package of the app's UID, each with its first
+# install time), with the switch still off. Its first hop must not be local for the choice to cover it, and the lab is
+# reached at 10.0.2.2, which is: so on an emulator that `adb root` takes, a rule of the emulator's own `nat` table sends
+# the network part's own connections to a TEST-NET address (RFC 5737) to the lab, and the engine sees a first hop that
+# no prefix makes local, from end to end: the store, the hand-over, the JNI, the engine, "Now" and the log. Only the
+# network part's sockets match the rule, by their UID; the fixture's packets reach the tunnel with the TEST-NET address
+# still on them. An image whose build refuses root (a `user` build, as the Play Store's) runs only the steps that need
+# none, and says so; with PROXYLAB_REQUIRED=1, which CI sets on its rootable image, a refused root fails, and so does a
+# missing `nat` table anywhere. The ten-minute window is the engine's tests' to check, never a wait here.
+CHOICE_ADDRESS=203.0.113.80
+logged_uids() { dump | sed -n 's/^ *proxy-logged //p'; }
+names_uid() { [[ " $(logged_uids) " == *" $1 "* ]]; }
+names_none() { [ "$(logged_uids)" = - ]; }
+# The phone's time in milliseconds, in whole seconds, as above.
+phone_ms() {
+    local now
+    now=$(adb shell date +%s </dev/null | tr -d '\r') || return 1
+    [[ $now =~ ^[0-9]+$ ]] || return 1
+    echo $((now * 1000))
+}
+# Whether the log's records $1 hold one of the fixture's that matches the pattern $2 and starts at or after $3 (ms), a
+# second's margin allowed for the phone's whole seconds.
+record_since() {
+    SINCE="$3" APP="$APP_UID" PATTERN="$2" awk '$1 == "tcp" && $2 == ENVIRON["APP"] && $0 ~ ENVIRON["PATTERN"] {
+        for (i = 1; i <= NF; i++) if ($i ~ /^at=/) { split(substr($i, 4), t, "-"); if (t[1] + 1000 >= ENVIRON["SINCE"] + 0) found = 1 }
+    } END { exit !found }' <<<"$1"
+}
+# The newest kept flow of the fixture to $1:$2, as `flow-proxy` writes it.
+newest_flow() {
+    proxies | awk -v to="$1:$2" -v uid="$APP_UID" '$1 == "tcp" && $3 == to && $4 == uid { line = $0 } END { print line }'
+}
+
+grep -q "proxy-log refused" <<<"$(dump proxy-log org.telegram.messenger on)" || fail "the dump took a real app's package for the choice"
+grep -q "proxy-log $FIXTURE on" <<<"$(dump proxy-log "$FIXTURE" on)" || fail "the dump did not make the choice for the fixture"
+within 5 names_uid "$APP_UID" || fail "the network part did not hand the fixture's UID $APP_UID as chosen: $(logged_uids)"
+# The SDK Runtime's UID the engine's rule gives the fixture's (app_of), against Android's own answer, public from API 35.
+sdk=$(adb shell getprop ro.build.version.sdk | tr -d '\r')
+if [ "$sdk" -ge 35 ]; then
+    sandbox=$(dump | sed -n "s/^ *proxy-sandbox $APP_UID //p")
+    [ "$sandbox" = $((APP_UID + 10000)) ] ||
+        fail "Android gives the fixture's SDK Runtime the UID ${sandbox:-none}, not $((APP_UID + 10000)), which the engine's rule follows"
+    echo "ok: the fixture chosen through the dump, handed by its UID, and Android's SDK Runtime UID for it ($sandbox) is the engine's rule's"
+else
+    echo "ok: the fixture chosen through the dump and handed by its UID; below API 35 ($sdk) Android has no call to compare the SDK Runtime's rule with"
+fi
+
+# 1. At the lab's own address, which is local: the choice never covers a local proxy.
+socks_before=$(ten_minutes "$SOCKS_HOP") || fail "the network part's dump could not be read"
+chosen_since=$(phone_ms) || fail "the phone's time could not be read"
+fixture "$FIXTURE" socks5 echoed "${lab[@]}" --es port "$PROXYLAB_PORT"
+within 15 socks_now ||
+    fail "with the fixture chosen, \"Now\" did not show the local SOCKS5 proxy's first hop for its window alone within 15 s: $(proxies_now)"
+none_asked_now || fail "the choice covered a proxy on the local network in \"Now\": $(proxies_now)"
+newest=$(newest_flow "$HOST" "$PROXYLAB_PORT") || fail "the network part's kept flows could not be read"
+[[ $newest =~ \ socks5\ read\ pn\ -\ -\ -\ -$ ]] || fail "the choice named a flow to a local proxy: ${newest:-none}"
+dump log-flush >/dev/null
+log=$(dump log-today | sed -n 's/^ *log-record //p')
+record_since "$log" "^tcp [0-9]+ 0\\.0\\.0\\.0:0 .*proxy=socks5:read:pln:-:-$" "$chosen_since" ||
+    fail "with the fixture chosen, the log does not hold its local SOCKS5 proxy's kind alone"
+! record_since "$log" "proxy=socks5:read:pn:" "$chosen_since" || fail "the choice logged a local proxy's first hop"
+echo "ok: the choice for one app never covers a proxy on the local network, live or in the log"
+
+# 2. Root, and the rule that sends the network part's own connections to $CHOICE_ADDRESS to the lab.
+build_type=$(adb shell getprop ro.build.type | tr -d '\r')
+if [ "$build_type" != user ]; then
+    adb root >/dev/null 2>&1 || true
+    timeout 60 adb wait-for-device || true
+    for _ in $(seq 1 10); do
+        [ "$(adb shell id -u 2>/dev/null | tr -d '\r')" = 0 ] && ROOTED=1 && break
+        sleep 1
+    done
+fi
+if [ -n "$ROOTED" ]; then
+    ADV_UID=$(uid_of "$PKG")
+    [ -n "$ADV_UID" ] || fail "the network part's UID could not be read"
+    DNAT_RULE="-m owner --uid-owner $ADV_UID -d $CHOICE_ADDRESS -p tcp --dport $PROXYLAB_PORT -j DNAT --to-destination $HOST:$PROXYLAB_PORT"
+    adb shell "iptables -w -t nat -I OUTPUT 1 $DNAT_RULE" ||
+        fail "the emulator's nat table took no rule: the choice cannot be checked at an address that is not local here"
+    DNAT_SET=1
+    echo "ok: rooted ($build_type build), the network part's own connections to $CHOICE_ADDRESS:$PROXYLAB_PORT go to the lab"
+
+    # 3. Through the lab at an address that is not local: the chosen app's proxy is named by its destination, live and
+    # in the log, with the switch off.
+    choice_lab=(--es host "$CHOICE_ADDRESS" --es user "$PROXYLAB_USER" --es password "$PROXYLAB_PASSWORD")
+    covered_since=$(phone_ms) || fail "the phone's time could not be read"
+    fixture "$FIXTURE" socks5 echoed "${choice_lab[@]}" --es port "$PROXYLAB_PORT"
+    covered() {
+        [[ $(newest_flow "$CHOICE_ADDRESS" "$PROXYLAB_PORT") =~ \ socks5\ read\ p\ inner\.proxylab\.test:443\ -\ -\ inner\.proxylab\.test$ ]]
+    }
+    within 10 covered ||
+        fail "the chosen app's flow through $CHOICE_ADDRESS was not named by its destination: $(newest_flow "$CHOICE_ADDRESS" "$PROXYLAB_PORT")"
+    CHOICE_PLACE="^$APP_UID socks5:read:p:inner\\.proxylab\\.test@443:- ${CHOICE_ADDRESS//./\\.}:$PROXYLAB_PORT named-by=1 inner\\.proxylab\\.test 10m="
+    place_full() { grep -qE "$CHOICE_PLACE" <<<"$(proxies_now)"; }
+    within 10 place_full || fail "\"Now\" does not show the chosen app's proxy in full, with where it asked to go: $(proxies_now)"
+    dump log-flush >/dev/null
+    log=$(dump log-today | sed -n 's/^ *log-record //p')
+    record_since "$log" "^tcp [0-9]+ ${CHOICE_ADDRESS//./\\.}:$PROXYLAB_PORT .* inner\\.proxylab\\.test .*proxy=socks5:read:p:inner\\.proxylab\\.test@443:-$" \
+        "$covered_since" || fail "the log does not hold the chosen app's proxy and where it asked to go"
+    echo "ok: with the switch off, the chosen app's own proxy at an address that is not local is named by its destination, in \"Now\" and in the log"
+else
+    if [ "${PROXYLAB_REQUIRED:-}" = 1 ]; then
+        fail "PROXYLAB_REQUIRED=1, and this $build_type build refuses adb root: the choice cannot be checked at an address that is not local"
+    fi
+    echo "NOT RUN: the choice's steps at an address that is not local (2, 3 and 5's check of what is stripped) need adb root, which this $build_type build refuses"
+fi
+
+# 4. An update keeps the first install time, and so the choice.
+adb install -r "$ROOT/build/proxy-fixture/proxy-fixture.apk" >/dev/null
+[ "$(uid_of "$FIXTURE")" = "$APP_UID" ] || fail "the fixture's update gave it another UID"
+sleep 3
+names_uid "$APP_UID" || fail "an update of the fixture ended its choice: $(logged_uids)"
+echo "ok: an update of the chosen app keeps its choice"
+
+# 5. Turned off: at once, nothing the chosen app asked its proxy for stays in "Now" (R6), and its next flow is left out.
+grep -q "proxy-log $FIXTURE off" <<<"$(dump proxy-log "$FIXTURE" off)" || fail "the dump did not end the choice for the fixture"
+within 5 names_none || fail "the network part still hands the fixture as chosen: $(logged_uids)"
+if [ -n "$ROOTED" ]; then
+    within 5 none_asked_now || fail "with the choice off, \"Now\" still holds where the fixture asked its proxy to go: $(proxies_now)"
+    CHOICE_HOP="^$APP_UID socks5:read:pv:-:- ${CHOICE_ADDRESS//./\\.}:$PROXYLAB_PORT "
+    hop_before=$(ten_minutes "$CHOICE_HOP") || fail "the network part's dump could not be read"
+    off_since=$(phone_ms) || fail "the phone's time could not be read"
+    fixture "$FIXTURE" socks5 echoed "${choice_lab[@]}" --es port "$PROXYLAB_PORT"
+    hop_now() { [ "$(ten_minutes "$CHOICE_HOP")" -gt "$hop_before" ]; }
+    within 15 hop_now || fail "with the choice off, \"Now\" did not show the proxy's first hop alone for its window: $(proxies_now)"
+    none_asked_now || fail "with the choice off, \"Now\" holds where the fixture asked its proxy to go: $(proxies_now)"
+    dump log-flush >/dev/null
+    log=$(dump log-today | sed -n 's/^ *log-record //p')
+    record_since "$log" "^tcp [0-9]+ 0\\.0\\.0\\.0:0 .*proxy=socks5:read:pl:-:-$" "$off_since" ||
+        fail "with the choice off, the log does not hold the proxy's kind alone"
+    ! record_since "$log" "proxy=socks5:read:p:" "$off_since" || fail "with the choice off, the log got the proxy's first hop"
+    # The rule and root go now, so that the rest of the check runs as it always did.
+    adb shell "iptables -w -t nat -D OUTPUT $DNAT_RULE" || fail "the emulator's nat rule could not be deleted"
+    DNAT_SET=""
+    adb unroot >/dev/null 2>&1 || true
+    timeout 60 adb wait-for-device || true
+    ROOTED=""
+    echo "ok: the choice turned off strips at once what the app's proxy asked for, and its next flow is left out of the log"
+else
+    echo "ok: the choice turned off is no longer handed"
+fi
+
+# 6. A reinstall ends it: the package removed and installed again while the network part does not follow the apps, so
+# that only its first install time tells, at the next hand-over.
+grep -q "proxy-log $FIXTURE on" <<<"$(dump proxy-log "$FIXTURE" on)" || fail "the dump did not make the choice for the fixture again"
+within 5 names_uid "$APP_UID" || fail "the network part did not hand the fixture as chosen again: $(logged_uids)"
+grep -qE "^ *packages-follow off$" <<<"$(dump packages-follow off)" || fail "the package receiver could not be turned off"
+adb uninstall "$FIXTURE" >/dev/null
+adb install "$ROOT/build/proxy-fixture/proxy-fixture.apk" >/dev/null
+APP_UID=$(uid_of "$FIXTURE")
+[ -n "$APP_UID" ] || fail "the fixture did not install again"
+grep -qE "^ *packages-follow on$" <<<"$(dump packages-follow on)" || fail "the package receiver could not be turned on again"
+# The switch set as it is: every route and the proxies handed again.
+grep -q "log-destinations off" <<<"$(dump log-destinations off)" || fail "the switch could not be set again"
+within 10 names_none || fail "the choice outlived the fixture's reinstall: proxy-logged $(logged_uids)"
+echo "ok: a reinstall of the chosen app ends its choice, by its first install time"
 
 # No password anywhere the network part writes or Android logs.
 shown="$(dump)
