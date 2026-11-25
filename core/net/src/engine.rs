@@ -1032,6 +1032,39 @@ fn lock<T>(mutex: &Mutex<T>) -> MutexGuard<'_, T> {
     mutex.lock().unwrap_or_else(PoisonError::into_inner)
 }
 
+/// A task of the engine's that carries no traffic, boxed: every such task shares this one type, so that tokio's code
+/// for a task (its poll, shutdown and join handle, about 2 KB on x86-64 for each type of task) is in the library once,
+/// not once per kind of task. The resolver's tasks first (W8), then the tasks that open a flow, ask Android, listen
+/// and log (the cold paths' size pass, ADR 0053). It costs each task one allocation more, its future's box, and each
+/// of its polls one indirect call: the tasks that relay traffic, a mapping's, a relay's, a tunnel's, an echo's, keep
+/// their own types.
+type Task = std::pin::Pin<Box<dyn std::future::Future<Output = ()> + Send>>;
+
+/// Spawns `task` as a [`Task`].
+#[track_caller]
+fn spawn_task(
+    task: impl std::future::Future<Output = ()> + Send + 'static,
+) -> tokio::task::JoinHandle<()> {
+    let task: Task = Box::pin(task);
+    tokio::spawn(task)
+}
+
+/// Runs `job` on the blocking pool, its answer if it ran to its end: as `tokio::task::spawn_blocking(job).await.ok()`,
+/// but as one type of blocking task for every job, so that the pool's code for a task is in the library once, not
+/// once per call to Android (the cold paths' size pass, ADR 0053). The job fills a slot of its own with its answer,
+/// which the caller reads once the job has ended; a caller that stops waiting leaves the job to run on, as before,
+/// and its answer goes with the slot.
+async fn blocking<R: Send + 'static>(job: impl FnOnce() -> R + Send + 'static) -> Option<R> {
+    let slot = Arc::new(Mutex::new(None));
+    let filled = Arc::clone(&slot);
+    let job: Box<dyn FnOnce() + Send> = Box::new(move || {
+        let answer = job();
+        *lock(&filled) = Some(answer);
+    });
+    tokio::task::spawn_blocking(job).await.ok()?;
+    lock(&slot).take()
+}
+
 impl Shared {
     fn keep(&self, flow: Flow) {
         let counter = match flow.outcome {
@@ -1826,6 +1859,92 @@ mod tests {
         }
 
         fn log(&self, _: &[u8]) {}
+    }
+
+    /// One type of blocking task for every call to Android ([`blocking`], the cold paths' size pass): the job's answer
+    /// once it ran, none for a job that panicked, and the pool still answers after one did.
+    #[tokio::test(flavor = "current_thread")]
+    async fn a_blocking_job_gives_its_answer_and_none_when_it_panics() {
+        assert_eq!(blocking(|| 7u32).await, Some(7));
+        let panicked: Option<u32> = blocking(|| unreachable!("a job that panics")).await;
+        assert_eq!(panicked, None);
+        assert_eq!(blocking(|| "after").await, Some("after"));
+    }
+
+    /// Android protects what Kotlin is handed while it runs: a duplicate of the socket's descriptor, owned by the job
+    /// ([`upstream::protect`]), so that a caller that gives up and closes its socket leaves no bare number the kernel
+    /// could hand another socket meanwhile. The duplicate still names the caller's socket after the caller closed it,
+    /// and is closed once the job ends.
+    #[tokio::test(flavor = "current_thread")]
+    async fn a_socket_given_up_is_protected_through_its_own_duplicate() -> io::Result<()> {
+        /// Protects only once let go, noting what the descriptor it got names.
+        struct Holding {
+            named: Mutex<Option<(RawFd, std::path::PathBuf)>>,
+            go: Mutex<std::sync::mpsc::Receiver<()>>,
+            done: Mutex<std::sync::mpsc::Sender<()>>,
+        }
+        impl Platform for Holding {
+            fn owner(&self, _: u8, _: SocketAddr, _: SocketAddr) -> Option<u32> {
+                None
+            }
+
+            fn protect(&self, fd: RawFd) -> bool {
+                let _ = lock(&self.go).recv();
+                *lock(&self.named) = std::fs::read_link(format!("/proc/self/fd/{fd}"))
+                    .ok()
+                    .map(|path| (fd, path));
+                let _ = lock(&self.done).send(());
+                true
+            }
+
+            fn log(&self, _: &[u8]) {}
+        }
+        let (go, going) = std::sync::mpsc::channel();
+        let (done, ended) = std::sync::mpsc::channel();
+        let platform = Arc::new(Holding {
+            named: Mutex::new(None),
+            go: Mutex::new(going),
+            done: Mutex::new(done),
+        });
+        let shared = Arc::new(shared_with(Arc::clone(&platform) as Arc<dyn Platform>));
+        let socket = UdpSocket::bind((Ipv4Addr::LOCALHOST, 0)).await?;
+        let original = std::fs::read_link(format!(
+            "/proc/self/fd/{}",
+            std::os::fd::AsRawFd::as_raw_fd(&socket)
+        ))?;
+        let waited = tokio::time::timeout(
+            Duration::from_millis(50),
+            upstream::protect(&shared, socket.as_fd()),
+        )
+        .await;
+        assert!(waited.is_err(), "the job waits to be let go");
+        drop(socket);
+        let _ = go.send(());
+        let _ =
+            tokio::task::spawn_blocking(move || ended.recv_timeout(Duration::from_secs(5))).await;
+        let named = lock(&platform.named).clone();
+        let Some((fd, path)) = named else {
+            unreachable!("the job named its descriptor")
+        };
+        assert_eq!(
+            path, original,
+            "the duplicate names the socket the caller closed"
+        );
+        // Once the job has ended its duplicate is closed: the number names that socket no more.
+        let mut closed = false;
+        for _ in 0..100 {
+            if std::fs::read_link(format!("/proc/self/fd/{fd}"))
+                .ok()
+                .as_ref()
+                != Some(&original)
+            {
+                closed = true;
+                break;
+            }
+            tokio::time::sleep(Duration::from_millis(10)).await;
+        }
+        assert!(closed, "the duplicate is closed once the job ends");
+        Ok(())
     }
 
     /// The tunnel's DNS server is the chosen set's, and the two sets share no address, so either can

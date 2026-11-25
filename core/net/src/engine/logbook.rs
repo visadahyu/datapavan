@@ -938,7 +938,7 @@ pub(super) async fn logger(shared: Arc<Shared>, mut end: watch::Receiver<bool>) 
         }
         if let Some(batch) = shared.take_log() {
             let platform = Arc::clone(&shared.platform);
-            let _ = tokio::task::spawn_blocking(move || platform.log(&batch)).await;
+            let _ = super::blocking(move || platform.log(&batch)).await;
         }
         for done in asked {
             let _ = done.send(());

@@ -33,9 +33,8 @@ pub(super) async fn owner(
     remote: SocketAddr,
 ) -> Option<u32> {
     let platform = Arc::clone(&shared.platform);
-    let uid = tokio::task::spawn_blocking(move || platform.owner(protocol, local, remote))
+    let uid = super::blocking(move || platform.owner(protocol, local, remote))
         .await
-        .ok()
         .flatten();
     if let Some(uid) = uid {
         where_to(shared, uid).await;
@@ -72,7 +71,7 @@ async fn where_to(shared: &Arc<Shared>, uid: u32) {
 pub(super) async fn protect(shared: &Arc<Shared>, fd: BorrowedFd<'_>) -> io::Result<()> {
     let platform = Arc::clone(&shared.platform);
     let owned = fd.try_clone_to_owned()?;
-    if tokio::task::spawn_blocking(move || platform.protect(owned.as_raw_fd()))
+    if super::blocking(move || platform.protect(owned.as_raw_fd()))
         .await
         .unwrap_or(false)
     {

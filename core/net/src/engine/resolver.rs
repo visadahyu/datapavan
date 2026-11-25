@@ -614,17 +614,6 @@ pub fn is_local(name: &str) -> bool {
     octet(".172.in-addr.arpa", 16..=31) || octet(".100.in-addr.arpa", 64..=127)
 }
 
-/// A task of the resolver's, boxed: every one of them shares one type, so that the runtime's code for a task is
-/// in the library once, not once per kind of task (W8 kept the native library within its 2 MB gate so, at no
-/// cost in speed: one allocation per task, which the runtime makes anyway).
-pub(super) type Task = std::pin::Pin<Box<dyn std::future::Future<Output = ()> + Send>>;
-
-/// Spawns `task` as a [`Task`].
-pub(super) fn spawn(task: impl std::future::Future<Output = ()> + Send + 'static) {
-    let task: Task = Box::pin(task);
-    tokio::spawn(task);
-}
-
 /// Asks the network part's Kotlin side to carry `request`, and waits for its reply at most [`EXCHANGE_WAIT`].
 async fn ask(shared: &Shared, request: &Exchange) -> Reply {
     let exchanges = &shared.resolver.exchanges;
@@ -741,7 +730,7 @@ pub(super) async fn answer(
         };
         if first {
             let (keeper, config, again) = (Arc::clone(shared), Arc::clone(&config), asked.clone());
-            spawn(async move {
+            super::spawn_task(async move {
                 if let Some((fresh, _)) = resolve(&keeper, &config, &again, None).await {
                     keeper.learn(&fresh, None);
                     lock(&keeper.resolver.cache).insert(&fresh, keeper.clock.since_boot());
@@ -1050,7 +1039,7 @@ fn refresh_key(shared: &Arc<Shared>, config: &Arc<DnsConfig>, t: usize, met: Tar
     let extra = u128::from(u32::from_be_bytes(random)) % span.max(1);
     let wait = low + Duration::from_millis(u64::try_from(extra).unwrap_or(0));
     let (shared, config) = (Arc::clone(shared), Arc::clone(config));
-    spawn(async move {
+    super::spawn_task(async move {
         tokio::time::sleep(wait).await;
         let key = match key_from_records(&shared, &config, t).await {
             Some(key) => Some(key),
@@ -1282,7 +1271,7 @@ pub(super) async fn connect_lookups(
             let listener =
                 tokio::net::TcpListener::bind((std::net::Ipv4Addr::LOCALHOST, 0)).await?;
             let at = listener.local_addr()?;
-            spawn(serve_lookups(listener, Arc::clone(shared)));
+            super::spawn_task(serve_lookups(listener, Arc::clone(shared)));
             std::io::Result::Ok(at)
         })
         .await?;
@@ -1310,7 +1299,7 @@ async fn serve_lookups(listener: tokio::net::TcpListener, shared: Arc<Shared>) {
             at.map(|at| routes.swap_remove(at).1)
         };
         if let Some(route) = route {
-            spawn(serve_connection(stream, route, Arc::clone(&shared)));
+            super::spawn_task(serve_connection(stream, route, Arc::clone(&shared)));
         }
     }
 }
