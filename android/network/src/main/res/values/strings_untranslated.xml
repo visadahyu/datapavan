@@ -21,26 +21,37 @@
          the switch may have been turned off while the connection was open, after its first records were logged. Unit C:
          on a row the user's choice for its app could cover, above the link proxy_app_log_link ("below"). -->
     <string name="now_proxy_live_only">This proxy\'s address is shown here while the connection is open and for ten minutes after it ends. It is not logged unless you choose below to log where this app connects through a proxy, or turn on \"Log where apps connect through your tool, WireGuard or a proxy\".</string>
-    <!-- Unit C: as above, on a row no choice for one app covers: Android's proxy setting, a proxy on the local network,
-         a circumvention tool's own connection, and Android's PAC proxy, each of which can carry other apps'
-         connections. -->
+    <!-- Unit C: as above, on a row no choice for one app covers because its proxy can carry other apps' connections:
+         Android's proxy setting, a proxy on the local network, a circumvention tool's own connection, and Android's PAC
+         proxy. -->
     <string name="now_proxy_live_only_shared">This proxy\'s address is shown here while the connection is open and for ten minutes after it ends. It can carry other apps\' connections too, so it is logged only while \"Log where apps connect through your tool, WireGuard or a proxy\" is on.</string>
+    <!-- Unit C: as above, on a row with no link to the choice for any other reason (review C-rest 2): another user's
+         row, such as a dual app's, one whose owner Android did not tell, one of Android's own, a chosen app's connection
+         opened before the choice, or one the switch was turned on after. The words of before unit C, which say nothing of
+         why. -->
+    <string name="now_proxy_live_only_switch">This proxy\'s address is shown here while the connection is open and for ten minutes after it ends. It is not logged while \"Log where apps connect through your tool, WireGuard or a proxy\" is off.</string>
     <!-- Above it, for a proxy read from the connection (SOCKS or HTTP). -->
     <string name="now_proxy_asked_off">Where the app asked the proxy to go is not shown, and not logged while \"Log where apps connect through your tool, WireGuard or a proxy\" is off.</string>
     <!-- In "Now", a proxy whose address is no longer shown: %1$s is the proxy's kind. It states the rule, so it stays
          true after the switch is turned on. Then, on lines of their own, how Datapavan knows and the facts that name
          nothing. Unit C: on a row the user's choice for its app could cover, with the link proxy_app_log_link below. -->
     <string name="now_proxy_past">Through the %1$s. Its address is no longer shown. While \"Log where apps connect through your tool, WireGuard or a proxy\" is off, Datapavan shows a proxy\'s address only while the connection is open and for ten minutes after it ends, unless you choose to log where this app connects through a proxy.</string>
-    <!-- Unit C: as above, on a row no choice for one app covers (see now_proxy_live_only_shared). -->
+    <!-- Unit C: as above, on a row no choice for one app covers because its proxy can carry other apps' connections (see
+         now_proxy_live_only_shared). -->
     <string name="now_proxy_past_shared">Through the %1$s. Its address is no longer shown. This proxy can carry other apps\' connections too, so while \"Log where apps connect through your tool, WireGuard or a proxy\" is off, Datapavan shows its address only while the connection is open and for ten minutes after it ends.</string>
-    <!-- Unit C: as above, on a row of an app the user chose, left out before the choice: places stay as they were. -->
-    <string name="now_proxy_past_chosen">Through the %1$s. Its address is no longer shown: it was left out before you chose to log where this app connects through a proxy.</string>
+    <!-- Unit C: as above, on a row the choice is not offered on for another reason (see now_proxy_live_only_switch): the
+         words of before unit C. -->
+    <string name="now_proxy_past_switch">Through the %1$s. Its address is no longer shown: while \"Log where apps connect through your tool, WireGuard or a proxy\" is off, Datapavan shows a proxy\'s address only while the connection is open and for ten minutes after it ends.</string>
+    <!-- Unit C: as above, on a row of an app the user chose, left out while its proxy was not logged: before the choice,
+         or in the seconds after a start before the tools were read. Places stay as they were. -->
+    <string name="now_proxy_past_chosen">Through the %1$s. Its address is no longer shown: it was left out while this app\'s proxy was not logged.</string>
     <!-- As above, for the proxy set in Android's settings. -->
     <string name="now_proxy_setting_past">Through the %1$s in Android\'s settings, which other apps can use too. Its address is no longer shown: while \"Log where apps connect through your tool, WireGuard or a proxy\" is off, Datapavan shows a proxy\'s address only while the connection is open and for ten minutes after it ends.</string>
     <!-- Under the switch. It writes Now without quotes, as history_back does: every quoted string of these rows quotes
          the switch's label. -->
-    <string name="log_switch_note_proxies">Off unless you turn it on. It covers the apps you send through your circumvention tool or a WireGuard configuration, and the tool\'s own servers. Datapavan still counts their connections. It also covers apps that connect through a proxy, such as a Telegram proxy. While it is off, Now shows the proxy\'s address while the connection is open and for ten minutes after, and the log keeps that the app used a proxy, which kind, when, which known trackers it reached, and facts that name no address, such as whether a password was sent unencrypted. An app you choose on its own page is logged in full all the same. A list of where they went can be used against you if someone searches your phone.</string>
-    <!-- Unit C, after it, while the user chose any app on its own page: how many, the maintainer's count of 2026-11-25.
+    <string name="log_switch_note_proxies">Off unless you turn it on. It covers the apps you send through your circumvention tool or a WireGuard configuration, and the tool\'s own servers. Datapavan still counts their connections. It also covers apps that connect through a proxy, such as a Telegram proxy. While it is off, Now shows the proxy\'s address while the connection is open and for ten minutes after, and the log keeps that the app used a proxy, which kind, when, which known trackers it reached, and facts that name no address, such as whether a password was sent unencrypted. If you choose to log an app on its row or its page, where it connects through a proxy is logged as if this were on. That leaves out a proxy that Datapavan sees is in Android\'s settings or on your local network. A list of where they went can be used against you if someone searches your phone.</string>
+    <!-- Unit C, after it, while the user chose any app, on its row or its page: how many, the maintainer's count of
+         2026-11-25.
          The list of them is W9's, behind Advanced's lock. -->
     <plurals name="log_switch_note_chosen">
         <item quantity="one">You chose %d app to log this way.</item>
@@ -88,9 +99,11 @@
     <string name="proxy_app_log_together">Android counts these apps as one, so this covers each of them: %1$s.</string>
     <!-- Where the SDK Runtime is on (Android 13 and later): its parts run under a UID of their own. -->
     <string name="proxy_app_log_sdk">It also covers the parts of this app that Android runs apart from it, in the SDK Runtime.</string>
-    <!-- What the choice never covers: the engine's exclusions, and the apps sent through the tool or a configuration,
-         whose proxies Datapavan does not read. A tool by its signing key, never "your" tool (audit-C 6). -->
-    <string name="proxy_app_log_never">It never covers the proxy in Android\'s settings, a proxy on your local network, or Android\'s PAC proxy. It does not cover a circumvention tool that Datapavan knows by its signing key. Nor does it cover the apps you send through your tool or a WireGuard configuration. Those are logged only while \"Log where apps connect through your tool, WireGuard or a proxy\" is on.</string>
+    <!-- What the choice does not cover: the engine's exclusions, with what they miss (review C-engine, major 1: a PAC
+         file's proxies, reached under the app's own UID, and the setting by name, which the engine may not tell from the
+         app's own), and the apps sent through the tool or a configuration, whose proxies Datapavan does not read. A tool
+         as Datapavan counts it, by its signing key or as the chain's, never "your" tool (audit-C 6; review C-rest 3). -->
+    <string name="proxy_app_log_never">It does not cover the proxy in Android\'s settings, a proxy on your local network, or Android\'s PAC proxy. But a proxy that a PAC file names, or one set in Android\'s settings by its name rather than its address, may be logged as this app\'s own. It does not cover an app that Datapavan counts as a circumvention tool. Nor does it cover the apps you send through your tool or a WireGuard configuration. Those are logged only while \"Log where apps connect through your tool, WireGuard or a proxy\" is on.</string>
     <!-- What ends the choice without the user (audit-C 13), said before it is made. -->
     <string name="proxy_app_log_ends">Your choice ends by itself if this app is installed again, or if Android starts to count another app with it.</string>
     <!-- The confirmation's buttons; neither is chosen beforehand. -->
@@ -109,8 +122,11 @@
          proxy was not logged, and the switch or the choice came after (review A-rest, note 11). "If it asked for one":
          a SOCKS5 UDP ASSOCIATE's connection asks for no place (unit U). -->
     <string name="now_proxy_asked_earlier">Where the app asked the proxy to go is not shown for this connection. If it asked for a place, it did so before its proxy was logged.</string>
-    <!-- An app's choice that ended without the user, said on its page and its row in Now for this run (audit-C 13). -->
+    <!-- An app's choice that ended without the user, said on its page and its row in Now while the network part's
+         process lives (audit-C 13). Installed again: seen by its first install time, or as the package that came back
+         after the network part saw it gone (review C-rest 1). A tool: by its signing key, or the chain's tool (review
+         C-rest 3). -->
     <string name="proxy_app_ended_installed">Where this app connects through a proxy is not logged any more: it was installed again, which ended your choice.</string>
     <string name="proxy_app_ended_shared">Where this app connects through a proxy is not logged any more: Android now counts another app with it, which ended your choice.</string>
-    <string name="proxy_app_ended_tool">Where this app connects through a proxy is not logged any more: Datapavan now knows it as a circumvention tool by its signing key, which ended your choice.</string>
+    <string name="proxy_app_ended_tool">Where this app connects through a proxy is not logged any more: Datapavan now counts it as a circumvention tool, which ended your choice.</string>
 </resources>

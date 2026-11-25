@@ -123,7 +123,10 @@ class NowActivity : ComponentActivity() {
     private val sdkRuntime by lazy { org.visadahyu.datapavan.network.ui.sdkRuntimeOn() }
 
     /** The choice's taps: a yes of the confirmation, or a stop, for the app's UID. */
-    private val proxyActions = ProxyChoiceActions(onLog = { changeChoice(it, stop = false) }, onStop = { changeChoice(it, stop = true) })
+    private val proxyActions = ProxyChoiceActions(
+        onLog = { app, named -> changeChoice(app, stop = false, named) },
+        onStop = { changeChoice(it, stop = true) },
+    )
 
     /** Bumped when the rows are to sort anew, so that the view reads the order again. */
     private val sorts = mutableIntStateOf(0)
@@ -310,17 +313,18 @@ class NowActivity : ComponentActivity() {
     }
 
     /**
-     * A choice for the app [app] turned on, once its confirmation said yes, or off ([stop]): every package of its UID with
-     * its first install time written off the main thread, which has the running service hand it to the engine at once,
+     * A choice for the app [app] turned on, once its confirmation said yes having named the packages [named], or off
+     * ([stop]): the packages of its UID it named, each with its first install time ([LoggedApps.entriesNamed]), or
+     * every package of it, written off the main thread, which has the running service hand it to the engine at once,
      * and the view read again.
      */
-    private fun changeChoice(app: Int, stop: Boolean) {
+    private fun changeChoice(app: Int, stop: Boolean, named: List<String> = emptyList()) {
         stopped = if (stop) stopped + app else stopped - app
         lifecycleScope.launch {
             choices.value = withContext(worker) {
                 val store = LoggedApps.of(this@NowActivity)
                 val packages = LoggedApps.packages(packageManager)
-                if (stop) store.stop(packages.packagesOf(app)) else store.choose(LoggedApps.entriesOfUid(packages, app))
+                if (stop) store.stop(packages.packagesOf(app)) else store.choose(LoggedApps.entriesNamed(packages, app, named))
                 readChoices()
             }
         }

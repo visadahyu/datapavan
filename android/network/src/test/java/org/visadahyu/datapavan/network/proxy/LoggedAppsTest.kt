@@ -19,12 +19,14 @@ class LoggedAppsTest {
         var lines: Set<String> = emptySet()
         var memoryOnly = false
         var writes = 0
+        var durable = 0
         override fun lines() = lines
         override fun memoryOnly() = memoryOnly
-        override fun write(lines: Set<String>, memoryOnly: Boolean) {
+        override fun write(lines: Set<String>, memoryOnly: Boolean, durable: Boolean) {
             this.lines = lines
             this.memoryOnly = memoryOnly
             writes++
+            if (durable) this.durable++
         }
     }
 
@@ -46,7 +48,7 @@ class LoggedAppsTest {
     }
 
     private fun handed(tools: Set<Int> = emptySet(), pac: Int? = null, toolsRead: Boolean = true) =
-        LoggedApps.handed(store.entries(), phone, tools, pac, toolsRead)
+        LoggedApps.handed(store.entries(), phone, tools, pac, toolsRead, store.ended())
 
     /** Hands as the service does: the UIDs, with what was stale forgotten. */
     private fun hand(tools: Set<Int> = emptySet(), pac: Int? = null, toolsRead: Boolean = true): List<Int> =
@@ -87,8 +89,9 @@ class LoggedAppsTest {
     }
 
     /**
-     * A package that joins the UID later ends the choice for it, the safe direction, and says why on that app's rows;
-     * a reinstall ends it too, though Android gives the same name a new UID (K1); a package removed goes, saying nothing.
+     * A package that joins the UID later ends the choice for it, the safe direction, and says why on that app's rows; a
+     * reinstall ends it too, though Android gives the same name a new UID (K1); a package removed goes, saying nothing
+     * until it comes back.
      */
     @Test
     fun aJoiningPackageOrAReinstallEndsTheChoice() {
@@ -107,7 +110,53 @@ class LoggedAppsTest {
         phone.installed.remove("com.example.other")
         assertEquals(emptyList<Int>(), hand())
         assertEquals(emptySet<Entry>(), store.entries())
-        assertEquals(setOf("com.example.messenger"), store.ended().keys)
+        assertEquals(mapOf("com.example.messenger" to Ended.SHARED, "com.example.other" to Ended.REMOVED), store.ended())
+    }
+
+    /**
+     * A reinstall the network part follows (review C-rest 1): the removal's hand-over finds the package gone and drops
+     * it, and the install's finds it back, which says "installed again" as a first install time that changed does.
+     * Until it comes back nothing is said, and a package chosen again forgets it.
+     */
+    @Test
+    fun aReinstallSeenAsARemovalThenAnInstallSaysInstalledAgain() {
+        store.choose(LoggedApps.entriesOfUid(phone, 10_123))
+        assertEquals(listOf(10_123), hand())
+        phone.installed.remove("com.example.messenger")
+        assertEquals(emptyList<Int>(), hand())
+        assertEquals(emptySet<Entry>(), store.entries())
+        assertEquals(mapOf("com.example.messenger" to Ended.REMOVED), store.ended())
+        assertEquals(emptyList<Int>(), hand())
+        assertEquals(mapOf("com.example.messenger" to Ended.REMOVED), store.ended())
+        phone.installed["com.example.messenger"] = 10_300 to 6_000L
+        assertEquals(emptyList<Int>(), hand())
+        assertEquals(mapOf("com.example.messenger" to Ended.INSTALLED_AGAIN), store.ended())
+        assertEquals(emptySet<Entry>(), store.entries())
+        store.choose(LoggedApps.entriesOfUid(phone, 10_300))
+        assertEquals(emptyMap<String, Ended>(), store.ended())
+        assertEquals(listOf(10_300), hand())
+        // Nothing of it reaches the disk but the choice itself.
+        assertEquals(setOf("app\tcom.example.messenger\t6000"), disk.lines)
+    }
+
+    /**
+     * The yes chooses the packages its confirmation named, never one that joined the UID while it was open (review
+     * C-rest 9): that choice then ends as shared. A confirmation that named none chooses a UID of one package alone.
+     */
+    @Test
+    fun theYesChoosesOnlyThePackagesTheConfirmationNamed() {
+        assertEquals(listOf(Entry("com.example.messenger", 1_000)), LoggedApps.entriesNamed(phone, 10_123, emptyList()))
+        phone.installed["com.example.companion"] = 10_123 to 1_500L
+        assertEquals(emptyList<Entry>(), LoggedApps.entriesNamed(phone, 10_123, emptyList()))
+        val named = LoggedApps.entriesNamed(phone, 10_123, listOf("com.example.messenger"))
+        assertEquals(listOf(Entry("com.example.messenger", 1_000)), named)
+        store.choose(named)
+        assertEquals(emptyList<Int>(), hand())
+        assertEquals(mapOf("com.example.messenger" to Ended.SHARED), store.ended())
+        assertEquals(
+            LoggedApps.entriesOfUid(phone, 10_123),
+            LoggedApps.entriesNamed(phone, 10_123, listOf("com.example.companion", "com.example.messenger", "com.example.gone")),
+        )
     }
 
     /** An update keeps the first install time, and so the choice, whatever its UID (K8). */
@@ -163,6 +212,8 @@ class LoggedAppsTest {
         store.setProfile(true)
         assertTrue(store.memoryOnly)
         assertEquals(emptySet<String>(), disk.lines)
+        // On disk before it returns (review C-rest 12).
+        assertEquals(1, disk.durable)
         assertEquals(listOf(10_123), hand())
         val writes = disk.writes
         store.choose(LoggedApps.entriesOfUid(phone, 10_124))
@@ -212,8 +263,10 @@ class LoggedAppsTest {
         store.choose(LoggedApps.entriesOfUid(phone, 10_123))
         store.drop(LoggedApps.Handed(emptyList(), emptySet(), mapOf("com.example.gone" to Ended.SHARED)))
         val wipes = asked
+        val durable = disk.durable
         store.wipe()
         assertEquals(wipes + 1, asked)
+        assertEquals(durable + 1, disk.durable)
         assertEquals(emptySet<String>(), disk.lines)
         assertEquals(emptyMap<String, Ended>(), store.ended())
         assertFalse(store.memoryOnly)

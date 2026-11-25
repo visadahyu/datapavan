@@ -46,19 +46,28 @@ internal data class ProxyChoices(
     /** Whether the app of [uid] is chosen; an SDK Runtime UID's, its app's. */
     fun chosen(uid: Int?): Boolean = uid != null && ProxyChoice.appOf(uid) in chosen
 
-    /** What a proxy row of [uid] can offer: through Android's setting ([setting]) or a [local] proxy, on a [tcp] flow. */
-    fun row(uid: Int?, setting: Boolean, local: Boolean?, tcp: Boolean = true): RowChoice =
-        RowChoice(ProxyChoice.offered(uid, tools, pacHandler, setting, local, user), chosen(uid), switchOn, tcp)
+    /**
+     * What a proxy row of [uid] can offer: through Android's setting ([setting]) or a [local] proxy, on a [tcp] flow;
+     * and, where it offers nothing, whether that is because its proxy can carry other apps' connections (review C-rest
+     * 2): Android's setting, a local proxy, a circumvention tool's or the PAC handler's, its SDK Runtime's too. Another
+     * user's row, one whose owner Android did not tell, or one of Android's own UIDs is left out for no such reason.
+     */
+    fun row(uid: Int?, setting: Boolean, local: Boolean?, tcp: Boolean = true): RowChoice {
+        val app = uid?.let(ProxyChoice::appOf)
+        val shared = setting || local == true || (app != null && (app in tools || app == pacHandler))
+        return RowChoice(ProxyChoice.offered(uid, tools, pacHandler, setting, local, user), chosen(uid), switchOn, tcp, shared)
+    }
 
     /** Whether the app of [uid] can be chosen at all, on its page: an application of this user, no tool, no PAC handler. */
     fun offered(uid: Int?): Boolean = ProxyChoice.offered(uid, tools, pacHandler, setting = false, local = false, user = user)
 }
 
 /**
- * The taps on the choice: [onLog] once the confirmation said yes, [onStop] at once (a choice turned off keeps less, so
- * it asks nothing). Each takes the app's UID, an SDK Runtime UID's app already found.
+ * The taps on the choice: [onLog] once the confirmation said yes, with the packages it named, of which alone the choice
+ * is made (review C-rest 9; [LoggedApps.entriesNamed]); [onStop] at once (a choice turned off keeps less, so it asks
+ * nothing). Each takes the app's UID, an SDK Runtime UID's app already found.
  */
-internal class ProxyChoiceActions(val onLog: (Int) -> Unit = {}, val onStop: (Int) -> Unit = {})
+internal class ProxyChoiceActions(val onLog: (Int, List<String>) -> Unit = { _, _ -> }, val onStop: (Int) -> Unit = {})
 
 /**
  * The lines an app's row in "Now" and its page say of its choice, as a pure function the JVM tests hold: that the user
@@ -73,7 +82,8 @@ internal fun appChoiceLines(uid: Int?, packages: List<String>, choices: ProxyCho
         LoggedApps.Ended.INSTALLED_AGAIN -> lines += R.string.proxy_app_ended_installed
         LoggedApps.Ended.SHARED -> lines += R.string.proxy_app_ended_shared
         LoggedApps.Ended.TOOL -> lines += R.string.proxy_app_ended_tool
-        null -> Unit
+        // Gone at a hand-over: nothing to say until it comes back, installed again.
+        LoggedApps.Ended.REMOVED, null -> Unit
     }
     return lines
 }

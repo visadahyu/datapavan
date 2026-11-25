@@ -336,8 +336,10 @@ class ProxyRowTest {
 
     /**
      * The proxy record's unit C (C8): a first hop "Now" shows only, on a row the user's choice for its app could cover,
-     * says so in its window's line and links to the choice after the switch; a row no choice covers says its proxy can
-     * carry other apps' connections, and has no such link; a chosen app's, or one with the switch on, has none either.
+     * says so in its window's line and links to the choice after the switch; a row no choice covers because its proxy
+     * can carry other apps' connections says so, and has no such link; one not offered for any other reason, a chosen
+     * app's opened before the choice, or one with the switch on, says only that the switch logs it, with no link
+     * either, never "choose below" (review C-rest 2).
      */
     @Test
     fun aFirstHopShownOnlyOffersTheChoiceWhereItCouldCoverIt() {
@@ -345,40 +347,56 @@ class ProxyRowTest {
         val row = proxyRow(socks, past = false, choice = offered)
         assertEquals(listOf(R.string.now_proxy_asked_off, R.string.now_proxy_live_only), texts(row).takeLast(2))
         assertEquals(true to Choice.LOG, row.toSwitch to row.toChoice)
-        val shared = proxyRow(socks, past = false)
+        val shared = proxyRow(socks, past = false, choice = RowChoice(shared = true))
         assertEquals(R.string.now_proxy_live_only_shared, texts(shared).last())
         assertEquals(true to null, shared.toSwitch to shared.toChoice)
-        for (choice in listOf(offered.copy(chosen = true), offered.copy(switchOn = true))) {
-            assertEquals(null, proxyRow(socks, past = false, choice = choice).toChoice)
+        for (choice in listOf(RowChoice(), offered.copy(chosen = true), offered.copy(switchOn = true))) {
+            val other = proxyRow(socks, past = false, choice = choice)
+            assertEquals(R.string.now_proxy_live_only_switch, texts(other).last())
+            assertEquals(true to null, other.toSwitch to other.toChoice)
         }
     }
 
     /**
      * Unit C: what the screens offer is the engine's rule (ProxyChoice): never on Android's setting, a local proxy, a
-     * circumvention tool's row or the PAC proxy's, nor on another user's row; an SDK Runtime UID's row through its app.
-     * Each of those rows says its proxy can carry other apps' connections, past the window too, and links only to the
-     * switch.
+     * circumvention tool's row or the PAC proxy's, nor on another user's row, one whose owner Android did not tell, or
+     * one of Android's own UIDs; an SDK Runtime UID's row through its app. Those of the first four say their proxy can
+     * carry other apps' connections, past the window too; the others say only that the switch logs it, since nothing
+     * says their proxy carries anyone else's (review C-rest 2). Each links only to the switch.
      */
     @Test
     fun noRowTheChoiceNeverCoversOffersIt() {
         val choices = ProxyChoices(tools = setOf(10_124), pacHandler = 10_125, chosen = setOf(10_126))
         assertEquals(true, choices.row(10_123, setting = false, local = false).offered)
         assertEquals(true, choices.row(20_123, setting = false, local = null).offered)
-        val never = listOf(
+        val shared = listOf(
             choices.row(10_123, setting = true, local = false),
             choices.row(10_123, setting = false, local = true),
             choices.row(10_124, setting = false, local = false),
             choices.row(20_124, setting = false, local = false),
             choices.row(10_125, setting = false, local = false),
+            choices.row(null, setting = true, local = false),
+            choices.row(1_010_123, setting = false, local = true),
+        )
+        val other = listOf(
             choices.row(1_010_123, setting = false, local = false),
             choices.row(null, setting = false, local = false),
+            choices.row(1_000, setting = false, local = false),
         )
         val leftOut = ProxyFacts.of(LogRecord.Proxy(LogRecord.PROXY_SOCKS5, leftOut = true), zeros, 0)
-        for (choice in never) {
-            assertEquals(false, choice.offered)
-            val past = proxyRow(leftOut, past = false, choice = choice)
-            assertEquals(R.string.now_proxy_past_shared to null, past.header?.text to past.toChoice)
-            assertEquals(null, proxyRow(leftOut, past = true, choice = choice).toChoice)
+        val live = ProxyFacts.of(LogRecord.Proxy(LogRecord.PROXY_SOCKS5), hetzner, 1080, shownOnly = true)
+        for ((rows, header, window) in listOf(
+            Triple(shared, R.string.now_proxy_past_shared, R.string.now_proxy_live_only_shared),
+            Triple(other, R.string.now_proxy_past_switch, R.string.now_proxy_live_only_switch),
+        )) {
+            for (choice in rows) {
+                assertEquals(false, choice.offered)
+                val past = proxyRow(leftOut, past = false, choice = choice)
+                assertEquals(header to null, past.header?.text to past.toChoice)
+                assertEquals(null, proxyRow(leftOut, past = true, choice = choice).toChoice)
+                val now = proxyRow(live, past = false, choice = choice)
+                assertEquals(window to null, texts(now).last() to now.toChoice)
+            }
         }
         // Chosen: the app's sandbox too; the row knows it.
         assertEquals(true to true, choices.row(20_126, setting = false, local = false).let { it.offered to it.chosen })
@@ -480,6 +498,9 @@ class ProxyRowTest {
         )) {
             assertEquals(listOf(line), appChoiceLines(10_123, packages, ProxyChoices(ended = mapOf("com.example.messenger" to why))))
         }
+        // A package found gone says nothing until it comes back (review C-rest 1).
+        val removed = mapOf("com.example.messenger" to org.visadahyu.datapavan.network.proxy.LoggedApps.Ended.REMOVED)
+        assertEquals(emptyList<Int>(), appChoiceLines(10_123, packages, ProxyChoices(ended = removed)))
         assertEquals(emptyList<Int>(), appChoiceLines(10_123, packages, ProxyChoices(ended = ended, stopped = setOf(10_123), chosen = setOf(10_123))))
         assertEquals(emptyList<Int>(), appChoiceLines(null, packages, ProxyChoices(ended = ended)))
     }

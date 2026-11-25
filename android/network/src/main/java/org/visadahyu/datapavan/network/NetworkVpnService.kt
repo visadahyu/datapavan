@@ -464,16 +464,43 @@ class NetworkVpnService : VpnService() {
     /** The UIDs of the apps whose own proxies the user chose, as [applyProxies] last handed them: debug builds' dump. */
     private var loggedHanded = IntArray(0)
 
+    /** How many times [applyProxies] handed the engine the proxies in this service's life: debug builds' dump. */
+    @Volatile
+    private var proxiesHanded = 0
+
+    /**
+     * Debug builds: how many hand-overs each package's change ran ([followPackages]), by package, for the check that an
+     * update keeps the choice, which waits for the hand-over that follows it (review C-rest 6). Written on the main
+     * thread, read by the dump's.
+     */
+    private val debugPackagesHanded = java.util.concurrent.ConcurrentHashMap<String, Int>()
+
+    /**
+     * Android's setting's proxies by name ("host port", lowercase) and the addresses this run's lookups found for them
+     * under strict Private DNS, the newest first ([applyProxies]): handed with the names from each first hand on, and
+     * forgotten when the names change or the run ends (review C-engine, major 1 (a)). Main thread.
+     */
+    private var settingAddresses: Pair<Set<String>, List<String>>? = null
+
+    /**
+     * Counts the runs, so that a reading of the tools a run asked for counts for that run alone (review C-rest 18).
+     * Main thread.
+     */
+    private var runs = 0
+
     /**
      * Hands the engine the messengers' apps, by the UIDs Android gives their packages now (`data/messengers`, through
-     * the engine's own table), and the proxies Android's setting names: the global one and each network's (W8, part
-     * 2a, ADR 0052). The engine reads each new flow of those apps for their proxies, and tells Android's setting from
-     * an app's own. With them (the proxy record's unit C), the apps whose own proxies the user chose to log, by the UIDs
+     * the engine's own table), and the proxies Android's setting names: the global one and each network's (W8, part 2a,
+     * ADR 0052). The engine reads each new flow of those apps for their proxies, and tells Android's setting from an
+     * app's own. With them (the proxy record's unit C), the apps whose own proxies the user chose to log, by the UIDs
      * their packages hold now ([org.visadahyu.datapavan.network.proxy.LoggedApps.handed]), the choices found stale
-     * forgotten; the circumvention tools by UID; and Android's PAC handler's UID, read here each time, since
-     * [publishProxyContext] reads nothing before the tunnel is this process's default network (audit-C 15). The engine
-     * never counts a tool or the handler among the chosen, nor covers Android's setting or a local proxy. Main thread
-     * only.
+     * forgotten; the circumvention tools by UID, the chain's tool among them from the chain's settings at once (review
+     * C-rest 8); and Android's PAC handler's UID, read here each time, since [publishProxyContext] reads nothing before
+     * the tunnel is this process's default network (audit-C 15). The engine never counts a tool or the handler among
+     * the chosen, nor covers a flow it reads as through Android's setting or a local proxy. Under strict Private DNS,
+     * where it tells the setting by the addresses handed alone, the addresses of an earlier lookup go with the names,
+     * and no app the user chose is handed while the setting's names have none yet (review C-engine, major 1 (a)). Main
+     * thread only.
      */
     private fun applyProxies() {
         val clients = Engine.nativeMessengerClients().lineSequence().mapNotNull { line ->
@@ -512,14 +539,23 @@ class NetworkVpnService : VpnService() {
         val strict = dnsState.value is PrivateDns.Strict
         val (onLink, transport) = onLinkOf(current)
         val pacHandler = org.visadahyu.datapavan.network.proxy.PacHandler.uid(packageManager)
-        val tools = org.visadahyu.datapavan.network.proxy.ProxyContext.state.value.tools.keys
+        val tools = org.visadahyu.datapavan.network.proxy.ProxyContext.state.value.tools.keys + listOfNotNull(chainToolUid())
+        // The setting's proxies by name, and the addresses this run last found for them, kept until the names change: a
+        // first hand without them would leave, under strict DNS, a chosen app's flow to the setting read as its own.
+        val named = direct.filter { (_, info) -> org.visadahyu.datapavan.network.dns.Exchanger.numeric(info.host.removePrefix("[").removeSuffix("]")) == null }
+        val names = named.map { (_, info) -> "${info.host.lowercase()} ${info.port}" }.toSet()
+        val known = settingAddresses?.takeIf { it.first == names }?.second
+        if (known == null) settingAddresses = null
+        val waiting = strict && names.isNotEmpty() && known == null
         val choice = org.visadahyu.datapavan.network.proxy.LoggedApps.of(this)
         val handed = org.visadahyu.datapavan.network.proxy.LoggedApps.handed(
-            choice.entries(), org.visadahyu.datapavan.network.proxy.LoggedApps.packages(packageManager), tools, pacHandler, toolsRead,
+            choice.entries(), org.visadahyu.datapavan.network.proxy.LoggedApps.packages(packageManager), tools, pacHandler,
+            ready = toolsRead && !waiting, before = choice.ended(),
         )
         choice.drop(handed)
         val logged = handed.uids.toIntArray()
         loggedHanded = logged
+        proxiesHanded++
         val hand = { lines: List<String> ->
             Engine.nativeProxies(
                 messengers.map { it.first }.toIntArray(),
@@ -533,10 +569,9 @@ class NetworkVpnService : VpnService() {
                 pacHandler ?: -1,
             )
         }
-        hand(android)
+        hand(android + known.orEmpty())
         publishProxyContext(pacHandler)
         val ticket = ++settingLookups
-        val named = direct.filter { (_, info) -> org.visadahyu.datapavan.network.dns.Exchanger.numeric(info.host.removePrefix("[").removeSuffix("]")) == null }
         if (!strict || named.isEmpty()) return
         val on = current
         lookUp {
@@ -551,7 +586,29 @@ class NetworkVpnService : VpnService() {
                 }
             }
             if (resolved.isEmpty()) return@lookUp
-            main.post { if (active && ticket == settingLookups) hand(android + resolved) }
+            main.post {
+                if (!active || ticket != settingLookups) return@post
+                // The newest first, an earlier lookup's after: an app may still connect to an address it was given.
+                val addresses = (resolved + known.orEmpty()).distinct().take(MAX_SETTING_ADDRESSES)
+                settingAddresses = names to addresses
+                // The apps the user chose, held back until now, are handed with them; else only the addresses are new.
+                if (waiting) applyProxies() else hand(android + addresses)
+            }
+        }
+    }
+
+    /**
+     * The UID of the chain's tool while the chain is on, from the chain's settings, as [applyChain] reads it. Main
+     * thread.
+     */
+    private fun chainToolUid(): Int? {
+        val settings = org.visadahyu.datapavan.network.chain.ChainSettings.of(this)
+        val name = settings.lastTool?.packageName?.takeIf { settings.on } ?: return null
+        return try {
+            @Suppress("DEPRECATION")
+            packageManager.getApplicationInfo(name, 0).uid
+        } catch (e: PackageManager.NameNotFoundException) {
+            null
         }
     }
 
@@ -607,16 +664,18 @@ class NetworkVpnService : VpnService() {
     }
 
     /**
-     * The tools' UIDs, by their signing keys, for "Now", the history and the engine, which never counts a tool among the
-     * apps the user chose (the proxy record's unit C): handed again once read, and the chosen apps with them from the
-     * first reading on ([toolsRead]). A late result after the tunnel stops is dropped.
+     * The tools' UIDs, by their signing keys, for "Now", the history and the engine, which never counts a tool among
+     * the apps the user chose (the proxy record's unit C): handed again once read, and the chosen apps with them from
+     * the first reading on ([toolsRead]). A late result after the tunnel stops, or of a run before, is dropped (review
+     * C-rest 18).
      */
     private fun refreshTools() {
+        val run = runs
         try {
             toolLookups.execute {
                 val tools = org.visadahyu.datapavan.network.chain.Tools.uids(this)
                 main.post {
-                    if (!active) return@post
+                    if (!active || run != runs) return@post
                     org.visadahyu.datapavan.network.proxy.ProxyContext.publishTools(tools)
                     toolsRead = true
                     applyProxies()
@@ -780,7 +839,9 @@ class NetworkVpnService : VpnService() {
         if (packages != null || packagesOff) return
         val receiver = object : android.content.BroadcastReceiver() {
             override fun onReceive(context: android.content.Context, intent: Intent) {
-                if (active) applyRoutes()
+                if (!active) return
+                applyRoutes()
+                if (debuggable) intent.data?.schemeSpecificPart?.let { debugPackagesHanded.merge(it, 1, Int::plus) }
             }
         }
         val filter = android.content.IntentFilter().apply {
@@ -1368,6 +1429,8 @@ class NetworkVpnService : VpnService() {
         // The next run reads the tools again before it hands any app the user chose (the proxy record's unit C).
         toolsRead = false
         loggedHanded = IntArray(0)
+        settingAddresses = null
+        runs++
         if (active) {
             for (callback in listOf(network, ownNetwork)) {
                 try {
@@ -1689,12 +1752,16 @@ class NetworkVpnService : VpnService() {
      * Debug builds only, for scripts/verify-proxies.sh (ADR 0052): `messenger-client FAMILY PACKAGE` adds a package of
      * this project's own (`org.visadahyu.datapavan.` and after) to the clients of `telegram`, `whatsapp` or `signal`,
      * and refuses any other, so that a real app is never read as another's; `messenger-clear` takes them away; and (the
-     * proxy record's unit C) `proxy-log PACKAGE on|off` turns the user's choice "Log where APP connects through a proxy"
-     * on or off for the app of a package of this project's own ([org.visadahyu.datapavan.network.proxy.LoggedApps.debugAllowed]),
-     * every package of its UID with it, as the screens do, and refuses any other. Then, always, the kept flows that went
-     * through a proxy, one `flow-proxy` line each (no credential: none is kept); `proxy-logged UID...` (or `-`), the
-     * chosen apps' UIDs the last hand-over gave the engine; and on Android 15 and later one `proxy-sandbox UID SANDBOX`
-     * for each, the SDK Runtime's UID Android gives that app, for the check that the engine's rule matches Android's.
+     * proxy record's unit C) `proxy-log PACKAGE on|off` turns the user's choice "Log where APP connects through a
+     * proxy" on or off for the app of a package of this project's own
+     * ([org.visadahyu.datapavan.network.proxy.LoggedApps.debugAllowed]), every package of its UID with it, as the
+     * screens do, and refuses any other. Then, always, the kept flows that went through a proxy, one `flow-proxy` line
+     * each (no credential: none is kept); `proxy-logged UID...` (or `-`), the chosen apps' UIDs the last hand-over gave
+     * the engine; and on Android 15 and later one `proxy-sandbox UID SANDBOX` for each, the SDK Runtime's UID Android
+     * gives that app, for the check that the engine's rule matches Android's; `proxy-handed COUNT`, the hand-overs so
+     * far; one `proxy-ended PACKAGE WHY` for each choice that ended without the user while the process lives
+     * (`installed-again`, `shared`, `tool` or `removed`); and one `packages-handed PACKAGE COUNT` for each package
+     * whose change ran a hand-over, for the checks of an update and a reinstall (review C-rest 6 and 11).
      */
     private fun debugProxies(args: List<String>, writer: PrintWriter) {
         val at = args.indexOf("messenger-client")
@@ -1753,6 +1820,11 @@ class NetworkVpnService : VpnService() {
         if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.VANILLA_ICE_CREAM) {
             for (uid in loggedHanded) writer.println("proxy-sandbox $uid ${android.os.Process.getSdkSandboxUidForAppUid(uid)}")
         }
+        writer.println("proxy-handed $proxiesHanded")
+        for ((name, why) in org.visadahyu.datapavan.network.proxy.LoggedApps.of(this).ended().toSortedMap()) {
+            writer.println("proxy-ended $name ${why.name.lowercase().replace('_', '-')}")
+        }
+        for ((name, count) in debugPackagesHanded.toSortedMap()) writer.println("packages-handed $name $count")
         writer.println("proxy-on-link ${Engine.nativeProxyOnLink()}")
         // What "Now" holds of Android's own setting (the proxy record's unit B): the whole phone's, the network's, the PAC
         // handler's UID and the tools' count.
@@ -2331,6 +2403,9 @@ class NetworkVpnService : VpnService() {
          * C, `proxy.LoggedApps`), handed to the engine again.
          */
         const val ACTION_APPLY_PROXIES = "org.visadahyu.datapavan.network.APPLY_PROXIES"
+
+        /** At most so many addresses of Android's setting's names handed under strict Private DNS ([applyProxies]). */
+        private const val MAX_SETTING_ADDRESSES = 32
 
         /** The chain's settings changed: hand them to the engine (W6). */
         const val ACTION_APPLY_CHAIN = "org.visadahyu.datapavan.network.APPLY_CHAIN"

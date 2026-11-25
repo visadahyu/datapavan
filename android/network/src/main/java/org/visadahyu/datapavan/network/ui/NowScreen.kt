@@ -219,7 +219,7 @@ internal fun NowScreen(
             sdkRuntime = view.choices.sdkRuntime,
             onYes = {
                 asking = null
-                proxyActions.onLog(app)
+                proxyActions.onLog(app, named?.packages.orEmpty())
             },
             onNo = { asking = null },
         )
@@ -649,13 +649,20 @@ internal data class ProxyRow(val header: ProxyLine?, val lines: List<ProxyLine>,
 internal enum class Choice { LOG, STOP }
 
 /**
- * What a proxy row knows of the user's choice for its app (the proxy record's unit C, C8): whether the choice could cover
- * it ([offered], [org.visadahyu.datapavan.network.proxy.ProxyChoice.offered], so never on Android's setting, a local
- * proxy, a tool's row or the PAC handler's), whether its app is chosen ([chosen]), whether the switch of every app is on
- * ([switchOn]), and whether the place is a TCP connection's ([tcp]), for the line of a destination asked for before its
- * proxy was logged, which a SOCKS5 relay's datagrams never say.
+ * What a proxy row knows of the user's choice for its app (the proxy record's unit C, C8): whether the choice could
+ * cover it ([offered], [org.visadahyu.datapavan.network.proxy.ProxyChoice.offered], so never on Android's setting, a
+ * local proxy, a tool's row or the PAC handler's), whether its app is chosen ([chosen]), whether the switch of every
+ * app is on ([switchOn]), whether the place is a TCP connection's ([tcp]), for the line of a destination asked for
+ * before its proxy was logged, which a SOCKS5 relay's datagrams never say, and whether a row not offered is so because
+ * its proxy can carry other apps' connections ([shared], [ProxyChoices.row]; review C-rest 2).
  */
-internal data class RowChoice(val offered: Boolean = false, val chosen: Boolean = false, val switchOn: Boolean = false, val tcp: Boolean = true) {
+internal data class RowChoice(
+    val offered: Boolean = false,
+    val chosen: Boolean = false,
+    val switchOn: Boolean = false,
+    val tcp: Boolean = true,
+    val shared: Boolean = false,
+) {
     /** Whether the row offers to log its app's proxy: it could be covered, and neither the switch nor the choice keeps it. */
     val toLog: Boolean get() = offered && !chosen && !switchOn
 }
@@ -679,11 +686,12 @@ internal data class RowChoice(val offered: Boolean = false, val chosen: Boolean 
  * The user's choice for one app ([choice]; the proxy record's unit C, C8, with audit-C 1): a row the choice could cover
  * says so in its window's line and its header past the window, and links to the choice while neither the switch nor the
  * choice keeps it; a row no choice covers (Android's setting, a local proxy, a tool's, the PAC proxy's) says that its
- * proxy can carry other apps' connections, so only the switch logs it; a row of a chosen app left out before the
- * choice says so. In "Now", a row the choice alone keeps says why it is shown in full, and links to stop; and a row read
- * from the connection, kept with no destination asked for, says that it asked for it before its proxy was logged
- * (review A-rest, note 11). A plain request is never said to be logged for the choice, which would call its server a
- * proxy.
+ * proxy can carry other apps' connections, so only the switch logs it; one the choice is not offered on for another
+ * reason (another user's, one whose owner Android did not tell, one of Android's own UIDs) says only that the switch
+ * logs it (review C-rest 2); a row of a chosen app left out while its proxy was not logged says so. In "Now", a row the
+ * choice alone keeps says why it is shown in full, and links to stop; and a row read from the connection, kept with no
+ * destination asked for, says that it asked for it before its proxy was logged (review A-rest, note 11). A plain
+ * request is never said to be logged for the choice, which would call its server a proxy.
  */
 internal fun proxyRow(facts: ProxyFacts.Facts, past: Boolean, tool: String? = null, choice: RowChoice = RowChoice()): ProxyRow {
     val lines = mutableListOf<ProxyLine>()
@@ -691,6 +699,8 @@ internal fun proxyRow(facts: ProxyFacts.Facts, past: Boolean, tool: String? = nu
     // A tool's own connection through a proxy: a fact of the app, which names no address, so it stays with the switch off.
     val toolLine = tool?.let { ProxyLine(R.string.proxy_tool, args = listOf(isolate(it))) }
     val toLog = Choice.LOG.takeIf { choice.toLog }
+    // Why a row the choice is not offered on is so: its proxy can carry other apps' connections, or nothing it can say.
+    val shared = choice.shared || tool != null || facts.setting || facts.where == ProxyFacts.Where.LOCAL
     if (!facts.kept) {
         // A record the engine could not tell was a messenger's proxy (taken back, or never named for substitution) says
         // so in place of its proxy line, and so says nothing of how it was inferred: only the history has such records.
@@ -701,9 +711,9 @@ internal fun proxyRow(facts: ProxyFacts.Facts, past: Boolean, tool: String? = nu
                 facts.setting && past -> R.string.history_proxy_setting_hidden
                 facts.setting -> R.string.now_proxy_setting_past
                 past -> R.string.history_proxy_hidden
-                // Unit C: a proxy no choice for one app covers says so; a chosen app's place left out before the choice
-                // stays as it was, and says so (audit-C 1).
-                !choice.offered -> R.string.now_proxy_past_shared
+                // Unit C: a proxy no choice for one app covers says so; a chosen app's place left out while its proxy
+                // was not logged stays as it was, and says so (audit-C 1).
+                !choice.offered -> if (shared) R.string.now_proxy_past_shared else R.string.now_proxy_past_switch
                 choice.chosen && !choice.switchOn -> R.string.now_proxy_past_chosen
                 else -> R.string.now_proxy_past
             },
@@ -760,7 +770,15 @@ internal fun proxyRow(facts: ProxyFacts.Facts, past: Boolean, tool: String? = nu
     if (past) return ProxyRow(null, lines, toSwitch = false)
     if (facts.shownOnly) {
         if (facts.declared) lines += ProxyLine(R.string.now_proxy_asked_off)
-        lines += ProxyLine(if (choice.offered) R.string.now_proxy_live_only else R.string.now_proxy_live_only_shared)
+        // "Choose below" only where the link is below: a chosen app's flow opened before the choice, or one the switch
+        // was turned on after, has none.
+        lines += ProxyLine(
+            when {
+                choice.toLog -> R.string.now_proxy_live_only
+                shared -> R.string.now_proxy_live_only_shared
+                else -> R.string.now_proxy_live_only_switch
+            },
+        )
         return ProxyRow(null, lines, toSwitch = true, toChoice = toLog)
     }
     // Kept with no destination asked for: it opened while its proxy was not logged (note 11). A SOCKS5 relay's datagram

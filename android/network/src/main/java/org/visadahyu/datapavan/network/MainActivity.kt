@@ -314,6 +314,8 @@ class MainActivity : ComponentActivity() {
     /**
      * How many apps the user chose to log one by one (the proxy record's unit C), for the switch's note, read off the main
      * thread by the rule the hand-over uses: a choice made in "Now" while this screen was away shows when it comes back.
+     * The tools as the service published them or, while it published none, as this screen reads them, as "Now" does, so
+     * that the count and the rows agree while the tunnel is off (review C-rest 14).
      */
     private fun countChosen() {
         worker.execute {
@@ -321,7 +323,7 @@ class MainActivity : ComponentActivity() {
             val store = org.visadahyu.datapavan.network.proxy.LoggedApps.of(this)
             val count = store.chosen(
                 org.visadahyu.datapavan.network.proxy.LoggedApps.packages(packageManager),
-                published.tools.keys,
+                published.tools.keys.ifEmpty { org.visadahyu.datapavan.network.chain.Tools.uids(this).keys },
                 published.pacHandler ?: org.visadahyu.datapavan.network.proxy.PacHandler.uid(packageManager),
             ).size
             runOnUiThread { if (count != logSwitch.value.chosen) logSwitch.value = logSwitch.value.copy(chosen = count) }

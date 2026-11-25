@@ -15,18 +15,26 @@ import org.visadahyu.datapavan.network.NetworkVpnService
  * (audit-C 23).
  *
  * Why the first install time: Android gives a removed app's UID to another after a reboot, and a package name can be
- * installed again by anyone. An entry whose package is gone, or whose first install time changed, is dropped at the next
- * hand-over ([handed]) and never comes back; an update keeps the first install time, and so the choice. A UID is handed
- * only while every package that holds it now was chosen, so a package that joins it ends the choice; never Android's own
- * UIDs, a circumvention tool's or Android's PAC handler's. The engine decides what is logged, per flow, and leaves out
- * Android's setting and a local proxy whatever is handed.
+ * installed again by anyone. An entry whose package is gone, or whose first install time changed, is dropped at the
+ * next hand-over ([handed]) and never comes back; an update keeps the first install time, and so the choice. A package
+ * found gone is remembered in this process's memory alone ([Ended.REMOVED]), so that, installed again while the process
+ * lives, its rows say so, as they do when the network part saw only the new first install time (review C-rest 1). A UID
+ * is handed only while every package that holds it now was chosen, so a package that joins it ends the choice; never
+ * Android's own UIDs, a circumvention tool's or Android's PAC handler's. The engine decides what is logged, per flow,
+ * and leaves out a flow it reads as through Android's setting or a local proxy whatever is handed.
  *
  * Under ADR 0047's profile ([setProfile]) nothing of it is written: the lines live in this process alone
  * ([Session.PROCESS], which the screens and the service share), and are lost when it ends; [clearSession], at W9's
  * screen-off, empties them; turning the profile off writes nothing and restores nothing (ADR 0047, decision 4; audit-C
  * major 2). [wipe] empties both, for W9's wipe. Each of these, and each choice, asks the running service to hand the
- * choice to the engine again ([changed]), so that no caller can forget it (audit-C 4). The store sits behind Advanced's
- * lock once W9 brings it, as `BlockingSettings` does; until then it is as readable as the chain's list of apps.
+ * choice to the engine again ([changed]), so that no caller can forget it (audit-C 4). The profile's and the wipe's
+ * writes reach the disk before they return (review C-rest 12). The store sits behind Advanced's lock once W9 brings it,
+ * as `BlockingSettings` does; until then it is as readable as the chain's list of apps.
+ *
+ * The network process's alone (review C-rest 5): the session's lines and the service it asks live there, and Android's
+ * preferences are not shared safely between processes, so a caller in another process would wipe a copy that the
+ * network process then writes back. W9 calls [setProfile], [clearSession] and [wipe] in it, through an intent to the
+ * service or a receiver declared in `:network`; [of] refuses any other process.
  */
 class LoggedApps internal constructor(
     private val store: Store,
@@ -41,8 +49,8 @@ class LoggedApps internal constructor(
         /** Whether ADR 0047's profile keeps the choice in memory only: a flag that names no app. */
         fun memoryOnly(): Boolean
 
-        /** Writes the lines and the flag together, in one edit. */
-        fun write(lines: Set<String>, memoryOnly: Boolean)
+        /** Writes the lines and the flag together, in one edit: on disk before it returns where [durable]. */
+        fun write(lines: Set<String>, memoryOnly: Boolean, durable: Boolean = false)
     }
 
     /** One package chosen, by its name and its first install time, as Android's package manager gives them. */
@@ -50,10 +58,12 @@ class LoggedApps internal constructor(
 
     /**
      * Why an app's choice ended without the user (audit-C 13): it was installed again ([INSTALLED_AGAIN]), Android now
-     * counts another app with it ([SHARED]), or Datapavan now knows it as a circumvention tool by its signing key
-     * ([TOOL]). Kept in this process for its run, and said on that app's rows; never on disk.
+     * counts another app with it ([SHARED]), or Datapavan now counts it as a circumvention tool, by its signing key or
+     * as the chain's tool ([TOOL]); each said on that app's rows. Or its package was gone at a hand-over ([REMOVED]),
+     * which no row says, and which becomes [INSTALLED_AGAIN] when the package comes back (review C-rest 1). Kept in
+     * this process for its life; never on disk.
      */
-    enum class Ended { INSTALLED_AGAIN, SHARED, TOOL }
+    enum class Ended { INSTALLED_AGAIN, SHARED, TOOL, REMOVED }
 
     /** What one hand-over gives: the UIDs to hand the engine, sorted; the entries found stale; and why each ended. */
     data class Handed(val uids: List<Int>, val stale: Set<Entry>, val ended: Map<String, Ended>)
@@ -122,7 +132,7 @@ class LoggedApps internal constructor(
      * agree on an app installed again or become a tool meanwhile (audit-C 12). It writes nothing.
      */
     fun chosen(packages: Packages, tools: Set<Int>, pacHandler: Int?): Set<Int> =
-        handed(entries(), packages, tools, pacHandler, toolsRead = true).uids.toSet()
+        handed(entries(), packages, tools, pacHandler, ready = true).uids.toSet()
 
     /**
      * ADR 0047's profile on or off, by W9's switch (and the debug builds' `tunnel-profile on|off`). On, the lines on disk
@@ -134,12 +144,12 @@ class LoggedApps internal constructor(
             when {
                 on && !store.memoryOnly() -> {
                     session.lines = store.lines()
-                    store.write(emptySet(), memoryOnly = true)
+                    store.write(emptySet(), memoryOnly = true, durable = true)
                 }
                 !on && store.memoryOnly() -> {
                     session.lines = emptySet()
                     session.ended.clear()
-                    store.write(emptySet(), memoryOnly = false)
+                    store.write(emptySet(), memoryOnly = false, durable = true)
                 }
             }
         }
@@ -161,7 +171,7 @@ class LoggedApps internal constructor(
         synchronized(session) {
             session.lines = emptySet()
             session.ended.clear()
-            store.write(emptySet(), store.memoryOnly())
+            store.write(emptySet(), store.memoryOnly(), durable = true)
         }
         changed()
     }
@@ -182,9 +192,10 @@ class LoggedApps internal constructor(
 
         /**
          * The store of this process, whose changes the running service hands to the engine at once
-         * ([NetworkVpnService.ACTION_APPLY_PROXIES]).
+         * ([NetworkVpnService.ACTION_APPLY_PROXIES]); in the network process alone (review C-rest 5).
          */
         fun of(context: Context): LoggedApps {
+            check(android.app.Application.getProcessName().endsWith(":network")) { "The choice for one app is the network process's alone" }
             val app = context.applicationContext
             return LoggedApps(Preferences(app.getSharedPreferences(PREFS, Context.MODE_PRIVATE))) { apply(app) }
         }
@@ -203,22 +214,37 @@ class LoggedApps internal constructor(
 
         /**
          * The UIDs to hand the engine of the chosen [entries], and the entries stale, as a pure function the JVM tests
-         * hold. An entry whose package is missing, or whose first install time differs, is stale, and needs no tools. For
-         * each UID of the others, its entries are stale when it is not an application UID, when a package holds it now
-         * that was not chosen, or, once the tools were read in this run ([toolsRead]), when it is a circumvention tool's
-         * ([tools]) or Android's PAC handler's ([pacHandler]); else it is handed. Before the tools were read, no UID is
-         * handed: a tool whose key is known is then never covered in the seconds after a start.
+         * hold. An entry whose package is missing, or whose first install time differs, is stale, and needs no tools.
+         * For each UID of the others, its entries are stale when it is not an application UID, when a package holds it
+         * now that was not chosen, or, once the service is [ready] (the tools read in this run, and under strict
+         * Private DNS the setting's names looked up), when it is a circumvention tool's ([tools]) or Android's PAC
+         * handler's ([pacHandler]); else it is handed. Before, no UID is handed: a tool whose key is known is then
+         * never covered in the seconds after a start, nor a flow to Android's setting before its addresses are known. A
+         * package found gone at an earlier hand-over ([before], [Ended.REMOVED]) and installed now was installed again.
          */
-        fun handed(entries: Set<Entry>, packages: Packages, tools: Set<Int>, pacHandler: Int?, toolsRead: Boolean): Handed {
+        fun handed(
+            entries: Set<Entry>,
+            packages: Packages,
+            tools: Set<Int>,
+            pacHandler: Int?,
+            ready: Boolean,
+            before: Map<String, Ended> = emptyMap(),
+        ): Handed {
             val stale = HashSet<Entry>()
             val ended = HashMap<String, Ended>()
+            for ((name, why) in before) {
+                if (why == Ended.REMOVED && packages.firstInstallOf(name) != null) ended[name] = Ended.INSTALLED_AGAIN
+            }
             val byUid = HashMap<Int, MutableList<Entry>>()
             for (entry in entries) {
                 val uid = packages.uidOf(entry.packageName)
                 val installed = packages.firstInstallOf(entry.packageName)
                 when {
-                    // Removed: nothing to tell, the app is gone.
-                    uid == null || installed == null -> stale += entry
+                    // Removed: remembered in memory, so that its rows say so if it comes back while the process lives.
+                    uid == null || installed == null -> {
+                        stale += entry
+                        ended[entry.packageName] = Ended.REMOVED
+                    }
                     installed != entry.firstInstall -> {
                         stale += entry
                         ended[entry.packageName] = Ended.INSTALLED_AGAIN
@@ -233,7 +259,7 @@ class LoggedApps internal constructor(
                 val why = when {
                     !ProxyChoice.application(uid) || others.isNotEmpty() ->
                         if (others.any { ended[it] == Ended.INSTALLED_AGAIN }) Ended.INSTALLED_AGAIN else Ended.SHARED
-                    !toolsRead -> continue
+                    !ready -> continue
                     uid in tools || uid == pacHandler -> Ended.TOOL
                     else -> {
                         uids += uid
@@ -249,6 +275,18 @@ class LoggedApps internal constructor(
         /** The entries of every package of [uid], each with its first install time, for one choice of a shared UID too. */
         fun entriesOfUid(packages: Packages, uid: Int): List<Entry> =
             packages.packagesOf(uid).sorted().mapNotNull { name -> packages.firstInstallOf(name)?.let { Entry(name, it) } }
+
+        /**
+         * What one choice of [uid] writes, once its confirmation said yes having named the packages [named] (review
+         * C-rest 9): the entries of those alone, so that a package that joined the UID while it was open is never
+         * chosen unnamed, and the next hand-over ends the choice as one Android counts another app with
+         * ([Ended.SHARED]). A confirmation that named none, the app's names not read yet, chooses a UID of one package
+         * alone.
+         */
+        fun entriesNamed(packages: Packages, uid: Int, named: Collection<String>): List<Entry> {
+            val entries = entriesOfUid(packages, uid)
+            return if (named.isEmpty()) entries.takeIf { it.size == 1 }.orEmpty() else entries.filter { it.packageName in named }
+        }
 
         /** Android's package manager as [handed] reads it. Each call asks it once: any thread. */
         @Suppress("DEPRECATION") // getApplicationInfo(String, Int) and getPackageInfo(String, Int): the minimum SDK takes both.
@@ -287,7 +325,7 @@ class LoggedApps internal constructor(
     private class Preferences(private val prefs: SharedPreferences) : Store {
         override fun lines(): Set<String> = prefs.getStringSet(LINES, emptySet()).orEmpty().toSet()
         override fun memoryOnly() = prefs.getBoolean(MEMORY_ONLY, false)
-        override fun write(lines: Set<String>, memoryOnly: Boolean) = prefs.edit {
+        override fun write(lines: Set<String>, memoryOnly: Boolean, durable: Boolean) = prefs.edit(commit = durable) {
             if (lines.isEmpty()) remove(LINES) else putStringSet(LINES, lines)
             putBoolean(MEMORY_ONLY, memoryOnly)
         }

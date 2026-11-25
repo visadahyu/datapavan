@@ -203,10 +203,18 @@ class ProxyFactsTest {
         assertTrue(proxy.keys.toString(), proxy.size >= 60)
         for (name in listOf(
             "proxy_app_log_never", "proxy_app_log_switch_on", "now_proxy_live_only", "now_proxy_live_only_shared", "now_proxy_past",
-            "now_proxy_past_shared",
+            "now_proxy_past_shared", "now_proxy_live_only_switch", "now_proxy_past_switch",
         )) {
             assertTrue(name, name in naming)
         }
+        // Words that claim no more than the code does (review C-rest 3 and 4, review C-engine major 1): the chain's
+        // tool ends a choice too, whatever its key; the switch's note names both places the choice is made and what it
+        // leaves out; the confirmation says what the engine may miss.
+        assertTrue(!proxy.getValue("proxy_app_ended_tool").contains("signing key"))
+        assertTrue(proxy.getValue("log_switch_note_proxies").contains("on its row or its page"))
+        assertTrue(proxy.getValue("log_switch_note_proxies").contains("that leaves out a proxy that datapavan sees is in android\\'s settings or on your local network."))
+        assertTrue(!proxy.getValue("proxy_app_log_never").contains("never"))
+        assertTrue(proxy.getValue("proxy_app_log_never").contains("a proxy that a pac file names"))
         assertEquals(proxy.getValue("proxy_app_log") + "?", proxy.getValue("proxy_app_log_title"))
         assertTrue(proxy.getValue("proxy_app_log_body").contains("if you set this app\\'s proxy yourself, leave this off."))
     }
