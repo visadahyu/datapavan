@@ -52,10 +52,9 @@ async fn where_to(shared: &Arc<Shared>, uid: u32) {
     }
     let platform = Arc::clone(&shared.platform);
     let keeper = Arc::clone(shared);
-    let asked = tokio::spawn(async move {
-        let answer = tokio::task::spawn_blocking(move || platform.route_of_app(uid))
+    let asked = super::spawn_task(async move {
+        let answer = super::blocking(move || platform.route_of_app(uid))
             .await
-            .ok()
             .flatten();
         keeper.tunnels.answered(uid, answer, Instant::now());
     });

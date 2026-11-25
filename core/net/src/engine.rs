@@ -1639,7 +1639,7 @@ async fn run(
     let (end_logging, logging_ends) = watch::channel(false);
     // From here a logger is there to answer a flush.
     lock(&state.shared.flushes).logging = true;
-    let logging = tokio::spawn(logger(Arc::clone(&state.shared), logging_ends));
+    let logging = spawn_task(logger(Arc::clone(&state.shared), logging_ends));
     // A tunnel that keeps itself alive starts at once.
     state.tunnels_changed();
     loop {

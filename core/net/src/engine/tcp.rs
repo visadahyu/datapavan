@@ -57,7 +57,7 @@ pub(super) fn listen(
             shared.listener(address.is_ipv4()).bound(port);
             listener
         });
-    tokio::spawn(accept(
+    super::spawn_task(accept(
         first,
         (address, fake),
         Arc::clone(pending),
@@ -232,7 +232,7 @@ impl Loop {
                     parsed: *parsed,
                     port,
                 };
-                tokio::spawn(open(
+                super::spawn_task(open(
                     held,
                     waiting,
                     Arc::clone(&self.tun),

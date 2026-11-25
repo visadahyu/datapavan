@@ -3136,7 +3136,7 @@ impl Loop {
             Next::Flow(way, uid, cached, owed) => (way, uid, cached, owed),
             Next::Peer(to) => return self.sent_to_peer(to, packet, parsed).await,
             Next::Open => {
-                tokio::spawn(open_udp(
+                super::spawn_task(open_udp(
                     key,
                     Arc::clone(&self.tun),
                     Arc::clone(&self.shared),
@@ -3203,7 +3203,7 @@ impl Loop {
     ) -> bool {
         match way {
             UdpWay::Lookups(chain) => {
-                tokio::spawn(answer_lookup(
+                super::spawn_task(answer_lookup(
                     payload.to_vec(),
                     (key, uid),
                     Arc::clone(chain),
@@ -3642,7 +3642,7 @@ fn spawn_question(
     flows: &UdpFlows,
 ) {
     let (shared, flows) = (Arc::clone(shared), Arc::clone(flows));
-    tokio::spawn(async move { put_question(key, asking, &shared, &flows).await });
+    super::spawn_task(async move { put_question(key, asking, &shared, &flows).await });
 }
 /// Where a question to Android about an app socket's app stands.
 #[derive(Clone, Copy)]
@@ -4969,7 +4969,7 @@ fn start_answers(
                 return;
             }
             for query in questions {
-                tokio::spawn(answer_lookup(
+                super::spawn_task(answer_lookup(
                     query,
                     (key, uid),
                     Arc::clone(&chain),

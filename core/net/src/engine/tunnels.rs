@@ -1327,7 +1327,7 @@ impl super::Loop {
             Forwarded::Answer(answer) => self.send(&answer).await,
             Forwarded::Held(ask) => {
                 if ask {
-                    tokio::spawn(ask_again(Arc::clone(&self.shared), key));
+                    super::spawn_task(ask_again(Arc::clone(&self.shared), key));
                 }
             }
         }
