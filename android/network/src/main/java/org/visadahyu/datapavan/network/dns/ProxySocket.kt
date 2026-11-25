@@ -10,12 +10,12 @@ import java.net.SocketAddress
 import java.net.SocketException
 
 /**
- * A socket that reaches its destination through the network beneath's own HTTP proxy ([NetworkProxy]), by a `CONNECT`
- * to the destination's address (RFC 9110, 9.3.6), as [ToolSocket] does for the tool's SOCKS5: the address the data
- * pack gave, so that the proxy looks no name up and the resolver's pins and addresses hold (ADR 0042). The request
- * carries `Host` and nothing else: no `User-Agent` names the library, as OkHttp's own tunnel would. Any answer but a
- * `2xx`, and a proxy that cannot be reached within [budgetMs], is a [Refused], which the exchanger reads as the proxy's
- * refusal and answers by going directly.
+ * A socket that reaches its destination through the resolver's HTTP proxy ([NetworkProxy]: the network beneath's own,
+ * else Android's global one), by a `CONNECT` to the destination's address (RFC 9110, 9.3.6), as [ToolSocket] does for
+ * the tool's SOCKS5: the address the data pack gave, so that the proxy looks no name up and the resolver's pins and
+ * addresses hold (ADR 0042). The request carries `Host` and nothing else: no `User-Agent` names the library, as
+ * OkHttp's own tunnel would. Any answer but a `2xx`, and a proxy that cannot be reached within [budgetMs], is a
+ * [Refused], which the exchanger reads as the proxy's refusal and answers by going directly.
  */
 class ProxySocket(private val proxy: InetSocketAddress, private val budgetMs: Int) : Socket() {
     private var destination: InetSocketAddress? = null

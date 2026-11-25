@@ -7,8 +7,10 @@ import java.util.concurrent.atomic.AtomicInteger
 
 /**
  * The proxy the network part's resolver takes on purpose (ADR 0042, "Android's proxy"): the network beneath's own
- * direct proxy, never the process's, which Android gives a process at its start and so depends on whether the network
- * part started before its own VPN (measurements 7.1, point 3).
+ * direct proxy where it has one; else Android's global proxy, the whole phone's, where it is a direct one (the
+ * maintainer's decision of 2026-11-25); never the process's, which Android gives a process at its start and so depends
+ * on whether the network part started before its own VPN (measurements 7.1, point 3). Either is only the second way,
+ * after directly ([ResolverProxy]).
  *
  * A PAC gives none, and so do a proxy on the loopback, on one of the phone's own addresses or on a link-local one: such
  * a proxy is a tool's or a filter's local port, through which the resolver would loop through the tunnel or reach the
@@ -17,12 +19,19 @@ import java.util.concurrent.atomic.AtomicInteger
  * `ProxyInfo` into it.
  */
 object NetworkProxy {
-    /** A network's proxy as Android's settings give it: [host] and [port], whether a PAC file is set, its exclusions. */
+    /**
+     * A proxy as Android's settings give it, the network's or the global one: [host] and [port], whether a PAC file is
+     * set, its exclusions.
+     */
     data class Setting(val host: String, val port: Int, val pac: Boolean, val exclusions: List<String>)
 
     /** Why the resolver uses the proxy it does, for the debug dump's `dns-proxy` line. */
     enum class Why(val word: String) {
+        /** The network beneath's own proxy. */
         NETWORK("network"),
+
+        /** Android's global proxy, where the network beneath has no direct one of its own. */
+        GLOBAL("global"),
         NONE("none"),
         PAC("pac"),
         LOOPBACK("loopback"),
@@ -35,26 +44,35 @@ object NetworkProxy {
     const val MAX_ADDRESSES = 2
 
     /**
-     * The proxy of a network beneath, or the reason there is none, from its [setting]: null with [Why.NONE] for no
-     * proxy, [Why.PAC] for a PAC file, whatever its host and port (Android reports a PAC as `localhost` and its
-     * handler's port, which must never read as a direct proxy).
+     * The resolver's proxy, or the reason there is none, from the network beneath's own [network] setting and Android's
+     * [global] one: the network's own direct proxy where it has one ([Why.NETWORK]), even one whose addresses [usable]
+     * then leaves out, since the network's own stays the only one where the network has one; else the global one where
+     * it is a direct one ([Why.GLOBAL]); else none, [Why.PAC] for a PAC file, the network's or the global one, whatever
+     * its host and port (Android reports a PAC as `localhost` and its handler's port, which must never read as a direct
+     * proxy), [Why.NONE] for nothing set. The global one is a third party's, a device owner's or one set over adb, but
+     * as the second way its operator learns of the resolver only where the network lets nothing through directly: the
+     * managed phone whose device owner forces that proxy, who sees the phone's traffic already.
      */
-    fun choose(setting: Setting?): Pair<Setting?, Why> = when {
-        setting == null -> null to Why.NONE
-        setting.pac -> null to Why.PAC
-        setting.host.isBlank() || setting.port !in 1..65535 -> null to Why.NONE
-        else -> setting to Why.NETWORK
+    fun choose(network: Setting?, global: Setting? = null): Pair<Setting?, Why> {
+        direct(network)?.let { return it to Why.NETWORK }
+        direct(global)?.let { return it to Why.GLOBAL }
+        return null to if (network?.pac == true || global?.pac == true) Why.PAC else Why.NONE
     }
 
+    /** [setting] where it is a direct proxy: no PAC file, told before its host and port, a host and a port. */
+    private fun direct(setting: Setting?): Setting? =
+        setting?.takeIf { !it.pac && it.host.isNotBlank() && it.port in 1..65535 }
+
     /**
-     * The addresses of a chosen proxy that the resolver may use, or the reason there are none: [own] says whether an
-     * address is one of the phone's own (the tunnel's, the network's link addresses). Loopback, link-local and the
-     * phone's own addresses are left out; at most [MAX_ADDRESSES] are kept, in the order given.
+     * The addresses of a chosen proxy that the resolver may use, with [chosen], the choice's reason ([Why.NETWORK] or
+     * [Why.GLOBAL]), or the reason there are none: [own] says whether an address is one of the phone's own (the
+     * tunnel's, the network's link addresses). Loopback, link-local and the phone's own addresses are left out, the
+     * global proxy's as the network's; at most [MAX_ADDRESSES] are kept, in the order given.
      */
-    fun usable(addresses: List<InetAddress>, own: (InetAddress) -> Boolean): Pair<List<InetAddress>, Why> {
+    fun usable(addresses: List<InetAddress>, chosen: Why = Why.NETWORK, own: (InetAddress) -> Boolean): Pair<List<InetAddress>, Why> {
         if (addresses.isEmpty()) return emptyList<InetAddress>() to Why.UNRESOLVED
         val kept = addresses.filter { !it.isLoopbackAddress && !it.isLinkLocalAddress && !it.isAnyLocalAddress && !own(it) }
-        if (kept.isNotEmpty()) return kept.take(MAX_ADDRESSES) to Why.NETWORK
+        if (kept.isNotEmpty()) return kept.take(MAX_ADDRESSES) to chosen
         val why = when {
             addresses.any { it.isLoopbackAddress || it.isAnyLocalAddress } -> Why.LOOPBACK
             addresses.any { it.isLinkLocalAddress } -> Why.LINK_LOCAL
@@ -92,8 +110,8 @@ object NetworkProxy {
     fun zoned(address: InetAddress): Boolean = address is Inet6Address && address.scopeId != 0
 
     /**
-     * [Setting] from Android's `ProxyInfo` of the network beneath, or null for none: a PAC file is told by its URL, which
-     * is not `Uri.EMPTY`, before its host and port are read.
+     * [Setting] from Android's `ProxyInfo` of the network beneath or the global one, or null for none: a PAC file is told
+     * by its URL, which is not `Uri.EMPTY`, before its host and port are read.
      */
     fun of(info: android.net.ProxyInfo?): Setting? {
         info ?: return null
@@ -103,8 +121,8 @@ object NetworkProxy {
 }
 
 /**
- * The network beneath's proxy the resolver may take, for the network of [generation] only: [setting] as read, and
- * [addresses] usable for it. An exchange tries two ways within one deadline ([ways]): the first, then the other when
+ * The proxy the resolver may take, the network beneath's own or the global one ([NetworkProxy.choose]), for the network
+ * of [generation] only: [setting] as read, and [addresses] usable for it. An exchange tries two ways within one deadline ([ways]): the first, then the other when
  * the first gave no HTTP answer at all. Which comes first is learned only from an answer ([answeredBy]): after the
  * other way answered where the first gave none, that other way comes first on this network for [PREFERRED_MS], then
  * the default order again. A failure alone teaches nothing, since the server, not the way, may have failed.

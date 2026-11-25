@@ -157,9 +157,9 @@ class NetworkVpnService : VpnService() {
     )
 
     /**
-     * The network beneath's own proxy the resolver follows on purpose (ADR 0042, "Android's proxy";
-     * [org.visadahyu.datapavan.network.dns.NetworkProxy]), for the network of its generation; null for none. Set
-     * under [resolverProxyLock] by [recomputeResolverProxy].
+     * The proxy the resolver follows on purpose as its second way (ADR 0042, "Android's proxy";
+     * [org.visadahyu.datapavan.network.dns.NetworkProxy]): the network beneath's own, else Android's global one, for the
+     * network of its generation; null for none. Set under [resolverProxyLock] by [recomputeResolverProxy].
      */
     @Volatile
     private var resolverProxy: org.visadahyu.datapavan.network.dns.ResolverProxy? = null
@@ -286,8 +286,10 @@ class NetworkVpnService : VpnService() {
             val was = dnsState.value
             dnsState.value = PrivateDns.of(properties)
             if ((was is PrivateDns.Strict) != (dnsState.value is PrivateDns.Strict)) main.post { if (active) applyProxies() }
-            // The tunnel is this process's default network now: Android's own setting, for "Now".
+            // The tunnel is this process's default network now: Android's own setting, for "Now", and the global proxy
+            // for the resolver, which reads none before.
             main.post { publishProxyContext() }
+            recomputeResolverProxy()
         }
     }
 
@@ -531,16 +533,29 @@ class NetworkVpnService : VpnService() {
      */
     private fun publishProxyContext() {
         if (!active) return
-        // Only once Android has made the tunnel this process's default network: before, `defaultProxy` is the Wi-Fi
-        // network's own and would read as the whole phone's (review B-rest 1). The own network's callback publishes
-        // again when it has.
-        val own = connectivity.activeNetwork?.let { connectivity.getNetworkCapabilities(it) }
-        if (own?.hasTransport(NetworkCapabilities.TRANSPORT_VPN) != true) return
+        // Only once Android has made the tunnel this process's default network (review B-rest 1). The own network's
+        // callback publishes again when it has.
+        if (!insideOwnTunnel()) return
         org.visadahyu.datapavan.network.proxy.ProxyContext.publish(
-            org.visadahyu.datapavan.network.proxy.AndroidProxy.of(connectivity.defaultProxy, current?.let { connectivity.getLinkProperties(it) }?.httpProxy),
+            org.visadahyu.datapavan.network.proxy.AndroidProxy.of(globalProxy(), current?.let { connectivity.getLinkProperties(it) }?.httpProxy),
             org.visadahyu.datapavan.network.proxy.PacHandler.uid(packageManager),
         )
     }
+
+    /** Whether Android has made the tunnel this process's default network, so that [globalProxy] can be read. */
+    private fun insideOwnTunnel(): Boolean {
+        val own = connectivity.activeNetwork?.let { connectivity.getNetworkCapabilities(it) }
+        return own?.hasTransport(NetworkCapabilities.TRANSPORT_VPN) == true
+    }
+
+    /**
+     * Android's global proxy, the whole phone's (a device owner's, a profile's or one set over adb), for "Now" and the
+     * resolver alike: `defaultProxy` once the tunnel is this process's default network, which has no proxy of its own,
+     * so that only the whole phone's comes back (measurements 7.1, point 1). Before then `defaultProxy` is the network
+     * beneath's own and would read as the whole phone's (review B-rest 1): null, as for none, until the own network's
+     * callback reads it again. Android's proxy broadcast tells each change of it.
+     */
+    private fun globalProxy(): android.net.ProxyInfo? = if (insideOwnTunnel()) connectivity.defaultProxy else null
 
     /** Computes the circumvention tools' UIDs (the proxy record's unit B, B6) off the main thread, one at a time. */
     private val toolLookups = java.util.concurrent.Executors.newSingleThreadExecutor { task ->
@@ -590,21 +605,27 @@ class NetworkVpnService : VpnService() {
     }
 
     /**
-     * Reads the network beneath's own proxy for the resolver (ADR 0042, "Android's proxy"): a literal at once, a name
-     * through that network on [resolverProxyLookups], whose answer counts only while it is the latest recompute and the
-     * network's generation is unchanged. A proxy the same as the one held keeps it, with what it remembers of a refusal;
-     * another one tells the exchanger, which drops the clients built for the one before. Any thread: the network
-     * callbacks', the main one, the dump's.
+     * Reads the resolver's proxy (ADR 0042, "Android's proxy"): the network beneath's own direct proxy where it has one,
+     * else Android's global one where it is a direct one ([globalProxy]). A literal at once, a name through the network
+     * beneath on [resolverProxyLookups], the global proxy's as the network's, whose answer counts only while it is the
+     * latest recompute and the network's generation is unchanged. A proxy the same as the one held keeps it, with what
+     * it remembers of a refusal; another one tells the exchanger, which drops the clients built for the one before. Any
+     * thread: the network callbacks', the main one (Android's proxy broadcast, for the network's and the global one),
+     * the dump's.
      */
     private fun recomputeResolverProxy() {
         val network = current
         val generation = networkGeneration
         val asked = synchronized(resolverProxyLock) { ++resolverProxyAsked }
         val properties = network?.let { connectivity.getLinkProperties(it) }
+        if (network == null || properties == null) {
+            return settleResolverProxy(asked, generation, null, emptyList(), org.visadahyu.datapavan.network.dns.NetworkProxy.Why.NONE)
+        }
         val (setting, why) = org.visadahyu.datapavan.network.dns.NetworkProxy.choose(
-            org.visadahyu.datapavan.network.dns.NetworkProxy.of(properties?.httpProxy),
+            org.visadahyu.datapavan.network.dns.NetworkProxy.of(properties.httpProxy),
+            org.visadahyu.datapavan.network.dns.NetworkProxy.of(globalProxy()),
         )
-        if (network == null || properties == null || setting == null) return settleResolverProxy(asked, generation, null, emptyList(), why)
+        if (setting == null) return settleResolverProxy(asked, generation, null, emptyList(), why)
         val own = properties.linkAddresses.map { it.address }.toSet()
         val literal = org.visadahyu.datapavan.network.dns.Exchanger.numeric(org.visadahyu.datapavan.network.dns.NetworkProxy.bare(setting.host))
         if (literal != null) return settleResolverProxy(asked, generation, setting, listOf(literal), why, own)
@@ -636,7 +657,7 @@ class NetworkVpnService : VpnService() {
             val (usable, because) = if (setting == null) {
                 emptyList<java.net.InetAddress>() to why
             } else {
-                org.visadahyu.datapavan.network.dns.NetworkProxy.usable(found.filterNot(org.visadahyu.datapavan.network.dns.NetworkProxy::zoned)) {
+                org.visadahyu.datapavan.network.dns.NetworkProxy.usable(found.filterNot(org.visadahyu.datapavan.network.dns.NetworkProxy::zoned), why) {
                     it in own || it in tunnel
                 }
             }
@@ -662,7 +683,11 @@ class NetworkVpnService : VpnService() {
     /** The receiver of Android's proxy setting's changes, while the tunnel runs. */
     private var proxyChanges: android.content.BroadcastReceiver? = null
 
-    /** Follows Android's proxy setting while the tunnel runs (ADR 0052): the engine tells it from an app's own. */
+    /**
+     * Follows Android's proxy setting while the tunnel runs (ADR 0052): the engine tells it from an app's own, and the
+     * resolver reads its proxy again. Android sends the broadcast for a change of the global proxy (a device owner's or
+     * `settings put global http_proxy`) as for one of the default network's own.
+     */
     private fun followProxySetting() {
         if (proxyChanges != null) return
         val receiver = object : android.content.BroadcastReceiver() {
@@ -1795,6 +1820,10 @@ class NetworkVpnService : VpnService() {
      * `dot-connections` prints `dot-connections OPEN OPENING`, the DoT connections that take queries and the DoT opens
      * in flight;
      * `network-generation` prints `network-generation N`, the network beneath's generation.
+     * `dns-proxy` prints `dns-proxy GEN ADDRESSES WHY FIRST`: the resolver's proxy for the network of GEN, its addresses
+     * or `none`; `network` or `global` for the proxy it follows, the network beneath's own or Android's global one, and
+     * otherwise why it follows none ([org.visadahyu.datapavan.network.dns.NetworkProxy.Why]); and which way comes
+     * first, `direct-first`, `proxy-first` or `-`.
      */
     private fun debugDns(args: List<String>, writer: PrintWriter) {
         fun after(command: String, n: Int) = args.indexOf(command).takeIf { it >= 0 }?.let { args.drop(it + 1).take(n) }

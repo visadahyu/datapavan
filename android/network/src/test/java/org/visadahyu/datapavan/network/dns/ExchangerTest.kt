@@ -592,6 +592,29 @@ class ExchangerTest {
         }
     }
 
+    /**
+     * A server the proxy's exclusion list names, such as a device owner's global proxy's, goes directly only, even on a
+     * network that lets nothing through directly: the proxy learns nothing of it. A server the list does not name goes
+     * through the same proxy.
+     */
+    @Test
+    fun aServerTheProxysExclusionListNamesNeverGoesThroughIt() {
+        val server = webServer()
+        val seen = ArrayBlockingQueue<String>(4)
+        // Nothing listens at 127.0.0.2 directly; the proxy carries the tunnel to the server.
+        val proxy = connectProxy(seen, 200) { "127.0.0.1" }
+        val address = listOf(InetSocketAddress(InetAddress.getLoopbackAddress(), proxy.localPort))
+        val excluding = ResolverProxy(0, NetworkProxy.Setting("127.0.0.1", proxy.localPort, false, listOf("*.dnslab.test")), address)
+        http(exchanger(listOf(certificate("ca")), excluding), 65, Exchanger.CARRY_DOH, server, known = "127.0.0.2")
+        assertTrue(reply().second != Exchanger.OK)
+        assertNull(seen.poll(500, TimeUnit.MILLISECONDS))
+        val other = ResolverProxy(0, NetworkProxy.Setting("127.0.0.1", proxy.localPort, false, listOf("*.corp.example")), address)
+        server.enqueue(MockResponse.Builder().code(200).body(Buffer().write(byteArrayOf(1))).build())
+        http(exchanger(listOf(certificate("ca")), other), 66, Exchanger.CARRY_DOH, server, known = "127.0.0.2")
+        assertEquals(Exchanger.OK, reply().second)
+        assertTrue(seen.poll(5, TimeUnit.SECONDS)!!.startsWith("CONNECT 127.0.0.2:${server.port} "))
+    }
+
     /** A failure that is the server's, on both ways, teaches nothing: the order stays. */
     @Test
     fun aServersOwnFailureTeachesNoWay() {

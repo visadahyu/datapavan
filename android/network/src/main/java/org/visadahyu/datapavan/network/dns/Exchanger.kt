@@ -81,9 +81,9 @@ class Exchanger(
         val extraRoots: List<X509Certificate>
 
         /**
-         * The network beneath's own proxy that the resolver follows ([NetworkProxy]), for the network of its
-         * generation only; null for none. Never the process's: OkHttp is told no proxy, and this one is reached by
-         * [ProxySocket].
+         * The proxy the resolver follows as its second way ([NetworkProxy]): the network beneath's own, else Android's
+         * global one, for the network of its generation only; null for none. Never the process's: OkHttp is told no
+         * proxy, and this one is reached by [ProxySocket].
          */
         val resolverProxy: ResolverProxy? get() = null
     }
@@ -203,8 +203,9 @@ class Exchanger(
     }
 
     /**
-     * The network beneath's proxy changed ([Host.resolverProxy]): the clients built for the one before go, with their
-     * connections, off the caller's thread; the DoT connections stay, since they never go through a proxy.
+     * The resolver's proxy changed ([Host.resolverProxy]), the network beneath's or the global one: the clients built
+     * for the one before go, with their connections, off the caller's thread; the DoT connections stay, since they
+     * never go through a proxy.
      */
     fun proxyChanged() {
         val old = synchronized(clients) {
@@ -236,8 +237,8 @@ class Exchanger(
     }
 
     /**
-     * One exchange over HTTP, within one deadline ([CALL_MS]) for all its tries. With a network beneath that names a
-     * proxy ([routeFor]), it has two ways, directly and through the proxy ([ResolverProxy.ways]): the first gets at most
+     * One exchange over HTTP, within one deadline ([CALL_MS]) for all its tries. With a proxy for the resolver
+     * ([routeFor]), the network beneath's own or the global one, it has two ways, directly and through the proxy ([ResolverProxy.ways]): the first gets at most
      * [FIRST_WAY_MS], and any failure with no HTTP answer, the proxy's refusal, a stall or a TLS failure alike, sends the
      * same exchange the other way with what is left. A way learns to come first only from an answer
      * ([ResolverProxy.answeredBy]), never from a failure, which may be the server's.
@@ -328,8 +329,8 @@ class Exchanger(
     }
 
     /**
-     * The network beneath's proxy for an exchange with [server] on the network of [generation], or null to go directly:
-     * none told, one told for another network, or [server] in its exclusion list.
+     * The resolver's proxy for an exchange with [server] on the network of [generation], or null to go directly: none
+     * told, one told for another network, or [server] in its exclusion list, the global proxy's as the network's.
      */
     private fun routeFor(server: String, generation: Int): ResolverProxy? {
         val route = host.resolverProxy ?: return null

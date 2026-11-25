@@ -15,10 +15,10 @@ import org.junit.Assert.assertTrue
 import org.junit.Test
 
 /**
- * The network beneath's own proxy as the resolver follows it (ADR 0042, "Android's proxy"; the resolver unit's audit):
- * a PAC in Android's own shape gives none, so do a loopback, a link-local and one of the phone's own addresses; the
- * exclusion list by Android's rules; a refusal remembered; and the `CONNECT` by address that carries nothing but
- * `Host`.
+ * The network beneath's own proxy as the resolver follows it, and Android's global one where the network has none (ADR
+ * 0042, "Android's proxy"; the resolver unit's audit; the maintainer's decision of 2026-11-25): a PAC in Android's own
+ * shape gives none, so do a loopback, a link-local and one of the phone's own addresses; the exclusion list by
+ * Android's rules; a refusal remembered; and the `CONNECT` by address that carries nothing but `Host`.
  */
 class NetworkProxyTest {
     private val servers = mutableListOf<ServerSocket>()
@@ -40,19 +40,112 @@ class NetworkProxyTest {
         assertEquals(direct to NetworkProxy.Why.NETWORK, NetworkProxy.choose(direct))
     }
 
+    /**
+     * The maintainer's decision of 2026-11-25: the network beneath's own direct proxy where it has one, Android's global
+     * one only where the network has none, a PAC of the network's included, since the resolver cannot evaluate one.
+     */
+    @Test
+    fun theNetworksOwnProxyComesFirstAndTheGlobalOneOnlyWhereTheNetworkHasNone() {
+        val network = NetworkProxy.Setting("10.0.0.1", 3128, pac = false, exclusions = emptyList())
+        val global = NetworkProxy.Setting("proxy.corp.example", 8080, pac = false, exclusions = emptyList())
+        assertEquals(network to NetworkProxy.Why.NETWORK, NetworkProxy.choose(network, global))
+        assertEquals(network to NetworkProxy.Why.NETWORK, NetworkProxy.choose(network, null))
+        assertEquals(global to NetworkProxy.Why.GLOBAL, NetworkProxy.choose(null, global))
+        // A network's PAC is no direct proxy of its own; nor is Android's empty setting.
+        val networkPac = NetworkProxy.Setting("localhost", 34567, pac = true, exclusions = emptyList())
+        assertEquals(global to NetworkProxy.Why.GLOBAL, NetworkProxy.choose(networkPac, global))
+        assertEquals(global to NetworkProxy.Why.GLOBAL, NetworkProxy.choose(NetworkProxy.Setting("", 0, false, emptyList()), global))
+        // A network's own direct proxy stays the only one, even one its addresses then leave out.
+        val networkLoopback = NetworkProxy.Setting("127.0.0.1", 8118, pac = false, exclusions = emptyList())
+        assertEquals(networkLoopback to NetworkProxy.Why.NETWORK, NetworkProxy.choose(networkLoopback, global))
+        assertEquals(
+            emptyList<InetAddress>() to NetworkProxy.Why.LOOPBACK,
+            NetworkProxy.usable(listOf(address("127.0.0.1")), NetworkProxy.Why.NETWORK) { false },
+        )
+        assertEquals("global", NetworkProxy.Why.GLOBAL.word)
+        assertEquals("network", NetworkProxy.Why.NETWORK.word)
+    }
+
+    @Test
+    fun aGlobalPacIsNoDirectProxy() {
+        // Android reports a PAC set for the whole phone as its URL with `localhost` and the handler's port, as a network's.
+        val globalPac = NetworkProxy.Setting("localhost", 41234, pac = true, exclusions = emptyList())
+        assertEquals(null to NetworkProxy.Why.PAC, NetworkProxy.choose(null, globalPac))
+        assertEquals(null to NetworkProxy.Why.PAC, NetworkProxy.choose(NetworkProxy.Setting("localhost", 34567, true, emptyList()), null))
+        assertEquals(null to NetworkProxy.Why.PAC, NetworkProxy.choose(NetworkProxy.Setting("localhost", 34567, true, emptyList()), globalPac))
+        assertEquals(null to NetworkProxy.Why.NONE, NetworkProxy.choose(null, null))
+        assertEquals(null to NetworkProxy.Why.NONE, NetworkProxy.choose(null, NetworkProxy.Setting("", 0, false, emptyList())))
+        assertEquals(null to NetworkProxy.Why.NONE, NetworkProxy.choose(null, NetworkProxy.Setting("proxy.example", 0, false, emptyList())))
+    }
+
+    @Test
+    fun aGlobalProxyOnTheLoopbackALinkLocalOrThePhonesOwnAddressIsNotUsed() {
+        val global = NetworkProxy.Setting("127.0.0.1", 8080, pac = false, exclusions = emptyList())
+        assertEquals(global to NetworkProxy.Why.GLOBAL, NetworkProxy.choose(null, global))
+        val none = { _: InetAddress -> false }
+        assertEquals(emptyList<InetAddress>() to NetworkProxy.Why.LOOPBACK, NetworkProxy.usable(listOf(address("127.0.0.1")), NetworkProxy.Why.GLOBAL, none))
+        assertEquals(emptyList<InetAddress>() to NetworkProxy.Why.LOOPBACK, NetworkProxy.usable(listOf(address("::1")), NetworkProxy.Why.GLOBAL, none))
+        assertEquals(emptyList<InetAddress>() to NetworkProxy.Why.LINK_LOCAL, NetworkProxy.usable(listOf(address("169.254.7.7")), NetworkProxy.Why.GLOBAL, none))
+        val own = address("10.0.2.16")
+        assertEquals(emptyList<InetAddress>() to NetworkProxy.Why.OWN, NetworkProxy.usable(listOf(own), NetworkProxy.Why.GLOBAL) { it == own })
+        assertEquals(emptyList<InetAddress>() to NetworkProxy.Why.UNRESOLVED, NetworkProxy.usable(emptyList(), NetworkProxy.Why.GLOBAL, none))
+        // A usable one is kept as the global proxy's.
+        assertEquals(listOf(address("10.0.2.2")) to NetworkProxy.Why.GLOBAL, NetworkProxy.usable(listOf(address("10.0.2.2")), NetworkProxy.Why.GLOBAL, none))
+    }
+
+    @Test
+    fun theGlobalProxysExclusionListIsHonoured() {
+        val global = NetworkProxy.Setting("proxy.corp.example", 3128, pac = false, exclusions = listOf("*.corp.example", "dns.example"))
+        val (chosen, why) = NetworkProxy.choose(null, global)
+        assertEquals(NetworkProxy.Why.GLOBAL, why)
+        val exclusions = chosen!!.exclusions
+        assertTrue(NetworkProxy.excluded("doh.corp.example", exclusions))
+        assertTrue(NetworkProxy.excluded("dns.example", exclusions))
+        assertFalse(NetworkProxy.excluded("cloudflare-dns.com", exclusions))
+        assertFalse(NetworkProxy.excluded("odoh-relay.numa.rs", exclusions))
+        // The network's own proxy, where it has one, brings its own list, never the global one's.
+        val network = NetworkProxy.Setting("10.0.0.1", 3128, pac = false, exclusions = emptyList())
+        assertFalse(NetworkProxy.excluded("doh.corp.example", NetworkProxy.choose(network, global).first!!.exclusions))
+    }
+
+    /**
+     * What a recompute does with each change of either setting: the choice moves between the global proxy, the network's
+     * own and none, and a proxy from the other setting is not the same one, so that the exchanger drops the clients
+     * built for the one before; the same setting read again is, and keeps what it learned.
+     */
+    @Test
+    fun aChangeOfEitherSettingChangesTheChoice() {
+        val proxy = InetSocketAddress(address("10.0.2.2"), 3128)
+        val global = NetworkProxy.Setting("10.0.2.2", 3128, pac = false, exclusions = emptyList())
+        val network = NetworkProxy.Setting("10.0.2.2", 3128, pac = false, exclusions = listOf("*.lan.example"))
+        // The global proxy set, on a network with none.
+        val first = NetworkProxy.choose(null, global)
+        assertEquals(NetworkProxy.Why.GLOBAL, first.second)
+        val held = ResolverProxy(2, first.first!!, listOf(proxy))
+        assertTrue(held.same(ResolverProxy(2, NetworkProxy.choose(null, global).first!!, listOf(proxy))))
+        // The network gains its own: that one, with its own list, in place of the global one.
+        val second = NetworkProxy.choose(network, global)
+        assertEquals(NetworkProxy.Why.NETWORK, second.second)
+        assertFalse(held.same(ResolverProxy(2, second.first!!, listOf(proxy))))
+        // Both gone: none.
+        assertEquals(null to NetworkProxy.Why.NONE, NetworkProxy.choose(null, null))
+        // The global one becomes a PAC: none.
+        assertEquals(null to NetworkProxy.Why.PAC, NetworkProxy.choose(null, global.copy(host = "localhost", port = 41234, pac = true)))
+    }
+
     @Test
     fun aProxyOnTheLoopbackALinkLocalOrThePhonesOwnAddressIsNotUsed() {
         val none = { _: InetAddress -> false }
-        assertEquals(emptyList<InetAddress>() to NetworkProxy.Why.LOOPBACK, NetworkProxy.usable(listOf(address("127.0.0.1")), none))
-        assertEquals(emptyList<InetAddress>() to NetworkProxy.Why.LOOPBACK, NetworkProxy.usable(listOf(address("::1")), none))
-        assertEquals(emptyList<InetAddress>() to NetworkProxy.Why.LINK_LOCAL, NetworkProxy.usable(listOf(address("169.254.1.1")), none))
-        assertEquals(emptyList<InetAddress>() to NetworkProxy.Why.LINK_LOCAL, NetworkProxy.usable(listOf(address("fe80::1")), none))
+        assertEquals(emptyList<InetAddress>() to NetworkProxy.Why.LOOPBACK, NetworkProxy.usable(listOf(address("127.0.0.1")), own = none))
+        assertEquals(emptyList<InetAddress>() to NetworkProxy.Why.LOOPBACK, NetworkProxy.usable(listOf(address("::1")), own = none))
+        assertEquals(emptyList<InetAddress>() to NetworkProxy.Why.LINK_LOCAL, NetworkProxy.usable(listOf(address("169.254.1.1")), own = none))
+        assertEquals(emptyList<InetAddress>() to NetworkProxy.Why.LINK_LOCAL, NetworkProxy.usable(listOf(address("fe80::1")), own = none))
         val own = address("192.168.1.20")
         assertEquals(emptyList<InetAddress>() to NetworkProxy.Why.OWN, NetworkProxy.usable(listOf(own)) { it == own })
-        assertEquals(emptyList<InetAddress>() to NetworkProxy.Why.UNRESOLVED, NetworkProxy.usable(emptyList(), none))
+        assertEquals(emptyList<InetAddress>() to NetworkProxy.Why.UNRESOLVED, NetworkProxy.usable(emptyList(), own = none))
         // The usable ones are kept in order, at most two.
         val many = listOf(address("127.0.0.1"), address("10.0.0.1"), address("2001:db8::1"), address("10.0.0.2"))
-        assertEquals(listOf(address("10.0.0.1"), address("2001:db8::1")) to NetworkProxy.Why.NETWORK, NetworkProxy.usable(many, none))
+        assertEquals(listOf(address("10.0.0.1"), address("2001:db8::1")) to NetworkProxy.Why.NETWORK, NetworkProxy.usable(many, own = none))
     }
 
     @Test
