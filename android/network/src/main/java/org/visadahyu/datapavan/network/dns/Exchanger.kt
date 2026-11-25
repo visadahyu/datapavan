@@ -79,10 +79,24 @@ class Exchanger(
 
         /** Debug builds: the DNS lab's test root, beside Android's; release builds: none. */
         val extraRoots: List<X509Certificate>
+
+        /**
+         * The network beneath's own proxy that the resolver follows ([NetworkProxy]), for the network of its
+         * generation only; null for none. Never the process's: OkHttp is told no proxy, and this one is reached by
+         * [ProxySocket].
+         */
+        val resolverProxy: ResolverProxy? get() = null
     }
 
-    /** The clients: one per network beneath and tool, and from it one per server's addresses ([KnownOnly]). */
+    /**
+     * The clients: one per network beneath, tool and way through the network's proxy, and from it one per server's
+     * addresses ([KnownOnly]).
+     */
     private val clients = ConcurrentHashMap<String, OkHttpClient>()
+
+    /** Raised by each change of the network beneath's proxy ([proxyChanged]), as the generation is by the network's. */
+    @Volatile
+    private var proxyEpoch = 0
 
     /**
      * Debug builds, for the DNS lab's check on an emulator that was not started on the lab's resolver, as CI's are
@@ -146,7 +160,8 @@ class Exchanger(
     fun warm() {
         work.execute {
             try {
-                client(null)
+                val generation = host.generation
+                client(null, routeFor("", generation)?.address(), generation, proxyEpoch)
             } catch (e: RuntimeException) {
                 // The first exchange builds it again and says what failed.
             }
@@ -188,6 +203,18 @@ class Exchanger(
     }
 
     /**
+     * The network beneath's proxy changed ([Host.resolverProxy]): the clients built for the one before go, with their
+     * connections, off the caller's thread; the DoT connections stay, since they never go through a proxy.
+     */
+    fun proxyChanged() {
+        val old = synchronized(clients) {
+            proxyEpoch++
+            clients.values.toList().also { clients.clear() }
+        }
+        work.execute { old.forEach { it.connectionPool.evictAll() } }
+    }
+
+    /**
      * The service stopped: the idle connections of every client and the DoT connections are closed, off the caller's
      * thread (the main one), and no query they cut is asked again.
      */
@@ -208,7 +235,12 @@ class Exchanger(
         override fun hashCode() = proxy.hashCode()
     }
 
-    private fun http(ticket: Long, url: String, server: String, known: List<InetAddress>, pins: List<String>, through: Through?, body: ByteArray?, type: String?) {
+    /**
+     * One exchange over HTTP. Through the network beneath's proxy where it has one ([routeFor]); a refusal by the proxy,
+     * or a TLS failure inside its tunnel, is the proxy's, not the server's: the same exchange is asked again by the next
+     * way, the proxy's next address or directly ([ResolverProxy.refuse]), [tries] counting the ways tried.
+     */
+    private fun http(ticket: Long, url: String, server: String, known: List<InetAddress>, pins: List<String>, through: Through?, body: ByteArray?, type: String?, tries: Int = 0) {
         val request = Request.Builder().url(url).tag(Pins::class.java, Pins(pins)).apply {
             if (body != null && type != null) {
                 header("Accept", type)
@@ -216,19 +248,29 @@ class Exchanger(
             }
         }.build()
         val generation = host.generation
-        val client = client(through, server, known, generation)
+        val epoch = proxyEpoch
+        val route = if (through == null) routeFor(server, generation) else null
+        val via = route?.address()
+        val client = client(through, via, server, known, generation, epoch)
         client.newCall(request).enqueue(
             object : Callback {
                 override fun onFailure(call: Call, e: IOException) {
+                    leftBehind(client, generation, epoch)
+                    if (route != null && via != null && tries < MAX_TRIES) {
+                        val refused = refusal(e)
+                        if (refused != null || tls(e)) {
+                            route.refuse(via, all = refused == null)
+                            return http(ticket, url, server, known, pins, through, body, type, tries + 1)
+                        }
+                    }
                     reply(ticket, outcomeOf(e), null)
-                    leftBehind(client, generation)
                 }
 
                 override fun onResponse(call: Call, response: Response) {
                     try {
                         answer(response)
                     } finally {
-                        leftBehind(client, generation)
+                        leftBehind(client, generation, epoch)
                     }
                 }
 
@@ -254,8 +296,19 @@ class Exchanger(
      * the exchange left in its pool goes too, rather than idling there on the network before ([networkChanged] evicted
      * the pool before this exchange's connection returned to it).
      */
-    private fun leftBehind(client: OkHttpClient, generation: Int) {
-        if (host.generation != generation) work.execute { client.connectionPool.evictAll() }
+    private fun leftBehind(client: OkHttpClient, generation: Int, epoch: Int) {
+        if (host.generation != generation || proxyEpoch != epoch) work.execute { client.connectionPool.evictAll() }
+    }
+
+    /**
+     * The network beneath's proxy for an exchange with [server] on the network of [generation], or null to go directly:
+     * none told, one told for another network, or [server] in its exclusion list.
+     */
+    private fun routeFor(server: String, generation: Int): ResolverProxy? {
+        val route = host.resolverProxy ?: return null
+        if (route.generation != generation) return null
+        if (NetworkProxy.excluded(server, route.setting.exclusions)) return null
+        return route
     }
 
     /**
@@ -263,10 +316,10 @@ class Exchanger(
      * [known]: one per network, tool and set of addresses, all sharing the network's connection pool and TLS context. A
      * connection serves only clients of its own addresses (OkHttp's `Address` holds the [Dns]).
      */
-    private fun client(through: Through?, server: String, known: List<InetAddress>, generation: Int): OkHttpClient {
-        val key = "$generation ${through?.proxy} $server $known"
+    private fun client(through: Through?, via: InetSocketAddress?, server: String, known: List<InetAddress>, generation: Int, epoch: Int): OkHttpClient {
+        val key = "$generation $epoch ${through?.proxy} ${via ?: "direct"} $server $known"
         clients[key]?.let { return it }
-        return kept(key, generation, client(through, generation).newBuilder().dns(KnownOnly(server, known)).build())
+        return kept(key, generation, epoch, client(through, via, generation, epoch).newBuilder().dns(KnownOnly(server, known)).build())
     }
 
     /**
@@ -275,21 +328,27 @@ class Exchanger(
      * connection opened while the network changed does ([DotClient]). Under the same lock as [networkChanged]'s clear,
      * so that none is kept after it.
      */
-    private fun kept(key: String, generation: Int, built: OkHttpClient): OkHttpClient = synchronized(clients) {
-        if (host.generation != generation) built else clients.putIfAbsent(key, built) ?: built
+    private fun kept(key: String, generation: Int, epoch: Int, built: OkHttpClient): OkHttpClient = synchronized(clients) {
+        if (host.generation != generation || proxyEpoch != epoch) built else clients.putIfAbsent(key, built) ?: built
     }
 
-    /** The client for the network of [generation], directly or through [through], that knows no server's address. */
-    private fun client(through: Through?, generation: Int = host.generation): OkHttpClient {
-        val key = "$generation ${through?.proxy}"
+    /**
+     * The client for the network of [generation] and the proxy of [epoch], directly, through [through], or through the
+     * network beneath's proxy at [via], that knows no server's address. OkHttp itself is told no proxy, so that the
+     * process's `ProxySelector`, which Android set by the start order, never decides (measurements 7.1, point 3).
+     */
+    private fun client(through: Through?, via: InetSocketAddress?, generation: Int, epoch: Int): OkHttpClient {
+        val key = "$generation $epoch ${through?.proxy} ${via ?: "direct"}"
         clients[key]?.let { return it }
         return kept(
             key,
             generation,
+            epoch,
             OkHttpClient.Builder()
                 .protocols(listOf(Protocol.HTTP_2, Protocol.HTTP_1_1))
+                .proxy(java.net.Proxy.NO_PROXY)
                 .dns(KnownOnly("", emptyList()))
-                .socketFactory(Sockets(through))
+                .socketFactory(Sockets(through, via.takeIf { through == null }))
                 .sslSocketFactory(sslFor().socketFactory, trust)
                 .connectionPool(ConnectionPool(IDLE_CONNECTIONS, IDLE_SECONDS, TimeUnit.SECONDS))
                 .connectTimeout(CONNECT_MS, TimeUnit.MILLISECONDS)
@@ -308,15 +367,19 @@ class Exchanger(
     private fun sslFor(): SSLContext = SSLContext.getInstance("TLS").apply { init(null, arrayOf(trust), null) }
 
     /** A plain socket for [server], protected and bound to the network beneath, or one through the tool. */
-    internal fun socketFor(through: Through?): Socket = Sockets(through).createSocket()
+    internal fun socketFor(through: Through?): Socket = Sockets(through, null).createSocket()
 
-    /** The sockets OkHttp and the DoT client open. */
-    private inner class Sockets(private val through: Through?) : SocketFactory() {
+    /**
+     * The sockets OkHttp and the DoT client open: directly, through the tool, or through the network beneath's proxy at
+     * [via] ([ProxySocket]), which DoT never takes.
+     */
+    private inner class Sockets(private val through: Through?, private val via: InetSocketAddress?) : SocketFactory() {
         override fun createSocket(): Socket {
             // A tool on the loopback is reached as it is; one elsewhere (on the LAN) would loop through the network
             // part's own tunnel, where the network part's UID is: its socket is protected and bound as any other
             // (review S-m2).
             val socket = when {
+                through == null && via != null -> ProxySocket(via, PROXY_MS)
                 through == null -> Socket()
                 through.proxy.address.isLoopbackAddress -> return ToolSocket(through.proxy, through.user, through.password)
                 else -> ToolSocket(through.proxy, through.user, through.password)
@@ -434,6 +497,29 @@ class Exchanger(
         const val REFUSED = -3
         const val CONNECT_MS = 2_500L
         const val CALL_MS = 3_000L
+
+        /** What a way through the network beneath's proxy may take to answer its `CONNECT`, of [CONNECT_MS]. */
+        const val PROXY_MS = 1_200
+
+        /** The most ways one exchange tries: the proxy's addresses ([NetworkProxy.MAX_ADDRESSES]), then directly. */
+        const val MAX_TRIES = NetworkProxy.MAX_ADDRESSES
+
+        /** The network beneath's proxy's refusal behind [e], if it is one: OkHttp may give it as a cause or suppressed. */
+        fun refusal(e: Throwable): ProxySocket.Refused? {
+            val seen = HashSet<Throwable>()
+            val queue = ArrayDeque<Throwable>().apply { add(e) }
+            while (queue.isNotEmpty()) {
+                val t = queue.removeFirst()
+                if (!seen.add(t)) continue
+                if (t is ProxySocket.Refused) return t
+                t.cause?.let(queue::add)
+                t.suppressed.forEach(queue::add)
+            }
+            return null
+        }
+
+        /** Whether [e] is a TLS failure, which through the network beneath's proxy is the proxy's (one that inspects TLS). */
+        fun tls(e: Throwable): Boolean = generateSequence(e) { it.cause }.take(8).any { it is SSLException || it is CertificateException }
         const val IDLE_SECONDS = 60L
         const val IDLE_CONNECTIONS = 4
         const val MAX_BODY = 65_535L

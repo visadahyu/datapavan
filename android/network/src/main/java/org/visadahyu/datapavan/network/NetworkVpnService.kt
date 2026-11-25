@@ -150,8 +150,33 @@ class NetworkVpnService : VpnService() {
             override val generation: Int get() = networkGeneration
 
             override val extraRoots: List<java.security.cert.X509Certificate> get() = labRoots()
+
+            override val resolverProxy: org.visadahyu.datapavan.network.dns.ResolverProxy?
+                get() = this@NetworkVpnService.resolverProxy
         },
     )
+
+    /**
+     * The network beneath's own proxy the resolver follows on purpose (ADR 0042, "Android's proxy";
+     * [org.visadahyu.datapavan.network.dns.NetworkProxy]), for the network of its generation; null for none. Set
+     * under [resolverProxyLock] by [recomputeResolverProxy].
+     */
+    @Volatile
+    private var resolverProxy: org.visadahyu.datapavan.network.dns.ResolverProxy? = null
+
+    /** Why the resolver follows the proxy it does, for the debug dump's `dns-proxy` line. */
+    @Volatile
+    private var resolverProxyWhy = org.visadahyu.datapavan.network.dns.NetworkProxy.Why.NONE
+
+    private val resolverProxyLock = Any()
+
+    /** Raised by each recompute, so that a lookup of the proxy's name that ends after a newer one is dropped. */
+    private var resolverProxyAsked = 0
+
+    /** Looks a proxy's name up, one at a time, off the main thread and through the network it belongs to. */
+    private val resolverProxyLookups = java.util.concurrent.Executors.newSingleThreadExecutor { task ->
+        Thread(task, "network-dns-proxy").apply { isDaemon = true }
+    }
 
     /** The data pack's public suffixes, read once, for the network's search domains. */
     private val suffixes by lazy { org.visadahyu.datapavan.network.dns.DnsSettings.suffixes(this) }
@@ -186,6 +211,8 @@ class NetworkVpnService : VpnService() {
                 // (the DoT crash's audit, finding 1).
                 current = network
                 networkGeneration++
+                // The new network's proxy before the first client of its generation is built (the resolver's audit, M5).
+                recomputeResolverProxy()
                 exchanger.networkChanged()
                 exchanger.warm()
                 // The search domains of the network before go with it, before this one's arrive (review S-C1).
@@ -218,6 +245,7 @@ class NetworkVpnService : VpnService() {
             // closes the engine's UDP flows, and nothing the engine already knows is sent again.
             // A network's own proxy setting may have changed with its properties (ADR 0052).
             main.post { if (active) applyProxies() }
+            recomputeResolverProxy()
             if (network == told && dns == toldDns) return
             Engine.nativeNetworkChanged(dns, network != told)
             told = network
@@ -229,6 +257,7 @@ class NetworkVpnService : VpnService() {
             // In the same order as onAvailable's.
             current = null
             networkGeneration++
+            recomputeResolverProxy()
             exchanger.networkChanged()
             setUnderlyingNetworks(null)
             Engine.nativeNetworkChanged("", true)
@@ -440,6 +469,72 @@ class NetworkVpnService : VpnService() {
         )
     }
 
+    /**
+     * Reads the network beneath's own proxy for the resolver (ADR 0042, "Android's proxy"): a literal at once, a name
+     * through that network on [resolverProxyLookups], whose answer counts only while it is the latest recompute and the
+     * network's generation is unchanged. A proxy the same as the one held keeps it, with what it remembers of a refusal;
+     * another one tells the exchanger, which drops the clients built for the one before. Any thread: the network
+     * callbacks', the main one, the dump's.
+     */
+    private fun recomputeResolverProxy() {
+        val network = current
+        val generation = networkGeneration
+        val asked = synchronized(resolverProxyLock) { ++resolverProxyAsked }
+        val properties = network?.let { connectivity.getLinkProperties(it) }
+        val (setting, why) = org.visadahyu.datapavan.network.dns.NetworkProxy.choose(
+            org.visadahyu.datapavan.network.dns.NetworkProxy.of(properties?.httpProxy),
+        )
+        if (network == null || properties == null || setting == null) return settleResolverProxy(asked, generation, null, emptyList(), why)
+        val own = (properties.linkAddresses.map { it.address } + addresses.all.mapNotNull { org.visadahyu.datapavan.network.dns.Exchanger.numeric(it) }).toSet()
+        val literal = org.visadahyu.datapavan.network.dns.Exchanger.numeric(org.visadahyu.datapavan.network.dns.NetworkProxy.bare(setting.host))
+        if (literal != null) return settleResolverProxy(asked, generation, setting, listOf(literal), why, own)
+        resolverProxyLookups.execute {
+            val found = try {
+                network.getAllByName(setting.host).toList()
+            } catch (e: java.net.UnknownHostException) {
+                emptyList()
+            } catch (e: SecurityException) {
+                emptyList()
+            }
+            settleResolverProxy(asked, generation, setting, found, why, own)
+        }
+    }
+
+    /** Keeps the proxy [recomputeResolverProxy] read, unless a newer recompute or another network came since. */
+    private fun settleResolverProxy(
+        asked: Int,
+        generation: Int,
+        setting: org.visadahyu.datapavan.network.dns.NetworkProxy.Setting?,
+        found: List<java.net.InetAddress>,
+        why: org.visadahyu.datapavan.network.dns.NetworkProxy.Why,
+        own: Set<java.net.InetAddress> = emptySet(),
+    ) {
+        val changed = synchronized(resolverProxyLock) {
+            if (asked != resolverProxyAsked || generation != networkGeneration) return
+            val (usable, because) = if (setting == null) {
+                emptyList<java.net.InetAddress>() to why
+            } else {
+                org.visadahyu.datapavan.network.dns.NetworkProxy.usable(found.filterNot(org.visadahyu.datapavan.network.dns.NetworkProxy::zoned)) { it in own }
+            }
+            val next = if (setting != null && usable.isNotEmpty()) {
+                org.visadahyu.datapavan.network.dns.ResolverProxy(generation, setting, usable.map { java.net.InetSocketAddress(it, setting.port) })
+            } else {
+                null
+            }
+            resolverProxyWhy = if (next == null && setting != null && usable.isEmpty()) because else why
+            val held = resolverProxy
+            val same = held != null && next != null && held.generation == next.generation && held.setting == next.setting &&
+                held.addresses == next.addresses
+            if (same || (held == null && next == null)) {
+                false
+            } else {
+                resolverProxy = next
+                true
+            }
+        }
+        if (changed) exchanger.proxyChanged()
+    }
+
     /** The receiver of Android's proxy setting's changes, while the tunnel runs. */
     private var proxyChanges: android.content.BroadcastReceiver? = null
 
@@ -449,6 +544,7 @@ class NetworkVpnService : VpnService() {
         val receiver = object : android.content.BroadcastReceiver() {
             override fun onReceive(context: android.content.Context, intent: Intent) {
                 if (active) applyProxies()
+                recomputeResolverProxy()
             }
         }
         // A protected broadcast that only the system sends.
@@ -1015,6 +1111,7 @@ class NetworkVpnService : VpnService() {
         // resolver while it is set (W8, part 1). The first exchange's client and roots, and the public suffixes for the
         // network's search domains, are made ready meanwhile (W8's fix round).
         org.visadahyu.datapavan.network.dns.DnsSettings.apply(this)
+        recomputeResolverProxy()
         exchanger.warm()
         suffixes.known
         val fd = tunnel.detachFd()
@@ -1566,6 +1663,7 @@ class NetworkVpnService : VpnService() {
             // On this thread, the main one, on purpose: closing a DoT connection here is what crashed the network part.
             // As onAvailable does, but for the network itself: a debug build has no other one to set.
             networkGeneration++
+            recomputeResolverProxy()
             exchanger.networkChanged()
             writer.println("dns-network-changed done")
         }
@@ -1574,6 +1672,10 @@ class NetworkVpnService : VpnService() {
             writer.println("dot-connections $open $opening")
         }
         if ("network-generation" in args) writer.println("network-generation $networkGeneration")
+        if ("dns-proxy" in args) {
+            val route = resolverProxy
+            writer.println("dns-proxy ${route?.generation ?: networkGeneration} ${route?.toString() ?: "none"} ${resolverProxyWhy.word}")
+        }
         var changed = "dns-apply" in args
         after("dns-strict", 1)?.let {
             settings.strict = it.firstOrNull() == "on"

@@ -96,6 +96,63 @@ class ExchangerTest {
         given = SystemTrust.manager(trust),
     )
 
+    /** An exchanger whose network beneath has [route] as its proxy, for generation 0. */
+    private fun exchanger(trust: List<X509Certificate>, route: ResolverProxy?) = Exchanger(
+        object : Exchanger.Host {
+            override fun protect(socket: Socket) = true
+            override val network: Network? = null
+            override val generation = 0
+            override val extraRoots = emptyList<X509Certificate>()
+            override val resolverProxy = route
+        },
+        replies = { ticket, outcome, body -> replies.put(Triple(ticket, outcome, body)) },
+        given = SystemTrust.manager(trust),
+    )
+
+    /**
+     * A proxy on the loopback that records each request's head in [seen]: [status] 200 opens a tunnel to the address
+     * the `CONNECT` asked for and pipes it both ways; any other is answered and closed.
+     */
+    private fun connectProxy(seen: ArrayBlockingQueue<String>, status: Int): ServerSocket {
+        val proxy = ServerSocket(0, 8, InetAddress.getLoopbackAddress()).also { servers += it }
+        Thread {
+            while (!proxy.isClosed) {
+                val client = try {
+                    proxy.accept()
+                } catch (_: Exception) {
+                    break
+                }
+                Thread {
+                    try {
+                        val head = ProxySocket.head(client.getInputStream())
+                        seen.offer(head)
+                        if (status != 200) {
+                            client.getOutputStream().write("HTTP/1.1 $status No\r\n\r\n".toByteArray())
+                            client.close()
+                            return@Thread
+                        }
+                        val authority = head.substringAfter("CONNECT ").substringBefore(' ')
+                        val target = Socket(authority.substringBeforeLast(':'), authority.substringAfterLast(':').toInt())
+                        client.getOutputStream().write("HTTP/1.1 200 Connection established\r\n\r\n".toByteArray())
+                        Thread { runCatching { target.getInputStream().copyTo(client.getOutputStream()) }; runCatching { client.close() } }
+                            .apply { isDaemon = true; start() }
+                        runCatching { client.getInputStream().copyTo(target.getOutputStream()) }
+                        runCatching { target.close() }
+                    } catch (_: Exception) {
+                        runCatching { client.close() }
+                    }
+                }.apply { isDaemon = true; start() }
+            }
+        }.apply { isDaemon = true; start() }
+        return proxy
+    }
+
+    private fun route(proxy: ServerSocket) = ResolverProxy(
+        0,
+        NetworkProxy.Setting("127.0.0.1", proxy.localPort, pac = false, exclusions = emptyList()),
+        listOf(InetSocketAddress(InetAddress.getLoopbackAddress(), proxy.localPort)),
+    )
+
     private val query = byteArrayOf(0, 0, 1, 0, 0, 1, 0, 0, 0, 0, 0, 0) + "\u0005probe\u0006dnslab\u0004test\u0000".toByteArray() + byteArrayOf(0, 1, 0, 1)
 
     /** Answers each DoT query on [server] with the ID asked and one byte more, [count] times. */
@@ -461,5 +518,70 @@ class ExchangerTest {
         assertEquals(Exchanger.TAMPERED, Exchanger.outcomeOf(java.net.SocketException("Connection reset")))
         assertEquals(Exchanger.REFUSED, Exchanger.outcomeOf(java.net.ConnectException("Connection refused")))
         assertEquals(Exchanger.REFUSED, Exchanger.outcomeOf(java.io.IOException("closed")))
+    }
+
+    /**
+     * The resolver unit: through the network beneath's own proxy, DoH goes by a `CONNECT` to the data pack's address,
+     * with `Host` alone (no `User-Agent` names the library), and answers through the tunnel.
+     */
+    @Test
+    fun throughTheNetworksProxyTheConnectAsksForTheAddressWithNothingElse() {
+        val server = webServer()
+        val seen = ArrayBlockingQueue<String>(4)
+        val proxy = connectProxy(seen, 200)
+        val exchanger = exchanger(listOf(certificate("ca")), route(proxy))
+        val answer = ByteArray(40) { it.toByte() }
+        server.enqueue(MockResponse.Builder().code(200).body(Buffer().write(answer)).build())
+        http(exchanger, 60, Exchanger.CARRY_DOH, server)
+        val (ticket, outcome, body) = reply()
+        assertEquals(60L, ticket)
+        assertEquals(Exchanger.OK, outcome)
+        assertArrayEquals(answer, body)
+        assertEquals("CONNECT 127.0.0.1:${server.port} HTTP/1.1\r\nHost: 127.0.0.1:${server.port}\r\n\r\n", seen.poll(5, TimeUnit.SECONDS))
+    }
+
+    /** A proxy that refuses the tunnel costs the exchange nothing: it goes directly, and so do the next ones. */
+    @Test
+    fun aProxyThatRefusesIsLeftForADirectConnection() {
+        val server = webServer()
+        val seen = ArrayBlockingQueue<String>(4)
+        val proxy = connectProxy(seen, 403)
+        val route = route(proxy)
+        val exchanger = exchanger(listOf(certificate("ca")), route)
+        repeat(2) { server.enqueue(MockResponse.Builder().code(200).body(Buffer().write(byteArrayOf(1))).build()) }
+        http(exchanger, 61, Exchanger.CARRY_DOH, server)
+        assertEquals(Exchanger.OK, reply().second)
+        assertTrue(route.refused())
+        http(exchanger, 62, Exchanger.CARRY_DOH, server)
+        assertEquals(Exchanger.OK, reply().second)
+        // The proxy was asked once, by the first exchange only.
+        assertTrue(seen.poll(1, TimeUnit.SECONDS) != null)
+        assertNull(seen.poll(500, TimeUnit.MILLISECONDS))
+    }
+
+    /**
+     * The process's own `ProxySelector`, which Android sets by the start order (measurements 7.1, point 3), never
+     * decides: with one naming a proxy and none from the network beneath, the exchange goes directly.
+     */
+    @Test
+    fun theProcesssOwnProxySelectorNeverDecides() {
+        val before = java.net.ProxySelector.getDefault()
+        val seen = ArrayBlockingQueue<String>(4)
+        val proxy = connectProxy(seen, 200)
+        try {
+            java.net.ProxySelector.setDefault(object : java.net.ProxySelector() {
+                override fun select(uri: java.net.URI?) =
+                    listOf(java.net.Proxy(java.net.Proxy.Type.HTTP, InetSocketAddress(InetAddress.getLoopbackAddress(), proxy.localPort)))
+
+                override fun connectFailed(uri: java.net.URI?, sa: java.net.SocketAddress?, ioe: java.io.IOException?) = Unit
+            })
+            val server = webServer()
+            server.enqueue(MockResponse.Builder().code(200).body(Buffer().write(byteArrayOf(1))).build())
+            http(exchanger(listOf(certificate("ca")), null), 63, Exchanger.CARRY_DOH, server)
+            assertEquals(Exchanger.OK, reply().second)
+            assertNull(seen.poll(500, TimeUnit.MILLISECONDS))
+        } finally {
+            java.net.ProxySelector.setDefault(before)
+        }
     }
 }
