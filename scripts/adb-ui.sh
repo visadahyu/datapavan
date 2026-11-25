@@ -353,11 +353,16 @@ tap_holding() {
     adb shell input tap $(( ($1 + $3) / 2 )) $(( ($2 + $4) / 2 ))
 }
 
-# Waits until the audit overview shows, in any language: the loading screen has nothing to tap.
+# Waits until the audit overview shows, in any language, past its loading screen.
 wait_for_overview() {
+    local screen
     for _ in $(seq 1 60); do
-        if dump_screen &&
-            adb shell cat "$DUMP" | grep -q 'clickable="true"'; then
+        # Something to tap, and at least three texts: the loading screen ("Checking your phone…", one text beside a
+        # progress bar) has a tap target of its own too, and a capture of it left the large-text check with no text to
+        # compare (local runs of the screens shard beside three other emulators, 2026-11-25).
+        if dump_screen && screen=$(adb shell cat "$DUMP") &&
+            grep -q 'clickable="true"' <<<"$screen" &&
+            [ "$(grep -o 'text="[^"][^"]*"' <<<"$screen" | wc -l)" -ge 3 ]; then
             return 0
         fi
         sleep 1
