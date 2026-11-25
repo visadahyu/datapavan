@@ -1,9 +1,10 @@
 <?xml version="1.0" encoding="utf-8"?>
 <!--
     The proxy record's unit A (ADR 0052, decision 8): what "Now" and the switch say of an app's own proxy's first hop,
-    shown while its connection is open and for ten minutes after it ends, and not logged while the switch is off. In
-    English only until ADR 0030's next round translates them, with their review, into the seven other languages; they
-    then move into strings.xml, where scripts/check-translations.py holds them to every language. Until then the
+    shown while its connection is open and for ten minutes after it ends, and not logged while the switch is off.
+    Unit B's facts beside them (decision 9): a record the engine could not tell was a messenger's proxy. In English
+    only until ADR 0030's next round translates them, with their review, into the seven other languages; they then
+    move into strings.xml, where scripts/check-translations.py holds them to every language. Until then the
     plain-language gate holds this file (scripts/check.sh), and lint's check for missing translations is lifted for
     it alone. A release needs it gone (docs/RELEASE.md, "Strings"). They replace log_switch_note, now_proxy_hidden and
     now_proxy_setting_hidden. Each quotes the switch's label (log_switch) word for word, or writes Now without quotes.
@@ -23,4 +24,9 @@
     <!-- Under the switch. It writes Now without quotes, as history_back does: every quoted string of these rows quotes
          the switch's label. -->
     <string name="log_switch_note_proxies">Off unless you turn it on. It covers the apps you send through your circumvention tool or a WireGuard configuration, and the tool\'s own servers. Datapavan still counts their connections. It also covers apps that connect through a proxy, such as a Telegram proxy. While it is off, Now shows the proxy\'s address while the connection is open and for ten minutes after, and the log keeps that the app used a proxy, which kind, when, which known trackers it reached, and facts that name no address, such as whether a password was sent unencrypted. A list of where they went can be used against you if someone searches your phone.</string>
+    <!-- Unit B, in the history, in place of the proxy line of a record the engine could not tell was a messenger's
+         proxy: one it named so and then took the name back from, or one it never named, its address left out all the
+         same. %1$s is the kind as the rows name it (proxy_kind_mtproto and the others, such as "Telegram proxy
+         (MTProto)"), never a proxy the messenger runs. -->
+    <string name="history_proxy_unsure">Datapavan could not tell whether this connection went through a %1$s. Its address was not logged, because \"Log where apps connect through your tool, WireGuard or a proxy\" was off.</string>
 </resources>

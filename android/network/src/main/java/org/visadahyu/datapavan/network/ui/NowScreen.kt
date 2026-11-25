@@ -587,7 +587,9 @@ internal data class ProxyRow(val header: ProxyLine?, val lines: List<ProxyLine>,
  * unencrypted). A plain request in a proxy's form is never called a proxy: its line says what it asked for, or with the
  * switch off that this is not shown. The one exception is a plain request to Android's setting, which is called by
  * that setting's name, since Android names it so (the proxy record's unit B, R7): left out, it has the setting's
- * headers, and within its window in "Now" it ends as a first hop does. Where the network part cannot name the network,
+ * headers, and within its window in "Now" it ends as a first hop does. A record the engine could not tell was a
+ * messenger's proxy says so in the kind's own words in place of its proxy line ([ProxyFacts.Facts.unsure]), never that
+ * it went through one, nor how that was inferred. Where the network part cannot name the network,
  * the maker's network the address is not in is still said (ADR 0052, decision 6). A first hop "Now" shows only for
  * its window ends with why: for a declared proxy, that where the app asked it to go is not shown or logged, then that
  * its address is shown only so long; and links to the switch. The history never says so: what it shows was logged.
@@ -596,8 +598,12 @@ internal fun proxyRow(facts: ProxyFacts.Facts, past: Boolean): ProxyRow {
     val lines = mutableListOf<ProxyLine>()
     val notMaker = ProxyLine(R.string.proxy_not_maker, args = listOf(isolate(facts.maker)))
     if (!facts.kept) {
+        // A record the engine could not tell was a messenger's proxy (taken back, or never named for substitution) says
+        // so in place of its proxy line, and so says nothing of how it was inferred: only the history has such records.
+        val unsure = facts.unsure && past
         val header = ProxyLine(
             when {
+                unsure -> R.string.history_proxy_unsure
                 facts.setting && past -> R.string.history_proxy_setting_hidden
                 facts.setting -> R.string.now_proxy_setting_past
                 past -> R.string.history_proxy_hidden
@@ -605,7 +611,7 @@ internal fun proxyRow(facts: ProxyFacts.Facts, past: Boolean): ProxyRow {
             },
             kind = facts.kind,
         )
-        lines += ProxyLine(if (facts.declared) R.string.proxy_how_read else R.string.proxy_how_inferred)
+        if (!unsure) lines += ProxyLine(if (facts.declared) R.string.proxy_how_read else R.string.proxy_how_inferred)
         // "On your local network" names no address, so it stays with the switch off (finding 4 of the brief's audit), in
         // the history and in "Now" past the window alike; as in a kept row, a local address says nothing of a maker.
         when {

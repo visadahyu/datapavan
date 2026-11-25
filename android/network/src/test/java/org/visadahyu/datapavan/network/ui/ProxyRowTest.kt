@@ -70,6 +70,29 @@ class ProxyRowTest {
         }
     }
 
+    /**
+     * The proxy record's unit B, B3: a record the engine could not tell was a messenger's proxy says so in place of its
+     * proxy line, in the kind's own words, and nothing of how it was inferred; the facts that name nothing stay. "Now"
+     * never has such a record: the snapshot refuses the mark, and the live words stand.
+     */
+    @Test
+    fun anUnsureRecordSaysSoInPlaceOfItsProxyLine() {
+        val unsure = LogRecord.Proxy(LogRecord.PROXY_MTPROTO, outsideMaker = true, leftOut = true, unsure = true)
+        val row = proxyRow(ProxyFacts.of(unsure, zeros, 0), past = true)
+        assertEquals(ProxyLine(R.string.history_proxy_unsure, ProxyFacts.Kind.MTPROTO), row.header)
+        assertEquals(listOf(ProxyLine(R.string.proxy_not_maker, args = listOf(isolate("Telegram")))), row.lines)
+        assertTrue(row.toSwitch)
+        val local = proxyRow(ProxyFacts.of(unsure.copy(kind = LogRecord.PROXY_WHATSAPP, local = true), zeros, 0), past = true)
+        assertEquals(listOf(R.string.history_proxy_unsure, R.string.proxy_local), texts(local))
+        assertEquals(ProxyFacts.Kind.WHATSAPP, local.header?.kind)
+        // Without the mark, the record went through one, and says how that is known.
+        assertEquals(
+            listOf(R.string.history_proxy_hidden, R.string.proxy_how_inferred, R.string.proxy_not_maker),
+            texts(proxyRow(ProxyFacts.of(unsure.copy(unsure = false), zeros, 0), past = true)),
+        )
+        assertEquals(R.string.now_proxy_past, proxyRow(ProxyFacts.of(unsure, zeros, 0), past = false).header?.text)
+    }
+
     /** Android's proxy setting, left out, has its own words, which never call it the app's: no second line contradicts them. */
     @Test
     fun androidsSettingLeftOutHasItsOwnWords() {

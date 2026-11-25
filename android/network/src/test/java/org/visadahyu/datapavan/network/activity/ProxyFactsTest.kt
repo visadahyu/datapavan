@@ -186,6 +186,9 @@ class ProxyFactsTest {
             "its connection sent the name %1\$s. no dns answer datapavan passed gave that name this address.",
             proxy.getValue("proxy_cover"),
         )
+        // Unit B, B3 (audit-B 15): a record the engine could not tell about is named by the kind's own words, never as a
+        // proxy the messenger runs.
+        assertTrue(proxy.getValue("history_proxy_unsure").contains("could not tell whether this connection went through a %1\$s."))
         // "Own" goes from the proxy rows: Android's setting is no app's own (screens review M3).
         for (name in proxy.keys.filter { "proxy_" in it && it.endsWith("_hidden") }) {
             assertTrue(name, !Regex("\\bown\\b").containsMatchIn(proxy.getValue(name)))

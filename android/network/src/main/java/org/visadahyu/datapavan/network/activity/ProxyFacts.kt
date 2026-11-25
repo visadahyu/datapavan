@@ -29,7 +29,8 @@ object ProxyFacts {
      * is off ([askedLeftOut]); [maker] the company whose network the address is not, where the network part can tell;
      * [cover] and [coverOwner] the name an inferred proxy's hello sent and, where the owners' table names both, the
      * company it belongs to beside the network's; [shownOnly] whether "Now" shows this first hop only for its window,
-     * as the engine marks it (snapshot version 5), never in the history.
+     * as the engine marks it (snapshot version 5), never in the history; [unsure] whether the engine could not tell
+     * that a record left out was this messenger's proxy ([LogRecord.Proxy.unsure]), a record's only.
      */
     data class Facts(
         val kind: Kind,
@@ -45,6 +46,7 @@ object ProxyFacts {
         val cover: String,
         val coverOwner: Pair<String, String>?,
         val shownOnly: Boolean = false,
+        val unsure: Boolean = false,
     ) {
         /** Whether a plain request's destination asked for was left out for the switch, its server kept. */
         val askedLeftOut: Boolean get() = kind == Kind.REQUEST && asked.isEmpty()
@@ -115,6 +117,7 @@ object ProxyFacts {
             cover = proxy.cover,
             coverOwner = coverOwner,
             shownOnly = shownOnly,
+            unsure = proxy.unsure,
         )
     }
 

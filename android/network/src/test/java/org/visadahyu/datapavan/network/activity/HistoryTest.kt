@@ -133,18 +133,31 @@ class HistoryTest {
      */
     @Test
     fun aLocalProxyLeftOutSaysSoInTheHistory() {
-        val zeros = segment(app, t + 1_000, t + 2_000, name = "").copy(address = InetAddress.getByAddress(ByteArray(4)), port = 0)
-        fun row(proxy: LogRecord.Proxy): List<Int> {
-            val entry = History.day(20_775, listOf(zeros.copy(proxy = proxy)), app, installedAt = t).entries.single()
-            assertEquals(History.LeftOut.PROXY, History.leftOut(entry, tool = false))
-            val facts = org.visadahyu.datapavan.network.ui.proxyFacts(checkNotNull(entry.proxy), entry.ip, entry.port, entry.asn, null, null)
-            val row = org.visadahyu.datapavan.network.ui.proxyRow(facts, past = true)
-            return listOfNotNull(row.header?.text) + row.lines.map { it.text }
-        }
         val connect = LogRecord.Proxy(LogRecord.PROXY_CONNECT, leftOut = true, local = true)
-        assertEquals(listOf(R.string.history_proxy_hidden, R.string.proxy_how_read, R.string.proxy_local), row(connect))
-        assertEquals(listOf(R.string.history_proxy_hidden, R.string.proxy_how_read), row(connect.copy(local = null)))
-        assertEquals(listOf(R.string.history_proxy_hidden, R.string.proxy_how_read), row(connect.copy(local = false)))
+        assertEquals(listOf(R.string.history_proxy_hidden, R.string.proxy_how_read, R.string.proxy_local), leftOutRow(connect))
+        assertEquals(listOf(R.string.history_proxy_hidden, R.string.proxy_how_read), leftOutRow(connect.copy(local = null)))
+        assertEquals(listOf(R.string.history_proxy_hidden, R.string.proxy_how_read), leftOutRow(connect.copy(local = false)))
+    }
+
+    /**
+     * The proxy record's unit B, B3: a record the engine could not tell was a messenger's proxy, taken back or never
+     * named, says so in place of its proxy line, from the day's entry to its row.
+     */
+    @Test
+    fun anUnsureRecordSaysSoInTheHistory() {
+        val unsure = LogRecord.Proxy(LogRecord.PROXY_MTPROTO, leftOut = true, unsure = true)
+        assertEquals(listOf(R.string.history_proxy_unsure), leftOutRow(unsure))
+        assertEquals(listOf(R.string.history_proxy_hidden, R.string.proxy_how_inferred), leftOutRow(unsure.copy(unsure = false)))
+    }
+
+    /** The strings of the history's row of a segment of [app] at an address of zeros, its flow left out for [proxy]. */
+    private fun leftOutRow(proxy: LogRecord.Proxy): List<Int> {
+        val zeros = segment(app, t + 1_000, t + 2_000, name = "").copy(address = InetAddress.getByAddress(ByteArray(4)), port = 0)
+        val entry = History.day(20_775, listOf(zeros.copy(proxy = proxy)), app, installedAt = t).entries.single()
+        assertEquals(History.LeftOut.PROXY, History.leftOut(entry, tool = false))
+        val facts = org.visadahyu.datapavan.network.ui.proxyFacts(checkNotNull(entry.proxy), entry.ip, entry.port, entry.asn, null, null)
+        val row = org.visadahyu.datapavan.network.ui.proxyRow(facts, past = true)
+        return listOfNotNull(row.header?.text) + row.lines.map { it.text }
     }
 
     /** The days the log keeps, today first; none with retention "none". */
