@@ -5167,3 +5167,36 @@ fn a_chosen_apps_proxy_is_logged_and_a_local_one_is_not() -> Outcome {
         },
     )
 }
+
+/// The proxy record's unit C, test 8: the user's choice for one app crosses a hand-over to the next engine, which the
+/// network part starts on a new tunnel with what the engine before it handed over, before it hands anything itself.
+#[test]
+#[ignore = "needs an unprivileged network namespace; scripts/check.sh rust runs it"]
+fn the_choice_for_one_app_crosses_a_hand_over() -> Outcome {
+    lab_engines(
+        "the_choice_for_one_app_crosses_a_hand_over",
+        |tunnels| async move {
+            let first = tunnels.start(None)?;
+            first.proxies(datapavan_net::ProxySetting {
+                logged: vec![APP],
+                ..datapavan_net::ProxySetting::default()
+            });
+            let handover = tokio::task::spawn_blocking(move || first.hand_over()).await?;
+            let second = tunnels.start(Some(handover))?;
+            let socks = scripted_proxy(SERVER, SOCKS).await?;
+            let mut app = app_connect(socks).await?;
+            hidden_request(&mut app, &socks_auth()).await?;
+            let inner = client_hello("inner.after.test");
+            step(&mut app, &inner, &inner).await?;
+            let flow = flow_to(&second, socks, |f| {
+                f.named_by == datapavan_net::NamedBy::Tls
+            })
+            .await?;
+            assert_eq!(flow.name.as_deref(), Some("inner.after.test"));
+            assert!(flow.proxy.is_some_and(|p| p.asked.is_some()));
+            drop(app);
+            drop(second);
+            Ok(())
+        },
+    )
+}

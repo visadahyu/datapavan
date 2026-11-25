@@ -3045,7 +3045,7 @@ mod tests {
     }
 
     fn telegram(shared: &Shared) {
-        shared.set_proxies(ProxySetting {
+        let _ = shared.set_proxies(ProxySetting {
             messengers: vec![(Family::Telegram, UID)],
             android: Vec::new(),
             trackers: None,
@@ -5332,5 +5332,148 @@ mod tests {
             rows += 1;
         }
         assert!(rows >= 13);
+    }
+
+    /// Unit C, the audit's minor 11: the window is decided per place, not per app. A chosen app's own proxy to
+    /// Android's setting, or on the user's own network, leaves "Now" once its window ends, while its covered proxy
+    /// stays in full.
+    #[test]
+    fn a_chosen_apps_places_the_choice_does_not_cover_keep_only_their_window() {
+        use crate::local::{OnLink, Transport};
+        let (shared, clock) = engine_at(false);
+        let _ = shared.set_proxies(ProxySetting {
+            android: vec![("203.0.113.5".into(), 1080)],
+            on_link: OnLink::new([(IpAddr::from([192, 168, 1, 0]), 24)], Transport::Wifi),
+            logged: vec![UID],
+            ..ProxySetting::default()
+        });
+        let setting = socks5_of(&shared, UID, [203, 0, 113, 5]);
+        let local = socks5_of(&shared, UID, [192, 168, 1, 7]);
+        let covered = socks5_of(&shared, UID, [198, 51, 100, 7]);
+        let snapshot = crate::snapshot::encode(&shared.now_view(T + 1_000));
+        for address in [[203, 0, 113, 5], [192, 168, 1, 7], [198, 51, 100, 7]] {
+            assert!(holds(&snapshot, &address), "{address:?} shown while open");
+        }
+        for id in [setting.id, local.id, covered.id] {
+            shared.finish(id);
+        }
+        clock.pass(11 * 60_000);
+        let snapshot = crate::snapshot::encode(&shared.now_view(T + 11 * 60_000 + 2_000));
+        assert!(
+            !holds(&snapshot, &[203, 0, 113, 5]),
+            "the setting's window ended"
+        );
+        assert!(
+            !holds(&snapshot, &[192, 168, 1, 7]),
+            "the local proxy's window ended"
+        );
+        assert!(
+            holds(&snapshot, &[198, 51, 100, 7]),
+            "the covered proxy stays"
+        );
+    }
+
+    /// Unit C, the audit's minor 11: the switch turned on and off, and a chain set, while an app is chosen: each runs
+    /// the pass that strips, and the chosen app keeps its destination through them, while another app's flow made with
+    /// the switch on goes back to its first hop.
+    #[test]
+    fn a_chosen_app_keeps_its_destination_through_the_switch_and_a_chain() {
+        let shared = engine(false);
+        learn(&shared, "203.0.113.5", "proxy.example.net");
+        choose(&shared, &[UID]);
+        switch(&shared, true);
+        let chosen = socks5_of(&shared, UID, [203, 0, 113, 5]);
+        let other = socks5_of(&shared, UID + 1, [203, 0, 113, 5]);
+        switch(&shared, false);
+        shared.hide_chained();
+        assert_eq!(
+            live(&shared, chosen.id).name.as_deref(),
+            Some("example.com")
+        );
+        assert!(
+            live(&shared, chosen.id)
+                .proxy
+                .is_some_and(|p| p.asked.is_some())
+        );
+        let back = live(&shared, other.id);
+        assert_eq!(back.name.as_deref(), Some("proxy.example.net"), "{back:?}");
+        assert!(back.proxy.is_some_and(|p| p.asked.is_none()));
+    }
+
+    /// Unit C, test 2: a chosen messenger's inferred proxy, with the cover its hello sent, reaches the log whole after
+    /// its window of take-back, as with the switch on.
+    #[test]
+    fn a_chosen_messengers_inferred_proxy_is_logged_whole_after_its_window() {
+        let (shared, clock) = engine_at(false);
+        telegram(&shared);
+        choose(&shared, &[UID]);
+        looked_up(&shared, UID, "web.example.org", [93, 184, 216, 99]);
+        let (proxy, bytes) = open(&shared, UID, at([93, 184, 216, 34], 443));
+        relay(
+            &shared,
+            proxy,
+            &bytes,
+            &[&crate::tls::tests::hello("www.google.com", 1000)],
+        );
+        assert_eq!(
+            live(&shared, proxy.id).proxy.map(|p| p.kind),
+            Some(Kind::MtProto)
+        );
+        shared.finish(proxy.id);
+        shared.flush();
+        clock.pass(11 * 60_000);
+        another_record(&shared);
+        let records = taken(&shared);
+        let written = of_flow(&records, proxy.id);
+        assert!(
+            !written.is_empty()
+                && written
+                    .iter()
+                    .all(|f| f.destination == at([93, 184, 216, 34], 443)
+                        && f.proxy.as_ref().is_some_and(|p| !p.left_out)),
+            "{written:?}"
+        );
+        assert!(holds(&crate::log::batch(&records), b"www.google.com"));
+    }
+
+    /// Unit C, test 10: a chosen messenger's flow never named its proxy for substitution is written with its own
+    /// address, as with the switch on; at a local address it is left out, since no choice covers a local proxy.
+    #[test]
+    fn a_chosen_messengers_substituted_flow_is_logged_as_it_is_unless_local() {
+        use crate::local::{OnLink, Transport};
+        for local in [false, true] {
+            let (shared, clock) = engine_at(false);
+            let _ = shared.set_proxies(ProxySetting {
+                messengers: vec![(Family::Telegram, UID)],
+                logged: vec![UID],
+                on_link: if local {
+                    OnLink::new([(IpAddr::from([93, 184, 216, 0]), 24)], Transport::Wifi)
+                } else {
+                    OnLink::default()
+                },
+                ..ProxySetting::default()
+            });
+            let (direct, _) = open(&shared, UID, at([149, 154, 167, 51], 443));
+            let (proxy, bytes) = open(&shared, UID, at([93, 184, 216, 34], 443));
+            relay(&shared, proxy, &bytes, &[&obfuscated()]);
+            for id in [proxy.id, direct.id] {
+                shared.finish(id);
+            }
+            shared.flush();
+            clock.pass(11 * 60_000);
+            another_record(&shared);
+            let written = of_flow(&taken(&shared), proxy.id);
+            assert!(!written.is_empty(), "local {local}");
+            if local {
+                assert!(written.iter().all(left_out), "local: {written:?}");
+            } else {
+                assert!(
+                    written
+                        .iter()
+                        .all(|f| f.destination == at([93, 184, 216, 34], 443)),
+                    "{written:?}"
+                );
+            }
+        }
     }
 }

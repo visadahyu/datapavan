@@ -1667,14 +1667,16 @@ pub extern "system" fn Java_org_visadahyu_datapavan_network_Engine_nativeFlowRou
         .resolve::<ThrowRuntimeExAndDefault>()
 }
 
-/// `Engine.nativeProxies(families, uids, android, strictDns, onLink, transport)`: the messengers' apps, each UID of
-/// `uids` of the family at the same place in `families` (0 Telegram, 1 `WhatsApp`, 2 Signal), the proxies Android's
-/// setting names, one `host port` a line in `android` (W8, part 2a; ADR 0052), whether Private DNS is strict on the
-/// network part's network, and the network beneath's on-link prefixes, one `address length` a line in `onLink`, with
-/// its transport (0 unknown, 1 Wi-Fi, 2 Ethernet, 3 cellular, 4 other), for the "local" fact (the proxy record's unit
-/// B). Kept for the engines to come, as the chain is.
+/// `Engine.nativeProxies(families, uids, android, strictDns, onLink, transport, logged, tools, pacHandler)`: the
+/// messengers' apps, each UID of `uids` of the family at the same place in `families` (0 Telegram, 1 `WhatsApp`, 2
+/// Signal), the proxies Android's setting names, one `host port` a line in `android` (W8, part 2a; ADR 0052), whether
+/// Private DNS is strict on the network part's network, and the network beneath's on-link prefixes, one `address
+/// length` a line in `onLink`, with its transport (0 unknown, 1 Wi-Fi, 2 Ethernet, 3 cellular, 4 other), for the
+/// "local" fact (the proxy record's unit B); and (unit C) the apps whose own proxies the user chose to log, the tools,
+/// and Android's PAC handler's UID, or -1 for none. Kept for the engines to come, as the chain is.
 // SAFETY: exported under the JNI name of the Kotlin method `external fun nativeProxies(families: IntArray, uids:
-// IntArray, android: String, strictDns: Boolean, onLink: String, transport: Int)`.
+// IntArray, android: String, strictDns: Boolean, onLink: String, transport: Int, logged: IntArray, tools: IntArray,
+// pacHandler: Int)`.
 #[unsafe(no_mangle)]
 #[allow(clippy::too_many_arguments)]
 pub extern "system" fn Java_org_visadahyu_datapavan_network_Engine_nativeProxies<'caller>(
@@ -1704,8 +1706,8 @@ pub extern "system" fn Java_org_visadahyu_datapavan_network_Engine_nativeProxies
             let read = ProxySetting {
                 strict_dns,
                 on_link: on_link_of(&on_link, transport),
-                logged: uids_of(&logged, 512),
-                tools: uids_of(&tools, 256),
+                logged: uids_of(&logged, 512, true),
+                tools: uids_of(&tools, 256, false),
                 pac_handler: u32::try_from(pac_handler).ok(),
                 ..proxy_setting(&families, &uids, &android)
             };
@@ -1753,11 +1755,13 @@ fn proxy_setting(families: &[i32], uids: &[i32], android: &str) -> ProxySetting 
 }
 
 /// The UIDs of `nativeProxies`' chosen apps or tools (the proxy record's unit C): those that do not fit a UID are left
-/// out, and at most `most` are kept; the engine keeps only the chosen application UIDs of them.
-fn uids_of(values: &[i32], most: usize) -> Vec<u32> {
+/// out, and for the chosen apps all but application UIDs too (10,000 to 19,999 in each user's range), before at most
+/// `most` are kept, so that no other UID takes a chosen app's place.
+fn uids_of(values: &[i32], most: usize, applications: bool) -> Vec<u32> {
     values
         .iter()
         .filter_map(|&uid| u32::try_from(uid).ok())
+        .filter(|uid| !applications || (10_000..20_000).contains(&(uid % 100_000)))
         .take(most)
         .collect()
 }
@@ -2473,6 +2477,16 @@ mod tests {
                 ("2001:db8::1".to_owned(), 80),
             ]
         );
+        // The chosen apps: application UIDs only, the cut after the filter (unit C, P14); the tools as they fit.
+        let mut many: Vec<i32> = (0..600).collect();
+        many.extend([10_123, -1, 20_123, 1_010_123]);
+        assert_eq!(uids_of(&many, 512, true), vec![10_123, 1_010_123]);
+        assert_eq!(
+            uids_of(&[10_123, -1, 1_000], 256, false),
+            vec![10_123, 1_000]
+        );
+        let apps: Vec<i32> = (10_000..10_600).collect();
+        assert_eq!(uids_of(&apps, 512, true).len(), 512);
     }
 
     /// A kept flow's proxy, as the dump prints it: no credential, since none is kept.
