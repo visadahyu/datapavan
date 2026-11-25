@@ -252,7 +252,7 @@ chaining is, and must follow the same switch.
      the clear also resets the proxy counters the switch's drawing reads (`LogSwitch.proxiesSeen`) and the
      substitution's memory is W9's work, a must in DESIGN.md's W9 row: no engine path reads the profile yet.
    - **Kept from before.** The switch is drawn wherever anything is left out for it, and every left-out row links to
-     it. A release's dump writes the six proxy counters as `-`. The substitution's state is a few instants and name
+     it. A release's dump writes the proxy counters as `-`, eight since unit U. The substitution's state is a few instants and name
      hashes per messenger, in memory. Nothing reaches a summary, the widget or the tile (ADR 0046, decision 3).
    - **The other units.** R3, the per-app choice "Keep where APP connects through a proxy": unit C, which accepts this
      record. R4, the facts said whatever the switch, with R7, plain requests to Android's setting: unit B, built
@@ -280,8 +280,9 @@ chaining is, and must follow the same switch.
     - **The request.** Command 3 is read beside `CONNECT`. Its `DST` is the client's own source (RFC 1928, section 6),
       never a destination: it names nothing, the switch on or off, and the control flow keeps its own server's names.
     - **The reply.** Once the server confirms, as for `CONNECT`, its bytes are read on, across reads, until the reply's
-      `BND` is whole (at most 266 bytes), by the engine's own fuzzed SOCKS5 parsers, and only then does the reply reach
-      the app.
+      `BND` is whole, by the engine's own fuzzed SOCKS5 parsers: at most 266 of the server's bytes, its choice of method
+      and RFC 1929's success included. The relay is tied before the read that completes `BND` reaches the app, which
+      cannot send to the relay before it knows the port.
     - **The tie.** While the control flow is open, the app's UDP flows that go directly to that flow's own server at
       `BND.PORT`, and those that come in from that server on any port, are the app's own proxy's, with its first hop.
       The tie is at the server that confirmed with its own bytes, never at `BND.ADDR`: otherwise an app's server could
@@ -290,14 +291,19 @@ chaining is, and must follow the same switch.
       nor a chained or tunnelled app's. Apps that share a UID share its associations, as they share everything Android
       tells of a flow; an SDK Runtime's sandbox has a UID of its own, so its UDP is never tied to its app's proxy.
     - **The relay's flow.** At its birth it gets the proxy's kind, the relay's names and network, the control flow's
-      setting and password facts, its trackers' marks on the relay's names, and whether it is local; its first
-      datagram's SOCKS5 header adds the marks on the destination it names and, with the switch on, that destination,
-      which then names the flow, through the same naming under the flow's lock as a `CONNECT`'s request.
+      setting and password facts, its trackers' marks on the relay's names, and whether it is local. On a flow its app
+      began, the first datagram's SOCKS5 header adds the marks on the destination it names and, with the switch on,
+      that destination, which then names the flow, through the same naming under the flow's lock as a `CONNECT`'s
+      request; a fragment, or a header that does not parse, gives none. No hello ever names a relay's flow, the switch
+      on or off: a hello the app sends on it, as plain QUIC to the relay's port, only adds its trackers' marks (the
+      unit's review, engine M1).
     - **Lifetime and bounds.** An association ends with its control flow (RFC 1928, section 6); two on one relay port
       each count, so that the tie goes only with the last; none is handed over, as a stop ends every flow first. At
-      most 16 for each app and 256 in all, so that no app can push another app's out.
-    - **Records.** No format changes: the relay's flow is an own proxy's flow of kind SOCKS5. Two counters are appended:
-      the associations tied, and the replies whose relay named another address.
+      most 16 for each app and 256 in all, so that one app's flood forgets only its own: a full table, which takes
+      sixteen apps at their share, forgets the oldest of the app that holds the most.
+    - **Records.** No format changes: the relay's flow is an own proxy's flow of kind SOCKS5. Two counters are appended,
+      each written as `-` in a release's dump, as the six before them are: the associations tied, and among them the
+      replies whose relay named another address or a name.
 
 ## Consequences
 
@@ -393,6 +399,12 @@ chaining is, and must follow the same switch.
       again, the app's UDP to the relay is an ordinary flow until it associates again.
     - *The bounds.* At most 16 associations for each app and 256 in all are tied at once; past them the oldest of the
       same app goes, or of the app that holds the most, and its relay's new flows are ordinary flows.
+    - *An address, not a service.* The tie is the app's UDP to the server's address at `BND.PORT`, and from it on any
+      port. Where that address serves others too, as a cloud's load balancer may, the app's own UDP there to another
+      service on that port loses its address with the switch off, which is wider than TCP's residual of the one flow
+      that confirmed; it is still only the app's own flows, to a server that confirmed SOCKS5 to it.
+    - *NAT64.* An app that reached its proxy by an address of the NAT64 prefix, while the reply names the server's IPv4
+      address, has its relay elsewhere: not tied.
     - *No emulator check.* microsocks, the proxy lab's SOCKS5 server, answers every command but `CONNECT` with code 7,
       and the fixture sends no UDP: the network lab's test through the whole engine is unit U's check.
   - The false positives that need a maker's own network (a Telegram CDN data centre beside its ranges, WhatsApp's link

@@ -1125,8 +1125,8 @@ confirmed proxy's, Android's PAC handler and the user's tool, by its signing key
 own setting shown in "Now". Unit U, on `proxy-record-u`, 2026-11-25: SOCKS5's `UDP ASSOCIATE` read, its `DST` naming
 nothing, and the reply's relay read whole; while its control flow is open, the app's direct UDP to that flow's own
 server at the reply's port is the app's own proxy's first hop, never at an address the reply names (its plan audit's
-C1), at most 16 associations for each app and 256 in all; the first datagram's header gives the trackers' marks and,
-with the switch on, where it asked to go. Checked by the engine's tests with hand mutants, fuzzing, and a network-lab
+C1), at most 16 associations for each app and 256 in all; on a flow the app began, the first datagram's header gives
+the trackers' marks and, with the switch on, where it asked to go, and no hello names a relay's flow. Checked by the engine's tests with hand mutants, fuzzing, and a network-lab
 test through the whole engine with a relay that answers; microsocks carries no UDP, so the emulator has no check of
 it.
 

@@ -115,9 +115,11 @@ Chaining also contains an untrusted tool (see [RESTRICTED-REGIONS.md](RESTRICTED
   the port its reply names, or comes in from that server, is the app's own proxy's, with its first hop: shown in "Now"
   for its window, and logged under the switch alone, as for its TCP. The tie is at the server whose own bytes
   confirmed, never at an address the reply names: a reply naming another address ties nothing there, and that address
-  stays in the log, as before. The first datagram's SOCKS5 header gives the trackers' marks and, with the switch on,
-  where the app asked to go; later datagrams on the flow are not read. At most 16 associations for each app and 256
-  in all are tied at once; an association ends with its connection, and none crosses a restart of the tunnel.
+  stays in the log, as before. On a flow the app began, the first datagram's SOCKS5 header gives the trackers' marks
+  and, with the switch on, where the app asked to go; a fragment or a header that does not parse gives none, later
+  datagrams on the flow are not read, and no hello names the flow, only marks it. At most 16 associations for each
+  app and 256 in all are tied at once; an association ends with its connection, and none crosses a restart of the
+  tunnel.
 - **Proxy-like behaviour is flagged** (v0.2) and can be blocked (v0.3): many distinct destinations in a short time, sustained upload, or activity while the screen is off. Thresholds come from measurements, and a flag says what was seen instead of accusing the app. Detection counts destinations in memory, so it does not need the destination log that is off by default for chained flows.
 - **Per-app choice.** The user decides which apps go through the tool, and which through which WireGuard
   configuration. Everything else goes directly or is blocked.
