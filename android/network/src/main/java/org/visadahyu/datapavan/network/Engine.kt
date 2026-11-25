@@ -291,6 +291,13 @@ internal object Engine {
     external fun nativeDnsTimesClear()
 
     /**
+     * A way through the resolver's proxy opened where there was none (ADR 0042, "Android's proxy"): the encrypted
+     * steps' holds and what the resolver learned of them go, as on a change of network, and the answers kept stay, so
+     * that a step that failed without the proxy is tried again at once. Nothing when no engine runs.
+     */
+    external fun nativeDnsWaysChanged()
+
+    /**
      * The ways of the four tables for the network screen, as [org.visadahyu.datapavan.network.dns.DnsCatalogue] reads
      * them.
      */

@@ -1234,6 +1234,24 @@ pub extern "system" fn Java_org_visadahyu_datapavan_network_Engine_nativeDnsTime
         .resolve::<ThrowRuntimeExAndDefault>();
 }
 
+/// `Engine.nativeDnsWaysChanged()`: a way through the resolver's proxy opened where there was none
+/// ([`Engine::dns_ways_changed`]); nothing when no engine runs.
+// SAFETY: exported under the JNI name of the Kotlin method `external fun nativeDnsWaysChanged()`.
+#[unsafe(no_mangle)]
+pub extern "system" fn Java_org_visadahyu_datapavan_network_Engine_nativeDnsWaysChanged<'caller>(
+    mut unowned_env: EnvUnowned<'caller>,
+    _class: JClass<'caller>,
+) {
+    unowned_env
+        .with_env(|_env| -> Result<_, Error> {
+            if let Some(running) = engine().as_ref() {
+                running.dns_ways_changed();
+            }
+            Ok(())
+        })
+        .resolve::<ThrowRuntimeExAndDefault>();
+}
+
 /// The ways of the datasets for the network screen ([`catalogue_lines`]).
 // SAFETY: exported under the JNI name of the Kotlin method `external fun nativeDnsCatalogue(relays: String,
 // targets: String, pairs: String, presets: String): String`.

@@ -1421,6 +1421,14 @@ impl Engine {
         self.shared.resolver.clear_times();
     }
 
+    /// A way through the resolver's proxy opened where there was none (ADR 0042, "Android's proxy"): Android's
+    /// global proxy read, or the network found closed to direct connections while it is set, or a network's own
+    /// proxy set. The encrypted steps' holds and what was learned of them go, as on a change of network; the keys
+    /// and the answers kept stay.
+    pub fn dns_ways_changed(&self) {
+        self.shared.resolver.ways_changed();
+    }
+
     /// The exchanges that wait for the network part's Kotlin side, which hands each reply to [`Exchanges::complete`].
     #[must_use]
     pub fn exchanges(&self) -> Arc<Exchanges> {

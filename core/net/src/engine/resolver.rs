@@ -483,6 +483,12 @@ impl Resolver {
         lock(&self.search).clear();
     }
 
+    /// A way through the resolver's proxy opened ([`super::Engine::dns_ways_changed`]): the holds and what was learned
+    /// go, as on a change of network; the keys and answers kept stay.
+    pub(super) fn ways_changed(&self) {
+        lock(&self.ladder).reset();
+    }
+
     /// What Android says of the network beneath: validated or not, and its search domains.
     pub(super) fn network(&self, validated: bool, domains: &str) {
         lock(&self.ladder).set_validated(validated);
@@ -1897,6 +1903,27 @@ mod tests {
         tokio::time::sleep(Duration::from_millis(50)).await;
         assert_eq!(fake.seen(Carry::Odoh).len(), 2, "one renewal");
         assert!(lock(&shared.resolver.renewing).is_empty());
+    }
+
+    /// The global proxy's review, m1: a way through the resolver's proxy opening clears the holds of the steps that
+    /// failed without it, so that they are tried again at once, and keeps the answers.
+    #[tokio::test(flavor = "current_thread")]
+    async fn a_way_through_the_proxy_opening_clears_the_holds_and_keeps_the_answers() {
+        let (shared, fake) = resolving("");
+        fake.does(Carry::Odoh, Does::Fail(Failure::Refused));
+        let (address, _) = read(answer(&shared, &app_query("a.example.com", 1), false, None).await);
+        assert!(address.is_some(), "a target's DoH answered");
+        let held = |shared: &Arc<Shared>| lock(&shared.resolver.ladder).held(Instant::now());
+        assert_eq!(held(&shared), 2, "both pairs held");
+        let kept = lock(&shared.resolver.cache).len();
+        assert!(kept > 0, "the answer is kept");
+        shared.resolver.ways_changed();
+        assert_eq!(held(&shared), 0, "the holds go");
+        assert_eq!(
+            lock(&shared.resolver.cache).len(),
+            kept,
+            "the answers kept stay"
+        );
     }
 
     /// Review R-m1: turning strict on, or choosing another resolver, keeps what was learned on this network (a
