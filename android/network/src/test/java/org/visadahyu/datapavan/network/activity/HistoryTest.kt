@@ -4,6 +4,7 @@ import java.net.InetAddress
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertTrue
 import org.junit.Test
+import org.visadahyu.datapavan.network.R
 import org.visadahyu.datapavan.network.log.AppState
 import org.visadahyu.datapavan.network.log.LogRecord
 
@@ -123,6 +124,27 @@ class HistoryTest {
         assertEquals(null, why(segment(app, t + 1_000, t + 2_000)))
         val entry = History.day(20_775, listOf(segment(app, t + 1_000, t + 2_000)), app, installedAt = t).entries.single()
         assertEquals(InetAddress.getByName("192.0.2.1") to "192.0.2.1", entry.ip to entry.address)
+    }
+
+    /**
+     * The proxy record's unit B (audit-B 4): a record left out for the switch whose proxy the engine found on the local
+     * network says so in the history, as its row is built from the day's entry; a record before version 7, at its
+     * address of zeros, never does.
+     */
+    @Test
+    fun aLocalProxyLeftOutSaysSoInTheHistory() {
+        val zeros = segment(app, t + 1_000, t + 2_000, name = "").copy(address = InetAddress.getByAddress(ByteArray(4)), port = 0)
+        fun row(proxy: LogRecord.Proxy): List<Int> {
+            val entry = History.day(20_775, listOf(zeros.copy(proxy = proxy)), app, installedAt = t).entries.single()
+            assertEquals(History.LeftOut.PROXY, History.leftOut(entry, tool = false))
+            val facts = org.visadahyu.datapavan.network.ui.proxyFacts(checkNotNull(entry.proxy), entry.ip, entry.port, entry.asn, null, null)
+            val row = org.visadahyu.datapavan.network.ui.proxyRow(facts, past = true)
+            return listOfNotNull(row.header?.text) + row.lines.map { it.text }
+        }
+        val connect = LogRecord.Proxy(LogRecord.PROXY_CONNECT, leftOut = true, local = true)
+        assertEquals(listOf(R.string.history_proxy_hidden, R.string.proxy_how_read, R.string.proxy_local), row(connect))
+        assertEquals(listOf(R.string.history_proxy_hidden, R.string.proxy_how_read), row(connect.copy(local = null)))
+        assertEquals(listOf(R.string.history_proxy_hidden, R.string.proxy_how_read), row(connect.copy(local = false)))
     }
 
     /** The days the log keeps, today first; none with retention "none". */

@@ -1,6 +1,5 @@
 package org.visadahyu.datapavan.network.activity
 
-import java.net.Inet6Address
 import java.net.InetAddress
 import org.visadahyu.datapavan.network.log.LogRecord
 
@@ -79,8 +78,10 @@ object ProxyFacts {
             else -> Kind.SIGNAL
         }
         val kept = proxy.kept
+        // "Local" is the engine's, from the network beneath's on-link prefixes, in every snapshot and every record from
+        // log version 7, whatever the switch says; only an older record, which never said, is read from its address.
         val where = when {
-            isLocal(address) -> Where.LOCAL
+            proxy.local ?: isLocal(address) -> Where.LOCAL
             proxy.organisation.isNotEmpty() -> Where.NETWORK
             else -> Where.UNKNOWN
         }
@@ -132,10 +133,21 @@ object ProxyFacts {
     fun hostPort(host: String, port: Int): String = if (':' in host) "[$host]:$port" else "$host:$port"
 
     /**
-     * Whether an address is on the user's own network: private (10/8, 172.16/12, 192.168/16), link-local, or IPv6's
-     * unique local addresses (fc00::/7). Loopback never reaches the network part: a proxy on the phone itself is not
-     * seen.
+     * Whether an address is on the user's own network by its range alone, for a record before log version 7, which never
+     * said ([LogRecord.Proxy.local]): link-local (169.254/16, fe80::/10), private (10/8, 172.16/12, 192.168/16), or IPv6's
+     * unique local addresses (fc00::/7). It is the engine's rule with no on-link prefixes told (core/net/src/local.rs,
+     * rule 5; the proxy record's unit B): never CGNAT (100.64/10), never the deprecated site-local fec0::/10 (RFC 3879),
+     * never an address of zeros. An IPv4-mapped IPv6 address reads as its IPv4 address. Loopback never reaches the
+     * network part: a proxy on the phone itself is not seen.
      */
-    fun isLocal(address: InetAddress): Boolean = address.isSiteLocalAddress || address.isLinkLocalAddress ||
-        (address is Inet6Address && (address.address[0].toInt() and 0xfe) == 0xfc)
+    fun isLocal(address: InetAddress): Boolean {
+        val raw = address.address
+        val mapped = raw.size == 16 && (0 until 10).all { raw[it].toInt() == 0 } && raw[10].toInt() == -1 && raw[11].toInt() == -1
+        val b = (if (mapped) raw.copyOfRange(12, 16) else raw).map { it.toInt() and 0xff }
+        return if (b.size == 4) {
+            b[0] == 10 || (b[0] == 172 && b[1] in 16..31) || (b[0] == 192 && b[1] == 168) || (b[0] == 169 && b[1] == 254)
+        } else {
+            (b[0] and 0xfe) == 0xfc || (b[0] == 0xfe && (b[1] and 0xc0) == 0x80)
+        }
+    }
 }

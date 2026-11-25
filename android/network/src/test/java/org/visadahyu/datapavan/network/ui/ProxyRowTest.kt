@@ -38,6 +38,38 @@ class ProxyRowTest {
         assertEquals(listOf(R.string.now_proxy_past, R.string.proxy_how_read, R.string.proxy_password), texts(socks))
     }
 
+    /**
+     * The proxy record's unit B (audit-B 4): a proxy left out for the switch still says "On your local network" where the
+     * engine's bit says so, in "Now" past the window, read from the snapshot's destination at its address of zeros, and in
+     * the history (HistoryTest); as in a kept row, a local address says nothing of a maker.
+     */
+    @Test
+    fun aLocalProxyLeftOutStillSaysItIsLocal() {
+        val place = { proxy: LogRecord.Proxy ->
+            org.visadahyu.datapavan.network.activity.Snapshot.Destination(
+                protocol = 6, namedBy = 0, ech = 0, dns = 0, cameIn = false, address = zeros, port = 0, asn = 0,
+                network = 0, name = "", dnsName = "", resolver = "", organisation = "", bytes = List(6) { 1L }, proxy = proxy,
+            )
+        }
+        val socks = LogRecord.Proxy(LogRecord.PROXY_SOCKS5, leftOut = true, local = true)
+        val past = proxyRow(checkNotNull(placeProxyFacts(place(socks), null, null)), past = false)
+        assertEquals(listOf(R.string.now_proxy_past, R.string.proxy_how_read, R.string.proxy_local), texts(past))
+        assertTrue(past.toSwitch)
+        assertEquals(
+            listOf(R.string.history_proxy_hidden, R.string.proxy_how_read, R.string.proxy_local),
+            texts(proxyRow(ProxyFacts.of(socks, zeros, 0), past = true)),
+        )
+        val telegram = LogRecord.Proxy(LogRecord.PROXY_MTPROTO, outsideMaker = true, leftOut = true, local = true)
+        assertEquals(
+            listOf(R.string.now_proxy_past, R.string.proxy_how_inferred, R.string.proxy_local),
+            texts(proxyRow(checkNotNull(placeProxyFacts(place(telegram), null, null)), past = false)),
+        )
+        // Not local, or a record that never said, at its address of zeros: no such line.
+        for (proxy in listOf(socks.copy(local = false), socks.copy(local = null))) {
+            assertEquals(listOf(R.string.now_proxy_past, R.string.proxy_how_read), texts(proxyRow(ProxyFacts.of(proxy, zeros, 0), past = false)))
+        }
+    }
+
     /** Android's proxy setting, left out, has its own words, which never call it the app's: no second line contradicts them. */
     @Test
     fun androidsSettingLeftOutHasItsOwnWords() {

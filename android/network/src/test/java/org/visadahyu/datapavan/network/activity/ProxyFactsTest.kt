@@ -62,6 +62,70 @@ class ProxyFactsTest {
     }
 
     /**
+     * The proxy record's unit B, B2: from log version 7 and in every snapshot the engine says whether the proxy is local,
+     * from the network beneath's on-link prefixes, and its word wins over the address, a stripped record's of zeros
+     * included (finding 4 of the brief's audit); only a record that never said is read from its address.
+     */
+    @Test
+    fun theEnginesLocalBitWinsOverTheAddress() {
+        val proxy = LogRecord.Proxy(LogRecord.PROXY_SOCKS5)
+        val home = InetAddress.getByName("192.168.1.2")
+        assertEquals(ProxyFacts.Where.LOCAL, ProxyFacts.of(proxy, home, 1080).where)
+        // On mobile data a private address outside the link's own prefix is not local, whatever its range.
+        assertEquals(ProxyFacts.Where.UNKNOWN, ProxyFacts.of(proxy.copy(local = false), home, 1080).where)
+        val named = proxy.copy(local = false, organisation = "Example Net")
+        assertEquals(ProxyFacts.Where.NETWORK, ProxyFacts.of(named, home, 1080).where)
+        // A global IPv6 address on the link's own prefix is local, though no range says so.
+        assertEquals(ProxyFacts.Where.LOCAL, ProxyFacts.of(proxy.copy(local = true), InetAddress.getByName("2001:db8:1::5"), 1080).where)
+        // Left out, at an address of zeros: the bit alone says it.
+        val zeros = InetAddress.getByName("0.0.0.0")
+        assertEquals(ProxyFacts.Where.LOCAL, ProxyFacts.of(proxy.copy(leftOut = true, local = true), zeros, 0).where)
+        assertEquals(ProxyFacts.Where.UNKNOWN, ProxyFacts.of(proxy.copy(leftOut = true), zeros, 0).where)
+    }
+
+    /**
+     * The fallback for a record before version 7 is the engine's rule with no prefixes told (rule 5): link-local, the
+     * private ranges and unique local addresses; never CGNAT, never the deprecated fec0::/10, never zeros; a mapped IPv4
+     * address read as its IPv4 address.
+     */
+    @Test
+    fun theFallbackIsTheEnginesRuleWithNoPrefixes() {
+        val local = listOf(
+            "10.0.0.5", "172.16.5.5", "172.31.255.255", "192.168.1.20", "169.254.10.1", "fe80::1", "febf::1", "fc00::1",
+            "fd00::5", "::ffff:192.168.1.20",
+        )
+        val notLocal = listOf(
+            "100.64.1.1", "172.15.0.1", "172.32.0.1", "192.169.0.1", "fec0::1", "feff::1", "0.0.0.0", "::", "8.8.8.8",
+            "2001:db8::7", "203.0.113.5", "::ffff:100.64.1.1",
+        )
+        for (address in local) assertTrue(address, ProxyFacts.isLocal(InetAddress.getByName(address)))
+        for (address in notLocal) assertTrue(address, !ProxyFacts.isLocal(InetAddress.getByName(address)))
+        // An IPv4-mapped address kept as IPv6 reads as its IPv4 address too.
+        val mapped = ByteArray(16).also {
+            it[10] = -1
+            it[11] = -1
+            it[12] = 192.toByte()
+            it[13] = 168.toByte()
+            it[15] = 2
+        }
+        assertTrue(ProxyFacts.isLocal(java.net.Inet6Address.getByAddress(null, mapped, -1)))
+    }
+
+    /**
+     * The same, against the engine's own vectors (core/net/testdata/local-addresses.tsv): its rows with no prefixes and
+     * the transport not known, which are rule 5's, give the engine's answer here.
+     */
+    @Test
+    fun theFallbackGivesTheEnginesAnswerOnItsVectors() {
+        val vectors = File("../../core/net/testdata/local-addresses.tsv")
+        org.junit.Assume.assumeTrue("the engine's vectors are not in this tree yet", vectors.isFile)
+        val rows = vectors.readLines().filter { it.isNotBlank() && !it.startsWith("#") }.map { it.split('\t') }
+            .filter { it.size >= 4 && it[1] == "-" && it[2] == "unknown" }
+        assertTrue(rows.toString(), rows.size >= 5)
+        for (row in rows) assertEquals(row[0], row[3] == "local", ProxyFacts.isLocal(InetAddress.getByName(row[0])))
+    }
+
+    /**
      * A plain request in a proxy's absolute form is its own kind, never an HTTP proxy's: nothing confirms the server is
      * one (fix round of W8 part 2a). With the switch off it keeps its server and leaves out only what it asked for.
      */

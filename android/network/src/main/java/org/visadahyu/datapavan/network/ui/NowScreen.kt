@@ -581,7 +581,8 @@ internal data class ProxyRow(val header: ProxyLine?, val lines: List<ProxyLine>,
  * The row of a destination's proxy [facts], in "Now" or, [past], in the history, as a pure function the JVM tests
  * hold. How the network part knows is always said, the switch on or off: "Read from the connection" or "Inferred from
  * where and how it connects". A flow left out for the switch shows its kind, Android's setting in its own words, and
- * the facts that name nothing (the maker's network it is not in, a password unencrypted). A plain request in a proxy's
+ * the facts that name nothing (on the local network, or else the maker's network it is not in; a password
+ * unencrypted). A plain request in a proxy's
  * form is never called a proxy: its line says what it asked for, or with the switch off that this is not shown. Where
  * the network part cannot name the network, the maker's network the address is not in is still said (ADR 0052, decision
  * 6). A first hop "Now" shows only for its window ends with why: for a declared proxy, that where the app asked it to
@@ -602,7 +603,12 @@ internal fun proxyRow(facts: ProxyFacts.Facts, past: Boolean): ProxyRow {
             kind = facts.kind,
         )
         lines += ProxyLine(if (facts.declared) R.string.proxy_how_read else R.string.proxy_how_inferred)
-        if (facts.maker.isNotEmpty()) lines += notMaker
+        // "On your local network" names no address, so it stays with the switch off (finding 4 of the brief's audit), in
+        // the history and in "Now" past the window alike; as in a kept row, a local address says nothing of a maker.
+        when {
+            facts.where == ProxyFacts.Where.LOCAL -> lines += ProxyLine(R.string.proxy_local)
+            facts.maker.isNotEmpty() -> lines += notMaker
+        }
         if (facts.password) lines += ProxyLine(R.string.proxy_password)
         return ProxyRow(header, lines, toSwitch = true)
     }
