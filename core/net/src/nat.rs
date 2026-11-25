@@ -126,15 +126,15 @@ impl Nat {
     #[must_use]
     pub fn with_ports(first: u16, last: u16) -> Self {
         Self {
-            by_fake: HashMap::new(),
-            by_app: HashMap::new(),
+            by_fake: crate::map(),
+            by_app: crate::map(),
             first,
             last: last.max(first),
             cooling: VecDeque::new(),
-            cooling_set: HashSet::new(),
+            cooling_set: crate::set(),
             idle: TCP_IDLE,
             cooling_for: PORT_COOLING,
-            random: RandomState::new(),
+            random: crate::keys(),
             draws: 0,
         }
     }

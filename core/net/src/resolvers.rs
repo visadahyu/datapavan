@@ -13,10 +13,19 @@ use std::net::IpAddr;
 const BUNDLED: &str = include_str!("../../../data/resolvers/resolvers.tsv");
 
 /// Resolvers by address and by host name, each giving the resolver's id (`google`, `quad9`).
-#[derive(Debug, Default)]
+#[derive(Debug)]
 pub struct Resolvers {
     by_address: HashMap<IpAddr, String>,
     by_host: HashMap<String, String>,
+}
+
+impl Default for Resolvers {
+    fn default() -> Self {
+        Self {
+            by_address: crate::map(),
+            by_host: crate::map(),
+        }
+    }
 }
 
 impl Resolvers {

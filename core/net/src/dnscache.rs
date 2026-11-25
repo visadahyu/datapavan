@@ -28,12 +28,22 @@ const TYPE_SOA: u16 = 6;
 type Key = (String, u16, u16);
 
 /// Answers by question, each with the time since the phone started until which it is kept.
-#[derive(Debug, Default)]
+#[derive(Debug)]
 pub struct DnsCache {
     entries: HashMap<Key, (Vec<u8>, Duration)>,
     order: VecDeque<Key>,
     /// How long past its time an answer is still kept to be served stale (RFC 8767); none by default.
     stale_for: Duration,
+}
+
+impl Default for DnsCache {
+    fn default() -> Self {
+        Self {
+            entries: crate::map(),
+            order: VecDeque::new(),
+            stale_for: Duration::ZERO,
+        }
+    }
 }
 
 /// The time to live of an answer served stale (RFC 8767, 4: "30 seconds").

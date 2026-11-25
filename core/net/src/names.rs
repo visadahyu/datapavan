@@ -123,7 +123,7 @@ impl<K: Hash + Eq + Clone, V> Scoped<K, V> {
     fn new(caps: (usize, usize)) -> Self {
         Self {
             shared: Fifo::default(),
-            own: HashMap::new(),
+            own: crate::map(),
             writes: 0,
             caps,
         }
@@ -197,7 +197,7 @@ impl Default for Names {
         Self {
             addresses: Scoped::new((CAPACITY, OWN_CAPACITY)),
             public: Scoped::new((PUBLIC_CAPACITY, OWN_PUBLIC_CAPACITY)),
-            hasher: RandomState::new(),
+            hasher: crate::keys(),
         }
     }
 }

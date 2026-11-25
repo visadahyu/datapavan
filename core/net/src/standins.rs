@@ -57,8 +57,8 @@ impl StandIns {
     pub fn with_capacity(capacity: usize) -> Self {
         Self {
             capacity: capacity.clamp(1, CAPACITY),
-            by_name: HashMap::new(),
-            by_offset: HashMap::new(),
+            by_name: crate::map(),
+            by_offset: crate::map(),
             by_use: BTreeMap::new(),
             clock: 0,
             cursor: 0,

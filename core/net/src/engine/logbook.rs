@@ -779,19 +779,20 @@ impl Shared {
                     })
                     .flatten()
             };
-            let unnamed: HashMap<u64, super::Proxied> = live
-                .values()
-                .filter(|l| !l.hidden)
-                .filter_map(|l| own_proxy(&l.flow))
-                .chain(activity.held.iter().filter_map(|piece| match &piece.of {
-                    Of::Flow {
-                        flow,
-                        hidden: false,
-                        ..
-                    } => own_proxy(flow),
-                    _ => None,
-                }))
-                .collect();
+            let mut unnamed: HashMap<u64, super::Proxied> = crate::map();
+            unnamed.extend(
+                live.values()
+                    .filter(|l| !l.hidden)
+                    .filter_map(|l| own_proxy(&l.flow))
+                    .chain(activity.held.iter().filter_map(|piece| match &piece.of {
+                        Of::Flow {
+                            flow,
+                            hidden: false,
+                            ..
+                        } => own_proxy(flow),
+                        _ => None,
+                    })),
+            );
             self.to_first_hops(&mut live, &mut activity, of);
             let back = lock(&self.held_back);
             for record in lock(&self.pending_log).iter_mut() {

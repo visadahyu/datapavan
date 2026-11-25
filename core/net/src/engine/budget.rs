@@ -20,10 +20,18 @@ pub(super) struct Budget {
 }
 
 /// How many places are held, in all and by each app.
-#[derive(Default)]
 struct Held {
     all: usize,
     by_app: HashMap<Option<u32>, usize>,
+}
+
+impl Default for Held {
+    fn default() -> Self {
+        Self {
+            all: 0,
+            by_app: crate::map(),
+        }
+    }
 }
 
 /// Why no place could be had.

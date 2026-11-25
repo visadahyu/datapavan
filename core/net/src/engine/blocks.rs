@@ -102,7 +102,6 @@ struct Tie {
 }
 
 /// The engine's state of blocking.
-#[derive(Default)]
 pub(super) struct Blocks {
     setting: BlockSetting,
     covered: HashSet<u32>,
@@ -113,16 +112,35 @@ pub(super) struct Blocks {
     ties: HashMap<IpAddr, Tie>,
 }
 
+impl Default for Blocks {
+    fn default() -> Self {
+        Self {
+            setting: BlockSetting::default(),
+            covered: crate::set(),
+            graded: crate::map(),
+            apps: crate::map(),
+            entries: crate::set(),
+            tallies: crate::map(),
+            ties: crate::map(),
+        }
+    }
+}
+
 impl Blocks {
     fn set(&mut self, setting: BlockSetting) {
-        self.covered = setting.covered.iter().copied().collect();
-        self.graded = setting
-            .graded
-            .iter()
-            .map(|&(uid, entry, grade)| ((uid, entry), grade))
-            .collect();
-        self.apps = setting.apps_allowed.iter().copied().collect();
-        self.entries = setting.entries_allowed.iter().copied().collect();
+        self.covered = crate::set();
+        self.covered.extend(setting.covered.iter().copied());
+        self.graded = crate::map();
+        self.graded.extend(
+            setting
+                .graded
+                .iter()
+                .map(|&(uid, entry, grade)| ((uid, entry), grade)),
+        );
+        self.apps = crate::map();
+        self.apps.extend(setting.apps_allowed.iter().copied());
+        self.entries = crate::set();
+        self.entries.extend(setting.entries_allowed.iter().copied());
         // Another table's rows are other rows: what was counted and tied by the old one's places goes.
         let same_table = match (&self.setting.table, &setting.table) {
             (Some(a), Some(b)) => Arc::ptr_eq(a, b) || a == b,

@@ -51,10 +51,11 @@ impl Owners {
     /// comments, then tab-separated rows. An AS whose entity is unknown is skipped.
     #[must_use]
     pub fn parse(entities: &str, asns: &str) -> Self {
-        let names: HashMap<&str, &str> = rows_of(entities)
-            .filter_map(|columns| Some((*columns.first()?, *columns.get(1)?)))
-            .collect();
-        let mut by_asn = HashMap::new();
+        let mut names: HashMap<&str, &str> = crate::map();
+        names.extend(
+            rows_of(entities).filter_map(|columns| Some((*columns.first()?, *columns.get(1)?))),
+        );
+        let mut by_asn = crate::map();
         for columns in rows_of(asns) {
             let (Some(asn), Some(entity), Some(hosting)) =
                 (columns.first(), columns.get(1), columns.get(2))

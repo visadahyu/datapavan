@@ -2176,7 +2176,6 @@ enum Carried {
 
 /// The engine's UDP: the destinations waiting for their way, the flows of lookups to the network part's own DNS
 /// address, and the mappings.
-#[derive(Default)]
 pub(super) struct UdpTable {
     /// By the app's address and the destination.
     flows: HashMap<(SocketAddr, SocketAddr), UdpEntry>,
@@ -2204,6 +2203,22 @@ pub(super) struct UdpTable {
     answered: Ranks<(u64, SocketAddr, Option<u32>)>,
 }
 
+impl Default for UdpTable {
+    fn default() -> Self {
+        Self {
+            flows: crate::map(),
+            mappings: crate::map(),
+            opening: crate::map(),
+            asking: crate::map(),
+            sockets: crate::map(),
+            opened: 0,
+            questions: 0,
+            recent: Ranks::default(),
+            answered: Ranks::default(),
+        }
+    }
+}
+
 /// Whose mappings a search looks at: every app's, or one app's.
 #[derive(Clone, Copy)]
 enum Of {
@@ -2221,7 +2236,7 @@ impl<K> Default for Ranks<K> {
     fn default() -> Self {
         Self {
             all: BTreeSet::new(),
-            by_app: HashMap::new(),
+            by_app: crate::map(),
         }
     }
 }
@@ -2255,7 +2270,6 @@ impl<K: Ord + Copy> Ranks<K> {
 /// about it that can still decide a datagram, and its ways. It goes with the socket's last way, and so
 /// is bounded by the ways: each question is asked for a datagram that waits in `flows` until its way
 /// opens, and the record keeps only the newest answer and those near a datagram that still waits.
-#[derive(Default)]
 struct Socket {
     /// What decides whose each of its datagrams is.
     record: Record,
@@ -2268,6 +2282,17 @@ struct Socket {
     /// names, as its mapping is: an answer naming another app ends them all, and one naming the same
     /// app touches none.
     lookups: HashSet<SocketAddr>,
+}
+
+impl Default for Socket {
+    fn default() -> Self {
+        Self {
+            record: Record::default(),
+            entries: 0,
+            waiting: BTreeMap::new(),
+            lookups: crate::set(),
+        }
+    }
 }
 
 impl Socket {
@@ -4265,7 +4290,7 @@ async fn mapping_for(
             exit: wanted.exit.clone(),
             chains,
             uid: wanted.uid,
-            peers: HashMap::new(),
+            peers: crate::map(),
             sources: Sources::default(),
             came_in: 0,
             last: now,

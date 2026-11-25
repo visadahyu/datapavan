@@ -123,7 +123,7 @@ struct Table<S> {
 impl<S> Default for Table<S> {
     fn default() -> Self {
         Self {
-            sockets: HashMap::new(),
+            sockets: crate::map(),
             numbered: 0,
             made_room: 0,
             ended: VecDeque::new(),

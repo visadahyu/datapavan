@@ -1212,9 +1212,9 @@ impl Engine {
             engine_thread: std::sync::OnceLock::new(),
             quarter: AtomicU64::new(quarter),
             last_reading: AtomicU64::new(0),
-            live: Mutex::default(),
-            lookups: Mutex::default(),
-            wire: Mutex::default(),
+            live: Mutex::new(crate::map()),
+            lookups: Mutex::new(crate::map()),
+            wire: Mutex::new(crate::map()),
             pending_log: Mutex::default(),
             tracks,
             waiting: Mutex::new(waiting),
@@ -1594,7 +1594,7 @@ async fn run(
     changes: watch::Receiver<u64>,
     mut swaps: mpsc::UnboundedReceiver<Swap>,
 ) {
-    let pending: Pending = Arc::default();
+    let pending: Pending = Arc::new(Mutex::new(crate::map()));
     let nat = Arc::new(Mutex::new(Nat::with_limits(&shared.limits)));
     let at = shared.addresses;
     listen(

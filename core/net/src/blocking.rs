@@ -80,10 +80,19 @@ impl std::error::Error for Error {}
 pub const MAX_ENTRIES: usize = 16_384;
 
 /// The graded table, ready for matching.
-#[derive(Clone, Debug, Default, PartialEq, Eq)]
+#[derive(Clone, Debug, PartialEq, Eq)]
 pub struct Table {
     entries: Vec<Entry>,
     by_host: HashMap<String, usize>,
+}
+
+impl Default for Table {
+    fn default() -> Self {
+        Self {
+            entries: Vec::new(),
+            by_host: crate::map(),
+        }
+    }
 }
 
 impl Table {

@@ -130,10 +130,18 @@ pub struct ProxySetting {
 
 /// A messenger app's direct connections to its maker's network: those open, and when the last one ended, in
 /// time since the phone started.
-#[derive(Default)]
 struct Direct {
     open: HashSet<u64>,
     last: Option<Duration>,
+}
+
+impl Default for Direct {
+    fn default() -> Self {
+        Self {
+            open: crate::set(),
+            last: None,
+        }
+    }
 }
 
 /// A flow named a messenger's inferred proxy, for its take-back: its app, what it was before, the hello whose
@@ -158,7 +166,6 @@ struct LookedUp {
 }
 
 /// The engine's state of the inference.
-#[derive(Default)]
 pub(super) struct State {
     setting: ProxySetting,
     families: HashMap<u32, Family>,
@@ -172,6 +179,20 @@ pub(super) struct State {
     third_party: HashMap<u32, Duration>,
     /// The key of the looked-up names' hashes.
     hasher: std::hash::RandomState,
+}
+
+impl Default for State {
+    fn default() -> Self {
+        Self {
+            setting: ProxySetting::default(),
+            families: crate::map(),
+            direct: crate::map(),
+            inferred: crate::map(),
+            looked_up: crate::map(),
+            third_party: crate::map(),
+            hasher: crate::keys(),
+        }
+    }
 }
 
 /// The most names a messenger app's lookups are kept for.
@@ -190,11 +211,20 @@ pub(super) type DirectInstants = Vec<(u32, Duration)>;
 /// The records of flows named an inferred proxy, held back from the log for their window of take-back, and
 /// the flows they are of with when the window ends (the fix round's S-M2): a name taken back is corrected in
 /// them before the log gets them, so that no record says what the engine took back. Bounded by [`HELD_BACK`].
-#[derive(Default)]
 pub(super) struct HeldBack {
     until: HashMap<u64, Duration>,
     records: std::collections::VecDeque<crate::log::Record>,
     taken_back: TakenBack,
+}
+
+impl Default for HeldBack {
+    fn default() -> Self {
+        Self {
+            until: crate::map(),
+            records: std::collections::VecDeque::new(),
+            taken_back: TakenBack::default(),
+        }
+    }
 }
 
 impl HeldBack {
@@ -225,10 +255,18 @@ impl HeldBack {
 /// (the maintainer, 2026-11-24, review A's major 1; ADR 0052). The flow itself is shown in "Now" as it is. A mark
 /// that the inference was taken back needs a flag of the log's next version (unit B). Bounded by [`TAKEN_BACK`],
 /// the oldest forgotten first.
-#[derive(Default)]
 pub(super) struct TakenBack {
     proxies: HashMap<u64, Proxied>,
     order: std::collections::VecDeque<u64>,
+}
+
+impl Default for TakenBack {
+    fn default() -> Self {
+        Self {
+            proxies: crate::map(),
+            order: std::collections::VecDeque::new(),
+        }
+    }
 }
 
 impl TakenBack {
@@ -368,11 +406,10 @@ impl Shared {
     /// Sets what the network part tells for the proxies ([`ProxySetting`]); the open flows keep how they were named.
     pub(super) fn set_proxies(&self, setting: ProxySetting) {
         let mut state = lock(&self.proxies);
-        state.families = setting
-            .messengers
-            .iter()
-            .map(|&(f, uid)| (uid, f))
-            .collect();
+        state.families = crate::map();
+        state
+            .families
+            .extend(setting.messengers.iter().map(|&(f, uid)| (uid, f)));
         state.setting = setting;
     }
 

@@ -437,7 +437,7 @@ impl Reassembler {
     pub fn new(bounds: Bounds) -> Self {
         Self {
             bounds,
-            datagrams: HashMap::new(),
+            datagrams: crate::map(),
             bytes: 0,
             taken: 0,
         }

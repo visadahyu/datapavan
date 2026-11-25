@@ -78,10 +78,18 @@ pub(super) type ByApp = HashMap<Option<u32>, usize>;
 
 /// What all flows and lookups, and each app's, hold of seconds not placed yet ([`MARKS`],
 /// [`MARKS_SHARE`]).
-#[derive(Default)]
 pub(super) struct Waiting {
     total: usize,
     by_app: ByApp,
+}
+
+impl Default for Waiting {
+    fn default() -> Self {
+        Self {
+            total: 0,
+            by_app: crate::map(),
+        }
+    }
 }
 
 impl Waiting {
@@ -349,10 +357,18 @@ struct Span {
 
 /// The states told, by the wall clock: spans in order, none overlapping, and in the known ones the
 /// intervals each app was in use or with its notification.
-#[derive(Default)]
 struct Timeline {
     spans: VecDeque<Span>,
     intervals: HashMap<u32, Vec<Interval>>,
+}
+
+impl Default for Timeline {
+    fn default() -> Self {
+        Self {
+            spans: VecDeque::new(),
+            intervals: crate::map(),
+        }
+    }
 }
 
 impl Timeline {
@@ -491,7 +507,7 @@ impl Activity {
             tracked,
             timeline: Timeline::default(),
             held: VecDeque::new(),
-            held_by: ByApp::new(),
+            held_by: crate::map(),
             counts: Counts::default(),
             screen: Screen::Unknown,
             known: None,
@@ -946,7 +962,7 @@ impl Shared {
     pub(super) fn settle(&self, force: Option<Force>) {
         let mut records = Vec::new();
         let written;
-        let mut settled = ByApp::new();
+        let mut settled: ByApp = crate::map();
         // The second the clock reads, and the one before, which the engine's coarser clock may still be
         // counting in: not placed in live flows of no app, unless everything is.
         let running = if force.is_some_and(|f| f.before == u64::MAX) {
@@ -1042,7 +1058,7 @@ impl Shared {
             return;
         }
         let mut records = Vec::new();
-        let mut settled = ByApp::new();
+        let mut settled: ByApp = crate::map();
         let mut waiting = false;
         let written;
         {

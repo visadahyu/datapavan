@@ -116,7 +116,7 @@ pub struct Configured {
 /// What the network part sets on its tunnels: the configurations, in the order they were added, the first the
 /// default; each app's tunnel by UID; and whether the destinations of the apps sent through them are
 /// kept (W6's switch, "Log where these apps connect", `chain_log_destinations`).
-#[derive(Clone, Debug, Default)]
+#[derive(Clone, Debug)]
 pub struct TunnelSetting {
     /// The configurations, the default first.
     pub tunnels: Vec<Configured>,
@@ -135,6 +135,18 @@ pub struct TunnelSetting {
     /// until then, never on a default way (the maintainer, 2026-11-20). None: the network part routes no app, or names
     /// none, and no flow asks.
     pub known: Option<Arc<HashSet<u32>>>,
+}
+
+impl Default for TunnelSetting {
+    fn default() -> Self {
+        Self {
+            tunnels: Vec::new(),
+            routes: crate::map(),
+            log_destinations: false,
+            default: None,
+            known: None,
+        }
+    }
 }
 
 /// Where the network part says an app it did not name in its last hand-over goes ([`super::Platform::route_of_app`]).
@@ -409,7 +421,6 @@ impl Tunnel {
 }
 
 /// The table of tunnels and their flows.
-#[derive(Default)]
 struct Table {
     /// The tunnels' numbers in the order set: the first is the default, unless [`TunnelSetting::default`] names one.
     order: Vec<u32>,
@@ -433,6 +444,27 @@ struct Table {
     ended: Vec<u64>,
     /// The engine's tunnel, for the tasks the table starts, and the network's changes they follow.
     tun: Option<(Arc<Tun>, watch::Receiver<u64>)>,
+}
+
+impl Default for Table {
+    fn default() -> Self {
+        Self {
+            order: Vec::new(),
+            default: None,
+            known: None,
+            answers: crate::map(),
+            tunnels: crate::map(),
+            routes: crate::map(),
+            log_destinations: false,
+            flows: crate::map(),
+            back: crate::map(),
+            echoes: crate::map(),
+            echo_back: crate::map(),
+            generations: 0,
+            ended: Vec::new(),
+            tun: None,
+        }
+    }
 }
 
 /// The engine's tunnels: the table, and flags read on each packet and each new flow without its lock.
@@ -514,7 +546,7 @@ impl Tunnels {
     pub(super) fn set(&self, setting: &TunnelSetting) {
         let ended = {
             let mut table = lock(&self.table);
-            let mut tunnels = std::mem::take(&mut table.tunnels);
+            let mut tunnels = std::mem::replace(&mut table.tunnels, crate::map());
             let mut order = Vec::new();
             let mut replaced = Vec::new();
             for configured in &setting.tunnels {
@@ -557,12 +589,14 @@ impl Tunnels {
             // Every route is kept, also to a tunnel whose configuration is not set: its app waits, its flows
             // refused, until the configuration comes (`admit`); only the network part taking the route away sends the
             // app its other way (fix round, both reviews' first major finding).
-            let routes: HashMap<u32, u32> = setting
-                .routes
-                .iter()
-                .filter(|(_, t)| **t != 0)
-                .map(|(&uid, &t)| (uid, t))
-                .collect();
+            let mut routes: HashMap<u32, u32> = crate::map();
+            routes.extend(
+                setting
+                    .routes
+                    .iter()
+                    .filter(|(_, t)| **t != 0)
+                    .map(|(&uid, &t)| (uid, t)),
+            );
             let moved: Vec<Option<u32>> = table
                 .routes
                 .iter()
@@ -2150,7 +2184,7 @@ fn query(name: &str, kind: u16) -> Option<Vec<u8>> {
 /// keys of the standard library's hasher, which it takes from the operating system's randomness.
 fn getrandom_id(id: &mut [u8; 2]) {
     use std::hash::{BuildHasher, Hasher};
-    let mut hasher = std::collections::hash_map::RandomState::new().build_hasher();
+    let mut hasher = crate::keys().build_hasher();
     hasher.write_u64(0);
     let [a, b, ..] = hasher.finish().to_le_bytes();
     *id = [a, b];

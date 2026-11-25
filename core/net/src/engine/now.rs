@@ -270,7 +270,6 @@ impl App {
 }
 
 /// Each app's counts by state, and the window since the screen came on.
-#[derive(Default)]
 pub(super) struct Counts {
     apps: HashMap<Option<u32>, App>,
     /// How many destinations all apps keep together.
@@ -296,6 +295,22 @@ pub(super) struct Counts {
     /// latest, at most [`PLACES_PER_APP`] of one app's and [`PLACES`] in all. Cleared with the rest, and handed to
     /// the next engine with the rest.
     ended: Vec<End>,
+}
+
+impl Default for Counts {
+    fn default() -> Self {
+        Self {
+            apps: crate::map(),
+            places: 0,
+            organisations: crate::map(),
+            session: None,
+            off: None,
+            cleared: 0,
+            off_floor: 0,
+            began: 0,
+            ended: Vec::new(),
+        }
+    }
 }
 
 impl Counts {
@@ -333,7 +348,7 @@ impl Counts {
         self.off = Some(Off {
             from,
             until: None,
-            apps: HashMap::new(),
+            apps: crate::map(),
         });
     }
 
