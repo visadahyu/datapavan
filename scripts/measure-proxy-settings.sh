@@ -31,7 +31,11 @@
 # sixth, PASSES=6, on the same kind of emulator, is that network with the global proxy alone: no proxy of the Wi-Fi
 # network's own, the global proxy set by `settings put global http_proxy` before the VPN starts, so that the resolver
 # answers only through the global proxy, its second way where the network has none (the maintainer's decision of
-# 2026-11-25, R-PLAN.md). Pass 3's global rows show the same choice made again on a change of the global proxy.
+# 2026-11-25, R-PLAN.md). Pass 3's global rows show the same choice made again on a change of the global proxy. A
+# seventh, PASSES=7, on the same kind of emulator, is an open network with the global proxy alone and one server down:
+# the first ODoH pair's relay's addresses (data/odoh) refused at the connection, every other connection out allowed, so
+# that the resolver, which takes the global proxy only once direct connections to two servers failed with none made
+# since (the global proxy's review, M1), sends it nothing.
 #
 # The resolver unit (the strategy repository's research/2026-11-proxy-record/R-PLAN.md, "After the audit", M8): with
 # the VPN on, each setting's part ends with what the network part's resolver did in it, as positive evidence, never as
@@ -117,6 +121,7 @@ STREAMER=$!
 OWNER_SET=""
 DATA_OFF=""
 EGRESS_SET=""
+DOWN=""
 # Pass 5's rules: every connection out of the emulator rejected but those on the loopback, into the VPN's interface and
 # to the recorder's proxy. Inserted first in OUTPUT, ahead of Android's own chains, and taken out again.
 egress_rules() {
@@ -144,11 +149,47 @@ egress_back() {
     egress_rules -D >/dev/null 2>&1
     EGRESS_SET=""
 }
+# Pass 7's server down: each of the first ODoH pair's relay's addresses, as data/odoh gives them, refused at the
+# connection by a TCP reset; "-D" takes the rules out again.
+DOWN_ADDRESSES=""
+down_rules() {
+    local op=$1 address
+    for address in ${DOWN_ADDRESSES//,/ }; do
+        if [[ $address == *:* ]]; then
+            adb shell ip6tables "$op" OUTPUT -d "$address" -p tcp -j REJECT --reject-with tcp-reset
+        else
+            adb shell iptables "$op" OUTPUT -d "$address" -p tcp -j REJECT --reject-with tcp-reset
+        fi
+    done
+}
+DOWN_RELAY=""
+# Not in a subshell: what it sets is what server_back and the clean-up take out.
+server_down() {
+    DOWN_RELAY=$(awk -F'\t' '!/^#/ && NF >= 2 { print $1; exit }' "$ROOT/data/odoh/pairs.tsv")
+    DOWN_ADDRESSES=$(awk -F'\t' -v id="$DOWN_RELAY" '!/^#/ && $1 == id { print $3 ($4 == "-" ? "" : "," $4) }' "$ROOT/data/odoh/relays.tsv")
+    [ -n "$DOWN_ADDRESSES" ] || { echo "no addresses for the relay $DOWN_RELAY in data/odoh" >&2; exit 1; }
+    DOWN=1
+    down_rules -I
+}
+server_back() {
+    down_rules -D >/dev/null 2>&1
+    DOWN=""
+}
+# Android's global proxy taken away whole (the global proxy's review, m5): Android reads `http_proxy` only when it is
+# not empty, so `:0` first, which clears the proxy it holds, whoever set it; then every setting it keeps one in.
+clear_global_proxy() {
+    local key
+    adb shell settings put global http_proxy :0
+    for key in http_proxy global_http_proxy_host global_http_proxy_port global_http_proxy_exclusion_list global_http_proxy_pac; do
+        adb shell settings delete global "$key" >/dev/null
+    done
+}
 cleanup() {
     local status=$?
     set +e
     [ -z "$EGRESS_SET" ] || egress_back
-    adb shell settings delete global http_proxy >/dev/null 2>&1
+    [ -z "$DOWN" ] || server_back
+    clear_global_proxy >/dev/null 2>&1
     if [ -n "$OWNER_SET" ]; then
         owner global-none >/dev/null 2>&1
         owner wifi-none >/dev/null 2>&1
@@ -351,10 +392,7 @@ clear_setting() {
             owner wifi-none >/dev/null
             wifi_again
             ;;
-        global-setting)
-            adb shell settings put global http_proxy :0
-            adb shell settings delete global http_proxy >/dev/null
-            ;;
+        global-setting) clear_global_proxy ;;
         global-owner | global-pac) owner global-none >/dev/null ;;
     esac
     sleep 2
@@ -496,6 +534,21 @@ for pass in ${PASSES:-1 2 3 4}; do
             say "  egress: only to $HOST:$PROXY_PORT, the loopback and the VPN's interface"
             measure global-setting preset
             egress_back
+            vpn_stop
+            clear_setting global-setting
+            ;;
+        7)
+            say ""
+            say "== pass 7: an open network with the global proxy alone and one server down: the first ODoH pair's relay refused at the connection, every other connection out allowed"
+            adb root >/dev/null 2>&1 || true
+            adb wait-for-device
+            [ "$(adb shell id -u | tr -d '\r')" = 0 ] || { echo "pass 7 needs an emulator that adb root takes" >&2; exit 2; }
+            say "  set before the VPN: $(set_setting global-setting)"
+            vpn_start
+            server_down
+            say "  down: the relay $DOWN_RELAY at $DOWN_ADDRESSES, refused at the connection"
+            measure global-setting preset
+            server_back
             vpn_stop
             clear_setting global-setting
             ;;
