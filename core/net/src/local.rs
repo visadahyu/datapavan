@@ -26,6 +26,10 @@ pub const MIN_V4: u8 = 16;
 /// The same for IPv6.
 pub const MIN_V6: u8 = 48;
 
+/// The same for IPv4 on a cellular network, where a data call's link prefix wider than this would take in other
+/// subscribers (review B-engine, minor 5): `/32` and `/30` are the usual ones, and the emulator's radio has a `/24`.
+pub const MIN_V4_CELLULAR: u8 = 24;
+
 /// What the network beneath is, as far as rule 3 goes.
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
 pub enum Transport {
@@ -77,6 +81,9 @@ impl OnLink {
             .into_iter()
             .map(|(address, length)| (address.to_canonical(), length))
             .filter(|&(address, length)| match address {
+                IpAddr::V4(_) if transport == Transport::Cellular => {
+                    (MIN_V4_CELLULAR..=32).contains(&length)
+                }
                 IpAddr::V4(_) => (MIN_V4..=32).contains(&length),
                 IpAddr::V6(_) => (MIN_V6..=128).contains(&length),
             })

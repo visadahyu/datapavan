@@ -399,6 +399,9 @@ pub(super) fn strip_for_log(
     let crate::log::Record::Segment { flow, .. } = record else {
         return;
     };
+    // The take-back's mark, whatever the switch says now: a record stripped while it was off, and released after it
+    // was turned on, keeps the left-out shape and must still say that the engine could not tell (review B-engine 1).
+    mark_unsure(flow, taken_back);
     if keeps(flow.uid) {
         return;
     }
@@ -421,8 +424,13 @@ pub(super) fn strip_for_log(
             return;
         }
     }
-    // A record of a flow taken back, left out as the inferred proxy it was named before, also as it entered the log or
-    // while it was held back: the engine no longer holds that it was one (the take-back's mark, audit-B 5).
+    mark_unsure(flow, taken_back);
+}
+
+/// Marks `flow`'s record unsure where it is left out as an inferred proxy and the flow was taken back or substituted
+/// ([`TakenBack`]): also as it entered the log or while it was held back, the engine no longer holds that it was one
+/// (the take-back's mark, audit-B 5).
+fn mark_unsure(flow: &mut Flow, taken_back: &TakenBack) {
     if taken_back.proxies.contains_key(&flow.id)
         && let Some(proxy) = flow.proxy.as_deref_mut()
         && proxy.left_out
@@ -514,8 +522,10 @@ impl Shared {
                 if dns_name.is_some_and(|n| self.messengers.role(family, n) == Some(Role::Own)) {
                     return Some(true);
                 }
-                // An address of the user's own network is no company's network: a proxy on it is outside Meta's.
-                if self.local(address) {
+                // An address of the user's own network is no company's network: a proxy on it is outside Meta's. So
+                // is a private address off the link, as on a cellular network (review B-engine, minor 3): no company's
+                // public network either.
+                if self.local(address) || private_address(address) {
                     return Some(false);
                 }
                 let asn = self.organisations.as_ref()?.lookup(address)?.asn;
@@ -1313,6 +1323,14 @@ impl Shared {
         self.flow_of(id)
             .filter(|f| f.named_by == NamedBy::Dns)
             .and_then(|f| f.name)
+    }
+}
+
+/// Whether `address` is private (`10/8`, `172.16/12`, `192.168/16`, `fc00::/7`), whichever network it is on.
+fn private_address(address: IpAddr) -> bool {
+    match address.to_canonical() {
+        IpAddr::V4(a) => a.is_private(),
+        IpAddr::V6(a) => a.is_unique_local(),
     }
 }
 
@@ -2521,12 +2539,34 @@ mod tests {
         relay_replied(&shared, private, &bytes, &reads, SOCKS5_REPLY);
         let (public, bytes) = open(&shared, UID, at([203, 0, 113, 5], 1080));
         relay_replied(&shared, public, &bytes, &reads, SOCKS5_REPLY);
-        let local = |id| live(&shared, id).proxy.map(|p| p.local);
+        // A plain request and a messenger's inferred proxy on the link are local too (review B-engine, minor 2).
+        let (plain, bytes) = open(&shared, UID, at([100, 64, 7, 10], 8080));
+        relay(
+            &shared,
+            plain,
+            &bytes,
+            &[b"GET http://example.org/a HTTP/1.1\r\n\r\n"],
+        );
+        let messenger = UID + 2;
+        let mut setting = lock(&shared.proxies).setting().clone();
+        setting.messengers = vec![(Family::Telegram, messenger)];
+        shared.set_proxies(setting);
+        let (inferred, bytes) = open(&shared, messenger, at([100, 64, 7, 11], 443));
+        relay(&shared, inferred, &bytes, &[&obfuscated()]);
+        let local = |id| live(&shared, id).proxy.map(|p| (p.kind, p.local));
         assert_eq!(
             (local(on_link.id), local(private.id), local(public.id)),
-            (Some(true), Some(false), Some(false))
+            (
+                Some((Kind::Socks5, true)),
+                Some((Kind::Socks5, false)),
+                Some((Kind::Socks5, false))
+            )
         );
-        for id in [on_link.id, private.id, public.id] {
+        assert_eq!(
+            (local(plain.id), local(inferred.id)),
+            (Some((Kind::Forward, true)), Some((Kind::MtProto, true)))
+        );
+        for id in [on_link.id, private.id, public.id, plain.id, inferred.id] {
             shared.finish(id);
         }
         shared.flush();
@@ -3417,6 +3457,85 @@ mod tests {
                     "{of_cdn:?}"
                 );
             }
+        }
+    }
+
+    /// Review B-engine, minor 1: R7's two strip points of a segment cut before the request: `name_proxied`'s strip of
+    /// what waits for the log, with the switch off, and the switch-off pass's strip of such a segment, written while
+    /// the switch was on. Neither leaves Android's setting's address in the log.
+    #[test]
+    fn a_segment_cut_before_a_plain_request_to_the_setting_is_left_out_too() {
+        for switch_on_first in [false, true] {
+            let (shared, clock) = engine_at(switch_on_first);
+            shared.set_proxies(ProxySetting {
+                android: vec![("203.0.113.5".into(), 3128)],
+                ..ProxySetting::default()
+            });
+            let (opened, bytes) = open(&shared, UID, at([203, 0, 113, 5], 3128));
+            bytes.up(&shared, 40, 80);
+            cut_and_tell(&shared, &clock);
+            let request: &[u8] = b"GET http://example.org/a HTTP/1.1\r\n\r\n";
+            let mut sniff = Sniff::new(true, false);
+            let handshake = Mutex::new(Handshake::default());
+            for found in sniff.feed(request) {
+                shared.found(opened, found, &handshake);
+            }
+            bytes.up(&shared, request.len(), request.len() + 40);
+            if switch_on_first {
+                switch(&shared, false);
+            }
+            shared.finish(opened.id);
+            shared.flush();
+            clock.pass(11 * 60_000);
+            another_record(&shared);
+            let records = taken(&shared);
+            let written = of_flow(&records, opened.id);
+            assert!(written.len() >= 2, "{switch_on_first}: {written:?}");
+            assert!(
+                written.iter().all(left_out),
+                "{switch_on_first}: {written:?}"
+            );
+            assert!(!holds(&crate::log::batch(&records), &[203, 0, 113, 5]));
+        }
+    }
+
+    /// Review B-engine 1: a record stripped while the switch was off keeps the take-back's mark when it reaches the log
+    /// after the switch is turned on, whether the switch goes on before or after the take-back.
+    #[test]
+    fn a_record_stripped_before_the_switch_went_on_keeps_the_take_backs_mark() {
+        for switch_first in [true, false] {
+            let (shared, clock) = engine_at(false);
+            telegram(&shared);
+            learn(&shared, "93.184.216.34", "cdn.example.net");
+            let (cdn, bytes) = open(&shared, UID, at([93, 184, 216, 34], 443));
+            relay(&shared, cdn, &bytes, &[&obfuscated()]);
+            cut_and_tell(&shared, &clock);
+            bytes.up(&shared, 500, 540);
+            if switch_first {
+                switch(&shared, true);
+            }
+            let (main, bytes2) = open(&shared, UID, at([149, 154, 167, 51], 443));
+            relay(&shared, main, &bytes2, &[&obfuscated()]);
+            if !switch_first {
+                switch(&shared, true);
+            }
+            shared.finish(cdn.id);
+            shared.flush();
+            let records = taken(&shared);
+            let stripped: Vec<_> = of_flow(&records, cdn.id)
+                .into_iter()
+                .filter(left_out)
+                .collect();
+            assert!(
+                !stripped.is_empty(),
+                "{switch_first}: a record stripped at entry"
+            );
+            assert!(
+                stripped
+                    .iter()
+                    .all(|f| f.proxy.as_ref().is_some_and(|p| p.unsure)),
+                "{switch_first}: {stripped:?}"
+            );
         }
     }
 
