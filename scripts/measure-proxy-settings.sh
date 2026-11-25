@@ -415,7 +415,12 @@ measure() {
         step "left out: webview" fixture_as "$OUTSIDE" fresh webview --es url "http://$INNER/webview"
     fi
     say "  PAC pieces after: $(pac_state)"
-    [ "$VPN" != on ] || resolver_evidence "$row_records"
+    if [ "$VPN" = on ]; then
+        # A name no cache holds, so that the part has at least one exchange of the resolver's own: the fixture's names
+        # are cached from the part before, and through a global proxy apps look no name up at all.
+        step "a lookup of a name no cache holds" fixture_as "$FIXTURE" fresh lookup --es name "r$(date +%s%N).example.com"
+        resolver_evidence "$row_records"
+    fi
     [ "$how" != set ] || clear_setting "$setting"
 }
 
