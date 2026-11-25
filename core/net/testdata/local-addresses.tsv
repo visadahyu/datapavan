@@ -1,0 +1,41 @@
+# SPDX-License-Identifier: CC0-1.0
+# Whether an address is on the user's own network (core/net/src/local.rs; the proxy record's unit B, R4), as both sides
+# read it: the Rust rule whole, and Kotlin's fallback for records before log version 7 (no prefixes, transport
+# unknown). Columns, tab-separated: the address; the on-link prefixes as address/length by commas, - for none; the
+# transport (unknown, wifi, ethernet, cellular, other); local or not-local.
+192.168.1.20	-	wifi	local
+192.168.1.20	-	cellular	not-local
+192.168.1.20	-	unknown	local
+172.16.5.5	-	ethernet	local
+172.16.5.5	-	other	not-local
+10.0.0.5	-	cellular	not-local
+10.0.0.5	10.0.0.0/24	cellular	local
+10.0.2.2	10.0.2.0/24	wifi	local
+10.20.30.40	10.0.0.0/8	cellular	not-local
+100.64.1.1	-	wifi	not-local
+100.64.1.1	-	unknown	not-local
+100.64.1.1	100.64.0.0/16	cellular	local
+100.64.1.1	100.64.0.0/10	wifi	not-local
+2001:db8:1::5	2001:db8:1::/64	wifi	local
+2001:db8:2::5	2001:db8:1::/64	wifi	not-local
+2001:db8:1::5	2001:db8:1::/64	cellular	local
+fd00::5	-	wifi	local
+fd00::5	-	unknown	local
+fd00::5	-	cellular	not-local
+fec0::1	-	wifi	not-local
+fec0::1	-	unknown	not-local
+169.254.10.1	-	cellular	local
+169.254.10.1	-	unknown	local
+fe80::1	-	cellular	local
+fe80::1	-	unknown	local
+::ffff:192.168.1.20	-	wifi	local
+::ffff:192.168.1.20	-	cellular	not-local
+0.0.0.0	-	wifi	not-local
+::	-	wifi	not-local
+198.51.100.7	0.0.0.0/0	cellular	not-local
+198.51.100.7	0.0.0.0/0	wifi	not-local
+2001:db8::7	::/0	cellular	not-local
+192.0.0.4	192.0.0.4/32	cellular	local
+192.0.0.5	192.0.0.4/32	cellular	not-local
+8.8.8.8	-	wifi	not-local
+8.8.8.8	-	unknown	not-local

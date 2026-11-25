@@ -17,6 +17,7 @@ pub mod hpke;
 pub mod hygiene;
 pub mod identifiers;
 pub mod ladder;
+pub mod local;
 pub mod log;
 pub mod messengers;
 pub mod names;
