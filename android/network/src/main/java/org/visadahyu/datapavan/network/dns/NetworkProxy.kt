@@ -226,18 +226,27 @@ class ResolverProxy(
  * global proxy's review, M1): the global proxy is a way only on a network that lets nothing through directly, so that
  * its operator learns of the resolver only there.
  *
- * Closed once direct connections to at least [SERVERS] servers, at different addresses, failed at the connection itself
- * on the network of one generation (refused, unreachable, reset, or no TCP connection within the try's time), with no
- * direct connection made since. A TLS failure, a slow or failed HTTP answer and a server's own error come after a
- * connection was made, and so open it, as any direct connection made does. A connection that failed while another was
- * made after it began says nothing, as Happy Eyeballs' loser, closed when the other address won. Each closing has a
- * number of its own ([closure]), so that what was learned while closed counts only in that closing.
+ * Closed once the direct exchanges with at least [SERVERS] servers, at different addresses, found no connection on the
+ * network of one generation: each failed at the connection itself (refused, unreachable, reset, or no TCP connection
+ * within the try's time, [refused]), with no direct connection made since it began ([failed]), and none made since. A
+ * TLS failure, a slow or failed HTTP answer and a server's own error come after a connection was made, and so open it,
+ * as any direct connection made does. A server counts by its exchange, not by an address: one address refused beside
+ * another that connects, as IPv6 on a network without it, or Happy Eyeballs' loser, says nothing. The exchange's end and
+ * its socket's refusal may come in either order (a connect cut short when the exchange's time ran out ends after the
+ * exchange did): whichever comes second, within [RACE_MS], counts the server. Each closing has a number of its own
+ * ([closure]), so that what was learned while closed counts only in that closing.
  */
 class DirectReach {
     private var generation = Int.MIN_VALUE
 
-    /** The servers whose direct connections failed since the last one made, by address. */
+    /** Each server's latest direct connection that failed at the connection itself: its address, and when. */
+    private val refusals = HashMap<String, Pair<InetAddress, Long>>()
+
+    /** The servers whose exchanges found no direct connection since the last one made, by the address that refused. */
     private val failed = HashMap<InetAddress, String>()
+
+    /** The servers whose direct exchange ended with no answer before any refusal of its came: when it began, and ended. */
+    private val ended = HashMap<String, Pair<Long, Long>>()
 
     private var connectedAt = NEVER
     private var closed = false
@@ -252,19 +261,46 @@ class DirectReach {
     fun connected(generation: Int, now: Long = System.nanoTime()): Boolean {
         if (!at(generation)) return false
         connectedAt = now
+        refusals.clear()
         failed.clear()
+        ended.clear()
         return closed.also { closed = false }
     }
 
     /**
-     * A direct connection to [server] at [address], begun at [started], failed at the connection itself on the network
-     * of [generation]. Whether this closed the network to the resolver.
+     * A direct connection to [server] at [address] failed at the connection itself on the network of [generation], at
+     * [now]. Whether this closed the network to the resolver: when the server's exchange had already ended ([failed]).
      */
     @Synchronized
-    fun failed(generation: Int, server: String, address: InetAddress, started: Long): Boolean {
+    fun refused(generation: Int, server: String, address: InetAddress, now: Long = System.nanoTime()): Boolean {
         if (!at(generation)) return false
-        // Another connection was made while this one was tried: the network was open.
-        if (connectedAt != NEVER && connectedAt - started >= 0) return false
+        refusals[server] = address to now
+        val (began, end) = ended.remove(server) ?: return false
+        return now - end <= RACE_MS * 1_000_000 && count(server, began)
+    }
+
+    /**
+     * A direct exchange with [server], begun at [began] on the network of [generation], ended with no answer at [now]. It
+     * counts when one of the server's connections failed at the connection itself since [began] and none was made since
+     * then, by this exchange or another. Whether this closed the network to the resolver.
+     */
+    @Synchronized
+    fun failed(generation: Int, server: String, began: Long, now: Long = System.nanoTime()): Boolean {
+        if (!at(generation)) return false
+        val refusedAt = refusals[server]?.second
+        if (refusedAt == null || refusedAt - began < 0) {
+            // Its refusal may come yet.
+            ended[server] = began to now
+            return false
+        }
+        return count(server, began)
+    }
+
+    /** The server's exchange begun at [began] found no connection: one more server, unless one was made since. */
+    private fun count(server: String, began: Long): Boolean {
+        val address = refusals[server]?.first ?: return false
+        // A connection was made while this exchange was tried: the network was open.
+        if (connectedAt != NEVER && connectedAt - began >= 0) return false
         failed[address] = server
         if (closed || failed.values.toSet().size < SERVERS) return false
         closed = true
@@ -277,7 +313,9 @@ class DirectReach {
         if (generation < this.generation) return false
         if (generation > this.generation) {
             this.generation = generation
+            refusals.clear()
             failed.clear()
+            ended.clear()
             connectedAt = NEVER
             closed = false
         }
@@ -285,8 +323,11 @@ class DirectReach {
     }
 
     companion object {
-        /** How many servers' direct connections must fail at the connection before the network counts as closed. */
+        /** How many servers' direct exchanges must find no connection before the network counts as closed. */
         const val SERVERS = 2
+
+        /** How long after an exchange ended its socket's refusal may still come and count. */
+        const val RACE_MS = 500L
 
         private const val NEVER = Long.MIN_VALUE
     }

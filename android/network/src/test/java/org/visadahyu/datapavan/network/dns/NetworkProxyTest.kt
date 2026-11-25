@@ -140,52 +140,97 @@ class NetworkProxyTest {
     }
 
     /**
-     * The global proxy's review, M1: the network is closed to the resolver only once direct connections to two servers,
-     * at different addresses, failed at the connection itself on one network, with none made since.
+     * The global proxy's review, M1: the network is closed to the resolver only once the direct exchanges with two
+     * servers, at different addresses, found no connection on one network, each refused at the connection, with none
+     * made since.
      */
     @Test
     fun theNetworkClosesOnlyWhenTwoServersCannotBeReachedAndNothingConnected() {
         val reach = DirectReach()
-        val now = 1_000_000_000L
-        // One server's outage, on both its addresses: open.
-        assertFalse(reach.failed(4, "relay-a.example", address("192.0.2.1"), now))
-        assertFalse(reach.failed(4, "relay-a.example", address("2001:db8::1"), now + 1))
+        val t = 1_000_000_000L
+        // One server's outage, both its addresses refused, again and again: open.
+        repeat(3) { n ->
+            val began = t + n * 100
+            assertFalse(reach.refused(4, "relay-a.example", address("192.0.2.1"), began + 1))
+            assertFalse(reach.refused(4, "relay-a.example", address("2001:db8::1"), began + 2))
+            assertFalse(reach.failed(4, "relay-a.example", began, began + 3))
+        }
         assertNull(reach.closure(4))
         // A second server: closed, in a closing of its own.
-        assertTrue(reach.failed(4, "relay-b.example", address("192.0.2.2"), now + 2))
+        assertFalse(reach.refused(4, "relay-b.example", address("192.0.2.2"), t + 401))
+        assertTrue(reach.failed(4, "relay-b.example", t + 400, t + 402))
         val closure = reach.closure(4)
         assertTrue(closure != null)
         assertNull(reach.closure(5))
         // More failures keep it closed, the same closing.
-        assertFalse(reach.failed(4, "relay-c.example", address("192.0.2.3"), now + 3))
+        reach.refused(4, "relay-c.example", address("192.0.2.3"), t + 501)
+        assertFalse(reach.failed(4, "relay-c.example", t + 500, t + 502))
         assertEquals(closure, reach.closure(4))
         // A direct connection made opens it; the next closing has another number.
-        assertTrue(reach.connected(4, now + 4))
+        assertTrue(reach.connected(4, t + 600))
         assertNull(reach.closure(4))
-        assertFalse(reach.connected(4, now + 5))
-        assertFalse(reach.failed(4, "relay-a.example", address("192.0.2.1"), now + 6))
-        assertTrue(reach.failed(4, "relay-b.example", address("192.0.2.2"), now + 7))
+        assertFalse(reach.connected(4, t + 601))
+        reach.refused(4, "relay-a.example", address("192.0.2.1"), t + 701)
+        assertFalse(reach.failed(4, "relay-a.example", t + 700, t + 702))
+        reach.refused(4, "relay-b.example", address("192.0.2.2"), t + 711)
+        assertTrue(reach.failed(4, "relay-b.example", t + 710, t + 712))
         assertTrue(reach.closure(4) != null && reach.closure(4) != closure)
     }
 
-    /** A failure begun before a connection was made, as Happy Eyeballs' loser, and an older network's word, say nothing. */
+    /**
+     * A server counts by its exchange: an address refused beside another that connects, as IPv6 on a network without
+     * it, or Happy Eyeballs' loser, says nothing; nor does an exchange that found no refusal, as one on a connection kept
+     * from before, nor one while another connection was made, nor an older network's word.
+     */
     @Test
-    fun aFailureWhileAnotherConnectedAndAnOlderNetworksWordSayNothing() {
+    fun anAddressRefusedBesideOneThatConnectsSaysNothing() {
         val reach = DirectReach()
-        val now = 1_000_000_000L
-        assertFalse(reach.failed(7, "relay-a.example", address("192.0.2.1"), now))
-        // relay-b's IPv6 try began, its IPv4 one connected, then the IPv6 one was closed.
-        assertFalse(reach.connected(7, now + 20))
-        assertFalse(reach.failed(7, "relay-b.example", address("2001:db8::2"), now + 10))
-        assertFalse(reach.failed(7, "relay-c.example", address("2001:db8::3"), now + 15))
+        val t = 1_000_000_000L
+        // relay-a's IPv6 refused at once, its IPv4 connected: the exchange then fails at TLS.
+        reach.refused(7, "relay-a.example", address("2001:db8::1"), t + 1)
+        reach.connected(7, t + 2)
+        assertFalse(reach.failed(7, "relay-a.example", t, t + 3))
+        // relay-b likewise, while relay-c's exchange, begun before, failed at its only address.
+        reach.refused(7, "relay-c.example", address("192.0.2.3"), t + 11)
+        reach.refused(7, "relay-b.example", address("2001:db8::2"), t + 12)
+        reach.connected(7, t + 13)
+        assertFalse(reach.failed(7, "relay-b.example", t + 10, t + 14))
+        assertFalse(reach.failed(7, "relay-c.example", t + 10, t + 15))
         assertNull(reach.closure(7))
-        // Failures begun after it count again; the network before's do not, and a new network starts afresh.
-        assertFalse(reach.failed(7, "relay-a.example", address("192.0.2.1"), now + 30))
-        assertFalse(reach.failed(6, "relay-b.example", address("192.0.2.2"), now + 31))
+        // An exchange that met no refusal of its own counts nothing, however it ended.
+        assertFalse(reach.failed(7, "relay-d.example", t + 20, t + 21))
+        assertFalse(reach.failed(7, "relay-e.example", t + 20, t + 22))
         assertNull(reach.closure(7))
-        assertFalse(reach.failed(8, "relay-b.example", address("192.0.2.2"), now + 32))
+        // The network before's word is dropped; a new network starts afresh.
+        reach.refused(6, "relay-a.example", address("192.0.2.1"), t + 31)
+        assertFalse(reach.failed(6, "relay-a.example", t + 30, t + 32))
+        reach.refused(8, "relay-a.example", address("192.0.2.1"), t + 41)
+        assertFalse(reach.failed(8, "relay-a.example", t + 40, t + 42))
         assertNull(reach.closure(8))
         assertNull(reach.closure(7))
+    }
+
+    /**
+     * The exchange's end and its socket's refusal in either order: a connect cut short when the exchange's time ran out
+     * ends after the exchange did, and still counts the server, within [DirectReach.RACE_MS].
+     */
+    @Test
+    fun aRefusalThatComesAfterTheExchangeEndedStillCounts() {
+        val reach = DirectReach()
+        val t = 1_000_000_000L
+        val ms = 1_000_000L
+        assertFalse(reach.failed(2, "relay-a.example", t, t + 1_500 * ms))
+        assertFalse(reach.refused(2, "relay-a.example", address("192.0.2.1"), t + 1_501 * ms))
+        assertFalse(reach.failed(2, "relay-b.example", t + 2_000 * ms, t + 3_500 * ms))
+        assertTrue(reach.refused(2, "relay-b.example", address("192.0.2.2"), t + 3_502 * ms))
+        assertTrue(reach.closure(2) != null)
+        // Too late after the end, it does not.
+        val late = DirectReach()
+        late.refused(2, "relay-a.example", address("192.0.2.1"), t + 1)
+        assertFalse(late.failed(2, "relay-a.example", t, t + 2))
+        assertFalse(late.failed(2, "relay-b.example", t + 10, t + 20))
+        assertFalse(late.refused(2, "relay-b.example", address("192.0.2.2"), t + 20 + (DirectReach.RACE_MS + 1) * ms))
+        assertNull(late.closure(2))
     }
 
     /**
@@ -217,13 +262,18 @@ class NetworkProxyTest {
         assertFalse(global.same(network))
     }
 
-    /** The phone's own addresses are every interface's, the loopback's included, as this machine's kernel lists them. */
+    /**
+     * The phone's own addresses are every interface's, the loopback's included, as this machine's kernel lists them: each
+     * address listed both before and after the reading, since a busy machine's interfaces come and go.
+     */
     @Test
     fun thePhonesOwnAddressesAreEveryInterfaces() {
+        fun listed() = java.net.NetworkInterface.getNetworkInterfaces().toList().flatMap { it.inetAddresses.toList() }.toSet()
+        val before = listed()
         val own = NetworkProxy.phoneAddresses()
-        val listed = java.net.NetworkInterface.getNetworkInterfaces().toList().flatMap { it.inetAddresses.toList() }
-        assertTrue(listed.isNotEmpty())
-        assertTrue(own.containsAll(listed))
+        val stayed = before.intersect(listed())
+        assertTrue(stayed.isNotEmpty())
+        assertTrue(own.containsAll(stayed))
         assertTrue(own.any { it.isLoopbackAddress })
     }
 

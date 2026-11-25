@@ -269,11 +269,13 @@ told no proxy.
      failed direct try in the first exchanges after each change.
    - **The global proxy, only on a network closed to the resolver** (`dns/NetworkProxy.kt`, `DirectReach`; the global
      proxy's review, M1). It is a third party, not the network, and through it that party would learn when, how often
-     and which servers the resolver asks (the plan's audit, M4). So it is a way only once direct connections to two
-     servers, at different addresses, failed at the connection itself on that network: refused, unreachable, reset,
-     or no TCP connection within the try's time. A TLS failure, a slow or failed HTTP answer and a server's own error
-     come after a connection, and never count. Nor does a connection that failed while another was made, as Happy
-     Eyeballs' loser. Any direct connection made, or any answer directly, DoT's included, opens the network again, and
+     and which servers the resolver asks (the plan's audit, M4). So it is a way only once the direct exchanges with two
+     servers, at different addresses, found no connection on that network, each failing at the connection itself:
+     refused, unreachable, reset, or no TCP connection within the try's time. A TLS failure, a slow or failed HTTP
+     answer and a server's own error come after a connection, and never count. A server counts by its exchange, not by
+     an address: an address refused beside another that connects, as IPv6 on a network without it, or Happy Eyeballs'
+     loser, says nothing, and nor does an exchange during which another connection was made. Any direct connection
+     made, or any answer directly, DoT's included, opens the network again, and
      the global proxy is no way until it closes again. Until then an exchange goes directly alone, with the whole
      deadline; the one whose failure closed the network goes through the proxy with what is left. So its operator
      learns of the resolver only where the network lets nothing through directly. That is the managed phone whose

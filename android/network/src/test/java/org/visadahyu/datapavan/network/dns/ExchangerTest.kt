@@ -676,6 +676,28 @@ class ExchangerTest {
     }
 
     /**
+     * An address refused beside another of the same server that connects, as IPv6 on a network without it, never
+     * counts: two servers so, whose exchanges then fail at TLS, leave the network open and the global proxy unasked.
+     */
+    @Test
+    fun anAddressRefusedBesideOneThatConnectsNeverReachesTheGlobalProxy() {
+        val server = webServer()
+        val seen = ArrayBlockingQueue<String>(8)
+        val opened = java.util.concurrent.atomic.AtomicInteger()
+        val exchanger = exchanger(listOf(certificate("ca")), route(connectProxy(seen, 200) { "127.0.0.1" }, global = true)) {
+            opened.incrementAndGet()
+        }
+        // Nothing listens at 127.0.0.2 or 127.0.0.3; 127.0.0.1 connects, and its certificate names neither server.
+        http(exchanger, 85, Exchanger.CARRY_DOH, server, known = "127.0.0.2,127.0.0.1", name = "relay-a.dnslab.test")
+        assertTrue(reply().second != Exchanger.OK)
+        http(exchanger, 86, Exchanger.CARRY_DOH, server, known = "127.0.0.3,127.0.0.1", name = "relay-b.dnslab.test")
+        assertTrue(reply().second != Exchanger.OK)
+        assertNull(seen.poll(500, TimeUnit.MILLISECONDS))
+        assertNull(exchanger.closure(0))
+        assertEquals(0, opened.get())
+    }
+
+    /**
      * Two servers whose direct connections are refused close the network: the exchange that closed it goes through the
      * global proxy with what is left of its time, the engine is told a way opened, and the next exchanges have the
      * proxy as their second way, then first once it answered where directly gave nothing.

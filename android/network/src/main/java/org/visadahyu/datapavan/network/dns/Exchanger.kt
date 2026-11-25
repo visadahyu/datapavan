@@ -306,7 +306,8 @@ class Exchanger(
     ) {
         val via = ways[i]
         val last = i == ways.lastIndex
-        val left = (deadline - System.nanoTime()) / 1_000_000
+        val began = System.nanoTime()
+        val left = (deadline - began) / 1_000_000
         val client = client(through, via, server, known, generation, epoch)
         val call = client.newCall(request)
         call.timeout().timeout(if (last) left.coerceAtLeast(1) else left.coerceIn(1, FIRST_WAY_MS), TimeUnit.MILLISECONDS)
@@ -315,6 +316,8 @@ class Exchanger(
                 override fun onFailure(call: Call, e: IOException) {
                     leftBehind(client, generation, epoch)
                     if (via != null && refusal(e)?.status == 0) route?.unreachable(via)
+                    // A direct try that found no connection counts the server toward the network's closing.
+                    if (via == null && through == null && reach.failed(generation, server, began)) closed(generation)
                     val closed = reach.closure(generation) != null
                     val global = route != null && route.global
                     val more = when {
@@ -495,17 +498,16 @@ class Exchanger(
     /**
      * A direct socket that tells [reach] what became of its connection: made, the network is open to the resolver; failed
      * at the connection itself (refused, unreachable, reset, or none within the try's time, when the exchange's share
-     * ran out and its socket was closed), one more of [server]'s addresses that could not be reached. DoT's ([server]
-     * null) only opens it.
+     * ran out and its socket was closed), an address of [server]'s that could not be reached, which counts only if the
+     * exchange as a whole then finds no connection ([DirectReach.failed]). DoT's ([server] null) only opens it.
      */
     private inner class DirectSocket(private val generation: Int, private val server: String?) : Socket() {
         override fun connect(endpoint: SocketAddress?, timeout: Int) {
-            val started = System.nanoTime()
             try {
                 super.connect(endpoint, timeout)
             } catch (e: IOException) {
                 val address = (endpoint as? InetSocketAddress)?.address
-                if (server != null && address != null && reach.failed(generation, server, address, started)) closed(generation)
+                if (server != null && address != null && reach.refused(generation, server, address)) closed(generation)
                 throw e
             }
             reach.connected(generation)
