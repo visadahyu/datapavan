@@ -1030,6 +1030,8 @@ impl Shared {
     /// read for proxies (it went directly, and is not the user's tool's) of an app Android named (audit-U m3), whose
     /// confirmed SOCKS5 proxy names it already. The relay is the control flow's own server at `BND.PORT`: a `BND.ADDR`
     /// elsewhere is counted, never tied there (audit-U C1), and a name there is tied by its port alone too.
+    #[cold]
+    #[inline(never)]
     fn associated(&self, opened: &Opened, bound: &Target) {
         let Some(uid) = opened.uid.filter(|_| opened.sniffs) else {
             return;
@@ -1738,6 +1740,20 @@ struct Binding {
     reply: Vec<u8>,
 }
 
+impl Binding {
+    /// The step after `request`'s confirmation, by the server's first bytes `reply`.
+    #[cold]
+    #[inline(never)]
+    fn start(request: &Request, reply: &[u8]) -> Step {
+        let mut bytes = Vec::with_capacity(ASSOCIATE_REPLY);
+        bytes.extend_from_slice(reply);
+        Step::Binding(Box::new(Self {
+            request: request.clone(),
+            reply: bytes,
+        }))
+    }
+}
+
 /// What a handshake's next bytes settle, for the relay to tell the engine ([`Shared::handshake_settled`]).
 pub(super) enum Settle {
     /// The request, confirmed, and the inner hello read before it was.
@@ -1777,7 +1793,12 @@ impl Handshake {
             rest = &bytes[take..];
             settled = self.decide();
         }
-        let relay = self.bind(rest);
+        // Read only for a confirmed `UDP ASSOCIATE`, out of the relay's own code (the hot set, ADR 0053).
+        let relay = if matches!(self.step, Step::Binding(_)) {
+            self.bind(rest)
+        } else {
+            None
+        };
         let wanted = match self.step {
             Step::Idle | Step::Waiting(..) => self.len < MAX_REPLY,
             Step::Binding(_) => true,
@@ -1788,6 +1809,8 @@ impl Handshake {
 
     /// A confirmed `UDP ASSOCIATE`'s relay, `more` of the server's bytes read on: once the reply is whole, and then
     /// nothing more is read.
+    #[cold]
+    #[inline(never)]
     fn bind(&mut self, more: &[u8]) -> Option<Target> {
         let Step::Binding(binding) = &mut self.step else {
             return None;
@@ -1829,12 +1852,7 @@ impl Handshake {
         if confirmed {
             // Its control flow is named at once; its relay is read on.
             if request.associate {
-                let mut reply = Vec::with_capacity(ASSOCIATE_REPLY);
-                reply.extend_from_slice(&self.reply[..self.len]);
-                self.step = Step::Binding(Box::new(Binding {
-                    request: request.clone(),
-                    reply,
-                }));
+                self.step = Binding::start(&request, &self.reply[..self.len]);
             }
             Some(Settle::Declared(request, hello))
         } else {

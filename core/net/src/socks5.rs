@@ -344,6 +344,7 @@ pub fn datagram(target: &Target, payload: &[u8]) -> Vec<u8> {
 /// A datagram from the relay: the target it came from and its payload. `None` for a fragment, which
 /// the network part drops as RFC 1928 allows, or for a malformed header.
 #[must_use]
+#[inline]
 pub fn parse_datagram(bytes: &[u8]) -> Option<(Target, &[u8])> {
     if *bytes.get(..3)? != [0, 0, 0] {
         return None;
