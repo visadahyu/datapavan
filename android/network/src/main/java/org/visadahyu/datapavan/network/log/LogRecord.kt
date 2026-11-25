@@ -109,6 +109,18 @@ sealed interface LogRecord {
          * while the switch is off, which names a tracker's company, never an address or a name.
          */
         val trackers: List<Int> = emptyList(),
+        /**
+         * Whether the proxy's address is on the user's local network, as the engine decided it with the network
+         * beneath's on-link prefixes (flag bit 5, version 7; the proxy record's unit B): kept whatever the switch says.
+         * Null for a record before version 7, which never said; the row then reads the address.
+         */
+        val local: Boolean? = null,
+        /**
+         * Whether the engine could not tell that this was a messenger's proxy (flag bit 6, version 7): a flow it named
+         * one and then took the name back from, or one it never named for substitution, its record left out as the
+         * proxy it was or would have been named. Only an inferred kind's, only left out, never in a snapshot.
+         */
+        val unsure: Boolean = false,
     ) {
         /** Whether it was read from the connection: SOCKS or an HTTP proxy; else inferred. */
         val declared: Boolean get() = kind <= PROXY_FORWARD
@@ -121,12 +133,16 @@ sealed interface LogRecord {
              * A proxy as the engine writes it, or null for its code 0, none; a code or flag it never writes throws
              * [IllegalArgumentException], and the record is read as malformed.
              */
-            fun read(b: ByteBuffer): Proxy? {
+            fun read(b: ByteBuffer, version: Byte): Proxy? {
                 val kind = b.get().toInt() and 0xff
                 if (kind == 0) return null
                 require(kind in PROXY_SOCKS5..PROXY_SIGNAL)
                 val flags = b.get().toInt() and 0xff
-                require(flags and 0xe0 == 0)
+                // Bits 5 and 6 from version 7 only; bit 7 never.
+                require(flags and (if (version >= VERSION_7) 0x80 else 0xe0) == 0)
+                val unsure = flags and 64 != 0
+                // "Unsure" is only an inferred kind's, and only left out (bit 4).
+                require(!unsure || (kind > PROXY_FORWARD && flags and 16 != 0))
                 var asked = ""
                 var port = -1
                 if (flags and 8 != 0) {
@@ -148,6 +164,7 @@ sealed interface LogRecord {
                     kind, setting = flags and 1 != 0, password = flags and 2 != 0, outsideMaker = flags and 4 != 0,
                     asked = asked, askedPort = port, proxyName = proxyName, organisation = organisation, cover = cover,
                     leftOut = flags and 16 != 0, trackers = trackers,
+                    local = if (version >= VERSION_7) flags and 32 != 0 else null, unsure = unsure,
                 )
             }
 
@@ -174,7 +191,10 @@ sealed interface LogRecord {
 
     companion object {
         /** The version the engine writes. */
-        const val VERSION: Byte = 6
+        const val VERSION: Byte = 7
+
+        /** The version of a proxy's flags for local and unsure (bits 5 and 6; the proxy record's unit B). */
+        const val VERSION_7: Byte = 7
 
         /**
          * A segment's outcome (its [Segment.outcome]): opened, refused, unreachable, failed, and since version 6
@@ -266,9 +286,9 @@ sealed interface LogRecord {
                                     segment.copy(
                                         via = via,
                                         tunnel = tunnel,
-                                        proxy = if (version >= VERSION_5) Proxy.read(b) else null,
+                                        proxy = if (version >= VERSION_5) Proxy.read(b, version) else null,
                                         // The blocking row's SDK, after the proxy (version 6), empty for none.
-                                        blockedSdk = if (version >= VERSION) text(b) else "",
+                                        blockedSdk = if (version >= VERSION_6) text(b) else "",
                                     )
                                 }
                             }
@@ -303,6 +323,9 @@ sealed interface LogRecord {
 
         /** The version before a blocked flow's outcome and its row's SDK. */
         private const val VERSION_5: Byte = 5
+
+        /** The version before a proxy's local and unsure flags. */
+        private const val VERSION_6: Byte = 6
 
         /**
          * The app's state, one byte after the segment's counts from version 3 ("not told" before); in a

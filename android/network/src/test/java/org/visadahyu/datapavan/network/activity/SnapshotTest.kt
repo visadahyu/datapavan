@@ -80,6 +80,8 @@ class SnapshotTest {
             org.visadahyu.datapavan.network.log.LogRecord.Proxy(
                 org.visadahyu.datapavan.network.log.LogRecord.PROXY_SOCKS5, password = true,
                 proxyName = "proxy.example.net", organisation = "Hetzner Online GmbH", trackers = listOf(312),
+                // A snapshot's proxy block is the log's of version 7, which always says whether it is local.
+                local = false,
             ),
             proxied.proxy,
         )

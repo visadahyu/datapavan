@@ -211,13 +211,16 @@ data class Snapshot(
             // A code the engine never writes, or a tunnel number beside no tunnel, is refused.
             require(via <= org.visadahyu.datapavan.network.log.LogRecord.VIA_TUNNEL)
             require((via == org.visadahyu.datapavan.network.log.LogRecord.VIA_TUNNEL) == (tunnel != 0L))
-            val proxy = org.visadahyu.datapavan.network.log.LogRecord.Proxy.read(b)
-            // Shown here only is an app's own proxy's first hop, kept whole: never with no proxy, left out, or a plain
-            // request, which the engine never marks so.
+            // The proxy block is the log's of version 7 (`log::push_proxy`), its local flag included.
+            val proxy = org.visadahyu.datapavan.network.log.LogRecord.Proxy.read(b, org.visadahyu.datapavan.network.log.LogRecord.VERSION_7)
+            // "Unsure" marks records only: "Now" shows a flow as it is.
+            require(proxy?.unsure != true)
+            // Shown here only is an app's own proxy's first hop, kept whole: never with no proxy or left out, and of a
+            // plain request only one to Android's setting (R7), which the engine never marks otherwise.
             val shownOnly = flags and 2 != 0
             require(
                 !shownOnly || proxy != null && !proxy.leftOut &&
-                    proxy.kind != org.visadahyu.datapavan.network.log.LogRecord.PROXY_FORWARD,
+                    (proxy.kind != org.visadahyu.datapavan.network.log.LogRecord.PROXY_FORWARD || proxy.setting),
             )
             return Destination(
                 protocol, namedBy, ech, dns, flags and 1 != 0, address, port, asn, network,

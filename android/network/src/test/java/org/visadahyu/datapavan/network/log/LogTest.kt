@@ -242,7 +242,7 @@ class LogTest {
     @Test
     fun skipsAndCountsARecordOfAnotherVersion() {
         val (_, engines) = EngineRecords.records[0]
-        val newer = engines.copyOf().also { it[0] = 7 }
+        val newer = engines.copyOf().also { it[0] = (LogRecord.VERSION + 1).toByte() }
         val batch = ByteBuffer.allocate(4 + 3 * 2 + newer.size + segment.size + engines.size).order(ByteOrder.LITTLE_ENDIAN)
             .putInt(3).putShort(newer.size.toShort()).put(newer).putShort(segment.size.toShort()).put(segment)
             .putShort(engines.size.toShort()).put(engines).array()
