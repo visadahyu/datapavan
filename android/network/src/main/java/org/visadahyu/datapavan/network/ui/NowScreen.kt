@@ -55,6 +55,8 @@ import org.visadahyu.datapavan.network.activity.ProxyFacts
 import org.visadahyu.datapavan.network.activity.Snapshot
 import org.visadahyu.datapavan.network.activity.TrackerMarks
 import org.visadahyu.datapavan.network.log.AppState
+import org.visadahyu.datapavan.network.proxy.AndroidProxy
+import org.visadahyu.datapavan.network.proxy.ProxyContext
 
 /** A tunnel's configuration by its name, or a plain phrase for one since removed (W7, part 2). */
 @Composable
@@ -82,6 +84,11 @@ internal data class NowView(
     val blocking: BlockingView = BlockingView(),
     /** The user stopped the counts' updates (the accessibility unit, WCAG 2.2.2). */
     val paused: Boolean = false,
+    /**
+     * What the service knows of the proxies around the apps (the proxy record's unit B): Android's own settings, the PAC
+     * proxy's UID and the circumvention tools' UIDs.
+     */
+    val proxies: ProxyContext.State = ProxyContext.State(),
 )
 
 /** The marks of a destination of the app [uid], from its hosts' matches (ADR 0046, decision 2 (d)). */
@@ -274,6 +281,13 @@ private fun Facts(view: NowView, snapshot: Snapshot?, onAllowAccess: () -> Unit)
     val paused = view.blocking.pausedUntil
     if (view.running && view.blocking.on && paused != null) {
         Text(stringResource(R.string.blocking_paused_now, whenText(context, paused)), style = MaterialTheme.typography.bodyMedium)
+    }
+    // Android's own proxy setting, while the tunnel runs (the proxy record's unit B, B7): a proxy set for the whole phone
+    // over adb or by a device owner shows in none of Android's own Wi-Fi screens, and this is where the user sees it.
+    if (view.running) {
+        androidProxyLine(view.proxies.android)?.let {
+            Text(lineText(it), style = MaterialTheme.typography.bodyMedium, modifier = Modifier.testTag("now-android-proxy"))
+        }
     }
     when (snapshot?.known) {
         Snapshot.NO_ACCESS -> {
@@ -660,6 +674,27 @@ internal fun proxyRow(facts: ProxyFacts.Facts, past: Boolean): ProxyRow {
         lines += ProxyLine(R.string.now_proxy_live_only)
     }
     return ProxyRow(null, lines, toSwitch = shownOnly)
+}
+
+/**
+ * The one line "Now" shows of Android's own proxy settings while any is set (the proxy record's unit B, B7; note 24 of
+ * the brief's audit), as a pure function the JVM tests hold. The whole phone's comes first, as Android puts it first:
+ * apps then follow it, not the network's. Else the network's own, which reaches only the apps that were already running
+ * when Datapavan's VPN started and the apps left out (measurements 7.1 and 7.2): its words change again with the unit
+ * that gives the VPN the network's proxy (`setHttpProxy`). A PAC file has a sentence of its own, the network's saying
+ * that apps started inside the VPN do not use it. It never says who set a proxy, or whether anyone chose it (ADR 0025).
+ */
+internal fun androidProxyLine(proxy: AndroidProxy): ProxyLine? {
+    fun at(server: AndroidProxy.Setting.Server) = listOf(isolateLtr(ProxyFacts.hostPort(server.host, server.port)))
+    return when (val global = proxy.global) {
+        is AndroidProxy.Setting.Server -> ProxyLine(R.string.now_proxy_global, args = at(global))
+        AndroidProxy.Setting.Pac -> ProxyLine(R.string.now_proxy_global_pac)
+        null -> when (val network = proxy.network) {
+            is AndroidProxy.Setting.Server -> ProxyLine(R.string.now_proxy_network, args = at(network))
+            AndroidProxy.Setting.Pac -> ProxyLine(R.string.now_proxy_network_pac)
+            null -> null
+        }
+    }
 }
 
 /** A proxy's line as the user reads it: the kind's words set in first, then the other arguments. */

@@ -139,6 +139,7 @@ class NowActivity : ComponentActivity() {
         }
         setContent {
             val running by NetworkVpnService.running.collectAsState()
+            val proxies by org.visadahyu.datapavan.network.proxy.ProxyContext.state.collectAsState()
             NetworkTheme {
                 NowScreen(
                     view = NowView(
@@ -155,6 +156,7 @@ class NowActivity : ComponentActivity() {
                         tunnelNames = tunnelNames,
                         blocking = blocking.value,
                         paused = paused.value,
+                        proxies = proxies,
                     ),
                     history = history.value,
                     onPause = { paused.value = !paused.value },

@@ -1,0 +1,112 @@
+package org.visadahyu.datapavan.network.proxy
+
+import java.io.File
+import org.junit.Assert.assertEquals
+import org.junit.Assert.assertNull
+import org.junit.Assert.assertTrue
+import org.junit.Test
+import org.visadahyu.datapavan.network.R
+import org.visadahyu.datapavan.network.dns.NetworkProxy
+import org.visadahyu.datapavan.network.ui.ProxyLine
+import org.visadahyu.datapavan.network.ui.androidProxyLine
+import org.visadahyu.datapavan.ui.isolateLtr
+
+/** Android's own proxy settings, as the network part reads them and "Now" says them (the proxy record's unit B, B7). */
+class AndroidProxyTest {
+    private fun read(host: String, port: Int, pac: Boolean = false) = NetworkProxy.Setting(host, port, pac, emptyList())
+
+    private val server = AndroidProxy.Setting.Server("proxy.example.net", 3128)
+
+    /** A `ProxyInfo` read: a PAC file whatever its host and port, a server with both, or none; brackets taken off. */
+    @Test
+    fun readsEachSettingAsAndroidGivesIt() {
+        assertNull(AndroidProxy.setting(null))
+        assertEquals(AndroidProxy.Setting.Pac, AndroidProxy.setting(read("localhost", 41_235, pac = true)))
+        assertEquals(AndroidProxy.Setting.Pac, AndroidProxy.setting(read("", 0, pac = true)))
+        assertEquals(server, AndroidProxy.setting(read("proxy.example.net", 3128)))
+        assertEquals(AndroidProxy.Setting.Server("2001:db8::7", 8080), AndroidProxy.setting(read("[2001:db8::7]", 8080)))
+        assertNull(AndroidProxy.setting(read("", 3128)))
+        assertNull(AndroidProxy.setting(read("proxy.example.net", 0)))
+        assertNull(AndroidProxy.setting(read("proxy.example.net", 65_536)))
+        assertEquals(false, AndroidProxy().any)
+        assertEquals(true, AndroidProxy(network = AndroidProxy.Setting.Pac).any)
+    }
+
+    /**
+     * B7's lines: the whole phone's proxy first, as Android puts it first; else the network's own, naming this network
+     * and the apps left out; a PAC file's own sentences; and nothing while none is set.
+     */
+    @Test
+    fun nowSaysWhichSettingIsSetAndNothingWhileNoneIs() {
+        val at = listOf(isolateLtr("proxy.example.net:3128"))
+        assertEquals(ProxyLine(R.string.now_proxy_global, args = at), androidProxyLine(AndroidProxy(global = server)))
+        assertEquals(ProxyLine(R.string.now_proxy_global_pac), androidProxyLine(AndroidProxy(global = AndroidProxy.Setting.Pac)))
+        assertEquals(ProxyLine(R.string.now_proxy_network, args = at), androidProxyLine(AndroidProxy(network = server)))
+        assertEquals(ProxyLine(R.string.now_proxy_network_pac), androidProxyLine(AndroidProxy(network = AndroidProxy.Setting.Pac)))
+        // Both set: the whole phone's alone, which apps then follow.
+        assertEquals(R.string.now_proxy_global, androidProxyLine(AndroidProxy(global = server, network = AndroidProxy.Setting.Pac))?.text)
+        assertEquals(R.string.now_proxy_global_pac, androidProxyLine(AndroidProxy(AndroidProxy.Setting.Pac, server))?.text)
+        // An IPv6 address in brackets, as people write one with its port.
+        val v6 = AndroidProxy.Setting.Server("2001:db8::7", 8080)
+        assertEquals(listOf(isolateLtr("[2001:db8::7]:8080")), androidProxyLine(AndroidProxy(network = v6))?.args)
+        assertNull(androidProxyLine(AndroidProxy()))
+    }
+
+    /**
+     * B5: the engine is handed the servers Android's settings name, never a PAC file, whose `localhost` and handler's port
+     * are not an address, and never a server on the loopback, which never enters the tunnel; each once.
+     */
+    @Test
+    fun aPacFileAndTheLoopbackAreNotHandedToTheEngine() {
+        val lines = AndroidProxy.engineLines(
+            listOf(
+                read("proxy.example.net", 3128),
+                null,
+                read("localhost", 41_235, pac = true),
+                read("10.0.2.2", 8080, pac = true),
+                read("localhost", 3128),
+                read("LOCALHOST", 3128),
+                read("127.0.0.1", 8118),
+                read("[::1]", 9050),
+                read("203.0.113.5", 8080),
+                read("proxy.example.net", 3128),
+                read("", 3128),
+            ),
+        )
+        assertEquals(listOf("proxy.example.net 3128", "203.0.113.5 8080"), lines)
+    }
+
+    /** The holder the service publishes to: each part kept apart, and everything forgotten when the tunnel stops. */
+    @Test
+    fun theHolderKeepsWhatTheServicePublished() {
+        ProxyContext.clear()
+        ProxyContext.publish(AndroidProxy(global = server), pacHandler = 10_092)
+        ProxyContext.publishTools(mapOf(10_200 to "Orbot"))
+        assertEquals(ProxyContext.State(AndroidProxy(global = server), 10_092, mapOf(10_200 to "Orbot")), ProxyContext.state.value)
+        ProxyContext.publish(AndroidProxy(), pacHandler = null)
+        assertEquals(mapOf(10_200 to "Orbot"), ProxyContext.state.value.tools)
+        assertEquals(false, ProxyContext.state.value.android.any)
+        ProxyContext.clear()
+        assertEquals(ProxyContext.State(), ProxyContext.state.value)
+    }
+
+    /**
+     * The words (audit-B 14): the network's line names this network, not a Wi-Fi network, and the apps left out, which
+     * use its proxy unseen; the whole phone's says "most apps", not every app; none says who set a proxy.
+     */
+    @Test
+    fun theLinesSayWhichSettingWithoutJudging() {
+        val strings = File("src/main/res/values/strings_untranslated.xml").readText()
+        fun text(name: String) = checkNotNull(Regex("""<string name="$name">([^<]*)</string>""").find(strings)).groupValues[1]
+        assertTrue(text("now_proxy_global").contains("for the whole phone in Android\\'s settings"))
+        assertTrue(text("now_proxy_global").contains("Most apps go through it."))
+        assertTrue(text("now_proxy_network").startsWith("This network\\'s settings name a proxy"))
+        assertTrue(text("now_proxy_network").contains("and so do the apps you left out"))
+        assertTrue(text("now_proxy_network_pac").startsWith("This network\\'s settings give a PAC file."))
+        for (name in listOf("now_proxy_global", "now_proxy_global_pac", "now_proxy_network", "now_proxy_network_pac")) {
+            for (word in listOf("Wi-Fi", "every app", "you set", "your proxy", "chose", "admin", "owner")) {
+                assertTrue("$name: $word", !text(name).contains(word, ignoreCase = true))
+            }
+        }
+    }
+}
