@@ -143,6 +143,99 @@ pub struct ProxySetting {
     pub strict_dns: bool,
     /// The network beneath's on-link prefixes and its transport, for the "local" fact ([`crate::local`]).
     pub on_link: crate::local::OnLink,
+    /// The apps whose own proxies the user chose to log, by UID, as the network part hands them (R3, unit C).
+    pub logged: Vec<u32>,
+    /// The circumvention tools, by UID, as the network part tells them by signing key (unit B's B6): never chosen.
+    pub tools: Vec<u32>,
+    /// Android's PAC handler's UID, if one runs (unit B's B5): never chosen.
+    pub pac_handler: Option<u32>,
+}
+
+/// The most apps whose own proxies the user can choose to log (R3): the live view's bound on apps.
+const MAX_LOGGED: usize = 512;
+
+/// R3, the proxy record's unit C: the application UIDs whose own proxies the user chose to log, sorted, never a tool's
+/// nor Android's PAC handler's, at most [`MAX_LOGGED`]. A sorted slice and a binary search: it holds a few apps, and it
+/// adds no map's code. The engine keeps it behind a leaf lock of its own (`Shared::kept_apps`), never under `proxies`,
+/// whose holder `infer` takes `held_back` under it while the log's readers of this set hold `held_back`.
+#[derive(Debug, Default, PartialEq, Eq)]
+pub(super) struct LoggedApps {
+    apps: Box<[u32]>,
+}
+
+impl LoggedApps {
+    /// The set the network part handed in `setting`: its application UIDs, but a tool's and the PAC handler's.
+    fn of(setting: &ProxySetting) -> Self {
+        let mut apps: Vec<u32> = setting
+            .logged
+            .iter()
+            .copied()
+            .filter(|&uid| {
+                application(uid)
+                    && !setting.tools.contains(&uid)
+                    && setting.pac_handler != Some(uid)
+            })
+            .collect();
+        apps.sort_unstable();
+        apps.dedup();
+        apps.truncate(MAX_LOGGED);
+        Self {
+            apps: apps.into_boxed_slice(),
+        }
+    }
+
+    /// Whether the choice covers a flow of `uid` through `proxy`: its app was chosen (an SDK Runtime's follows its
+    /// app), and the proxy is neither Android's setting nor on the user's own network, which no choice for one app
+    /// covers. Both facts come from Android and the network part, never from the app's bytes (R8).
+    fn covers(&self, uid: Option<u32>, proxy: &Proxied) -> bool {
+        !proxy.setting
+            && !proxy.local
+            && uid.is_some_and(|uid| self.apps.binary_search(&app_of(uid)).is_ok())
+    }
+
+    /// Whether an app of this set is not in `after`: its choice was turned off, and what it kept goes (R6).
+    fn lost(&self, after: &Self) -> bool {
+        self.apps
+            .iter()
+            .any(|uid| after.apps.binary_search(uid).is_err())
+    }
+}
+
+/// Whether `uid` is an application's, in any user's range of 100,000 (AOSP's `FIRST_APPLICATION_UID` to
+/// `LAST_APPLICATION_UID`): Android's own UIDs, below, are shared by many parts and never chosen.
+fn application(uid: u32) -> bool {
+    (10_000..20_000).contains(&(uid % 100_000))
+}
+
+/// The app whose code a UID runs: an SDK Runtime sandbox's (AOSP's `FIRST_SDK_SANDBOX_UID` 20,000 to 29,999, ten
+/// thousand above its app's, in each user's range), else the UID itself.
+pub(super) fn app_of(uid: u32) -> u32 {
+    if (20_000..30_000).contains(&(uid % 100_000)) {
+        uid - 10_000
+    } else {
+        uid
+    }
+}
+
+/// Whose own proxies keep their first hop and where they were asked to go, read once (`Shared::keeps_first_hops`):
+/// every flow while "Log where these apps connect" is on, else the flows the user's choice for one app covers (R3).
+/// A concrete type, not a closure, so that no `&dyn Fn` is built at each call.
+#[derive(Clone, Debug, Default)]
+pub(super) struct Keeps {
+    all: bool,
+    apps: Arc<LoggedApps>,
+}
+
+impl Keeps {
+    /// Whether a flow of `uid` through `proxy` keeps its first hop and destination.
+    pub(super) fn proxy(&self, uid: Option<u32>, proxy: Option<&Proxied>) -> bool {
+        self.all || proxy.is_some_and(|p| self.apps.covers(uid, p))
+    }
+
+    /// [`Keeps::proxy`] for `flow`.
+    pub(super) fn flow(&self, flow: &Flow) -> bool {
+        self.proxy(flow.uid, flow.proxy.as_deref())
+    }
 }
 
 /// A messenger app's direct connections to its maker's network: those open, and when the last one ended, in
@@ -408,8 +501,8 @@ pub(super) fn own_first_hop(flow: &Flow) -> bool {
 /// Whether "Now" shows `flow`'s first hop for its window only, `keeps` saying whose apps' first hops are kept: an
 /// own proxy's first hop of an app whose are not. The window, the table of ends, the sweep and the snapshot's
 /// mark all ask this, never the proxy's fields, so that units B and D widen it here alone.
-pub(super) fn strips(flow: &Flow, keeps: &dyn Fn(Option<u32>) -> bool) -> bool {
-    own_first_hop(flow) && !keeps(flow.uid)
+pub(super) fn strips(flow: &Flow, keeps: &Keeps) -> bool {
+    own_first_hop(flow) && !keeps.flow(flow)
 }
 
 /// Whether `flow` holds where the app asked its proxy to go: a SOCKS, `CONNECT` or plain request's flow with what it
@@ -441,7 +534,7 @@ pub(super) fn strip_unnamed(record: &mut crate::log::Record, proxy: &Proxied) {
 /// where unit C's choice for one app keeps such records whole.
 pub(super) fn strip_for_log(
     record: &mut crate::log::Record,
-    keeps: &dyn Fn(Option<u32>) -> bool,
+    keeps: &Keeps,
     taken_back: &TakenBack,
 ) {
     let crate::log::Record::Segment { flow, .. } = record else {
@@ -450,7 +543,12 @@ pub(super) fn strip_for_log(
     // The take-back's mark, whatever the switch says now: a record stripped while it was off, and released after it
     // was turned on, keeps the left-out shape and must still say that the engine could not tell (review B-engine 1).
     mark_unsure(flow, taken_back);
-    if keeps(flow.uid) {
+    // A flow taken back has no proxy of its own: its would-be proxy's facts decide (unit C).
+    let proxy = flow
+        .proxy
+        .as_deref()
+        .or_else(|| taken_back.proxies.get(&flow.id));
+    if keeps.proxy(flow.uid, proxy) {
         return;
     }
     match flow.proxy.as_deref() {
@@ -490,13 +588,21 @@ fn mark_unsure(flow: &mut Flow, taken_back: &TakenBack) {
 
 impl Shared {
     /// Sets what the network part tells for the proxies ([`ProxySetting`]); the open flows keep how they were named.
-    pub(super) fn set_proxies(&self, setting: ProxySetting) {
-        let mut state = lock(&self.proxies);
-        state.families = crate::map();
-        state
-            .families
-            .extend(setting.messengers.iter().map(|&(f, uid)| (uid, f)));
-        state.setting = setting;
+    /// The set of chosen apps is built before `proxies` is locked and swapped after it is let go, one lock after the
+    /// other, never one inside the other (unit C, C2). Whether an app left that set, whose kept first hops and
+    /// destinations must then go ([`super::Engine::proxies`]).
+    pub(super) fn set_proxies(&self, setting: ProxySetting) -> bool {
+        let logged = Arc::new(LoggedApps::of(&setting));
+        {
+            let mut state = lock(&self.proxies);
+            state.families = crate::map();
+            state
+                .families
+                .extend(setting.messengers.iter().map(|&(f, uid)| (uid, f)));
+            state.setting = setting;
+        }
+        let before = std::mem::replace(&mut *lock(&self.kept_apps), Arc::clone(&logged));
+        before.lost(&logged)
     }
 
     /// The messenger an app is, if the network part named it one.
@@ -511,13 +617,14 @@ impl Shared {
         self.tunnels.logs_destinations()
     }
 
-    /// Whose apps' own proxies keep their first hop and where they were asked to go, as the switch reads at this
-    /// moment: every app's while "Log where these apps connect" is on. Each caller reads it once, under the lock
-    /// that orders it against a change of the switch, and asks it for each flow's app; the one place a choice
-    /// for single apps can join it (unit C's R3).
-    pub(super) fn keeps_first_hops(&self) -> impl Fn(Option<u32>) -> bool + use<> {
-        let all = self.logs_own_proxies();
-        move |_| all
+    /// Whose own proxies keep their first hop and where they were asked to go, as the switch and the user's choice for
+    /// single apps read at this moment ([`Keeps`]). Each caller reads it once, under the lock that orders it against a
+    /// change of the switch, and asks it for each flow. Both are leaves: the tunnels' table and `kept_apps`.
+    pub(super) fn keeps_first_hops(&self) -> Keeps {
+        Keeps {
+            all: self.logs_own_proxies(),
+            apps: Arc::clone(&lock(&self.kept_apps)),
+        }
     }
 
     /// `flow` with only its first hop (audit-A 4): what was named by where the app asked its proxy to go gives way to
@@ -1011,7 +1118,7 @@ impl Shared {
             unsure: false,
         };
         let network = organisation.map(|(network, _)| network);
-        self.name_proxied(opened, current.as_ref(), |flow, kept| {
+        self.name_proxied((opened, Some(&proxied)), current.as_ref(), |flow, kept| {
             flow.network = network;
             match &name {
                 Some(name) if kept => {
@@ -1146,7 +1253,8 @@ impl Shared {
         };
         let found = self.marks(&[(name.clone(), port)]);
         let current = self.flow_of(opened.id);
-        self.name_proxied(opened, current.as_ref(), |flow, kept| {
+        let tied = current.as_ref().and_then(|f| f.proxy.as_deref());
+        self.name_proxied((opened, tied), current.as_ref(), |flow, kept| {
             let Some(proxy) = flow
                 .proxy
                 .as_deref_mut()
@@ -1200,7 +1308,7 @@ impl Shared {
             local: self.local(destination.ip()),
             unsure: false,
         };
-        self.name_proxied(opened, None, |flow, kept| {
+        self.name_proxied((opened, Some(&proxied)), None, |flow, kept| {
             flow.proxy = Some(Box::new(if kept {
                 proxied.clone()
             } else {
@@ -1442,7 +1550,7 @@ impl Shared {
             }
         }
         // An inferred proxy holds no destination: its flow is named by its own address and hello either way.
-        self.name_proxied(opened, current.as_ref(), |flow, _| {
+        self.name_proxied((opened, Some(&proxied)), current.as_ref(), |flow, _| {
             flow.proxy = Some(Box::new(proxied.clone()));
         });
         true
@@ -1455,9 +1563,14 @@ impl Shared {
     /// `before`, becomes its place. Unkept, the records already gathered for the log are stripped too: a segment a
     /// quarter hour cut between the request and a slow reply was written as an ordinary flow's (finding 27). One
     /// closure from each caller, so that this is built once for each (the library's size).
-    fn name_proxied(&self, opened: &Opened, before: Option<&Flow>, name: impl Fn(&mut Flow, bool)) {
+    fn name_proxied(
+        &self,
+        (opened, proxy): (&Opened, Option<&Proxied>),
+        before: Option<&Flow>,
+        name: impl Fn(&mut Flow, bool),
+    ) {
         let mut live = lock(&self.live);
-        let kept = self.keeps_first_hops()(opened.uid);
+        let kept = self.keeps_first_hops().proxy(opened.uid, proxy);
         // The kept flows are locked after `live`, as `flow_of` locks them.
         if self.keep_flows > 0
             && let Some(flow) = lock(&self.flows)
@@ -2697,6 +2810,9 @@ mod tests {
             trackers: None,
             strict_dns: false,
             on_link: crate::local::OnLink::default(),
+            logged: Vec::new(),
+            tools: Vec::new(),
+            pac_handler: None,
         });
         let (own, bytes) = open(&shared, UID, at([203, 0, 113, 6], 3128));
         relay(
@@ -2927,6 +3043,9 @@ mod tests {
             trackers: None,
             strict_dns: false,
             on_link: crate::local::OnLink::default(),
+            logged: Vec::new(),
+            tools: Vec::new(),
+            pac_handler: None,
         });
     }
 
@@ -3055,6 +3174,9 @@ mod tests {
             trackers: None,
             strict_dns: false,
             on_link: crate::local::OnLink::default(),
+            logged: Vec::new(),
+            tools: Vec::new(),
+            pac_handler: None,
         });
     }
 
@@ -3146,6 +3268,9 @@ mod tests {
             trackers: None,
             strict_dns: false,
             on_link: crate::local::OnLink::default(),
+            logged: Vec::new(),
+            tools: Vec::new(),
+            pac_handler: None,
         });
     }
 

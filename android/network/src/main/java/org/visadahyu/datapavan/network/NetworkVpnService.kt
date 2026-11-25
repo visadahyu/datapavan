@@ -502,6 +502,9 @@ class NetworkVpnService : VpnService() {
                 strict,
                 onLink,
                 transport,
+                IntArray(0),
+                IntArray(0),
+                -1,
             )
         }
         hand(android)

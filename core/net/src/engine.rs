@@ -1025,6 +1025,10 @@ struct Shared {
     /// What the inference and the declared proxies know: the messengers' apps, their direct connections,
     /// and Android's proxy setting.
     proxies: Mutex<proxied::State>,
+    /// The apps whose own proxies the user chose to log (R3, unit C): a leaf lock, taken only to clone or swap the
+    /// `Arc`, with nothing taken while it is held, so that the log's readers, which hold `held_back`, never wait on
+    /// `proxies`, whose holder takes `held_back` (C2).
+    kept_apps: Mutex<Arc<proxied::LoggedApps>>,
     /// The records of flows named an inferred proxy, held back from the log for their window of take-back.
     held_back: Mutex<proxied::HeldBack>,
     /// Tracker blocking (W8, part 3a; ADR 0053): its setting, what it counted for "Now", and the addresses tied to
@@ -1247,6 +1251,7 @@ impl Engine {
             resolver: resolver::Resolver::default(),
             messengers: Messengers::bundled(),
             proxies: Mutex::default(),
+            kept_apps: Mutex::default(),
             held_back: Mutex::new(proxied::HeldBack::carrying(taken_back)),
             blocks: Mutex::default(),
             blocking_set: AtomicU64::new(0),
@@ -1473,7 +1478,10 @@ impl Engine {
     /// Sets the messengers' apps, by UID, and the proxies Android's setting names (W8, part 2a; ADR 0052): each
     /// app's new flows are read by them from now on, and the open ones keep how they were named.
     pub fn proxies(&self, setting: ProxySetting) {
-        self.shared.set_proxies(setting);
+        // An app left the user's choice (R6): what it kept goes at once, as a switch turned off strips.
+        if self.shared.set_proxies(setting) {
+            self.shared.leave_out_first_hops();
+        }
     }
 
     /// Sets tracker blocking (W8, part 3a; ADR 0053), whole: every lookup and connection is decided by it from now
@@ -2091,6 +2099,7 @@ mod tests {
             resolver: resolver::Resolver::default(),
             messengers: crate::messengers::Messengers::bundled(),
             proxies: Mutex::default(),
+            kept_apps: Mutex::default(),
             held_back: Mutex::default(),
             blocks: Mutex::default(),
             blocking_set: AtomicU64::new(0),

@@ -760,7 +760,7 @@ impl Activity {
     pub(super) fn expire_first_hops(
         &mut self,
         boot: Duration,
-        keeps: &dyn Fn(Option<u32>) -> bool,
+        keeps: &super::proxied::Keeps,
         live: &HashMap<u64, Live>,
     ) {
         let proxied: Vec<&Flow> = live
@@ -916,9 +916,9 @@ impl Shared {
         live: &mut HashMap<u64, Live>,
         activity: &mut Activity,
         boot: Duration,
-        keeps: &dyn Fn(Option<u32>) -> bool,
+        keeps: &super::proxied::Keeps,
     ) {
-        self.to_first_hops(live, activity, &|uid| !keeps(uid));
+        self.to_first_hops(live, activity, keeps);
         activity.expire_first_hops(boot, keeps, live);
     }
 

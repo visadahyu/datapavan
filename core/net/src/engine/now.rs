@@ -512,7 +512,7 @@ impl Counts {
     pub(super) fn expire_first_hops(
         &mut self,
         boot: Duration,
-        keeps: &dyn Fn(Option<u32>) -> bool,
+        keeps: &super::proxied::Keeps,
         open: &dyn Fn(Option<u32>, &Flow) -> bool,
     ) {
         let Self {
@@ -523,13 +523,14 @@ impl Counts {
             ..
         } = self;
         for (&uid, app) in apps.iter_mut() {
-            if keeps(uid) {
-                continue;
-            }
             let mut at = 0;
             while at < app.places.len() {
                 let flow = &app.places[at].flow;
-                if !own_first_hop(flow) || shown_after(ended, uid, flow, boot) || open(uid, flow) {
+                if !own_first_hop(flow)
+                    || keeps.proxy(uid, flow.proxy.as_deref())
+                    || shown_after(ended, uid, flow, boot)
+                    || open(uid, flow)
+                {
                     at += 1;
                     continue;
                 }
@@ -551,16 +552,14 @@ impl Counts {
     /// first hops then stay for their window.
     pub(super) fn first_hops(
         &mut self,
-        of: &dyn Fn(Option<u32>) -> bool,
+        keeps: &super::proxied::Keeps,
         to_first_hop: &dyn Fn(&Flow) -> Flow,
     ) {
         for (&uid, app) in &mut self.apps {
-            if !of(uid) {
-                continue;
-            }
             let mut at = 0;
             while at < app.places.len() {
-                if holds_destination(&app.places[at].flow) {
+                let flow = &app.places[at].flow;
+                if holds_destination(flow) && !keeps.proxy(uid, flow.proxy.as_deref()) {
                     let first_hop = to_first_hop(&app.places[at].flow);
                     if rename(&mut app.places, at, &first_hop) {
                         self.places -= 1;

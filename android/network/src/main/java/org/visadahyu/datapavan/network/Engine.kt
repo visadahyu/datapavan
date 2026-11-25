@@ -233,9 +233,21 @@ internal object Engine {
      * a line in [android] (W8, part 2a, ADR 0052), and whether Private DNS is strict on the network part's network
      * ([strictDns]), which hides the apps' lookups from the network part; and the network beneath's on-link prefixes,
      * one `address length` a line in [onLink], with its [transport] (0 none, 1 Wi-Fi, 2 Ethernet, 3 cellular, 4 other),
-     * for the "local" fact (the proxy record's unit B). Kept for the engines to come, as the chain is.
+     * for the "local" fact (the proxy record's unit B); and (unit C) the apps whose own proxies the user chose to log,
+     * by UID ([logged]), the circumvention tools by UID ([tools]), and Android's PAC handler's UID, or -1 for none
+     * ([pacHandler]), which the engine never counts among the chosen. Kept for the engines to come, as the chain is.
      */
-    external fun nativeProxies(families: IntArray, uids: IntArray, android: String, strictDns: Boolean, onLink: String, transport: Int)
+    external fun nativeProxies(
+        families: IntArray,
+        uids: IntArray,
+        android: String,
+        strictDns: Boolean,
+        onLink: String,
+        transport: Int,
+        logged: IntArray,
+        tools: IntArray,
+        pacHandler: Int,
+    )
 
     /**
      * The network beneath's on-link prefixes and transport the engines were last handed, as `TRANSPORT ADDRESS/LENGTH...`

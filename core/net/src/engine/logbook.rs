@@ -735,8 +735,6 @@ impl Shared {
     /// already wrote stays, for the retention the user chose. Apps' own proxies then follow the switch
     /// ([`Shared::leave_out_first_hops`]).
     pub(super) fn hide_chained(&self) {
-        // Read before `live` is locked: this always follows the change of the setting it reads.
-        let keeps = self.keeps_first_hops();
         {
             let mut live = lock(&self.live);
             for live in live.values_mut() {
@@ -757,17 +755,19 @@ impl Shared {
             }
             activity.counts.hide(|uid| self.hides_app(uid));
         }
-        self.leave_out_first_hops(&|uid| !keeps(uid));
+        self.leave_out_first_hops();
     }
 
-    /// The apps `of` names keep their own proxies' first hops no longer (R6): every flow of theirs that holds where
-    /// it asked its proxy to go goes back to its first hop at once, open, held for its states and in "Now", the
-    /// open ones `unkept`; the records gathered for the next batch, which waits 30 s awake and longer across a
-    /// sleep as the logger's timer stands still, are stripped while the activity is held, so that none is added
-    /// unstripped meanwhile; and the sweep strips the first hops outside their window. Those held back for a
-    /// take-back, and the segments held, keep their first hop until they reach the log, which strips it then.
-    /// Unit C calls it for one app.
-    pub(super) fn leave_out_first_hops(&self, of: &dyn Fn(Option<u32>) -> bool) {
+    /// The own proxies' flows that the switch and the user's choice keep no longer (R6), as they read now, before
+    /// `live` is locked, since this always follows the change it reads: every flow that holds where it asked its proxy
+    /// to go goes back to its first hop at once, open, held for its states and in "Now", the open ones `unkept`; the
+    /// records gathered for the next batch, which waits 30 s awake and longer across a sleep as the logger's timer
+    /// stands still, are stripped while the activity is held, so that none is added unstripped meanwhile; and the
+    /// sweep strips the first hops outside their window. Those held back for a take-back, and the segments held, keep
+    /// their first hop until they reach the log, which strips it then. After a change of the switch, and after an
+    /// app left the user's choice (`Engine::proxies`, unit C).
+    pub(super) fn leave_out_first_hops(&self) {
+        let keeps = self.keeps_first_hops();
         let boot = self.clock.since_boot();
         {
             let mut live = lock(&self.live);
@@ -776,7 +776,7 @@ impl Shared {
             // segment cut between a request and a slow reply was written as an ordinary flow's (review A, engine,
             // finding 2).
             let own_proxy = |flow: &Flow| {
-                (super::proxied::own_proxy(flow) && of(flow.uid))
+                (super::proxied::own_proxy(flow) && !keeps.flow(flow))
                     .then(|| {
                         flow.proxy
                             .as_deref()
@@ -798,33 +798,35 @@ impl Shared {
                         _ => None,
                     })),
             );
-            self.to_first_hops(&mut live, &mut activity, of);
+            self.to_first_hops(&mut live, &mut activity, &keeps);
             let back = lock(&self.held_back);
             for record in lock(&self.pending_log).iter_mut() {
-                super::proxied::strip_for_log(record, &|uid| !of(uid), back.taken_back());
+                super::proxied::strip_for_log(record, &keeps, back.taken_back());
                 if let crate::log::Record::Segment { flow, .. } = record
                     && let Some(proxy) = unnamed.get(&flow.id)
                 {
                     super::proxied::strip_unnamed(record, proxy);
                 }
             }
-            let keeps = self.keeps_first_hops();
             self.sweep(&mut live, &mut activity, boot, &keeps);
         }
         self.prune_inferred(boot);
     }
 
-    /// Sets every flow of the apps `of` names that holds where it asked its proxy to go back to its first hop
+    /// Sets every flow that `keeps` does not keep and that holds where it asked its proxy to go back to its first hop
     /// (`first_hop`): live, the open ones then `unkept` so that no hello names them again, held for their states,
     /// and placed in "Now". R6's conversion, and the sweep's backstop.
     pub(super) fn to_first_hops(
         &self,
         live: &mut HashMap<u64, Live>,
         activity: &mut super::activity::Activity,
-        of: &dyn Fn(Option<u32>) -> bool,
+        keeps: &super::proxied::Keeps,
     ) {
         for live in live.values_mut() {
-            if !live.hidden && of(live.flow.uid) && super::proxied::holds_destination(&live.flow) {
+            if !live.hidden
+                && !keeps.flow(&live.flow)
+                && super::proxied::holds_destination(&live.flow)
+            {
                 live.unkept |= super::proxied::own_proxy(&live.flow);
                 live.flow = self.first_hop(&live.flow);
             }
@@ -835,18 +837,20 @@ impl Shared {
                 hidden: false,
                 ..
             } = &mut piece.of
-                && of(flow.uid)
+                && !keeps.flow(flow)
                 && super::proxied::holds_destination(flow)
             {
                 *flow = self.first_hop(flow);
             }
         }
-        activity.counts.first_hops(of, &|flow| self.first_hop(flow));
+        activity
+            .counts
+            .first_hops(keeps, &|flow| self.first_hop(flow));
         // The flows debug builds keep, so that their dump holds no destination either (review A, engine, note 7);
         // none in a release. A leaf lock: nothing is taken while it is held.
         if self.keep_flows > 0 {
             for flow in lock(&self.flows).iter_mut() {
-                if of(flow.uid) && super::proxied::holds_destination(flow) {
+                if !keeps.flow(flow) && super::proxied::holds_destination(flow) {
                     *flow = self.first_hop(flow);
                 }
             }

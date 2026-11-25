@@ -1676,6 +1676,7 @@ pub extern "system" fn Java_org_visadahyu_datapavan_network_Engine_nativeFlowRou
 // SAFETY: exported under the JNI name of the Kotlin method `external fun nativeProxies(families: IntArray, uids:
 // IntArray, android: String, strictDns: Boolean, onLink: String, transport: Int)`.
 #[unsafe(no_mangle)]
+#[allow(clippy::too_many_arguments)]
 pub extern "system" fn Java_org_visadahyu_datapavan_network_Engine_nativeProxies<'caller>(
     mut unowned_env: EnvUnowned<'caller>,
     _class: JClass<'caller>,
@@ -1685,6 +1686,9 @@ pub extern "system" fn Java_org_visadahyu_datapavan_network_Engine_nativeProxies
     strict_dns: jboolean,
     on_link: JString<'caller>,
     transport: jint,
+    logged: JIntArray<'caller>,
+    tools: JIntArray<'caller>,
+    pac_handler: jint,
 ) {
     unowned_env
         .with_env(|env| -> Result<_, Error> {
@@ -1694,11 +1698,15 @@ pub extern "system" fn Java_org_visadahyu_datapavan_network_Engine_nativeProxies
                 Ok(values)
             };
             let (families, uids) = (read(&families, env)?, read(&uids, env)?);
+            let (logged, tools) = (read(&logged, env)?, read(&tools, env)?);
             let android = android.try_to_string(env)?;
             let on_link = on_link.try_to_string(env)?;
             let read = ProxySetting {
                 strict_dns,
                 on_link: on_link_of(&on_link, transport),
+                logged: uids_of(&logged, 512),
+                tools: uids_of(&tools, 256),
+                pac_handler: u32::try_from(pac_handler).ok(),
                 ..proxy_setting(&families, &uids, &android)
             };
             set_proxies(|proxies| *proxies = read);
@@ -1738,7 +1746,20 @@ fn proxy_setting(families: &[i32], uids: &[i32], android: &str) -> ProxySetting 
         trackers: None,
         strict_dns: false,
         on_link: datapavan_net::local::OnLink::default(),
+        logged: Vec::new(),
+        tools: Vec::new(),
+        pac_handler: None,
     }
+}
+
+/// The UIDs of `nativeProxies`' chosen apps or tools (the proxy record's unit C): those that do not fit a UID are left
+/// out, and at most `most` are kept; the engine keeps only the chosen application UIDs of them.
+fn uids_of(values: &[i32], most: usize) -> Vec<u32> {
+    values
+        .iter()
+        .filter_map(|&uid| u32::try_from(uid).ok())
+        .take(most)
+        .collect()
 }
 
 /// The network beneath's on-link prefixes of `nativeProxies`: lines that do not parse are left out, and
