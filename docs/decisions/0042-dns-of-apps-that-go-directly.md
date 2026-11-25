@@ -261,23 +261,32 @@ told no proxy.
    The network's proxy is the one in its `LinkProperties`: a Wi-Fi network's, or a mobile network's APN proxy. Where
    the network has a direct proxy of its own, it is the only one, even when point 4 leaves it out. Where it has none,
    or only a PAC file, the second way is Android's global proxy, the whole phone's, where that is a direct one: a
-   device owner's, a profile's or one set over adb (the maintainer's decision of 2026-11-25).
+   device owner's, or one set by `adb` or by an app granted `WRITE_SECURE_SETTINGS` (the maintainer's decision of
+   2026-11-25).
    - **Directly first:** no proxy's operator learns when, how often or where the resolver asks while the network lets
      it go directly.
-   - **The proxy second:** a network that requires its proxy keeps the encrypted way, at the cost of one failed direct
-     try in the first exchanges after each change.
-   - **The global proxy, only second and only where the network has none:** it is a third party, not the network, and
-     through it that party would learn when, how often and which servers the resolver asks (the plan's audit, M4). As
-     the second way, it learns that only where the network lets nothing through directly. That is the managed phone
-     whose device owner forces that proxy, and who already sees the phone's traffic. There the resolver keeps the
-     encrypted way, rather than falling back to the network's resolver in plain DNS.
+   - **The network's own proxy second:** a network that requires its proxy keeps the encrypted way, at the cost of one
+     failed direct try in the first exchanges after each change.
+   - **The global proxy, only on a network closed to the resolver** (`dns/NetworkProxy.kt`, `DirectReach`; the global
+     proxy's review, M1). It is a third party, not the network, and through it that party would learn when, how often
+     and which servers the resolver asks (the plan's audit, M4). So it is a way only once direct connections to two
+     servers, at different addresses, failed at the connection itself on that network: refused, unreachable, reset,
+     or no TCP connection within the try's time. A TLS failure, a slow or failed HTTP answer and a server's own error
+     come after a connection, and never count. Nor does a connection that failed while another was made, as Happy
+     Eyeballs' loser. Any direct connection made, or any answer directly, DoT's included, opens the network again, and
+     the global proxy is no way until it closes again. Until then an exchange goes directly alone, with the whole
+     deadline; the one whose failure closed the network goes through the proxy with what is left. So its operator
+     learns of the resolver only where the network lets nothing through directly. That is the managed phone whose
+     device owner forces that proxy, and who already sees the phone's traffic; there the resolver keeps the encrypted
+     way, rather than falling back to the network's resolver in plain DNS. One server's outage never reaches it.
 2. **One deadline per exchange,** 3 s, the engine's own wait being 3.5 s. The first way gets at most 1.5 s of it. Any
    failure with no HTTP answer sends the same exchange the other way with what is left: a refused connection, a
    `CONNECT` refused (a 407 included, since Android's setting carries no credentials), a tunnel that stalls after
    its `200`, or a TLS failure.
 3. **A way comes first only after it answered where the other gave nothing,** and then for ten minutes on that network;
    an answer of the default first way restores the order at once. A failure alone teaches nothing, since it may be
-   the server's. Outcomes through the proxy are the proxy's.
+   the server's. The global proxy learns to come first only while the network is closed, and only for that closing: a
+   direct connection made forgets it. Outcomes through the proxy are the proxy's.
 4. **None for a PAC file,** the network's or the global one, told by its URL before its host and port, since Android
    reports a PAC as `localhost` and its handler's port. **None for a proxy on the loopback, on a link-local address or
    on one of the phone's own addresses,** the tunnel's included, for the global proxy as for the network's: such a
@@ -293,8 +302,18 @@ told no proxy.
    "Now" reads it, once the tunnel is the network part's own default network: before that, Android's answer may be the
    network's own proxy and cannot be told from it, so the global one counts as none until then. A name, the global
    proxy's too, is resolved only through the network beneath, off the main thread, and a late answer is dropped. The
-   debug dump's `dns-proxy` line says which proxy, `network` or `global`, why there is none where there is none, and
-   which way comes first.
+   phone's own addresses are every interface's: the networks', a hotspot's, USB tethering's, Wi-Fi Direct's and the
+   tunnel's. An exchange in flight keeps the route it began with, so a proxy changed or removed meanwhile may still
+   get that exchange's one `CONNECT` within its 3 s. When a way through the proxy opens where there was none (a
+   network's own proxy set, the global one read on a closed network, or the network found closed while it is set),
+   the engine's holds on the encrypted steps go, as on a change of network, so that a step that failed without the
+   proxy is tried again at once. The debug dump's `dns-proxy` line says which proxy, `network` or `global`, why there
+   is none where there is none, and which way comes first: `direct-first`, `proxy-first`, or `direct-only` for the
+   global proxy while the network lets the resolver connect directly.
+   - **Measured** on Android 15 alone (`dp-api35-ci`; the strategy repository's `measurements-7.md`, "After the
+     resolver's global proxy"): the global proxy read inside the tunnel, read anew on a change with the VPN on, and
+     used on a network that lets only the proxy through. That `defaultProxy` inside the VPN gives the global proxy
+     alone was measured on Android 15 and 17 (measurements 7.1). Android 10 to 14 and 16 are not measured.
 7. **Limits:** DoT stays direct, since most proxies refuse a `CONNECT` to port 853 and DoT is not HTTP; a proxy that
    wants a password is refused, and the exchange goes directly.
 
