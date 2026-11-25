@@ -121,8 +121,12 @@ object ProxyFacts {
         )
     }
 
-    /** The engine's counters of apps' own proxies (ADR 0052): declared, with a password, inferred, substituted, taken back, covers. */
-    val COUNTERS = 61..66
+    /**
+     * The engine's counters of apps' own proxies (ADR 0052), by their places: declared, with a password, inferred,
+     * substituted, taken back, covers; and (the proxy record's unit U) the `UDP ASSOCIATE`s tied, and the relays named
+     * elsewhere.
+     */
+    val COUNTERS: Set<Int> = (61..66).toSet() + (71..72)
 
     /**
      * The engine's counters as the network part's dump writes them: all of them in a debuggable build; in a release,

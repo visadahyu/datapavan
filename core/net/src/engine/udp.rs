@@ -556,7 +556,13 @@ impl Peer {
             app_port: app.port(),
             id: opened.id,
             quic: (!came_in).then(|| (opened, Box::new(quic::Initial::new()))),
-            bytes: shared.record(flow),
+            bytes: {
+                let bytes = shared.record(flow);
+                if relay {
+                    shared.relay_recorded(opened.id);
+                }
+                bytes
+            },
             last: now,
             made: now,
             came_in,
@@ -5204,7 +5210,12 @@ async fn udp_failed(
 ) {
     let unreachable = flow.outcome == Outcome::Unreachable;
     let uid = flow.uid;
+    // A relay's flow tied to its app's own proxy ends as it is recorded: its first hop keeps its window in "Now" (R2).
+    let tied = super::proxied::own_first_hop(&flow).then(|| flow.clone());
     shared.record(flow);
+    if let Some(tied) = tied {
+        shared.ended_now(&tied);
+    }
     // Only what the rule says that app sent fails with it; another app's waits on.
     let waiting = {
         let mut table = lock(flows);

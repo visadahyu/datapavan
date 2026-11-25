@@ -1049,11 +1049,12 @@ impl Shared {
             }
             Target::Name(_, port) => (true, *port),
         };
-        if elsewhere {
-            Counters::add(&self.counters.proxy_relays_elsewhere, 1);
-        }
+        // A port of 0 names no relay: nothing is tied, and nothing counted.
         if port == 0 {
             return;
+        }
+        if elsewhere {
+            Counters::add(&self.counters.proxy_relays_elsewhere, 1);
         }
         Counters::add(&self.counters.proxy_associations, 1);
         lock(&self.proxies).associate(Association {
@@ -1071,8 +1072,9 @@ impl Shared {
     /// port (audit-U m4): the proxy's kind and its first hop, the relay's own names and network, the facts that name
     /// nothing, and the trackers' marks on the relay's names (audit-U M4). No `asked` yet, which only the first
     /// datagram's header can give ([`Shared::relay_asked`]): "Now" shows the first hop, and the log keeps what an own
-    /// proxy's flow keeps, as for any own proxy (`strips`, `strip_for_log`). Every fact is read before the proxies'
-    /// lock is taken, and nothing else is locked under it. Whether one was given.
+    /// proxy's flow keeps, as for any own proxy (`strips`, `strip_for_log`). The proxies' lock is taken alone, under
+    /// the UDP table's, and let go before the other facts are read, which take it again themselves. Once recorded, the
+    /// flow is [`Shared::relay_recorded`]. Whether one was given.
     pub(super) fn tie_relay(&self, flow: &mut Flow, came_in: bool) -> bool {
         let Some(uid) = flow.uid else {
             return false;
@@ -1108,6 +1110,16 @@ impl Shared {
             unsure: false,
         }));
         true
+    }
+
+    /// A flow tied to its app's proxy's relay ([`Shared::tie_relay`]) was recorded: no hello names it, whatever the
+    /// switch says, so that a hello its app sends on it, as plain QUIC to the relay's port, only adds its trackers'
+    /// marks, and the record keeps them (review U-engine M1). Only its first datagram's SOCKS5 header can name it, with
+    /// the switch on ([`Shared::relay_asked`]).
+    pub(super) fn relay_recorded(&self, id: u64) {
+        if let Some(live) = lock(&self.live).get_mut(&id) {
+            live.unkept = true;
+        }
     }
 
     /// The first datagram an app sent on a flow tied to its proxy's relay ([`Shared::tie_relay`]) named `target` in its
@@ -1700,30 +1712,30 @@ impl Sniff {
 /// an inner hello read meanwhile waits; refused, or answered by another protocol, the request names nothing,
 /// and that hello names the flow as its own. A server that never answers confirms nothing. A confirmed `UDP
 /// ASSOCIATE` is read on, across reads, until its reply's relay is whole ([`proxies::bound`], at most
-/// [`ASSOCIATE_REPLY`] bytes; audit-U M2).
+/// [`ASSOCIATE_REPLY`] bytes; audit-U M2), in a buffer of its own on the heap ([`Binding`]): every TCP flow carries
+/// this handshake in its relay, which keeps its 16 bytes.
+#[derive(Default)]
 pub(super) struct Handshake {
-    reply: [u8; ASSOCIATE_REPLY],
+    reply: [u8; MAX_REPLY],
     len: usize,
     step: Step,
 }
 
-impl Default for Handshake {
-    fn default() -> Self {
-        Self {
-            reply: [0; ASSOCIATE_REPLY],
-            len: 0,
-            step: Step::Idle,
-        }
-    }
-}
-
+#[derive(Default)]
 enum Step {
+    #[default]
     Idle,
     Waiting(Request, Option<Hello>),
     /// A `UDP ASSOCIATE` confirmed, its relay not read whole yet.
-    Binding(Request),
+    Binding(Box<Binding>),
     Confirmed,
     Refused,
+}
+
+/// A confirmed `UDP ASSOCIATE`'s request, and its server's first bytes so far, at most [`ASSOCIATE_REPLY`].
+struct Binding {
+    request: Request,
+    reply: Vec<u8>,
 }
 
 /// What a handshake's next bytes settle, for the relay to tell the engine ([`Shared::handshake_settled`]).
@@ -1756,29 +1768,36 @@ impl Handshake {
     /// The server sent `bytes`: what they settle, a confirmed `UDP ASSOCIATE`'s relay once its reply is whole, and
     /// whether its next bytes are still wanted.
     fn server(&mut self, bytes: &[u8]) -> (Option<Settle>, Option<Target>, bool) {
-        let associate = matches!(&self.step, Step::Waiting(r, _) | Step::Binding(r) if r.associate);
-        let most = if associate {
-            ASSOCIATE_REPLY
-        } else {
-            MAX_REPLY
+        let mut rest = bytes;
+        let mut settled = None;
+        if !matches!(self.step, Step::Binding(_)) {
+            let take = bytes.len().min(MAX_REPLY - self.len);
+            self.reply[self.len..self.len + take].copy_from_slice(&bytes[..take]);
+            self.len += take;
+            rest = &bytes[take..];
+            settled = self.decide();
+        }
+        let relay = self.bind(rest);
+        let wanted = match self.step {
+            Step::Idle | Step::Waiting(..) => self.len < MAX_REPLY,
+            Step::Binding(_) => true,
+            Step::Confirmed | Step::Refused => false,
         };
-        let take = bytes.len().min(most.saturating_sub(self.len));
-        self.reply[self.len..self.len + take].copy_from_slice(&bytes[..take]);
-        self.len += take;
-        let settled = self.decide();
-        let relay = self.bind();
-        let wanted = self.len < most
-            && matches!(self.step, Step::Idle | Step::Waiting(..) | Step::Binding(_));
         (settled, relay, wanted)
     }
 
-    /// A confirmed `UDP ASSOCIATE`'s relay, once the reply is whole: then nothing more is read.
-    fn bind(&mut self) -> Option<Target> {
-        let Step::Binding(request) = &self.step else {
+    /// A confirmed `UDP ASSOCIATE`'s relay, `more` of the server's bytes read on: once the reply is whole, and then
+    /// nothing more is read.
+    fn bind(&mut self, more: &[u8]) -> Option<Target> {
+        let Step::Binding(binding) = &mut self.step else {
             return None;
         };
-        let relay = match proxies::bound(request, &self.reply[..self.len]) {
-            None if self.len < ASSOCIATE_REPLY => return None,
+        let take = more
+            .len()
+            .min(ASSOCIATE_REPLY.saturating_sub(binding.reply.len()));
+        binding.reply.extend_from_slice(&more[..take]);
+        let relay = match proxies::bound(&binding.request, &binding.reply) {
+            None if binding.reply.len() < ASSOCIATE_REPLY => return None,
             None => None,
             Some(relay) => relay,
         };
@@ -1810,7 +1829,12 @@ impl Handshake {
         if confirmed {
             // Its control flow is named at once; its relay is read on.
             if request.associate {
-                self.step = Step::Binding(request.clone());
+                let mut reply = Vec::with_capacity(ASSOCIATE_REPLY);
+                reply.extend_from_slice(&self.reply[..self.len]);
+                self.step = Step::Binding(Box::new(Binding {
+                    request: request.clone(),
+                    reply,
+                }));
             }
             Some(Settle::Declared(request, hello))
         } else {
@@ -4542,8 +4566,11 @@ mod tests {
         let app = SocketAddr::from(([10, 1, 10, 1], 50_000));
         let (opened, mut flow) = super::super::udp::begin_udp(shared, app, destination, Some(uid));
         flow.came_in = came_in;
-        shared.tie_relay(&mut flow, came_in);
+        let tied = shared.tie_relay(&mut flow, came_in);
         let _ = shared.record(flow);
+        if tied {
+            shared.relay_recorded(opened.id);
+        }
         (opened, live(shared, opened.id))
     }
 
@@ -4706,7 +4733,7 @@ mod tests {
     fn an_association_ends_with_the_last_of_its_control_flows() {
         let shared = engine(false);
         let server = at([203, 0, 113, 5], 1080);
-        // A server that relays on its TCP port, as Xray's and sing-box's SOCKS inbounds do.
+        // A server that relays on its TCP port, as shadowsocks-libev's local SOCKS5 server does.
         let bnd = [1, 0, 0, 0, 0, 0x04, 0x38];
         let first = associate_at(&shared, UID, server, &bnd);
         let second = associate_at(&shared, UID, server, &bnd);
@@ -4800,6 +4827,40 @@ mod tests {
                         |f| left_out(f) && f.proxy.as_ref().is_some_and(|p| p.trackers == [49])
                     ),
                 "{written:?}"
+            );
+        }
+    }
+
+    /// Review U-engine M1: a hello its app sends on a relay's flow, as plain QUIC to the relay's port, names the flow
+    /// nothing, the switch off or on, and its trackers' marks are kept, as they are for TCP.
+    #[test]
+    fn a_hello_on_a_relays_flow_names_nothing_and_keeps_its_mark() {
+        for logs in [false, true] {
+            let shared = engine(logs);
+            with_trackers(&shared);
+            associate_at(
+                &shared,
+                UID,
+                at([203, 0, 113, 5], 1080),
+                &[1, 0, 0, 0, 0, 0x9c, 0x40],
+            );
+            let (relay, before) = udp_flow(&shared, UID, at([203, 0, 113, 5], 40_000), false);
+            let ServerName::Found(hello) =
+                tls::server_name(&crate::tls::tests::hello("sdk.tracker.example", 1000))
+            else {
+                unreachable!("a hello")
+            };
+            shared.hello(relay, &hello, NamedBy::Quic);
+            let after = live(&shared, relay.id);
+            assert_eq!(
+                (&after.name, after.named_by),
+                (&before.name, before.named_by),
+                "the switch {logs}"
+            );
+            assert_eq!(
+                after.proxy.map(|p| p.trackers),
+                Some(vec![49]),
+                "the switch {logs}"
             );
         }
     }

@@ -582,6 +582,11 @@ impl Shared {
         Some(ended)
     }
 
+    /// [`Shared::ended`] now, for a flow recorded as it ended: a UDP flow whose way could not be opened.
+    pub(super) fn ended_now(&self, flow: &Flow) {
+        self.ended(flow, self.clock.since_boot());
+    }
+
     /// A flow that showed an app's own proxy's first hop ended at `boot`: noted with its first hop, which is how
     /// "Now" places it once the switch is off, so that its place stays in full for its window (R2).
     fn ended(&self, flow: &Flow, boot: Duration) {
