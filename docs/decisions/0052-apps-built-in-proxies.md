@@ -422,7 +422,10 @@ chaining is, and must follow the same switch.
   round measured 1,695,200, 1,256,752 and 1,933,072 bytes, stripped, inside `core`), the library in Advanced's release
   APK 1,772,296 bytes on arm64-v8a, 1,312,792 on armeabi-v7a and 2,017,976 on x86_64, under the 2 MiB gate (2,097,152
   bytes) of each ABI, which is unchanged: x86_64 79,176 bytes under it. Against part 1's figures, built otherwise,
-  this part with its fix round adds about 77, 56 and 85 KB.
+  this part with its fix round adds about 77, 56 and 85 KB. Unit U, against `main` at `5c5dc487` (2,039,896 bytes on
+  x86_64): 2,051,208 bytes on x86_64, 1,826,872 on arm64-v8a and 1,356,752 on armeabi-v7a, 11,312 bytes more on
+  x86_64 and 45,944 under the gate; the packet path's machine code compared function by function with the size
+  pass's tool, every relay's poll inline as before.
 - **Frontier research, open:** Telegram's fake-TLS hello across versions, told from the device without a JA4 database;
   encapsulated handshakes seen from the device (Xue et al., USENIX Security 2024) for Signal and WhatsApp; and how
   people read "read from the connection" against "inferred", with real users.
