@@ -42,9 +42,13 @@ your unlocked phone can see it, as they can see the rest of the app.
   was sent unencrypted, whether it is the proxy in Android's settings, whether it is on your local network, and
   whether Datapavan could not tell it was a messenger's proxy), and which known trackers its
   connection's names matched (by their εxodus ids, which name a tracker's company, not a destination). Only while
-  "Log where apps connect through your tool, WireGuard or a proxy" is on does it also keep where the proxy is (its
-  address and the name a DNS answer gave it), what the app asked it for and, for a messenger's proxy, the name its
-  connection sent in place of its destination. It never keeps a proxy's password, which Datapavan reads past and
+  "Log where apps connect through your tool, WireGuard or a proxy" is on, or for an app you chose on its own page,
+  does it also keep where the proxy is (its address and the name a DNS answer gave it), what the app asked it for
+  and, for a messenger's proxy, the name its connection sent in place of its destination. If you choose to log where
+  one app connects through a proxy, its proxy's address and where it asked to go are logged like any connection from
+  then on, until you turn that off, but never for the proxy in Android's settings, a proxy on your local network,
+  Android's PAC proxy or a circumvention tool Datapavan knows by its signing key; what was logged before stays for the
+  days you chose. It never keeps a proxy's password, which Datapavan reads past and
   does not store, and says only that one was sent unencrypted. The records of a connection taken for a messenger's
   proxy wait ten minutes in memory before they are written, so that one Datapavan corrects in that time is written
   correct. A request an app sends to the proxy in Android's settings, written as for a proxy, is kept as an app's own
@@ -58,7 +62,7 @@ your unlocked phone can see it, as they can see the rest of the app.
   app's own proxy is (its address, name and network, and for a messenger's proxy the name its connection sent) is
   shown there, in memory only, while the connection is open and for ten minutes after it ends, whatever "Log where
   apps connect through your tool, WireGuard or a proxy" says. Where the app asked the proxy to go is shown only
-  while that switch is on. "Now" also shows the proxy set in Android's own settings, while one is set. To tell Telegram's, WhatsApp's and Signal's own connections from their proxies', it
+  while that switch is on, or for an app you chose to log that way. "Now" also shows the proxy set in Android's own settings, while one is set. To tell Telegram's, WhatsApp's and Signal's own connections from their proxies', it
   also notes in memory, until the firewall stops (and across the tunnel's own restarts, which hand it on): when
   each of them last connected to its maker's network, which counts for ten minutes; the names Telegram and
   WhatsApp looked up through Datapavan, as hashes that cannot be read back, each for an hour; and when Signal last
@@ -76,6 +80,10 @@ your unlocked phone can see it, as they can see the rest of the app.
   tracking and an app's own sign-in, which one an app uses, it reads the tracker scan's results already kept on
   the phone. With the setting for phones that may be searched (planned), these settings stay behind Datapavan's
   own lock and go with a wipe, and nothing of blocking is recorded.
+- **The apps whose proxies you chose to log, if you choose any:** each app's package name and when it was first
+  installed, never anything of its connections, so that an app installed again, or another app that Android comes to
+  count with it, is not logged on your earlier choice. With the setting for phones that may be searched (planned),
+  they are kept in memory only, until the screen turns off, and go with a wipe.
 - **The WireGuard configurations you add,** at most eight: each one's text, which holds its private key and its
   server, and the name you gave it, encrypted under a key that Android's keystore keeps (in the phone's separate
   security chip where it has one), in storage that is never backed up or moved to another phone. Beside them, also

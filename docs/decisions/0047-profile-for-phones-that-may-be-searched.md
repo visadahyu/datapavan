@@ -31,6 +31,7 @@ Basic's items; it does not list Advanced's yet, since Advanced is not released.
 | Basic | The appearance, and before Android 13 the language | `settings` preferences | Nothing of use |
 | Advanced | All of Basic's, plus the connection log ([ADR 0037](0037-connection-log-storage.md)): the database, each day's wrapped keys and the Keystore key pair | App-private database and preferences | Which app spoke to whom, for as long as the retention keeps it |
 | Advanced | The chain's settings: on or off, all apps or a list of apps, whether chained destinations are logged, the tool, its host and port, UDP, and the generated proxy password under a Keystore key | `chain` preferences | The user's circumvention tool, even after it was uninstalled before the search, and which apps the user sends through it |
+| Advanced | The apps whose own proxies the user chose to log ([ADR 0052](0052-apps-built-in-proxies.md), decision 8, R3): each app's packages, each with its first install time, never a UID | `logged_proxies` preferences | That the user wanted to see where those apps connect through a proxy, and when each was installed; an app removed while the tunnel was off, until the network part runs again. The preferences are written through a backup file and a rename, and flash keeps old blocks until they are reused, as for every store here |
 | Advanced | The apps left out of the tunnel ([ADR 0041](0041-visibility-and-coexistence.md)) | `left_out` preferences | Little: apps that do not work with a VPN |
 | Advanced | The WireGuard configurations ([ADR 0035](0035-wireguard-upstream.md), W7): each one's text, with its private key and its server, and its name, wrapped with AES-256-GCM under key B (`network-tunnels-unlocked`, which needs an unlocked phone) while the profile is on, under key A (`network-tunnels`, which opens at any time) otherwise; and what decides the routes, under key A always: which apps go through each, how many there are, the order and the default, "Local network directly", and whether the profile is on | `noBackupFilesDir/tunnels` (no backup, no device transfer), and the two non-exportable Keystore keys | Nothing without the phone's Keystore. With it, by code run as Datapavan or above: under key A, which apps the user sends through a VPN provider's configuration, at any time after the first unlock; the provider, its server and the account's key under key A without the profile, and under key B with it only while the phone is unlocked (from Android 12), not from a locked phone after its first unlock; and from a dump of the running `:network` process's memory, the configurations the engine set, which no app can prevent |
 | Advanced | The flows of this run, in memory, for the network screen | Memory | What apps did since the network part started, to anyone who opens the network screen |
@@ -104,7 +105,8 @@ asks the question and keeps its own switch; each says that the other edition has
 | ADR 0046's summary notification | Asked at onboarding, with this profile's question | Off. If Advanced still posts an ongoing notification, its text is a neutral "On": no count, no app, no tool and no word for VPN; hidden on the lock screen (`VISIBILITY_SECRET`); silent |
 | ADR 0046's Quick Settings tile | Its state and summary | On and off only, no count. Opening the "Now" view from it asks for the phone's unlock first (`unlockAndRun`) |
 | ADR 0046's "Now" view | As ADR 0046 decides | Shows only this screen-on session, behind Advanced's lock |
-| Apps' own proxies (Advanced, ADR 0052) | Where the proxy is (its address, name and network, and a messenger's cover name) is shown in "Now" while the connection is open and for ten minutes after it ends. It is logged, with where the app asked it to go, only with "Log where apps connect through your tool, WireGuard or a proxy". The history keeps the kind and the facts that name nothing | Nothing is recorded. The proxy's address, name and network are shown within the screen-on session only, behind Advanced's lock. The screen-off clear takes it with the table of the connections' ends, the proxy counters and the substitution's memory (ADR 0052, decision 8, R9; W9 wires it) |
+| Apps' own proxies (Advanced, ADR 0052) | Where the proxy is (its address, name and network, and a messenger's cover name) is shown in "Now" while the connection is open and for ten minutes after it ends. It is logged, with where the app asked it to go, only with "Log where apps connect through your tool, WireGuard or a proxy", or for an app the user chose to log one by one (the row below). The history keeps the kind and the facts that name nothing | Nothing is recorded. The proxy's address, name and network are shown within the screen-on session only, behind Advanced's lock. The screen-off clear takes it with the table of the connections' ends, the proxy counters and the substitution's memory (ADR 0052, decision 8, R9; W9 wires it) |
+| The apps whose own proxies the user chose to log (Advanced, ADR 0052, decision 8, R3) | Kept, by package and first install time, behind Advanced's lock once W9 brings it, and wiped by a wipe (`LoggedApps.wipe`) | In memory only (`LoggedApps.setProfile`), cleared when the screen turns off (`LoggedApps.clearSession`) and by a wipe. Since nothing is recorded, a choice only changes what "Now" shows, a chosen app's destinations included, within the screen-on session. Turning the profile off writes nothing of them |
 | ADR 0046's opt-in flag notice | Kept, if the user opted in | Never kept |
 | ADR 0046's optional baseline for each app: one number per app, the most it sent in the background in a day | Kept, if the user turned it on | Never kept, so flags that need it are not raised |
 | Advanced's own lock (ADR 0040) | Offered, off | On, with a code of its own, so that a forced unlock of the phone does not open it; it locks as soon as Advanced leaves the screen or the screen turns off |
@@ -130,8 +132,10 @@ Basic on Google Play (ADR 0031) has the same profile as Basic.
 
 Turning the profile on wipes at once, after one confirmation, everything it would not have kept: the log and its
 keys (as "Delete everything now" does, ADR 0037), the journal, the sensor review, the scan's results, and the
-tool, host and port. Nothing is kept "for later". Turning it off restores nothing: the user chooses a retention
-again, and the journal starts empty.
+tool, host and port; the apps whose own proxies the user chose to log leave the disk and stay in memory alone.
+Nothing is kept "for later". Turning it off restores nothing: the user chooses a retention again, the journal starts empty, and the
+choices of apps' proxies made under the profile are gone, never written (ADR 0052, decision 8, R3), so that a choice
+made while nothing was recorded never starts a record.
 
 ### 5. Recents
 
@@ -188,7 +192,8 @@ own that the call cannot reach: it drops its snapshot, its trackers and an opene
   confirmed are wiped. In Advanced it covers the WireGuard configurations (W7): the folder
   `noBackupFilesDir/tunnels`, the configurations' wraps and the routes' alike, and both Keystore keys,
   `network-tunnels` and `network-tunnels-unlocked`, deleted with it so that no copy of a wrap made before can be
-  opened (the security review of W7's part 2, m6).
+  opened (the security review of W7's part 2, m6); and the apps whose own proxies the user chose to log, on disk and
+  in memory (`LoggedApps.wipe`, ADR 0052, decision 8, R3), which the running tunnel stops logging at once.
 - **PanicKit.** Both editions answer [PanicKit](https://guardianproject.info/code/panickit/) triggers, as ADR
   0040 decided for Advanced. PanicKit's rules hold: a trigger app may make an app destroy data only once the user
   has connected the two, and the connection is never made automatically. With the profile on:

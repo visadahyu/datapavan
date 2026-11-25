@@ -146,7 +146,7 @@ time, and every release costs an offline signing session and texts reviewed in e
 The milestones of 0.2.0, W1 to W9, with what each must show before it counts as done, are in
 [DESIGN.md §13.2](docs/DESIGN.md#132-v020-datapavan-advanced-the-connection-log-next-to-circumvention-tools).
 
-Where it stands on 2026-11-22: the four items before W1 are drafted (ADRs
+Where it stands on 2026-11-25: the four items before W1 are drafted (ADRs
 [0034](docs/decisions/0034-network-permissions.md), [0035](docs/decisions/0035-wireguard-upstream.md) and
 [0036](docs/decisions/0036-ip-to-organisation-dataset.md), accepted; the table of tools in `data/tools/`).
 W1, the network part's skeleton, and W2, the packet engine in the product, are in `main`: every app's traffic passes
@@ -157,7 +157,8 @@ comparison, which needs a test account, and W4's runs on the A40 and an Android 
 through the user's tool ([ADR 0038](docs/decisions/0038-dns-of-chained-apps.md)), was accepted and merged on
 2026-11-11. W5, and W7's parts so far, are in `main` too. W8 is in `main` but for part 2b: encrypted DNS for apps
 that go directly ([ADR 0042](docs/decisions/0042-dns-of-apps-that-go-directly.md)), apps' built-in proxies named
-([ADR 0052](docs/decisions/0052-apps-built-in-proxies.md)), tracker blocking
+([ADR 0052](docs/decisions/0052-apps-built-in-proxies.md), accepted 2026-11-25 with the proxy record's unit C, on
+`proxy-record-c`, which lets the user log one app's proxy from its own page), tracker blocking
 ([ADR 0053](docs/decisions/0053-tracker-blocking.md)) and the per-tool guides, translated; an ODoH relay of the
 project's own is proposed in [ADR 0055](docs/decisions/0055-an-odoh-relay-of-the-projects-own.md); Android's own labels, read from the phone in both
 editions ([ADR 0054](docs/decisions/0054-android-labels-read-from-the-phone.md), accepted 2026-11-21), are built on

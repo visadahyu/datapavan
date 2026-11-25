@@ -96,9 +96,12 @@ Chaining also contains an untrusted tool (see [RESTRICTED-REGIONS.md](RESTRICTED
   and the apps chained or tunnelled through it are not read: they carry the tool's traffic. An app's own proxy's first
   hop (its address, name and network, and a messenger's cover name) is shown in "Now" while the connection is open and
   for ten minutes after it ends, whatever the switch (ADR 0052, decision 8). It is logged, with the destination asked
-  for, only under the one switch "Log where apps connect through your tool, WireGuard or a proxy"; otherwise the log
-  keeps its kind, the facts that name nothing and its trackers' marks, matched on its names before they were left out,
-  and the destination is not shown either. The switch is on the network screen wherever a row points to it. Proxies inside
+  for, only under the one switch "Log where apps connect through your tool, WireGuard or a proxy", or for an app the
+  user chose on its own page, "Log where APP connects through a proxy" (the proxy record's unit C, R3), which the
+  engine decides per flow and never applies to Android's setting, a local proxy, a tool's or Android's PAC proxy;
+  otherwise the log keeps its kind, the facts that name nothing and its trackers' marks, matched on its names before
+  they were left out, and the destination is not shown either. The choice is kept by package and first install time,
+  never by UID, so a reinstall or a package that joins the app's UID ends it. The switch is on the network screen wherever a row points to it. Proxies inside
   TLS or QUIC, and those on the phone itself, whose loopback never enters the tunnel, are not seen, but for Android's
   PAC proxy, whose connections for other apps, left-out apps included, come into the tunnel under its own name and
   say so.

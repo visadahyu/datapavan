@@ -1,10 +1,13 @@
 # 0052. Apps' built-in proxies named: read from the connection, or inferred with substitution
 
-- Status: Proposed (built on `watch-w8b`, W8 part 2a, 2026-11-20; its fix round on `watch-w8b-fix`, 2026-11-21;
-  awaits the maintainer's word)
-- Date: 2026-11-20, fix round 2026-11-21
+- Status: Accepted, with the proxy record's unit C (2026-11-25), as the maintainer approved its plan on 2026-11-24
+  («تایید شد», "approved"), which named this ADR's acceptance in that unit; decision 8 rests on the maintainer's
+  middle way of 2026-11-22 («تایید شد», "approved"). Built on `watch-w8b`, W8 part 2a, 2026-11-20; its fix round on
+  `watch-w8b-fix`, 2026-11-21.
+- Date: 2026-11-20, fix round 2026-11-21; the proxy record's units A to C, 2026-11-24 and 2026-11-25
 - Decided by: drafted by the builder of W8 part 2a with AI help, under the session's grant (go on by the roadmap at
-  the S-tier bar), from a brief audited once before the build; the maintainer accepts or changes it.
+  the S-tier bar), from a brief audited once before the build; the proxy record's units A to C built with AI help, each
+  from a plan audited once, under the maintainer's approvals of 2026-11-22 and 2026-11-24 that decision 8 quotes.
 - Builds on: ADR [0025](0025-guided-check-and-traffic-facts.md) (decisions 4 and 5: facts, never alarms; the words),
   [0036](0036-ip-to-organisation-dataset.md) (decision 4: an address's organisation hosts, it does not run),
   [0037](0037-connection-log-storage.md), [0038](0038-dns-of-chained-apps.md),
@@ -154,8 +157,8 @@ chaining is, and must follow the same switch.
    umbrella, even on the argument that the user's phone might be searched". The coordinator's proposal that followed,
    built from an independent design study (rules R1 to R10, in the private strategy repository), was approved the
    same day («تایید شد», "approved"). On 2026-11-24 the maintainer approved its split into four units and the plan's
-   four proposals («تایید شد», "approved"). Unit A, "seen live in full", builds what follows; the other units are
-   named at the end.
+   four proposals («تایید شد», "approved"). Unit A, "seen live in full", builds what follows; unit C, the choice for
+   one app (R3), is below; the other units are named at the end.
    - **The words.** An *own proxy flow* is a SOCKS or `CONNECT` flow the server's reply confirmed, or a messenger's
      inferred proxy (decisions 1 and 5), and a plain request to Android's setting (decision 1's exception, unit B). Any
      other plain request in absolute form is not one. Its *first hop* is the flow's own
@@ -164,7 +167,8 @@ chaining is, and must follow the same switch.
      for, the DNS name of an address asked for, and the inner hello's name, ECH state and resolver mark. Only a
      declared SOCKS or `CONNECT` flow can hold one; an inferred flow never does (Signal's is named by its outer hello,
      the proxy's own name). *The switch* is "Log where apps connect through your tool, WireGuard or a proxy" (W6's
-     switch, F6), off by default.
+     switch, F6), off by default. *With the switch off*, below, means for a flow that the user's choice for its app
+     does not cover (R3, unit C): a flow it covers is kept as with the switch on.
    - **R1, the record.** With the switch off, each record of an own proxy flow is stripped as it enters the log
      (`logbook::without_destination`). It keeps the kind, the facts that name nothing (Android's setting, a password
      unencrypted, outside the maker's network), the trackers' εxodus ids, the bytes, times, states and route, and a
@@ -243,20 +247,69 @@ chaining is, and must follow the same switch.
      stay as they are.
    - **R8, no app makes Datapavan keep less.** The server's confirmation is still needed (F1). The live flow always
      keeps its own address: the request and the inner hello cannot rename it (C1), and a flood of other destinations
-     cannot push its first hop out of "Now" early (one limit below). Nothing an app sends turns the switch on or off:
-     it is set only from the screen and from the debug-only dump command. A PanicKit trigger from an app the user has
+     cannot push its first hop out of "Now" early (one limit below). Nothing an app sends turns the switch, or the
+     choice for one app (R3), on or off: each is set only from the screens and from the debug-only dump command. A PanicKit trigger from an app the user has
      not connected no longer clears the live view (ADR 0047, decision 7).
    - **R9, the profile.** Under ADR 0047's profile, no proxy kind, flag or counter is recorded, and "Now" shows a
      first hop within the screen-on session only, behind Advanced's lock. The screen-off clear
      (`Engine::clear_activity`) already forgets every place, full or not, and the table of ends, as a test shows. That
      the clear also resets the proxy counters the switch's drawing reads (`LogSwitch.proxiesSeen`) and the
-     substitution's memory is W9's work, a must in DESIGN.md's W9 row: no engine path reads the profile yet.
+     substitution's memory is W9's work, a must in DESIGN.md's W9 row: no engine path reads the profile yet. The
+     choice for one app (R3) shows a chosen app's destinations within that session too, and is kept in memory only.
    - **Kept from before.** The switch is drawn wherever anything is left out for it, and every left-out row links to
      it. A release's dump writes the proxy counters as `-`, eight since unit U. The substitution's state is a few instants and name
      hashes per messenger, in memory. Nothing reaches a summary, the widget or the tile (ADR 0046, decision 3).
-   - **The other units.** R3, the per-app choice "Keep where APP connects through a proxy": unit C, which accepts this
-     record. R4, the facts said whatever the switch, with R7, plain requests to Android's setting: unit B, built
-     (decisions 4 and 9). A plain request to a local address keeps its own address, as before (the brief audit's
+   - **R3, the choice for one app** (unit C, 2026-11-25). "Log where APP connects through a proxy", on the app's page
+     and on its rows in "Now" and the history, keeps that app's own proxy flows as the switch on does, the switch
+     staying off.
+     - *The rule, per flow.* Wherever the engine read the switch, it reads one predicate of the flow and its proxy
+       (`Keeps`): every flow while the switch is on, else a flow the choice covers (`LoggedApps::covers`). A covered
+       flow is named by its destination at naming (C1 does not apply), its records keep the first hop and the
+       destination at both entry points of the log, "Now" shows it in full with no window and no "shown here only"
+       bit, and a plain request keeps what it asked for. A flow taken back is decided by its would-be proxy's facts,
+       so a chosen messenger's taken-back records are written whole, as with the switch on.
+     - *Never covered, and where.* Android's proxy setting (the flow's `setting` fact, set at naming by an address or
+       a name Android's resolver gave, never the app's) and a proxy on the user's own network (the `local` fact, from
+       Android's link properties): in the engine, per flow. A circumvention tool known by its signing key, the
+       chain's tool and the three named rows (unit B's B6), and Android's PAC handler: the network part never offers
+       or hands them, and the engine drops them from the set. Android's own UIDs, below 10,000 in each user's range:
+       the engine keeps only application UIDs. An SDK Runtime UID (AOSP's 20,000 to 29,999 in each user's range)
+       follows its app (`app_of`). An exclusion only removes the choice's extra logging; it never goes below R1.
+       Chained and tunnelled apps' flows are not read for proxies (decision 3), so the choice changes nothing for
+       them, and its confirmation says so.
+     - *Shared UIDs.* The choice is made for the UID, and its confirmation names every package that holds it. A UID
+       is handed only while every package that holds it now was chosen: a package that joins it later ends the
+       choice, the safe direction, and the app's rows say so in the run that saw it.
+     - *R6 for the choice.* Turned off for an app, at once, as the switch turned off: that app's live flows, waiting
+       segments and "Now" places that hold a destination go back to their first hop, its own proxy records gathered
+       for the next batch are stripped, and its first hops in "Now" outside their window are stripped by the sweep
+       that follows (`Shared::apply_proxies` runs the pass whenever an app left the set, for whatever reason).
+       Held-back records and waiting segments are as R1 says. What the log already holds stays for the retention, and
+       the screens say so. Turned on: an open flow gains no destination it never held, and places stay as they are; a
+       place left out before the choice says so.
+     - *R8 for the choice.* It is written only by the network part's screens, which are not exported, and by the
+       debug builds' dump command `proxy-log`, which takes only this project's own packages. Every fact that excludes
+       a flow comes from Android or from the network part's own reading, never from an app's bytes.
+     - *The store* (`proxy/LoggedApps.kt`, the preferences `logged_proxies` of the network process): one line per
+       package, with its kind (unit D's tools a kind of their own) and its first install time, never a UID, and
+       nothing of any flow. Android gives a removed app's UID to another after a reboot, and a package name can be
+       installed again by anyone: an entry whose package is gone, or whose first install time changed, is dropped at
+       the next hand-over and never comes back, and the app's rows say that a reinstall ended it; an update keeps the
+       first install time, and the choice. The network part hands the engine the chosen UIDs, with the tools' and the
+       PAC handler's, at each hand-over of the proxies (`nativeProxies`), and none before the tools were read once in
+       that run, so that a known tool is never covered in the seconds after a start. Under the switch, its note gives
+       how many apps are chosen (the maintainer, 2026-11-25); their list is W9's, behind Advanced's lock.
+     - *The profile (R9).* Nothing is recorded under ADR 0047's profile, so there the choice changes only what "Now"
+       shows. The store then keeps it in memory only; W9's screen-off and a wipe clear it, and turning the profile off
+       restores nothing and writes nothing (ADR 0047, decisions 3, 4 and 7). Each of these has the running network
+       part hand the choice to the engine again. The confirmation's words under the profile are W9's.
+     - *A leaf lock of its own.* The engine's set sits behind its own lock (`Shared::kept_apps`), taken only to clone
+       or swap it, with nothing taken under it. Under the `proxies` lock it would deadlock: `infer` holds `proxies`
+       and takes `held_back`, while the log's readers of the set hold `held_back`. The setting and the set are swapped
+       one after the other, never one inside the other, which is safe while network-jni serialises every call that
+       hands them.
+   - **The other units.** R4, the facts said whatever the switch, with R7, plain requests to Android's setting: unit
+     B, built (decisions 4 and 9). A plain request to a local address keeps its own address, as before (the brief audit's
      finding 15). SOCKS5's `UDP ASSOCIATE`: unit U, built (decision 10). R10, the tool's own row: unit D.
 9. **The records.** The log's records are version 7 (unit B; version 6 was [ADR 0053](0053-tracker-blocking.md)'s,
    which added the blocked outcome and the row's SDK); the live view's snapshot is version 6. Each has a proxy block
@@ -266,7 +319,11 @@ chaining is, and must follow the same switch.
    organisation, the cover and the trackers' ids (at most eight); six counters are appended (declared, with a password,
    inferred, substituted, taken back, covers kept out). Version 5 of the snapshot added one bit, bit 1 of the
    destination's flags: the first hop is shown here only; version 6 carries the log's version 7 block, its bit 6 never
-   set. The network part's Kotlin side reads the log's versions 1 to 7, bits 5 and 6 only from version 7.
+   set. The network part's Kotlin side reads the log's versions 1 to 7, bits 5 and 6 only from version 7. The choice
+   for one app (R3, unit C) changes neither format: a covered flow's record has the shape of one kept with the switch
+   on, and no bit says why it was kept, so a searcher learns nothing more from a record; the screens tell which rows
+   the choice could cover from the facts both formats already carry and the UIDs the network part knows, by the
+   engine's own vectors (`core/net/testdata/logged-apps.tsv`).
    - **"On your local network"** is one rule (`core/net/src/local.rs`, with a table of vectors both sides hold),
      decided where the proxy is named from the network beneath's on-link prefixes, which the network part hands over
      with its transport, and kept whatever the switch says, since it names nothing: link-local; an on-link prefix,
@@ -407,6 +464,23 @@ chaining is, and must follow the same switch.
       address, has its relay elsewhere: not tied.
     - *No emulator check.* microsocks, the proxy lab's SOCKS5 server, answers every command but `CONNECT` with code 7,
       and the fixture sends no UDP: the network lab's test through the whole engine is unit U's check.
+  - **The choice for one app** (decision 8, R3, unit C):
+    - *Android's setting and a local proxy.* A chosen app that sends through Android's setting, or through a proxy on
+      the user's own network, keeps its destination out with the switch off: those proxies carry other apps'
+      connections too.
+    - *A reinstall, or a package that joins the UID,* ends the choice; the app's rows say so in the network part's run
+      that saw it, and nothing of it is kept after.
+    - *The SDK Runtime's rule* rests on AOSP's numbering, which Android's own call confirms only from API 35 (the
+      emulator's check compares them); on Android 13 and 14 it is the same numbering, with nothing to compare.
+    - *A choice made by mistake* logs one app's proxy from then on, and its confirmation says so; an app that carries
+      other apps' connections has theirs logged as its own.
+    - *Who opens the app's page* sees its choice, until W9's lock; the count of apps chosen is under the switch.
+    - *A tool whose key Datapavan has not recorded yet* is an ordinary app (unit B's B6), so the choice covers it if
+      the user picks it.
+    - *Another user's copy of an app* (a vendor's dual app, Android's clone profile) is not offered the choice in this
+      user, whose package it would name.
+    - *The store at rest* is plain preferences of the network process, as the chain's list of apps is, with each chosen
+      app's first install time: an app removed while the tunnel was off stays in it until the network part runs again.
   - The false positives that need a maker's own network (a Telegram CDN data centre beside its ranges, WhatsApp's link
     previews and backups) are checked in the engine's tests and its network lab, not on the emulator, which must reach
     no outside server.
@@ -441,6 +515,16 @@ chaining is, and must follow the same switch.
   record's unit A added in `strings_untranslated.xml` until ADR 0030's next round, all held to ADR 0025's words by a
   test.
 - Data: `data/messengers` (CC0 for the project's lists; Telegram's `cidr.txt` states no licence, ADR 0015's record).
+- **The proxy record's unit C** (2026-11-25, decision 8's R3): in the engine, `Keeps`, `LoggedApps` and `app_of` in
+  `engine/proxied.rs`, with the leaf lock `Shared::kept_apps` and `Shared::apply_proxies`, and `ProxySetting`'s
+  `logged`, `tools` and `pac_handler`, which `nativeProxies` hands; the shared vectors
+  `core/net/testdata/logged-apps.tsv`, read by the engine's tests and the network part's (`proxy/ProxyChoice.kt`). In
+  the network part, `proxy/LoggedApps.kt` (the store, memory only under the profile, and the hand-over's rule),
+  `NetworkVpnService.applyProxies` (the UIDs, the tools and the PAC handler, again once the tools are read and at
+  `ACTION_APPLY_PROXIES`), `ui/AppProxyChoice.kt` (the confirmation and the page's switch), the rows of
+  `ui/NowScreen.kt` and `ui/HistoryScreen.kt`, the count under the switch, and the debug builds' `proxy-log`,
+  `proxy-logged` and `proxy-sandbox`. The emulator's `proxies` shard checks it end to end at a TEST-NET address that
+  a rooted emulator's own rule sends to the proxy lab, so that the first hop is not local (`scripts/verify-proxies.sh`).
 
 ## Fix round (2026-11-21)
 
