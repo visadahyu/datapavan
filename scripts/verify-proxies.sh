@@ -43,15 +43,17 @@ HOST=10.0.2.2
 compose=(docker compose -f "$ROOT/scripts/proxylab/compose.yaml")
 WORK="$(mktemp -d)"
 PROXY_SET=""
-# Unit C's part: whether this check rooted the emulator, and the nat rule it set there.
+# Unit C's part: whether this check rooted the emulator, whether it asked to (so that a root that took too long to show
+# is undone all the same; review C-rest 10), and the nat rule it set there.
 ROOTED=""
+UNROOT=""
 DNAT_SET=""
 DNAT_RULE=""
 
 cleanup() {
     local status=$?
     if [ -n "$DNAT_SET" ]; then adb shell "iptables -w -t nat -D OUTPUT $DNAT_RULE" >/dev/null 2>&1 || true; fi
-    if [ -n "$ROOTED" ]; then
+    if [ -n "$UNROOT" ]; then
         adb unroot >/dev/null 2>&1 || true
         timeout 60 adb wait-for-device >/dev/null 2>&1 || true
     fi
@@ -364,6 +366,13 @@ CHOICE_ADDRESS=203.0.113.80
 logged_uids() { dump | sed -n 's/^ *proxy-logged //p'; }
 names_uid() { [[ " $(logged_uids) " == *" $1 "* ]]; }
 names_none() { [ "$(logged_uids)" = - ]; }
+# The hand-overs of the proxies so far; those the change of the package $1 ran; and why the choice for the package $1
+# ended without the user, as the debug builds' dump writes them (review C-rest 6 and 11).
+handed_count() { dump | sed -n 's/^ *proxy-handed //p'; }
+package_handed() { dump | awk -v p="$1" '$1 == "packages-handed" && $2 == p { n = $3 } END { print n + 0 }'; }
+ended_why() { dump | awk -v p="$1" '$1 == "proxy-ended" && $2 == p { print $3 }'; }
+# Whether the change of the package $1 ran a hand-over since there were $2.
+package_handed_since() { [ "$(package_handed "$1")" -gt "$2" ]; }
 # The phone's time in milliseconds, in whole seconds, as above.
 phone_ms() {
     local now
@@ -416,6 +425,7 @@ echo "ok: the choice for one app never covers a proxy on the local network, live
 # 2. Root, and the rule that sends the network part's own connections to $CHOICE_ADDRESS to the lab.
 build_type=$(adb shell getprop ro.build.type | tr -d '\r')
 if [ "$build_type" != user ]; then
+    UNROOT=1
     adb root >/dev/null 2>&1 || true
     timeout 60 adb wait-for-device || true
     for _ in $(seq 1 10); do
@@ -457,12 +467,14 @@ else
     echo "NOT RUN: the choice's steps at an address that is not local (2, 3 and 5's check of what is stripped) need adb root, which this $build_type build refuses"
 fi
 
-# 4. An update keeps the first install time, and so the choice.
+# 4. An update keeps the first install time, and so the choice: read after the hand-over the update's own broadcast
+# runs, never the one before it (review C-rest 6).
+updates=$(package_handed "$FIXTURE")
 adb install -r "$ROOT/build/proxy-fixture/proxy-fixture.apk" >/dev/null
 [ "$(uid_of "$FIXTURE")" = "$APP_UID" ] || fail "the fixture's update gave it another UID"
-sleep 3
+within 15 package_handed_since "$FIXTURE" "$updates" || fail "the network part ran no hand-over for the fixture's update within 15 s"
 names_uid "$APP_UID" || fail "an update of the fixture ended its choice: $(logged_uids)"
-echo "ok: an update of the chosen app keeps its choice"
+echo "ok: an update of the chosen app keeps its choice, read after the hand-over that followed it"
 
 # 5. Turned off: at once, nothing the chosen app asked its proxy for stays in "Now" (R6), and its next flow is left out.
 grep -q "proxy-log $FIXTURE off" <<<"$(dump proxy-log "$FIXTURE" off)" || fail "the dump did not end the choice for the fixture"
@@ -487,25 +499,54 @@ if [ -n "$ROOTED" ]; then
     adb unroot >/dev/null 2>&1 || true
     timeout 60 adb wait-for-device || true
     ROOTED=""
+    UNROOT=""
     echo "ok: the choice turned off strips at once what the app's proxy asked for, and its next flow is left out of the log"
 else
     echo "ok: the choice turned off is no longer handed"
 fi
 
-# 6. A reinstall ends it: the package removed and installed again while the network part does not follow the apps, so
-# that only its first install time tells, at the next hand-over.
+# 6. A reinstall ends it, and says so (review C-rest 1). First one the network part follows, as a phone's always is:
+# the removal's hand-over finds the package gone, and the install's finds it back.
 grep -q "proxy-log $FIXTURE on" <<<"$(dump proxy-log "$FIXTURE" on)" || fail "the dump did not make the choice for the fixture again"
 within 5 names_uid "$APP_UID" || fail "the network part did not hand the fixture as chosen again: $(logged_uids)"
-grep -qE "^ *packages-follow off$" <<<"$(dump packages-follow off)" || fail "the package receiver could not be turned off"
+removals=$(package_handed "$FIXTURE")
 adb uninstall "$FIXTURE" >/dev/null
+within 15 package_handed_since "$FIXTURE" "$removals" || fail "the network part ran no hand-over for the fixture's removal within 15 s"
+names_none || fail "the choice outlived the fixture's removal: proxy-logged $(logged_uids)"
+[ "$(ended_why "$FIXTURE")" = removed ] || fail "the fixture's removal was kept as '$(ended_why "$FIXTURE")', not removed"
+installs=$(package_handed "$FIXTURE")
 adb install "$ROOT/build/proxy-fixture/proxy-fixture.apk" >/dev/null
 APP_UID=$(uid_of "$FIXTURE")
 [ -n "$APP_UID" ] || fail "the fixture did not install again"
+within 15 package_handed_since "$FIXTURE" "$installs" || fail "the network part ran no hand-over for the fixture's install within 15 s"
+names_none || fail "the choice came back with the fixture's new install: proxy-logged $(logged_uids)"
+[ "$(ended_why "$FIXTURE")" = installed-again ] ||
+    fail "the fixture installed again after a removal the network part saw says '$(ended_why "$FIXTURE")', not installed again"
+echo "ok: a reinstall the network part follows ends the choice, and its rows say it was installed again"
+
+# Then one it does not follow, the package receiver off, so that only the first install time tells, at the next
+# hand-over: with none between the removal and the install, or the removal would tell (review C-rest 11). A hand-over
+# between them (a network callback, a reading of the tools) is tried again, at most three times.
+grep -qE "^ *packages-follow off$" <<<"$(dump packages-follow off)" || fail "the package receiver could not be turned off"
+quiet=""
+for _ in 1 2 3; do
+    grep -q "proxy-log $FIXTURE on" <<<"$(dump proxy-log "$FIXTURE" on)" || fail "the dump did not make the choice for the fixture again"
+    within 5 names_uid "$APP_UID" || fail "the network part did not hand the fixture as chosen again: $(logged_uids)"
+    before=$(handed_count)
+    adb uninstall "$FIXTURE" >/dev/null
+    adb install "$ROOT/build/proxy-fixture/proxy-fixture.apk" >/dev/null
+    APP_UID=$(uid_of "$FIXTURE")
+    [ -n "$APP_UID" ] || fail "the fixture did not install again"
+    [ "$(handed_count)" = "$before" ] && quiet=1 && break
+done
+[ -n "$quiet" ] || fail "three times a hand-over came between the fixture's removal and its install: the first install time's rule is not checked"
 grep -qE "^ *packages-follow on$" <<<"$(dump packages-follow on)" || fail "the package receiver could not be turned on again"
 # The switch set as it is: every route and the proxies handed again.
 grep -q "log-destinations off" <<<"$(dump log-destinations off)" || fail "the switch could not be set again"
 within 10 names_none || fail "the choice outlived the fixture's reinstall: proxy-logged $(logged_uids)"
-echo "ok: a reinstall of the chosen app ends its choice, by its first install time"
+[ "$(ended_why "$FIXTURE")" = installed-again ] ||
+    fail "the fixture installed again, seen by its first install time alone, says '$(ended_why "$FIXTURE")', not installed again"
+echo "ok: a reinstall of the chosen app ends its choice by its first install time alone, and says so"
 
 # No password anywhere the network part writes or Android logs.
 shown="$(dump)
