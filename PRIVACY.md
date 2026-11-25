@@ -42,13 +42,14 @@ your unlocked phone can see it, as they can see the rest of the app.
   was sent unencrypted, whether it is the proxy in Android's settings, whether it is on your local network, and
   whether Datapavan could not tell it was a messenger's proxy), and which known trackers its
   connection's names matched (by their εxodus ids, which name a tracker's company, not a destination). Only while
-  "Log where apps connect through your tool, WireGuard or a proxy" is on, or for an app you chose on its own page,
+  "Log where apps connect through your tool, WireGuard or a proxy" is on, or for an app whose proxy you chose to log,
   does it also keep where the proxy is (its address and the name a DNS answer gave it), what the app asked it for
   and, for a messenger's proxy, the name its connection sent in place of its destination. If you choose to log where
   one app connects through a proxy, its proxy's address and where it asked to go are logged like any connection from
-  then on, until you turn that off, but never for the proxy in Android's settings, a proxy on your local network,
-  Android's PAC proxy or a circumvention tool Datapavan knows by its signing key; what was logged before stays for the
-  days you chose. It never keeps a proxy's password, which Datapavan reads past and
+  then on, until you turn that off, but not for the proxy in Android's settings, a proxy on your local network,
+  Android's PAC proxy or an app Datapavan counts as a circumvention tool. A proxy that a PAC file names, or the one in
+  Android's settings when it is given by name, may be taken for the app's own and logged. What was logged before stays
+  for the days you chose. It never keeps a proxy's password, which Datapavan reads past and
   does not store, and says only that one was sent unencrypted. The records of a connection taken for a messenger's
   proxy wait ten minutes in memory before they are written, so that one Datapavan corrects in that time is written
   correct. A request an app sends to the proxy in Android's settings, written as for a proxy, is kept as an app's own

@@ -268,11 +268,14 @@ chaining is, and must follow the same switch.
        destination at both entry points of the log, "Now" shows it in full with no window and no "shown here only"
        bit, and a plain request keeps what it asked for. A flow taken back is decided by its would-be proxy's facts,
        so a chosen messenger's taken-back records are written whole, as with the switch on.
-     - *Never covered, and where.* Android's proxy setting (the flow's `setting` fact, set at naming by an address or
+     - *Not covered, and where.* Android's proxy setting (the flow's `setting` fact, set at naming by an address or
        a name Android's resolver gave, never the app's) and a proxy on the user's own network (the `local` fact, from
-       Android's link properties): in the engine, per flow. A circumvention tool known by its signing key, the
-       chain's tool and the three named rows (unit B's B6), and Android's PAC handler: the network part never offers
-       or hands them, and the engine drops them from the set. Android's own UIDs, below 10,000 in each user's range:
+       Android's link properties): in the engine, per flow, as far as those facts reach. They miss a PAC file's
+       proxies and, at times, a setting given by name, so a chosen app's flows to those can be covered; the limits
+       for the choice say when, and the confirmation says so (review C-engine, major 1). A circumvention tool known by
+       its signing key, the chain's tool and the three named rows (unit B's B6), and Android's PAC handler: the
+       network part never offers or hands them, and the engine drops them from the set. The chain's tool is dropped
+       from the chain's own settings at each hand-over, before the tools are read again (review C-rest 8). Android's own UIDs, below 10,000 in each user's range:
        the engine keeps only application UIDs. An SDK Runtime UID (AOSP's 20,000 to 29,999 in each user's range)
        follows its app (`app_of`). An exclusion only removes the choice's extra logging; it never goes below R1.
        Chained and tunnelled apps' flows are not read for proxies (decision 3), so the choice changes nothing for
@@ -286,7 +289,7 @@ chaining is, and must follow the same switch.
        that follows (`Shared::apply_proxies` runs the pass whenever an app left the set, for whatever reason).
        Held-back records and waiting segments are as R1 says. What the log already holds stays for the retention, and
        the screens say so. Turned on: an open flow gains no destination it never held, and places stay as they are; a
-       place left out before the choice says so.
+       place left out while its proxy was not logged says so.
      - *R8 for the choice.* It is written only by the network part's screens, which are not exported, and by the
        debug builds' dump command `proxy-log`, which takes only this project's own packages. Every fact that excludes
        a flow comes from Android or from the network part's own reading, never from an app's bytes.
@@ -294,15 +297,22 @@ chaining is, and must follow the same switch.
        package, with its kind (unit D's tools a kind of their own) and its first install time, never a UID, and
        nothing of any flow. Android gives a removed app's UID to another after a reboot, and a package name can be
        installed again by anyone: an entry whose package is gone, or whose first install time changed, is dropped at
-       the next hand-over and never comes back, and the app's rows say that a reinstall ended it; an update keeps the
-       first install time, and the choice. The network part hands the engine the chosen UIDs, with the tools' and the
-       PAC handler's, at each hand-over of the proxies (`nativeProxies`), and none before the tools were read once in
-       that run, so that a known tool is never covered in the seconds after a start. Under the switch, its note gives
-       how many apps are chosen (the maintainer, 2026-11-25); their list is W9's, behind Advanced's lock.
+       the next hand-over and never comes back; an update keeps the first install time, and the choice. The app's rows
+       say that a reinstall ended it, whether the network part saw the new first install time or the package gone and
+       then back, the second kept in the network process's memory alone while it lives (review C-rest 1). The yes of
+       the confirmation chooses only the packages it named (review C-rest 9). The network part hands the engine the
+       chosen UIDs, with the tools' and the PAC handler's, at each hand-over of the proxies (`nativeProxies`), and none
+       before the tools were read once in that run, so that a known tool is never covered in the seconds after a
+       start. Under strict Private DNS, where the engine tells the setting by the addresses handed alone, the addresses
+       of the network part's last lookup of the setting's names go with them at each hand-over until the names change,
+       and no chosen UID is handed while the names have none yet (review C-engine, major 1 (a)). Under the switch, its
+       note gives how many apps are chosen (the maintainer, 2026-11-25); their list is W9's, behind Advanced's lock.
      - *The profile (R9).* Nothing is recorded under ADR 0047's profile, so there the choice changes only what "Now"
        shows. The store then keeps it in memory only; W9's screen-off and a wipe clear it, and turning the profile off
        restores nothing and writes nothing (ADR 0047, decisions 3, 4 and 7). Each of these has the running network
-       part hand the choice to the engine again. The confirmation's words under the profile are W9's.
+       part hand the choice to the engine again, and each runs in the network process, which alone holds the session
+       and the service it asks (review C-rest 5); the profile's and the wipe's writes reach the disk before they
+       return. The confirmation's words under the profile are W9's.
      - *A leaf lock of its own.* The engine's set sits behind its own lock (`Shared::kept_apps`), taken only to clone
        or swap it, with nothing taken under it. Under the `proxies` lock it would deadlock: `infer` holds `proxies`
        and takes `held_back`, while the log's readers of the set hold `held_back`. The setting and the set are swapped
@@ -467,16 +477,41 @@ chaining is, and must follow the same switch.
   - **The choice for one app** (decision 8, R3, unit C):
     - *Android's setting and a local proxy.* A chosen app that sends through Android's setting, or through a proxy on
       the user's own network, keeps its destination out with the switch off: those proxies carry other apps'
-      connections too.
-    - *A reinstall, or a package that joins the UID,* ends the choice; the app's rows say so in the network part's run
-      that saw it, and nothing of it is kept after.
+      connections too. That holds where the engine's facts say so (review C-engine, major 1), and the confirmation
+      says that a PAC file's proxy, or the setting given by its name, may be logged as the app's own:
+      - *A PAC file's proxies.* An app reaches a proxy a PAC file names under its own UID (decision 4), which the engine
+        reads as the app's own: a chosen app's flows to it are covered, unless it is on the user's own network.
+      - *The setting given by name.* Outside strict Private DNS the engine tells it by Android's answers for the name,
+        which its names table holds among at most 8,192 addresses, the oldest going first: after a day's browsing the
+        entry can go, and until Android's resolver answers the name again where the network part sees it, a chosen
+        app's flows to the setting's proxy are covered. Under strict Private DNS the network part looks the names up itself, hands the
+        addresses with the names from then on, and hands no chosen app while it has none, a lookup that finds none
+        included; an address the app's own lookup got and the network part's did not, as a name that answers by asker
+        can give, is covered all the same.
+      - *A change of the setting or the network.* The facts are set when a flow is named; the engine reads them again
+        for a chosen app's open flows when the setting or the network's prefixes change, and a flow that became the
+        setting's or local goes back to its first hop. A fact never goes from true to false, so nothing is named anew.
+      - *A private address beyond the link.* On Wi-Fi and Ethernet every private address counts as local, so a chosen
+        app's proxy at one that is routed beyond the link (a hotel's or a company's `10/8`) is not covered: the safe
+        direction (the study's 4.2).
+    - *Connections opened before the choice is handed.* After each start no app is handed before the tools are read,
+      nor, under strict Private DNS, before the setting's names are looked up: a chosen app's connection opened before
+      then, as a messenger's to its proxy as soon as the VPN is up, keeps its first hop alone for its whole life, as
+      one opened before the choice does, and its row says so (review C-rest 13).
+    - *A reinstall, or a package that joins the UID,* ends the choice; the app's rows say so while the network process
+      that saw it lives, a removal it saw and the package back after it included, and nothing of it is kept on disk.
+      A restart of the network process between the removal it saw and the new install ends the choice silently.
+    - *An archived app.* An app that Android or its store archives for disuse, on Android 15 and later, reads as
+      removed: its choice ends, and the user chooses again once it is restored.
     - *The SDK Runtime's rule* rests on AOSP's numbering, which Android's own call confirms only from API 35 (the
-      emulator's check compares them); on Android 13 and 14 it is the same numbering, with nothing to compare.
+      emulator's check compares them); on Android 13 and 14 it is the same numbering, with nothing to compare. A
+      chosen app's isolated and app-zygote processes (90,000 to 99,999 in each user's range) run under UIDs of their
+      own, which the choice does not cover: the safe direction.
     - *A choice made by mistake* logs one app's proxy from then on, and its confirmation says so; an app that carries
       other apps' connections has theirs logged as its own.
     - *Who opens the app's page* sees its choice, until W9's lock; the count of apps chosen is under the switch.
     - *A tool whose key Datapavan has not recorded yet* is an ordinary app (unit B's B6), so the choice covers it if
-      the user picks it.
+      the user picks it, until it becomes the chain's tool, which ends the choice at the next hand-over.
     - *Another user's copy of an app* (a vendor's dual app, Android's clone profile) is not offered the choice in this
       user, whose package it would name.
     - *The store at rest* is plain preferences of the network process, as the chain's list of apps is, with each chosen
@@ -521,10 +556,14 @@ chaining is, and must follow the same switch.
   `core/net/testdata/logged-apps.tsv`, read by the engine's tests and the network part's (`proxy/ProxyChoice.kt`). In
   the network part, `proxy/LoggedApps.kt` (the store, memory only under the profile, and the hand-over's rule),
   `NetworkVpnService.applyProxies` (the UIDs, the tools and the PAC handler, again once the tools are read and at
-  `ACTION_APPLY_PROXIES`), `ui/AppProxyChoice.kt` (the confirmation and the page's switch), the rows of
-  `ui/NowScreen.kt` and `ui/HistoryScreen.kt`, the count under the switch, and the debug builds' `proxy-log`,
-  `proxy-logged` and `proxy-sandbox`. The emulator's `proxies` shard checks it end to end at a TEST-NET address that
-  a rooted emulator's own rule sends to the proxy lab, so that the first hop is not local (`scripts/verify-proxies.sh`).
+  `ACTION_APPLY_PROXIES`, with the setting's addresses under strict Private DNS), `ui/AppProxyChoice.kt` (the
+  confirmation and the page's switch), the rows of `ui/NowScreen.kt` and `ui/HistoryScreen.kt`, the count under the
+  switch, and the debug builds' `proxy-log`, `proxy-logged`, `proxy-sandbox`, `proxy-handed`, `proxy-ended` and
+  `packages-handed`. The emulator's `proxies` shard checks it end to end at a TEST-NET address that a rooted
+  emulator's own rule sends to the proxy lab, so that the first hop is not local (`scripts/verify-proxies.sh`), and
+  checks an update, a reinstall the network part follows and one it learns of by the first install time alone, each
+  after the hand-over that follows it. Its review round (2026-11-25, two reviewers, the engine and the rest) found no
+  critical; its findings are taken in as the sections above say, each with the review's number.
 
 ## Fix round (2026-11-21)
 

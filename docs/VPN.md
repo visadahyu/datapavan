@@ -97,8 +97,10 @@ Chaining also contains an untrusted tool (see [RESTRICTED-REGIONS.md](RESTRICTED
   hop (its address, name and network, and a messenger's cover name) is shown in "Now" while the connection is open and
   for ten minutes after it ends, whatever the switch (ADR 0052, decision 8). It is logged, with the destination asked
   for, only under the one switch "Log where apps connect through your tool, WireGuard or a proxy", or for an app the
-  user chose on its own page, "Log where APP connects through a proxy" (the proxy record's unit C, R3), which the
-  engine decides per flow and never applies to Android's setting, a local proxy, a tool's or Android's PAC proxy;
+  user chose on its row or its page, "Log where APP connects through a proxy" (the proxy record's unit C, R3), which
+  the engine decides per flow and does not apply to a flow it reads as through Android's setting or a local proxy, nor
+  to a tool's or Android's PAC proxy (a PAC file's proxies, and the setting given by name, can escape that reading:
+  ADR 0052's limits for the choice);
   otherwise the log keeps its kind, the facts that name nothing and its trackers' marks, matched on its names before
   they were left out, and the destination is not shown either. The choice is kept by package and first install time,
   never by UID, so a reinstall or a package that joins the app's UID ends it. The switch is on the network screen wherever a row points to it. Proxies inside

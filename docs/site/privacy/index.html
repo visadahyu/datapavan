@@ -247,13 +247,14 @@ default that the app used a proxy, which kind, when, the facts that name no addr
 was sent unencrypted, whether it is the proxy in Android&rsquo;s settings, whether it is on your local network, and
 whether Datapavan could not tell it was a messenger&rsquo;s proxy), and which known trackers its
 connection&rsquo;s names matched (by their εxodus ids, which name a tracker&rsquo;s company, not a destination). Only while
-&ldquo;Log where apps connect through your tool, WireGuard or a proxy&rdquo; is on, or for an app you chose on its own page,
+&ldquo;Log where apps connect through your tool, WireGuard or a proxy&rdquo; is on, or for an app whose proxy you chose to log,
 does it also keep where the proxy is (its address and the name a DNS answer gave it), what the app asked it for
 and, for a messenger&rsquo;s proxy, the name its connection sent in place of its destination. If you choose to log where
 one app connects through a proxy, its proxy&rsquo;s address and where it asked to go are logged like any connection from
-then on, until you turn that off, but never for the proxy in Android&rsquo;s settings, a proxy on your local network,
-Android&rsquo;s PAC proxy or a circumvention tool Datapavan knows by its signing key; what was logged before stays for the
-days you chose. It never keeps a proxy&rsquo;s password, which Datapavan reads past and
+then on, until you turn that off, but not for the proxy in Android&rsquo;s settings, a proxy on your local network,
+Android&rsquo;s PAC proxy or an app Datapavan counts as a circumvention tool. A proxy that a PAC file names, or the one in
+Android&rsquo;s settings when it is given by name, may be taken for the app&rsquo;s own and logged. What was logged before stays
+for the days you chose. It never keeps a proxy&rsquo;s password, which Datapavan reads past and
 does not store, and says only that one was sent unencrypted. The records of a connection taken for a messenger&rsquo;s
 proxy wait ten minutes in memory before they are written, so that one Datapavan corrects in that time is written
 correct. A request an app sends to the proxy in Android&rsquo;s settings, written as for a proxy, is kept as an app&rsquo;s own
