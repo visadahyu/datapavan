@@ -47,7 +47,9 @@ your unlocked phone can see it, as they can see the rest of the app.
   connection sent in place of its destination. It never keeps a proxy's password, which Datapavan reads past and
   does not store, and says only that one was sent unencrypted. The records of a connection taken for a messenger's
   proxy wait ten minutes in memory before they are written, so that one Datapavan corrects in that time is written
-  correct. A request an app sends to the proxy in Android's settings is kept the same way. When tracker blocking refused a connection, its record says so, with the name of the tracker's software
+  correct. A request an app sends to the proxy in Android's settings, written as for a proxy, is kept as an app's own
+  proxy is: its kind and the facts, not the proxy's address, while that switch is off. When tracker blocking refused a
+  connection, its record says so, with the name of the tracker's software
   package (for example `com.google.firebase:firebase-analytics`), which names a tracker, never a destination, and
   is kept whatever the switch for your tool says.
 - **Each app's recent traffic, for the "Now" view,** in memory only. It is gone when the firewall stops. Where an
@@ -64,7 +66,8 @@ your unlocked phone can see it, as they can see the rest of the app.
 - **Your circumvention tool's settings:** whether apps go through it and which ones, the tool's host and port, and
   the password Datapavan made for it, which is encrypted under a key that Android's keystore protects.
 - **The apps you leave out of the firewall,** which then go to the internet without it: their names, until you take
-  them back.
+  them back. A left-out app's requests through Android's PAC proxy, if a PAC file is set, come back into the firewall
+  under that proxy's own name, and are shown and recorded there.
 - **Tracker blocking's settings, if you turn it on** (off until you do): whether it is on, whether it includes
   browsers and your tool's own lookups, when a pause ends, and the apps and trackers you allowed, by the app's
   package name and the tracker's host, with when each allowance ends. To tell, for a few hosts that serve both

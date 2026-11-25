@@ -99,7 +99,17 @@ Chaining also contains an untrusted tool (see [RESTRICTED-REGIONS.md](RESTRICTED
   for, only under the one switch "Log where apps connect through your tool, WireGuard or a proxy"; otherwise the log
   keeps its kind, the facts that name nothing and its trackers' marks, matched on its names before they were left out,
   and the destination is not shown either. The switch is on the network screen wherever a row points to it. Proxies inside
-  TLS or QUIC, and those on the phone itself, whose loopback never enters the tunnel, are not seen.
+  TLS or QUIC, and those on the phone itself, whose loopback never enters the tunnel, are not seen, but for Android's
+  PAC proxy, whose connections for other apps, left-out apps included, come into the tunnel under its own name and
+  say so.
+- **The facts of an app's own proxy** (the proxy record's unit B, ADR 0052 decisions 4 and 9), kept whatever the switch:
+  whether it is Android's own setting, matched by its address or a name Android's resolver gave it and never by an
+  app's own resolver's answer; whether it is on the user's own network, decided once by the network beneath's on-link
+  prefixes and kept in the log's version 7; and, on a messenger's record the engine took back or never named for
+  substitution, that Datapavan could not tell. A plain request to Android's setting is left out of the record as a
+  confirmed proxy's, and shown in "Now" for its window. A circumvention tool's own proxy rows say so, the tool known by
+  its signing key, never its package name. "Now" says which of Android's own proxy settings is set, the whole phone's
+  first.
 - **Proxy-like behaviour is flagged** (v0.2) and can be blocked (v0.3): many distinct destinations in a short time, sustained upload, or activity while the screen is off. Thresholds come from measurements, and a flag says what was seen instead of accusing the app. Detection counts destinations in memory, so it does not need the destination log that is off by default for chained flows.
 - **Per-app choice.** The user decides which apps go through the tool, and which through which WireGuard
   configuration. Everything else goes directly or is blocked.

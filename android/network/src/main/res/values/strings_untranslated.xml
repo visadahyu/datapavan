@@ -36,7 +36,7 @@
          Android puts first: %1$s is its host and port. Not "every app": a browser engine inside an app may not use it. -->
     <string name="now_proxy_global">A proxy is set for the whole phone in Android\'s settings: %1$s. Most apps go through it.</string>
     <!-- As above, a PAC file (a proxy auto-config file) set for the whole phone. -->
-    <string name="now_proxy_global_pac">Android\'s settings give a PAC file, which chooses a proxy for each connection.</string>
+    <string name="now_proxy_global_pac">A PAC file is set for the whole phone in Android\'s settings. It names a proxy, or none, for each connection.</string>
     <!-- The current network's own proxy, with none set for the whole phone: %1$s is its host and port. Apps that start
          inside Datapavan's VPN are not given it; apps left out of the VPN, and apps already running, are. "This network",
          not "this Wi-Fi network": it may be Ethernet or mobile data. -->

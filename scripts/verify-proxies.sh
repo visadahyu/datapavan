@@ -180,9 +180,15 @@ adb shell settings put global http_proxy "$HOST:$PROXYLAB_PORT_OPEN"
 sleep 2
 fixture "$FIXTURE" setting 204
 proxied "$APP_UID" "$PROXYLAB_PORT_OPEN" "forward read sn inner\.proxylab\.test:80 - - [^i].*"
+# "Now"'s line of Android's own setting (the proxy record's unit B): the whole phone's proxy, read once the tunnel is
+# the network part's default network, never the Wi-Fi network's as the whole phone's (review B-rest 1).
+context_global() { grep -q "proxy-context global=${HOST//./\\.}:$PROXYLAB_PORT_OPEN " <<<"$(dump)"; }
+within 10 context_global || fail "\"Now\" does not hold the whole phone's proxy: $(dump | sed -n 's/^ *proxy-context //p')"
 adb shell settings put global http_proxy :0
 adb shell settings delete global http_proxy >/dev/null 2>&1 || true
 PROXY_SET=""
+context_none() { grep -q "proxy-context global=- network=- " <<<"$(dump)"; }
+within 10 context_none || fail "\"Now\" still holds a proxy setting once none is set: $(dump | sed -n 's/^ *proxy-context //p')"
 echo "ok: Android's proxy setting told apart from an app's own"
 
 # Inferred: Telegram's obfuscated start and fake-TLS hello to mtg, WhatsApp's clear header, Signal's proxy by its name.

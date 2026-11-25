@@ -117,6 +117,15 @@ class SnapshotTest {
         for (bit in 2..7) {
             assertNull("bit $bit", Snapshot.parse(set(fixture, third, 0b10 or (1 shl bit))))
         }
+        // Version 6 (the proxy record's unit B, review B-rest 4): a plain request to Android's setting is a first hop
+        // shown here only (R7), and the log's "unsure" is never a snapshot's, left out or not.
+        val flags = fixture[kind + 1].toInt()
+        val toSetting = Snapshot.parse(set(set(fixture, kind, forward), kind + 1, flags or 1))?.apps?.get(2)?.destinations?.single()
+        assertEquals(true to true, toSetting?.shownOnly to toSetting?.proxy?.setting)
+        val mtproto = org.visadahyu.datapavan.network.log.LogRecord.PROXY_MTPROTO
+        val leftOut = set(set(set(fixture, third, 0), kind, mtproto), kind + 1, 0x10)
+        assertEquals(true, Snapshot.parse(leftOut)?.apps?.get(2)?.destinations?.single()?.proxy?.leftOut)
+        assertNull("unsure", Snapshot.parse(set(leftOut, kind + 1, 0x50)))
     }
 
     /**

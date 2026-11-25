@@ -46,6 +46,9 @@ chaining is, and must follow the same switch.
    proxy's; the inner TLS hello is read too, and names the flow as any hello does. A plain request in absolute form
    cannot be confirmed so, since origin servers accept that form too (RFC 9112, 3.2.2): its flow keeps its own address
    and names whatever the switch says, and its row says what the request asked for, never that the server is a proxy.
+   **The exception (the proxy record's unit B, R7):** a plain request to the proxy in Android's settings, which is
+   known by the setting's address or a name Android's resolver gave it, never by the app's bytes. Its row calls it by
+   that setting's name, as Android does, and its record is left out as a confirmed proxy's (decisions 4 and 8).
    Of a plain request only the authority is taken, never its path or query, and a target with an `@` after its
    authority is refused. SOCKS5 needs a plausible method list (one to ten, each IANA assigned, none twice, the method
    used among them) and SOCKS4 a printable user ID: 0 of 2,000,000 random 600-byte starts parse as a request (36
@@ -154,7 +157,8 @@ chaining is, and must follow the same switch.
    four proposals («تایید شد», "approved"). Unit A, "seen live in full", builds what follows; the other units are
    named at the end.
    - **The words.** An *own proxy flow* is a SOCKS or `CONNECT` flow the server's reply confirmed, or a messenger's
-     inferred proxy (decisions 1 and 5). A plain request in absolute form is not one. Its *first hop* is the flow's own
+     inferred proxy (decisions 1 and 5), and a plain request to Android's setting (decision 1's exception, unit B). Any
+     other plain request in absolute form is not one. Its *first hop* is the flow's own
      address and port, the DNS name its address had, its network and organisation, and an inferred proxy's cover name.
      Its *destination* is what the app asked the proxy for, and every name that gives it: the name or address asked
      for, the DNS name of an address asked for, and the inner hello's name, ECH state and resolver mark. Only a
@@ -166,7 +170,8 @@ chaining is, and must follow the same switch.
      unencrypted, outside the maker's network), the trackers' εxodus ids, the bytes, times, states and route, and a
      blocked flow's SDK. It keeps nothing of the first hop or the destination, at an address of zeros with flag bit 4
      set, the shape the log already had for a flow left out. A plain request's record keeps its own address and loses
-     what it asked for. With the switch on, records keep the first hop and the destination, as before.
+     what it asked for, except one to Android's setting, which is left out as above. With the switch on, records keep
+     the first hop and the destination, as before.
      - *When it is decided.* The switch is read under the log's lock at two points: as a record enters the log's
        queue, before it is held back or pushed, and as a held-back record goes on to the next batch. A messenger's
        records enter the queue as they are made, so those made while the switch was off are held back already

@@ -286,6 +286,8 @@ class NetworkVpnService : VpnService() {
             val was = dnsState.value
             dnsState.value = PrivateDns.of(properties)
             if ((was is PrivateDns.Strict) != (dnsState.value is PrivateDns.Strict)) main.post { if (active) applyProxies() }
+            // The tunnel is this process's default network now: Android's own setting, for "Now".
+            main.post { publishProxyContext() }
         }
     }
 
@@ -529,6 +531,11 @@ class NetworkVpnService : VpnService() {
      */
     private fun publishProxyContext() {
         if (!active) return
+        // Only once Android has made the tunnel this process's default network: before, `defaultProxy` is the Wi-Fi
+        // network's own and would read as the whole phone's (review B-rest 1). The own network's callback publishes
+        // again when it has.
+        val own = connectivity.activeNetwork?.let { connectivity.getNetworkCapabilities(it) }
+        if (own?.hasTransport(NetworkCapabilities.TRANSPORT_VPN) != true) return
         org.visadahyu.datapavan.network.proxy.ProxyContext.publish(
             org.visadahyu.datapavan.network.proxy.AndroidProxy.of(connectivity.defaultProxy, current?.let { connectivity.getLinkProperties(it) }?.httpProxy),
             org.visadahyu.datapavan.network.proxy.PacHandler.uid(packageManager),
@@ -1625,6 +1632,19 @@ class NetworkVpnService : VpnService() {
         }
         Engine.nativeFlowProxies().lineSequence().filter { it.isNotBlank() }.forEach { writer.println("flow-proxy $it") }
         writer.println("proxy-on-link ${Engine.nativeProxyOnLink()}")
+        // What "Now" holds of Android's own setting (the proxy record's unit B): the whole phone's, the network's, the PAC
+        // handler's UID and the tools' count.
+        org.visadahyu.datapavan.network.proxy.ProxyContext.state.value.let { context ->
+            fun word(setting: org.visadahyu.datapavan.network.proxy.AndroidProxy.Setting?) = when (setting) {
+                null -> "-"
+                is org.visadahyu.datapavan.network.proxy.AndroidProxy.Setting.Pac -> "pac"
+                is org.visadahyu.datapavan.network.proxy.AndroidProxy.Setting.Server -> "${setting.host}:${setting.port}"
+            }
+            writer.println(
+                "proxy-context global=${word(context.android.global)} network=${word(context.android.network)} " +
+                    "pac-handler=${context.pacHandler ?: "-"} tools=${context.tools.size}",
+            )
+        }
     }
 
     /**

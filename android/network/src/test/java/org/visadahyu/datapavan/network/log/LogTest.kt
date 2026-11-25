@@ -199,13 +199,19 @@ class LogTest {
         assertNull((LogRecord.parse(version4) as LogRecord.Segment).proxy)
         assertEquals(LogRecord.VIA_TUNNEL, (LogRecord.parse(version4) as LogRecord.Segment).via)
         val (_, hidden) = EngineRecords.records[14]
-        // The proxy's kind, flags, three empty texts, and two trackers' marks; then no blocking row's SDK.
-        val kind = hidden.size - 16
+        // The proxy's kind, flags, three empty texts, a count and two trackers' marks; then no blocking row's SDK, one
+        // byte (review B-rest 3: the offset was one byte off, so these refusals tested the tunnel's number).
+        val kind = hidden.size - 15
+        assertEquals(LogRecord.PROXY_SOCKS4.toByte(), hidden[kind])
+        assertEquals(0x10.toByte(), hidden[kind + 1])
         assertEquals(LogRecord.PROXY_SOCKS4, (LogRecord.parse(hidden) as LogRecord.Segment).proxy?.kind)
         for (code in listOf(8, 0x80, 0xff)) {
             assertNull("no such proxy: $code", LogRecord.parse(hidden.copyOf().also { it[kind] = code.toByte() }))
         }
-        assertNull("a flag the engine never writes", LogRecord.parse(hidden.copyOf().also { it[kind + 1] = 0x20 }))
+        assertNull("bit 7, never written", LogRecord.parse(hidden.copyOf().also { it[kind + 1] = 0x90.toByte() }))
+        // Bit 5 is "local" in version 7, and a flag the engine never wrote in version 6.
+        assertEquals(true, (LogRecord.parse(hidden.copyOf().also { it[kind + 1] = 0x30 }) as LogRecord.Segment).proxy?.local)
+        assertNull("bit 5 in version 6", LogRecord.parse(hidden.copyOf().also { it[0] = 6; it[kind + 1] = 0x30 }))
         assertNull("a destination that does not follow", LogRecord.parse(hidden.copyOf().also { it[kind + 1] = 0x18 }))
         assertNull("more trackers than the engine writes", LogRecord.parse(hidden.copyOf().also { it[kind + 5] = 9 }))
     }
