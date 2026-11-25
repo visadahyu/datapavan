@@ -557,7 +557,9 @@ internal fun placeProxyFacts(place: Snapshot.Destination, appGroup: String?, com
 internal fun proxyKind(kind: ProxyFacts.Kind): Int = when (kind) {
     ProxyFacts.Kind.SOCKS5 -> R.string.proxy_kind_socks5
     ProxyFacts.Kind.SOCKS4 -> R.string.proxy_kind_socks4
-    // A plain request is never called a proxy: its rows do not set its kind in (proxyRow).
+    // A plain request is never called a proxy: its rows do not set its kind in (proxyRow). The one exception is a plain
+    // request to Android's setting, which is called by that setting's name, since Android names it so: left out for the
+    // switch, its headers are the setting's, with "HTTP proxy" set in (the proxy record's unit B, R7; ADR 0052).
     ProxyFacts.Kind.HTTP, ProxyFacts.Kind.REQUEST -> R.string.proxy_kind_http
     ProxyFacts.Kind.MTPROTO -> R.string.proxy_kind_mtproto
     ProxyFacts.Kind.WHATSAPP -> R.string.proxy_kind_whatsapp
@@ -582,12 +584,13 @@ internal data class ProxyRow(val header: ProxyLine?, val lines: List<ProxyLine>,
  * hold. How the network part knows is always said, the switch on or off: "Read from the connection" or "Inferred from
  * where and how it connects". A flow left out for the switch shows its kind, Android's setting in its own words, and
  * the facts that name nothing (on the local network, or else the maker's network it is not in; a password
- * unencrypted). A plain request in a proxy's
- * form is never called a proxy: its line says what it asked for, or with the switch off that this is not shown. Where
- * the network part cannot name the network, the maker's network the address is not in is still said (ADR 0052, decision
- * 6). A first hop "Now" shows only for its window ends with why: for a declared proxy, that where the app asked it to
- * go is not shown or logged, then that its address is shown only so long; and links to the switch. The history never
- * says so: what it shows was logged.
+ * unencrypted). A plain request in a proxy's form is never called a proxy: its line says what it asked for, or with the
+ * switch off that this is not shown. The one exception is a plain request to Android's setting, which is called by
+ * that setting's name, since Android names it so (the proxy record's unit B, R7): left out, it has the setting's
+ * headers, and within its window in "Now" it ends as a first hop does. Where the network part cannot name the network,
+ * the maker's network the address is not in is still said (ADR 0052, decision 6). A first hop "Now" shows only for
+ * its window ends with why: for a declared proxy, that where the app asked it to go is not shown or logged, then that
+ * its address is shown only so long; and links to the switch. The history never says so: what it shows was logged.
  */
 internal fun proxyRow(facts: ProxyFacts.Facts, past: Boolean): ProxyRow {
     val lines = mutableListOf<ProxyLine>()
@@ -621,7 +624,11 @@ internal fun proxyRow(facts: ProxyFacts.Facts, past: Boolean): ProxyRow {
         }
         if (facts.setting) lines += ProxyLine(R.string.proxy_setting)
         if (facts.password) lines += ProxyLine(R.string.proxy_request_password)
-        return ProxyRow(null, lines, toSwitch = facts.askedLeftOut)
+        // A plain request to Android's setting is that proxy's first hop (R7): "Now" shows it only for its window, as any
+        // own proxy's, and says so. The engine marks no other plain request so; were one marked, it is not called a proxy.
+        val shownOnly = facts.shownOnly && facts.setting && !past
+        if (shownOnly) lines += ProxyLine(R.string.now_proxy_live_only)
+        return ProxyRow(null, lines, toSwitch = facts.askedLeftOut || shownOnly)
     }
     lines += when {
         !facts.declared -> ProxyLine(R.string.proxy_inferred, facts.kind, listOf(isolateLtr(facts.at)))

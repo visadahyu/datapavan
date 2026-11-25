@@ -217,6 +217,52 @@ class ProxyRowTest {
     }
 
     /**
+     * The proxy record's unit B, R7 (audit-B 3 and 26): a plain request to Android's setting, the switch off, is that
+     * proxy's first hop. From the snapshot's destination, "Now" shows it within its window with the setting's line and
+     * the window's, and links to the switch; left out, past the window and in the history, it has the setting's headers
+     * with the request's kind, which the screens name "HTTP proxy". A plain request to any other server, were it marked,
+     * is still never called a proxy.
+     */
+    @Test
+    fun aPlainRequestToAndroidsSettingIsItsFirstHop() {
+        val lab = InetAddress.getByName("10.0.2.2")
+        val place = { proxy: LogRecord.Proxy, address: InetAddress, shownOnly: Boolean ->
+            org.visadahyu.datapavan.network.activity.Snapshot.Destination(
+                protocol = 6, namedBy = 0, ech = 0, dns = 0, cameIn = false, address = address, port = 3128, asn = 0,
+                network = 0, name = "", dnsName = "", resolver = "", organisation = "", bytes = List(6) { 1L }, proxy = proxy,
+                shownOnly = shownOnly,
+            )
+        }
+        val request = LogRecord.Proxy(LogRecord.PROXY_FORWARD, setting = true)
+        val live = proxyRow(checkNotNull(placeProxyFacts(place(request, lab, true), null, null)), past = false)
+        assertEquals(
+            listOf(R.string.now_proxy_request_hidden, R.string.proxy_how_read, R.string.proxy_setting, R.string.now_proxy_live_only),
+            texts(live),
+        )
+        assertEquals(null to true, live.header to live.toSwitch)
+        val zeros6 = InetAddress.getByName("::")
+        val past = proxyRow(checkNotNull(placeProxyFacts(place(request.copy(leftOut = true), zeros6, false), null, null)), past = false)
+        assertEquals(ProxyLine(R.string.now_proxy_setting_past, ProxyFacts.Kind.REQUEST), past.header)
+        assertEquals(R.string.proxy_kind_http, proxyKind(ProxyFacts.Kind.REQUEST))
+        assertEquals(listOf(R.string.proxy_how_read), past.lines.map { it.text })
+        assertTrue(past.toSwitch)
+        val history = proxyRow(ProxyFacts.of(request.copy(leftOut = true), zeros, 0), past = true)
+        assertEquals(ProxyLine(R.string.history_proxy_setting_hidden, ProxyFacts.Kind.REQUEST), history.header)
+        // A record is never shown only, nor is a row the engine did not mark: neither says the window's words.
+        assertEquals(
+            listOf(R.string.history_proxy_request_hidden, R.string.proxy_how_read, R.string.proxy_setting),
+            texts(proxyRow(checkNotNull(placeProxyFacts(place(request, lab, true), null, null)), past = true)),
+        )
+        assertEquals(
+            listOf(R.string.now_proxy_request_hidden, R.string.proxy_how_read, R.string.proxy_setting),
+            texts(proxyRow(checkNotNull(placeProxyFacts(place(request, lab, false), null, null)), past = false)),
+        )
+        val other = proxyRow(ProxyFacts.of(LogRecord.Proxy(LogRecord.PROXY_FORWARD), hetzner, 8080, shownOnly = true), past = false)
+        assertEquals(listOf(R.string.now_proxy_request_hidden, R.string.proxy_how_read), texts(other))
+        assertTrue(other.lines.none { it.kind != null })
+    }
+
+    /**
      * Fix brief point 2: the history never says a flow went through the user's tool unless its recorded route says so;
      * a direct one, the tool's own and one of a record with no route have words of their own.
      */
