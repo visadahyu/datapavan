@@ -3501,7 +3501,7 @@ async fn open_udp(
             Verdict::Owner(uid) if shared.is_tunnel_dns(key.1.ip()) => {
                 while let Made::Reroute = open_lookups(key, uid, context).await {}
             }
-            Verdict::Owner(uid) => open_mapped(key, uid, context).await,
+            Verdict::Owner(uid) => Box::pin(open_mapped(key, uid, context)).await,
             // Who sent it cannot be told, or its app holds the socket no more, or no answer near it can
             // be had: the very datagram decided goes, counted by why.
             why => {
@@ -3707,7 +3707,7 @@ async fn open_peer(
     let (app, destination) = key;
     let opened = match way_toward(key, &wanted, shared, flows) {
         None => Err(io::ErrorKind::HostUnreachable.into()),
-        Some(way) => mapping_for(key, &wanted, (tun, shared, flows, changes))
+        Some(way) => Box::pin(mapping_for(key, &wanted, (tun, shared, flows, changes)))
             .await
             .map(|opened| (opened, way)),
     };
@@ -3746,7 +3746,7 @@ async fn open_peer(
     let opened = match wanted_own {
         OwnWanted::No | OwnWanted::Refused => None,
         OwnWanted::Place(chain, places) => {
-            let made = associate(shared, &chain).await;
+            let made = Box::pin(associate(shared, &chain)).await;
             // As for the mapping's socket: the waiting datagrams leave at once, without waiting, so
             // the socket must first be known to take them.
             if let Ok((socket, _)) = &made {
