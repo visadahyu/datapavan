@@ -402,7 +402,75 @@ The words of the allow and the pause are checked with real users under ADR 0046'
   for HPKE's key pair), a Diffie-Hellman 40 µs either way; ARM phones take the slower serial path, for which the crate
   gives the table about four times the speed (not measured here); it needs GotaTun to depend on `x25519-dalek` without
   default features, a reviewed step (ADR 0035). For the engine's builder: hashbrown's maps instantiated per type (113 KB
-  on x86_64), the largest futures (`udp::open_udp`'s 42 KB, `Engine::start_with`'s 29 KB), and `std`'s backtrace
-  symbolizer (67 KB), which only a nightly `build-std` drops. No free setting is left for x86_64: what remains is code
-  and GotaTun's table. Not measured: arm64 and armv7 on a phone, which this pass did not touch; nothing kept changes
-  their code.
+  on x86_64), the largest functions on the cold paths (`udp::open_udp`'s future, 42 KB, and `Engine::start_with`, 29
+  KB), and `std`'s backtrace symbolizer (67 KB), which only a nightly `build-std` drops. The cold paths' pass below
+  found that boxing those futures only moves their bytes, and took its room from the code instantiated once per type. No
+  free setting is left for x86_64: what remains is code and GotaTun's table. Not measured: arm64 and armv7 on a phone,
+  which this pass did not touch; nothing kept changes their code.
+- **The cold paths** (2026-11-25, the maintainer's route that day over a review of the gate: room for the proxy record's
+  next units, from code that runs once per engine start, per flow opened or question to Android, with no change of
+  behaviour and none on the packet path; build settings untouched). *Where the bytes were,* by the size pass's method,
+  plus each function's bytes laid on the source functions inlined into it (an x86_64 build with line tables, every
+  instruction through `llvm-symbolizer --inlining`): `udp::open_udp`'s future (41,742 bytes) and `Engine::start_with`
+  (30,432) are big, but almost none of their code is there twice, so boxing their inner futures only moves it
+  (`Box::pin` of `open_udp`'s two arms put 27,889 of its bytes in the boxed future's poll and saved 604). What can go is
+  code instantiated once per type: tokio's code for a task, about 2 KB on x86_64 for each type of future spawned; the
+  blocking pool's, about 1.2 KB for each type of closure; and `std`'s `RandomState::new`, inlined at each map made,
+  about 100 bytes each time, 39 times in `Engine::start_with` and 15 KB across the library. **Kept, one commit each**
+  (bytes on arm64-v8a / armeabi-v7a / x86_64, from Gradle's own build and AGP's strip):
+  - one boxed task type for the engine's tasks that relay no stream of traffic (W8's, moved out of the resolver,
+    `engine::Task`), and one blocking task type for the calls to Android (`engine::on_pool`): 3,296 / 1,888 / 3,168;
+  - those tasks spawned through it: opening a UDP destination's way, the questions to Android about an app socket, a
+    tunnelled flow or an app the network part did not name, a chained app's lookup, the logger, a TCP connection's
+    opening and the listener's accept loop: 24,072 / 14,504 / 22,536;
+  - three inner futures of the UDP open path boxed (`open_mapped`, `mapping_for`, a stand-in's own association;
+    `open_lookups`' box made the library larger, and is left out): 1,664 / 640 / 2,496;
+  - a new map's hasher keys made out of line (`crate::keys`, `map`, `set`) where the engine starts, hands over and opens
+    a flow, and in the settings the network part sends: each map still calls `RandomState::new` once, in the same order,
+    and keeps its type: 8,064 / 5,856 / 8,704.
+
+  **The library: 1,810,296 bytes on arm64-v8a, 1,342,336 on armeabi-v7a and 2,032,136 on x86_64; x86_64 has 65,016 bytes
+  left** (28,112 before: 36,904 more), arm64 286,856 and armv7 754,816. *Left as they were,* since they run per packet,
+  per answer or in a relay task: every relaying task's type (a mapping's, a stand-in's own association's, a flow of
+  lookups' answers, a kept connection's, a tunnel's, an echo's, the TCP relay, `Loop::send`'s retry), and the maps of a
+  mapping's sources, the ordered sets and the names' FIFOs (about 1.5 KB of `RandomState::new` on x86_64). *What it
+  costs:* each boxed task one allocation more and one indirect call per poll (tokio boxes a future over 16 KB itself);
+  each call to Android two allocations more (the job's box and the slot for its answer), one indirect call and two
+  uncontended locks; each boxed inner future one allocation; each map made one call. Counted per event, at most: a UDP
+  destination opened directly seven allocations more (its task, two inner futures, and its two calls to Android: whose
+  socket it is, and the protection of its own), a TCP connection five (its task and its two calls), and a DNS query,
+  which is an event of its own since Android's resolver sends each from a new port, five for a direct app's (its flow's
+  opening and its two calls), four for a chained app's (its opening, its question to Android and its lookup's task),
+  three where the encrypted resolver answers (its opening and its question); each beside its calls to Android over
+  Binder, tens to hundreds of microseconds on a phone. No measure covers the chained path. *The machine code of the
+  packet path,* compared function by function before and after on unstripped x86_64 and arm64-v8a builds, addresses,
+  jump targets and page offsets set aside: the polls of every relaying task are the same, and so are `Loop::handle`,
+  `Loop::send`, `relayed_receive`, `mapped_receive`, `try_send_to`, `tunnels::forward`, `Tun::send` and `Counts::count`.
+  What differs: `Loop::forward` in three call targets alone, in the branches that spawn a UDP destination's opening, a
+  tunnelled flow's question and a TCP connection's opening; `Loop::answered_here` where it spawns a chained or resolved
+  lookup's task, and drops its join handle itself; `run`'s start (the maps of its tables, the logger's spawn), and in
+  its loop the registers and one stack slot, now at offset 0; `echo::carry`'s poll in the branch that protects a new
+  ping socket; `toward_peer` on x86_64 in one call to a folded copy of the same code and one `mov` fewer, and on arm64
+  in the order of its blocks after `try_send_to`, one taken branch moved, within two instructions on each path; and on
+  arm64 `Shared::learn`'s four page loads, which the linker relaxed. *The speed,* before (`main` with the measure below)
+  and after in turn, beside another project's database and build containers: the engine's own release measures, pinned
+  to four threads, eight rounds each at a load of 5 to 10 (medians): a count 12.95 ns both, a mark 169 and 168 ns, the
+  live view 0.98 and 0.97 ms, an answer among 4,000 peers 164.5 ns both, the engine's CPU for a datagram through
+  WireGuard 4.90 and 4.85 µs at 1,280 bytes and 4.50 and 4.48 at 100, sent directly 4.85 and 4.90 at 1,280 and 4.85 and
+  4.65 at 100 (10 ms ticks; eight rounds earlier at a load of 13 gave the same within their spread). The W2 CPU check on
+  the Android 15 emulator with release Rust, fifteen times each in turn, in three sets of five whose throughput moved
+  with the other project's load (about 90 Mbit/s at loads of 10 to 51, about 300 at 20 to 28): the engine's CPU per MB
+  moved 24.1 and 23.9 ms, 23.8 and 24.6, and 12.0 and 11.9 (medians of each set); downloads, uploads, four parallel
+  downloads, and the p50 of a connection and of a round trip differed between the builds by less than between runs of
+  one build, in every set (a rank test's |z| under 1.4, the signs mixed). *The time to open a UDP flow,* a new measure
+  (`opening_a_udp_flow`, `core/net/tests/wireguard.rs`): one datagram from each of 400 new ports, each waited for at the
+  far end; medians of eight rounds on the development machine at a load of 5 to 10, from the send to the arrival and
+  then the engine thread's CPU per open: directly 45.2 and 44.0 µs, 39.5 and 38.7; a lookup to the network part's DNS
+  address 38.9 and 38.3, 33.5 and 33.6; through WireGuard 22.8 and 22.2, 18.1 and 17.5. Built for Android and run on the
+  emulator, forty rounds each, the engine thread's CPU per open: directly 36.2 and 36.3 µs, a lookup 49.5 and 51.8,
+  through WireGuard 18.3 and 17.9, each difference inside a 95% interval that holds no change (the widest from −2.0 to
+  +4.6 µs), the measure's resolution there. The cost the change adds, a few hundred nanoseconds at most, is below both.
+  Not measured: arm64 and armv7 on a phone, whose code changed only as above. **Next, if more room is needed:**
+  hashbrown's code, 112 KB in 169 functions of its own and 109 KB inlined into others, one instantiation per key and
+  value type, on the packet path; the `jni` crate's code in each of the 39 JNI functions, about 11 KB together, which a
+  non-generic entry could share (not measured); the backtrace symbolizer and GotaTun's table, above.
