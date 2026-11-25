@@ -4835,3 +4835,195 @@ fn the_tools_own_flows_and_chained_apps_are_not_read_for_a_proxy() -> Outcome {
         },
     )
 }
+
+/// The counters of the proxy record's unit U: the `UDP ASSOCIATE`s whose relays are tied, and the replies that named
+/// a relay elsewhere than the proxy's own address.
+const PROXY_ASSOCIATIONS: usize = 71;
+const PROXY_RELAYS_ELSEWHERE: usize = 72;
+
+/// An app's own SOCKS5 proxy on the lab's "internet" that confirms every `UDP ASSOCIATE` with `bound` as its relay
+/// (`BND.ADDR` and `BND.PORT`), and keeps each control connection open until the app closes it (RFC 1928, section 6).
+async fn associating_proxy(at: Ipv4Addr, bound: SocketAddr) -> io::Result<SocketAddr> {
+    let listener = TcpListener::bind((at, 0)).await?;
+    let address = listener.local_addr()?;
+    let IpAddr::V4(relay) = bound.ip() else {
+        return Err(io::Error::other("an IPv4 relay"));
+    };
+    let mut reply = vec![5, 0, 0, 1];
+    reply.extend_from_slice(&relay.octets());
+    reply.extend_from_slice(&bound.port().to_be_bytes());
+    tokio::spawn(async move {
+        while let Ok((mut connection, _)) = listener.accept().await {
+            let reply = reply.clone();
+            tokio::spawn(async move {
+                let mut buffer = vec![0u8; 512];
+                for answer in [&[5, 0][..], &reply] {
+                    if !matches!(connection.read(&mut buffer).await, Ok(n) if n > 0)
+                        || connection.write_all(answer).await.is_err()
+                    {
+                        return;
+                    }
+                }
+                while matches!(connection.read(&mut buffer).await, Ok(n) if n > 0) {}
+            });
+        }
+    });
+    Ok(address)
+}
+
+/// A SOCKS5 UDP relay at `at`: each datagram whose header parses (RFC 1928, section 7) is answered to its sender with
+/// the same header and `relayed`, as a relay answers for the destination it names.
+async fn socks_relay(at: Ipv4Addr) -> io::Result<SocketAddr> {
+    let socket = UdpSocket::bind((at, 0)).await?;
+    let address = socket.local_addr()?;
+    tokio::spawn(async move {
+        let mut buffer = vec![0u8; 2048];
+        while let Ok((n, from)) = socket.recv_from(&mut buffer).await {
+            if let Some((target, _)) = datapavan_net::socks5::parse_datagram(&buffer[..n]) {
+                let answer = datapavan_net::socks5::datagram(&target, b"relayed");
+                let _ = socket.send_to(&answer, from).await;
+            }
+        }
+    });
+    Ok(address)
+}
+
+/// The app's `UDP ASSOCIATE` on `control`, its `DST` of zeros, confirmed with the relay `bound`.
+async fn associate(control: &mut TcpStream, bound: SocketAddr) -> Outcome {
+    step(control, &[5, 1, 0], &[5, 0]).await?;
+    let IpAddr::V4(relay) = bound.ip() else {
+        return Err("an IPv4 relay".into());
+    };
+    let mut reply = vec![5, 0, 0, 1];
+    reply.extend_from_slice(&relay.octets());
+    reply.extend_from_slice(&bound.port().to_be_bytes());
+    step(control, &[5, 3, 0, 1, 0, 0, 0, 0, 0, 0], &reply).await
+}
+
+/// A datagram for a SOCKS5 relay, to `name` at `port`.
+fn relayed(name: &str, port: u16, payload: &[u8]) -> Result<Vec<u8>, Box<dyn std::error::Error>> {
+    let target = datapavan_net::socks5::Target::name(name, port).ok_or("a name")?;
+    Ok(datapavan_net::socks5::datagram(&target, payload))
+}
+
+/// The proxy record's unit U (ADR 0052): an app's own SOCKS5 proxy's `UDP ASSOCIATE`, through the whole engine on
+/// Linux's stacks, with a relay that answers. With "Log where these apps connect" off, the control flow and the
+/// relay's flow are the app's own proxy's, the relay's first hop kept live and nothing the datagram asked for, and the
+/// log gets neither the proxy's address nor that destination; with it on, the datagram's destination names the relay's
+/// flow. Another app's UDP to the relay is not tied, nor the app's UDP to an address a reply named elsewhere (C1).
+#[test]
+#[ignore = "needs an unprivileged network namespace; scripts/check.sh rust runs it"]
+#[allow(clippy::too_many_lines)]
+fn an_apps_own_socks5_relay_is_tied_to_its_udp_associate() -> Outcome {
+    lab(
+        "an_apps_own_socks5_relay_is_tied_to_its_udp_associate",
+        &Limits {
+            close_linger: Duration::from_millis(50),
+            udp_idle: Duration::from_millis(400),
+            sweep_every: Duration::from_millis(100),
+            ..Limits::default()
+        },
+        |engine| async move {
+            let socks5 = datapavan_net::proxies::Kind::Socks5;
+            let relay = socks_relay(SERVER).await?;
+            // A `BND.ADDR` of zeros, as `scripts/network-lab/socks5.py` answers: the client sends to the proxy's own
+            // address.
+            let zeros = SocketAddr::from((Ipv4Addr::UNSPECIFIED, relay.port()));
+            let proxy = associating_proxy(SERVER, zeros).await?;
+            let before = LOGGED.lock().map_err(|e| e.to_string())?.len();
+            let mut control = app_connect(proxy).await?;
+            associate(&mut control, zeros).await?;
+            let app = app_socket().await?;
+            app.send_to(&relayed("asked.hidden.test", 53, b"query")?, relay)
+                .await?;
+            let (answer, from) = app_receive(&app).await?;
+            assert_eq!(from, relay);
+            assert!(answer.ends_with(b"relayed"), "{answer:?}");
+            let flow = flow_to(&engine, relay, |f| f.proxy.is_some()).await?;
+            let tied = flow.proxy.clone().ok_or("no proxy kept")?;
+            assert_eq!(tied.kind, socks5);
+            assert!(tied.asked.is_none() && !tied.left_out, "{tied:?}");
+            assert_ne!(flow.name.as_deref(), Some("asked.hidden.test"));
+            let named = flow_to(&engine, proxy, |f| f.proxy.is_some()).await?;
+            assert!(
+                named
+                    .proxy
+                    .is_some_and(|p| p.kind == socks5 && p.asked.is_none()),
+                "the control flow"
+            );
+            // Both end: the control connection closes, and the relay's mapping goes silent.
+            drop((control, app));
+            tokio::time::sleep(Duration::from_millis(1200)).await;
+            engine.flush_log();
+            let logged = LOGGED.lock().map_err(|e| e.to_string())?.clone();
+            let since = logged.get(before..).unwrap_or_default();
+            assert!(!since.is_empty(), "the flows' records were written");
+            assert!(
+                !holds(since, &SERVER.octets()),
+                "the proxy's address is not logged with the switch off"
+            );
+            assert!(
+                !holds(&logged, b"asked.hidden.test"),
+                "nor the destination asked for"
+            );
+
+            // Another app's UDP to the relay is its own, not tied.
+            let second = UdpSocket::bind((Addresses::COMMON.tun4, SECOND_PORTS.start)).await?;
+            let mut again = app_connect(proxy).await?;
+            associate(&mut again, zeros).await?;
+            second
+                .send_to(&relayed("other.hidden.test", 53, b"query")?, relay)
+                .await?;
+            app_receive(&second).await?;
+            let other = flow_to(&engine, relay, |f| f.uid == Some(SECOND_APP)).await?;
+            assert!(other.proxy.is_none(), "another app's flow: {other:?}");
+
+            // A reply that names another address as the relay ties nothing there (audit C1).
+            let elsewhere = socks_relay(OTHER).await?;
+            let third = associating_proxy(SERVER, elsewhere).await?;
+            let mut named_elsewhere = app_connect(third).await?;
+            associate(&mut named_elsewhere, elsewhere).await?;
+            let app = app_socket().await?;
+            app.send_to(&relayed("third.hidden.test", 53, b"query")?, elsewhere)
+                .await?;
+            app_receive(&app).await?;
+            let plain = flow_to(&engine, elsewhere, |_| true).await?;
+            assert!(plain.proxy.is_none(), "a relay named elsewhere: {plain:?}");
+
+            // "Log where these apps connect" on: the first datagram's destination names the relay's flow.
+            engine.tunnels(&datapavan_net::TunnelSetting {
+                log_destinations: true,
+                ..datapavan_net::TunnelSetting::default()
+            });
+            let mut kept = app_connect(proxy).await?;
+            associate(&mut kept, zeros).await?;
+            let app = app_socket().await?;
+            app.send_to(&relayed("asked.kept.test", 3478, b"query")?, relay)
+                .await?;
+            app_receive(&app).await?;
+            let flow = flow_to(&engine, relay, |f| {
+                f.named_by == datapavan_net::NamedBy::Proxy
+            })
+            .await?;
+            assert_eq!(flow.name.as_deref(), Some("asked.kept.test"));
+            assert_eq!(
+                flow.proxy.and_then(|p| p.asked),
+                Some((
+                    datapavan_net::proxies::Asked::Name("asked.kept.test".into()),
+                    3478
+                ))
+            );
+            let counters = engine.counters();
+            assert_eq!(
+                (
+                    counters[PROXY_ASSOCIATIONS],
+                    counters[PROXY_RELAYS_ELSEWHERE]
+                ),
+                (4, 1),
+                "associations tied, and one relay named elsewhere"
+            );
+            drop((again, named_elsewhere, kept));
+            Ok(())
+        },
+    )
+}
