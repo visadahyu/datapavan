@@ -6,9 +6,9 @@
 //! 1. link-local (`169.254/16`, `fe80::/10`) is local;
 //! 2. an address within one of the network's on-link prefixes is local, global IPv6 included: on Wi-Fi and Ethernet the
 //!    routes without a gateway and the link addresses' own prefixes, on a cellular network only the link addresses'
-//!    (a data call is point to point, and a modem may report its default route with no gateway); never a prefix of
-//!    length 0, and none wider than `/16` for IPv4 or `/48` for IPv6, which the network part leaves out before it hands
-//!    them over ([`OnLink::new`] does it again);
+//!    (a data call is point to point, and a modem may report its default route with no gateway), IPv4 from `/24` there,
+//!    so that other subscribers are not local; never a prefix of length 0, and none wider than `/16` for IPv4 or `/48`
+//!    for IPv6 ([`OnLink::new`] leaves them out);
 //! 3. private addresses (`10/8`, `172.16/12`, `192.168/16`, `fc00::/7`) are local on Wi-Fi and Ethernet; on another
 //!    network only by rule 2;
 //! 4. CGNAT (`100.64/10`) and the deprecated `fec0::/10` (RFC 3879) only by rule 2;

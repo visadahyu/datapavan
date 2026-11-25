@@ -266,7 +266,8 @@ chaining is, and must follow the same switch.
      decided where the proxy is named from the network beneath's on-link prefixes, which the network part hands over
      with its transport, and kept whatever the switch says, since it names nothing: link-local; an on-link prefix,
      global IPv6 included, never of length 0 nor wider than `/16` or `/48`, and on a cellular network only the link
-     addresses' own, since a data call may report its default route with no gateway; private addresses on Wi-Fi and
+     addresses' own, IPv4 from `/24`, since a data call may report its default route with no gateway and a wider
+     prefix there would take in other subscribers; private addresses on Wi-Fi and
      Ethernet only; CGNAT and `fec0::/10` only by a prefix.
 
 ## Consequences
