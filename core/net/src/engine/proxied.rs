@@ -16,7 +16,8 @@
 
 use super::{Counters, Flow, NamedBy, Opened, Shared, lock};
 use crate::messengers::{Family, Role};
-use crate::proxies::{self, Asked, Declared, Kind, MAX_REPLY, Request};
+use crate::proxies::{self, ASSOCIATE_REPLY, Asked, Declared, Kind, MAX_REPLY, Request};
+use crate::socks5::Target;
 use crate::tls::{self, Hello, ServerName};
 use crate::trackers::NetworkSignatures;
 use std::collections::{HashMap, HashSet};
@@ -49,6 +50,12 @@ const OPEN_DIRECT: usize = 4096;
 
 /// The most trackers a proxied flow keeps the marks of (the log's and the snapshot's proxy block).
 pub const MAX_TRACKERS: usize = 8;
+
+/// The most `UDP ASSOCIATE`s of apps' own SOCKS5 proxies the engine ties relays to at once, and the most for each app
+/// ([`Association`], audit-U M6): past an app's share, its own oldest is forgotten; past the whole, the oldest of the
+/// app that holds the most, so that no app can push another's out.
+const ASSOCIATIONS: usize = 256;
+const ASSOCIATIONS_OF_APP: usize = 16;
 
 /// A flow's proxy (ADR 0052). Its facts are each a yes or a no, as the records write them: flags, not a state.
 #[derive(Clone, Debug, PartialEq, Eq)]
@@ -175,6 +182,22 @@ struct LookedUp {
     last: Duration,
 }
 
+/// A `UDP ASSOCIATE` an app's own SOCKS5 proxy confirmed, on its control flow (the proxy record's unit U): while that
+/// flow is open, the app's UDP flows that go directly to the control flow's own server at the reply's `BND.PORT` are
+/// that proxy's relay, and so its first hop. The tie is at the server the app's TCP flow reached and whose bytes
+/// confirmed, never at the address the reply names (audit-U C1): a reply naming a third party's address ties nothing
+/// there, so no app's server can make the app's plain UDP to anyone else read as a proxy's. It ends with its control
+/// flow (RFC 1928, section 6), and is not handed over: a stop ends every flow first (audit-U M5).
+struct Association {
+    uid: u32,
+    control: u64,
+    server: IpAddr,
+    port: u16,
+    /// The control flow's facts that name nothing, which its relay's flows share.
+    setting: bool,
+    password: bool,
+}
+
 /// The engine's state of the inference.
 pub(super) struct State {
     setting: ProxySetting,
@@ -189,6 +212,8 @@ pub(super) struct State {
     third_party: HashMap<u32, Duration>,
     /// The key of the looked-up names' hashes.
     hasher: std::hash::RandomState,
+    /// The `UDP ASSOCIATE`s whose relays are tied, oldest first, at most [`ASSOCIATIONS`].
+    associations: Vec<Association>,
 }
 
 impl Default for State {
@@ -201,6 +226,7 @@ impl Default for State {
             looked_up: crate::map(),
             third_party: crate::map(),
             hasher: crate::keys(),
+            associations: Vec::new(),
         }
     }
 }
@@ -328,6 +354,28 @@ impl State {
         for (uid, last) in instants.into_iter().take(MESSENGER_APPS) {
             self.direct.entry(uid).or_default().last = Some(last);
         }
+    }
+
+    /// Notes `new`, within the bounds ([`ASSOCIATIONS`]): an app at its share forgets its own oldest; a full table, the
+    /// oldest of the app that holds the most. Two of one relay are each kept, so that the tie goes only with the last.
+    fn associate(&mut self, new: Association) {
+        let mut held: HashMap<u32, usize> = crate::map();
+        for a in &self.associations {
+            *held.entry(a.uid).or_default() += 1;
+        }
+        let forgets = if held.get(&new.uid).copied().unwrap_or(0) >= ASSOCIATIONS_OF_APP {
+            Some(new.uid)
+        } else if self.associations.len() >= ASSOCIATIONS {
+            held.iter().max_by_key(|&(_, &n)| n).map(|(&uid, _)| uid)
+        } else {
+            None
+        };
+        if let Some(uid) = forgets
+            && let Some(oldest) = self.associations.iter().position(|a| a.uid == uid)
+        {
+            self.associations.remove(oldest);
+        }
+        self.associations.push(new);
     }
 }
 
@@ -793,6 +841,8 @@ impl Shared {
                 direct.last = Some(now);
             }
         }
+        // A `UDP ASSOCIATE` ends with its control flow (RFC 1928, section 6).
+        state.associations.retain(|a| a.control != id);
         now
     }
 
@@ -802,6 +852,7 @@ impl Shared {
         let now = self.clock.since_boot();
         let mut state = lock(&self.proxies);
         state.inferred.clear();
+        state.associations.clear();
         for direct in state.direct.values_mut() {
             if !direct.open.is_empty() {
                 direct.open.clear();
@@ -931,21 +982,26 @@ impl Shared {
         let organisation = self.organisation(destination.ip());
         // The destination asked for names the flow: a name as it is, an address by the DNS answer it was
         // given for this app, if one is held, else by the address asked for itself, never by the proxy's (the
-        // fix round's R-m2).
-        let name = match &request.asked {
+        // fix round's R-m2). A `UDP ASSOCIATE` asks for none: its `DST` is the client's own source (audit-U M1), and
+        // its control flow keeps its own server's names whatever the switch says.
+        let name = (!request.associate).then(|| match &request.asked {
             Asked::Name(name) => name.clone(),
             Asked::Address(address) => lock(&self.names)
                 .get(*address, opened.uid, Instant::now())
                 .map_or_else(|| address.to_string(), str::to_owned),
-        };
+        });
         let mut hosts = Self::hosts_of(current.as_ref(), destination);
-        hosts.push((name.clone(), request.port));
+        if let Some(name) = &name {
+            hosts.push((name.clone(), request.port));
+        }
         let proxied = Proxied {
             kind: request.kind,
             setting,
             password: request.password,
             outside_maker: false,
-            asked: Some((request.asked.clone(), request.port)),
+            asked: name
+                .is_some()
+                .then(|| (request.asked.clone(), request.port)),
             proxy_name,
             organisation: organisation.as_ref().map(|(_, n)| n.clone()),
             cover: None,
@@ -957,13 +1013,142 @@ impl Shared {
         let network = organisation.map(|(network, _)| network);
         self.name_proxied(opened, current.as_ref(), |flow, kept| {
             flow.network = network;
+            match &name {
+                Some(name) if kept => {
+                    flow.name = Some(name.clone());
+                    flow.named_by = NamedBy::Proxy;
+                    flow.dns_name = None;
+                    flow.proxy = Some(Box::new(proxied.clone()));
+                }
+                _ => flow.proxy = Some(Box::new(proxied.without_asked())),
+            }
+        });
+    }
+
+    /// A `UDP ASSOCIATE` that the server of the flow `opened` confirmed named `bound` as its relay (unit U): the
+    /// association is noted, for the app's UDP flows to its relay, before the reply reaches the app. Only on a flow
+    /// read for proxies (it went directly, and is not the user's tool's) of an app Android named (audit-U m3), whose
+    /// confirmed SOCKS5 proxy names it already. The relay is the control flow's own server at `BND.PORT`: a `BND.ADDR`
+    /// elsewhere is counted, never tied there (audit-U C1), and a name there is tied by its port alone too.
+    fn associated(&self, opened: &Opened, bound: &Target) {
+        let Some(uid) = opened.uid.filter(|_| opened.sniffs) else {
+            return;
+        };
+        let Some(control) = self
+            .flow_of(opened.id)
+            .and_then(|f| f.proxy)
+            .filter(|p| p.kind == Kind::Socks5)
+        else {
+            return;
+        };
+        let server = opened.destination.ip().to_canonical();
+        let (elsewhere, port) = match bound {
+            Target::Address(relay) => {
+                let at = relay.ip().to_canonical();
+                (!at.is_unspecified() && at != server, relay.port())
+            }
+            Target::Name(_, port) => (true, *port),
+        };
+        if elsewhere {
+            Counters::add(&self.counters.proxy_relays_elsewhere, 1);
+        }
+        if port == 0 {
+            return;
+        }
+        Counters::add(&self.counters.proxy_associations, 1);
+        lock(&self.proxies).associate(Association {
+            uid,
+            control: opened.id,
+            server,
+            port,
+            setting: control.setting,
+            password: control.password,
+        });
+    }
+
+    /// Gives `flow`, a new UDP flow that goes directly (`udp::begin_udp`'s callers), its app's own SOCKS5 proxy, when it
+    /// goes to the relay of one of the app's open associations ([`Association`]), or comes in from that server on any
+    /// port (audit-U m4): the proxy's kind and its first hop, the relay's own names and network, the facts that name
+    /// nothing, and the trackers' marks on the relay's names (audit-U M4). No `asked` yet, which only the first
+    /// datagram's header can give ([`Shared::relay_asked`]): "Now" shows the first hop, and the log keeps what an own
+    /// proxy's flow keeps, as for any own proxy (`strips`, `strip_for_log`). Every fact is read before the proxies'
+    /// lock is taken, and nothing else is locked under it. Whether one was given.
+    pub(super) fn tie_relay(&self, flow: &mut Flow, came_in: bool) -> bool {
+        let Some(uid) = flow.uid else {
+            return false;
+        };
+        let address = flow.destination.ip().to_canonical();
+        let port = flow.destination.port();
+        let Some((setting, password)) = lock(&self.proxies)
+            .associations
+            .iter()
+            .rev()
+            .find(|a| a.uid == uid && a.server == address && (came_in || a.port == port))
+            .map(|a| (a.setting, a.password))
+        else {
+            return false;
+        };
+        let proxy_name = (flow.named_by == NamedBy::Dns)
+            .then(|| flow.name.clone())
+            .flatten();
+        let organisation = self.organisation(address).map(|(_, name)| name);
+        let trackers = self.marks(&Self::hosts_of(Some(flow), flow.destination));
+        flow.proxy = Some(Box::new(Proxied {
+            kind: Kind::Socks5,
+            setting,
+            password,
+            outside_maker: false,
+            asked: None,
+            proxy_name,
+            organisation,
+            cover: None,
+            left_out: false,
+            trackers,
+            local: self.local(address),
+            unsure: false,
+        }));
+        true
+    }
+
+    /// The first datagram an app sent on a flow tied to its proxy's relay ([`Shared::tie_relay`]) named `target` in its
+    /// SOCKS5 header (`socks5::parse_datagram`, which drops a fragment): its trackers' marks join the flow's, and while
+    /// "Log where these apps connect" is on, it is where the flow asked to go, which names it, as a `CONNECT`'s request
+    /// does (audit-U M3). Through [`Shared::name_proxied`], which reads the switch under the flow's lock and keeps an
+    /// unkept flow unkept. Only the first datagram is read: later ones to other destinations are not followed (n4).
+    pub(super) fn relay_asked(&self, opened: &Opened, target: &Target) {
+        let (asked, port) = match target {
+            Target::Address(at) => (Asked::Address(at.ip()), at.port()),
+            Target::Name(name, port) => match proxies::host_name(name.as_bytes()) {
+                Some(name) => (name, *port),
+                None => return,
+            },
+        };
+        self.log_now();
+        let name = match &asked {
+            Asked::Name(name) => name.clone(),
+            Asked::Address(address) => lock(&self.names)
+                .get(*address, opened.uid, Instant::now())
+                .map_or_else(|| address.to_string(), str::to_owned),
+        };
+        let found = self.marks(&[(name.clone(), port)]);
+        let current = self.flow_of(opened.id);
+        self.name_proxied(opened, current.as_ref(), |flow, kept| {
+            let Some(proxy) = flow
+                .proxy
+                .as_deref_mut()
+                .filter(|p| p.kind == Kind::Socks5 && p.asked.is_none())
+            else {
+                return;
+            };
+            proxy.trackers.extend(&found);
+            proxy.trackers.sort_unstable();
+            proxy.trackers.dedup();
+            proxy.trackers.truncate(MAX_TRACKERS);
             if kept {
+                proxy.asked = Some((asked.clone(), port));
                 flow.name = Some(name.clone());
                 flow.named_by = NamedBy::Proxy;
                 flow.dns_name = None;
-                flow.proxy = Some(Box::new(proxied.clone()));
-            } else {
-                flow.proxy = Some(Box::new(proxied.without_asked()));
             }
         });
     }
@@ -1513,19 +1698,30 @@ impl Sniff {
 /// bytes declared, and the server's first bytes ([`MAX_REPLY`] at most), which confirm it or not
 /// ([`proxies::confirmed`]; the fix round's S-M1). Until they do, the flow keeps its own address and names, and
 /// an inner hello read meanwhile waits; refused, or answered by another protocol, the request names nothing,
-/// and that hello names the flow as its own. A server that never answers confirms nothing.
-#[derive(Default)]
+/// and that hello names the flow as its own. A server that never answers confirms nothing. A confirmed `UDP
+/// ASSOCIATE` is read on, across reads, until its reply's relay is whole ([`proxies::bound`], at most
+/// [`ASSOCIATE_REPLY`] bytes; audit-U M2).
 pub(super) struct Handshake {
-    reply: [u8; MAX_REPLY],
+    reply: [u8; ASSOCIATE_REPLY],
     len: usize,
     step: Step,
 }
 
-#[derive(Default)]
+impl Default for Handshake {
+    fn default() -> Self {
+        Self {
+            reply: [0; ASSOCIATE_REPLY],
+            len: 0,
+            step: Step::Idle,
+        }
+    }
+}
+
 enum Step {
-    #[default]
     Idle,
     Waiting(Request, Option<Hello>),
+    /// A `UDP ASSOCIATE` confirmed, its relay not read whole yet.
+    Binding(Request),
     Confirmed,
     Refused,
 }
@@ -1552,19 +1748,42 @@ impl Handshake {
                 *waiting = Some(hello);
                 None
             }
-            Step::Confirmed => Some(Settle::Hello(hello, true)),
+            Step::Confirmed | Step::Binding(_) => Some(Settle::Hello(hello, true)),
             Step::Idle | Step::Refused => Some(Settle::Hello(hello, false)),
         }
     }
 
-    /// The server sent `bytes`: what they settle, and whether its next bytes are still wanted.
-    fn server(&mut self, bytes: &[u8]) -> (Option<Settle>, bool) {
-        let take = bytes.len().min(MAX_REPLY - self.len);
+    /// The server sent `bytes`: what they settle, a confirmed `UDP ASSOCIATE`'s relay once its reply is whole, and
+    /// whether its next bytes are still wanted.
+    fn server(&mut self, bytes: &[u8]) -> (Option<Settle>, Option<Target>, bool) {
+        let associate = matches!(&self.step, Step::Waiting(r, _) | Step::Binding(r) if r.associate);
+        let most = if associate {
+            ASSOCIATE_REPLY
+        } else {
+            MAX_REPLY
+        };
+        let take = bytes.len().min(most.saturating_sub(self.len));
         self.reply[self.len..self.len + take].copy_from_slice(&bytes[..take]);
         self.len += take;
         let settled = self.decide();
-        let wanted = self.len < MAX_REPLY && matches!(self.step, Step::Idle | Step::Waiting(..));
-        (settled, wanted)
+        let relay = self.bind();
+        let wanted = self.len < most
+            && matches!(self.step, Step::Idle | Step::Waiting(..) | Step::Binding(_));
+        (settled, relay, wanted)
+    }
+
+    /// A confirmed `UDP ASSOCIATE`'s relay, once the reply is whole: then nothing more is read.
+    fn bind(&mut self) -> Option<Target> {
+        let Step::Binding(request) = &self.step else {
+            return None;
+        };
+        let relay = match proxies::bound(request, &self.reply[..self.len]) {
+            None if self.len < ASSOCIATE_REPLY => return None,
+            None => None,
+            Some(relay) => relay,
+        };
+        self.step = Step::Confirmed;
+        relay
     }
 
     fn decide(&mut self) -> Option<Settle> {
@@ -1589,6 +1808,10 @@ impl Handshake {
             return None;
         };
         if confirmed {
+            // Its control flow is named at once; its relay is read on.
+            if request.associate {
+                self.step = Step::Binding(request.clone());
+            }
             Some(Settle::Declared(request, hello))
         } else {
             hello.map(|hello| Settle::Hello(hello, false))
@@ -1619,8 +1842,11 @@ impl Shared {
         bytes: &[u8],
         handshake: &Mutex<Handshake>,
     ) -> bool {
-        let (settled, wanted) = lock(handshake).server(bytes);
+        let (settled, relay, wanted) = lock(handshake).server(bytes);
         self.handshake_settled(opened, settled);
+        if let Some(relay) = relay {
+            self.associated(&opened, &relay);
+        }
         wanted
     }
 
@@ -4287,5 +4513,331 @@ mod tests {
             before,
             "the flow's own DNS is as it was"
         );
+    }
+
+    /// A `UDP ASSOCIATE` asked of the SOCKS5 server at `server` by `uid`, its reply naming `bnd` (`ATYP` and on) as its
+    /// relay, read as `tcp::relay` reads it: its control flow, left open.
+    fn associate_at(shared: &Shared, uid: u32, server: SocketAddr, bnd: &[u8]) -> Opened {
+        let (control, bytes) = open(shared, uid, server);
+        let mut reply = vec![5, 0, 5, 0, 0];
+        reply.extend_from_slice(bnd);
+        relay_replied(
+            shared,
+            control,
+            &bytes,
+            &[&[5, 1, 0], &[5, 3, 0, 1, 0, 0, 0, 0, 0, 0]],
+            &reply,
+        );
+        control
+    }
+
+    /// A UDP flow of `uid` to `destination` on the direct path, begun, tied and recorded as `udp::Peer::new` makes it:
+    /// its opening, and the live flow.
+    fn udp_flow(
+        shared: &Shared,
+        uid: u32,
+        destination: SocketAddr,
+        came_in: bool,
+    ) -> (Opened, Flow) {
+        let app = SocketAddr::from(([10, 1, 10, 1], 50_000));
+        let (opened, mut flow) = super::super::udp::begin_udp(shared, app, destination, Some(uid));
+        flow.came_in = came_in;
+        shared.tie_relay(&mut flow, came_in);
+        let _ = shared.record(flow);
+        (opened, live(shared, opened.id))
+    }
+
+    /// Unit U (audit-U M1, M3, M4): a confirmed `UDP ASSOCIATE` names its control flow an own SOCKS5 proxy's, by its
+    /// own server's names, its `DST` naming nothing, and ties the app's UDP flows to that server at the reply's port.
+    /// With the switch off, "Now" shows the relay's first hop, the first datagram's destination names nothing, and the
+    /// log keeps of both flows the proxy's kind and the facts that name nothing.
+    #[test]
+    fn a_udp_associate_ties_its_relays_flows_to_the_apps_own_proxy() {
+        let (shared, clock) = engine_at(false);
+        learn(&shared, "203.0.113.5", "proxy.example.net");
+        let server = at([203, 0, 113, 5], 1080);
+        let control = associate_at(&shared, UID, server, &[1, 0, 0, 0, 0, 0x9c, 0x40]);
+        let named = live(&shared, control.id);
+        assert!(
+            named
+                .proxy
+                .as_ref()
+                .is_some_and(|p| p.kind == Kind::Socks5 && p.asked.is_none() && !p.left_out),
+            "{named:?}"
+        );
+        assert_eq!(named.name.as_deref(), Some("proxy.example.net"));
+        let (relay, flow) = udp_flow(&shared, UID, at([203, 0, 113, 5], 40_000), false);
+        assert!(
+            flow.proxy.as_ref().is_some_and(|p| p.kind == Kind::Socks5
+                && p.asked.is_none()
+                && !p.left_out
+                && p.proxy_name.as_deref() == Some("proxy.example.net")),
+            "{flow:?}"
+        );
+        assert!(own_first_hop(&flow));
+        shared.relay_asked(&relay, &Target::Name("example.com".into(), 443));
+        let after = live(&shared, relay.id);
+        assert!(after.proxy.as_ref().is_some_and(|p| p.asked.is_none()));
+        assert_eq!(after.name.as_deref(), Some("proxy.example.net"));
+        assert!(lock(&shared.live).get(&relay.id).is_some_and(|l| l.unkept));
+        for id in [control.id, relay.id] {
+            shared.finish(id);
+        }
+        shared.flush();
+        clock.pass(11 * 60_000);
+        another_record(&shared);
+        let records = taken(&shared);
+        let batch = crate::log::batch(&records);
+        for hidden in [&b"proxy.example.net"[..], b"example.com", &[203, 0, 113, 5]] {
+            assert!(!holds(&batch, hidden), "{hidden:?}");
+        }
+        for id in [control.id, relay.id] {
+            let written = of_flow(&records, id);
+            assert!(
+                !written.is_empty()
+                    && written
+                        .iter()
+                        .all(|f| left_out(f)
+                            && f.proxy.as_ref().is_some_and(|p| p.kind == Kind::Socks5)),
+                "{written:?}"
+            );
+        }
+    }
+
+    /// With the switch on, the first datagram's destination names the relay's flow, as a `CONNECT`'s request names
+    /// its flow; turning the switch off sets it back to its first hop (audit-U M3).
+    #[test]
+    fn with_the_switch_on_a_relays_first_datagram_names_its_flow() {
+        let shared = engine(true);
+        learn(&shared, "203.0.113.5", "proxy.example.net");
+        let control = associate_at(
+            &shared,
+            UID,
+            at([203, 0, 113, 5], 1080),
+            &[1, 0, 0, 0, 0, 0x9c, 0x40],
+        );
+        // Its `DST`, the client's own source, names nothing, the switch on too (audit-U M1).
+        let named = live(&shared, control.id);
+        assert_eq!(named.name.as_deref(), Some("proxy.example.net"));
+        assert!(named.proxy.as_ref().is_some_and(|p| p.asked.is_none()));
+        let (relay, _) = udp_flow(&shared, UID, at([203, 0, 113, 5], 40_000), false);
+        shared.relay_asked(&relay, &Target::Address(at([198, 51, 100, 9], 3478)));
+        let named = live(&shared, relay.id);
+        assert_eq!(
+            (named.name.as_deref(), named.named_by),
+            (Some("198.51.100.9"), NamedBy::Proxy)
+        );
+        let asked = Asked::Address(IpAddr::V4([198, 51, 100, 9].into()));
+        assert!(
+            named
+                .proxy
+                .as_ref()
+                .is_some_and(|p| p.asked == Some((asked.clone(), 3478)))
+        );
+        switch(&shared, false);
+        let back = live(&shared, relay.id);
+        assert!(back.proxy.as_ref().is_some_and(|p| p.asked.is_none()));
+        assert_eq!(back.name.as_deref(), Some("proxy.example.net"));
+    }
+
+    /// Audit-U C1: a reply that names another address as its relay ties nothing there, so that no app's server can make
+    /// the app's plain UDP to a third party read as a proxy's; the control flow's own server at that port is tied, and
+    /// both the association and the relay elsewhere are counted.
+    #[test]
+    fn a_relay_named_elsewhere_ties_nothing_there() {
+        let shared = engine(false);
+        associate_at(
+            &shared,
+            UID,
+            at([203, 0, 113, 5], 1080),
+            &[1, 198, 51, 100, 20, 1, 187],
+        );
+        let (_, third) = udp_flow(&shared, UID, at([198, 51, 100, 20], 443), false);
+        assert!(third.proxy.is_none(), "{third:?}");
+        let (_, own) = udp_flow(&shared, UID, at([203, 0, 113, 5], 443), false);
+        assert!(own.proxy.is_some());
+        let counters = shared.counters.snapshot();
+        assert_eq!(counters[super::super::COUNTERS - 2..], [1, 1]);
+    }
+
+    /// Audit-U m3 and m4: only the associating app's flows are tied, a flow of no app never is, one that comes in from
+    /// the server is on any port, and a control flow not read for proxies (the user's tool's, a chained app's) notes no
+    /// association.
+    #[test]
+    fn only_the_associating_apps_flows_are_tied() {
+        let shared = engine(false);
+        associate_at(
+            &shared,
+            UID,
+            at([203, 0, 113, 5], 1080),
+            &[1, 0, 0, 0, 0, 0x9c, 0x40],
+        );
+        let (_, other) = udp_flow(&shared, UID + 1, at([203, 0, 113, 5], 40_000), false);
+        assert!(other.proxy.is_none());
+        let (_, port) = udp_flow(&shared, UID, at([203, 0, 113, 5], 40_001), false);
+        assert!(port.proxy.is_none(), "another port the app sent to");
+        let (_, came_in) = udp_flow(&shared, UID, at([203, 0, 113, 5], 40_123), true);
+        assert!(came_in.proxy.is_some(), "from the server, on any port");
+        let app = SocketAddr::from(([10, 1, 10, 1], 50_001));
+        let (_, mut nobody) =
+            super::super::udp::begin_udp(&shared, app, at([203, 0, 113, 5], 40_000), None);
+        assert!(!shared.tie_relay(&mut nobody, false));
+        let (tool, bytes) = open(&shared, UID + 2, at([203, 0, 113, 6], 1080));
+        let tool = Opened {
+            sniffs: false,
+            ..tool
+        };
+        let mut reply = vec![5, 0, 5, 0, 0];
+        reply.extend_from_slice(&[1, 0, 0, 0, 0, 0x9c, 0x40]);
+        relay_replied(
+            &shared,
+            tool,
+            &bytes,
+            &[&[5, 1, 0], &[5, 3, 0, 1, 0, 0, 0, 0, 0, 0]],
+            &reply,
+        );
+        let (_, untied) = udp_flow(&shared, UID + 2, at([203, 0, 113, 6], 40_000), false);
+        assert!(untied.proxy.is_none());
+    }
+
+    /// Audit-U M5: an association ends with its control flow, two on one relay port each count, so that the tie goes
+    /// only with the last, and the engine's stop ends every one: none is handed over.
+    #[test]
+    fn an_association_ends_with_the_last_of_its_control_flows() {
+        let shared = engine(false);
+        let server = at([203, 0, 113, 5], 1080);
+        // A server that relays on its TCP port, as Xray's and sing-box's SOCKS inbounds do.
+        let bnd = [1, 0, 0, 0, 0, 0x04, 0x38];
+        let first = associate_at(&shared, UID, server, &bnd);
+        let second = associate_at(&shared, UID, server, &bnd);
+        shared.finish(first.id);
+        assert!(udp_flow(&shared, UID, server, false).1.proxy.is_some());
+        shared.finish(second.id);
+        assert!(udp_flow(&shared, UID, server, false).1.proxy.is_none());
+        associate_at(&shared, UID, server, &bnd);
+        assert!(udp_flow(&shared, UID, server, false).1.proxy.is_some());
+        shared.proxies_all_ended();
+        assert!(udp_flow(&shared, UID, server, false).1.proxy.is_none());
+    }
+
+    /// Audit-U M2: the relay is tied from a reply split at any byte, in IPv6, the server's bytes read on past the
+    /// confirmation until its relay is whole, and no further.
+    #[test]
+    fn a_relay_is_tied_from_a_reply_split_anywhere_and_in_ipv6() {
+        let server = SocketAddr::new(
+            IpAddr::V6(std::net::Ipv6Addr::new(0x2001, 0xdb8, 0, 0, 0, 0, 0, 5)),
+            1080,
+        );
+        let mut reply = vec![5, 0, 5, 0, 0, 4];
+        reply.extend_from_slice(&[0; 16]);
+        reply.extend_from_slice(&[0x9c, 0x40]);
+        for cut in 1..reply.len() {
+            let shared = engine(false);
+            let (control, _) = open(&shared, UID, server);
+            let mut sniff = Sniff::new(true, false);
+            let handshake = Mutex::new(Handshake::default());
+            for read in [&[5, 1, 0][..], &[5, 3, 0, 1, 0, 0, 0, 0, 0, 0]] {
+                for found in sniff.feed(read) {
+                    shared.found(control, found, &handshake);
+                }
+            }
+            assert!(
+                shared.replied(control, &reply[..cut], &handshake),
+                "at {cut}"
+            );
+            assert!(
+                !shared.replied(control, &reply[cut..], &handshake),
+                "at {cut}"
+            );
+            let (_, relay) = udp_flow(&shared, UID, SocketAddr::new(server.ip(), 40_000), false);
+            assert!(relay.proxy.is_some(), "at {cut}");
+        }
+    }
+
+    /// Audit-U M4: a relay's flow keeps the trackers' marks on the relay's names and on its first datagram's
+    /// destination, whatever the switch says, as any own proxy's flow does.
+    #[test]
+    fn a_relays_flow_keeps_its_trackers_marks() {
+        let (shared, clock) = engine_at(false);
+        with_trackers(&shared);
+        learn(&shared, "203.0.113.5", "relay.tracker.example");
+        associate_at(
+            &shared,
+            UID,
+            at([203, 0, 113, 5], 1080),
+            &[1, 0, 0, 0, 0, 0x9c, 0x40],
+        );
+        let (by_relay, flow) = udp_flow(&shared, UID, at([203, 0, 113, 5], 40_000), false);
+        assert_eq!(flow.proxy.map(|p| p.trackers), Some(vec![49]));
+        associate_at(
+            &shared,
+            UID,
+            at([203, 0, 113, 8], 1080),
+            &[1, 0, 0, 0, 0, 0x9c, 0x40],
+        );
+        let (by_datagram, flow) = udp_flow(&shared, UID, at([203, 0, 113, 8], 40_000), false);
+        assert_eq!(flow.proxy.map(|p| p.trackers), Some(vec![]));
+        shared.relay_asked(
+            &by_datagram,
+            &Target::Name("sdk.tracker.example".into(), 443),
+        );
+        assert_eq!(
+            live(&shared, by_datagram.id).proxy.map(|p| p.trackers),
+            Some(vec![49])
+        );
+        for id in [by_relay.id, by_datagram.id] {
+            shared.finish(id);
+        }
+        shared.flush();
+        clock.pass(11 * 60_000);
+        another_record(&shared);
+        let records = taken(&shared);
+        for id in [by_relay.id, by_datagram.id] {
+            let written = of_flow(&records, id);
+            assert!(
+                !written.is_empty()
+                    && written.iter().all(
+                        |f| left_out(f) && f.proxy.as_ref().is_some_and(|p| p.trackers == [49])
+                    ),
+                "{written:?}"
+            );
+        }
+    }
+
+    /// Audit-U M6: one app's flood of associations leaves another app's: an app at its share forgets its own oldest,
+    /// and a full table the oldest of the app that holds the most.
+    #[test]
+    fn one_apps_flood_of_associations_leaves_another_apps() {
+        let mut state = State::default();
+        let entry = |uid, control| Association {
+            uid,
+            control,
+            server: IpAddr::V4([203, 0, 113, 5].into()),
+            port: 40_000,
+            setting: false,
+            password: false,
+        };
+        state.associate(entry(1, 0));
+        for control in 1..=100 {
+            state.associate(entry(2, control));
+        }
+        let of = |state: &State, uid| state.associations.iter().filter(|a| a.uid == uid).count();
+        assert_eq!(of(&state, 2), ASSOCIATIONS_OF_APP);
+        assert!(
+            state
+                .associations
+                .iter()
+                .filter(|a| a.uid == 2)
+                .all(|a| a.control > 84)
+        );
+        let mut control = 1000;
+        for uid in 3..40 {
+            for _ in 0..ASSOCIATIONS_OF_APP {
+                state.associate(entry(uid, control));
+                control += 1;
+            }
+        }
+        assert_eq!(state.associations.len(), ASSOCIATIONS);
+        assert_eq!(of(&state, 1), 1, "the app with one keeps it");
     }
 }

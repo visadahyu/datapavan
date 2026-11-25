@@ -26,7 +26,7 @@ const IPV6: u8 = 4;
 /// The longest name a request can carry: its length is one byte.
 const MAX_NAME: usize = 255;
 /// The longest reply: a header, a name of [`MAX_NAME`] bytes after its length, and a port.
-const MAX_REPLY: usize = 4 + 1 + MAX_NAME + 2;
+pub const MAX_REPLY: usize = 4 + 1 + MAX_NAME + 2;
 
 /// Where a request or a datagram goes, or where the proxy bound: an address, or a name the proxy
 /// resolves itself, so that the name never reaches the network beneath the tool.

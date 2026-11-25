@@ -453,6 +453,9 @@ struct Peer {
     /// Tracker blocking's hold of its first datagrams while they read as an unfinished QUIC hello, and its row
     /// once named (W8, part 3a; ADR 0053): none for a flow of no app, the user's tool's, or one that came in.
     gate: Option<Box<QuicGate>>,
+    /// Whether its first datagram is still to be read for where it asked its app's own SOCKS5 proxy's relay to go:
+    /// a flow the app sent to that relay, tied to its association (the proxy record's unit U).
+    relay_first: bool,
 }
 
 /// Where a stand-in stands with its answers.
@@ -533,6 +536,8 @@ impl Peer {
     ) -> Self {
         let (mut opened, mut flow) = begin_udp(shared, app, address, uid);
         flow.came_in = came_in;
+        // To an app's own SOCKS5 relay, or from its server, on the direct path only (unit U, audit m3).
+        let relay = way.header.is_none() && shared.tie_relay(&mut flow, came_in);
         let gate = (!came_in)
             .then(|| shared.quic_gate(uid, address, way.name.as_deref()))
             .flatten();
@@ -570,6 +575,7 @@ impl Peer {
             owed_errors: 0,
             last_sent: Sent::default(),
             gate,
+            relay_first: relay && !came_in,
         }
     }
 
@@ -3747,6 +3753,9 @@ async fn open_peer(
         }
         Err(error) => {
             let (_, mut flow) = begin_udp(shared, app, destination, wanted.uid);
+            if let Exit::Direct = wanted.exit {
+                shared.tie_relay(&mut flow, false);
+            }
             flow.outcome = if is_unreachable(&error) {
                 Outcome::Unreachable
             } else {
@@ -3797,6 +3806,9 @@ async fn open_peer(
         // leaves another way.
         Leaving::Failed(error) => {
             let (_, mut flow) = begin_udp(shared, app, destination, wanted.uid);
+            if let Exit::Direct = wanted.exit {
+                shared.tie_relay(&mut flow, false);
+            }
             flow.outcome = if is_unreachable(&error) {
                 Outcome::Unreachable
             } else {
@@ -3985,6 +3997,12 @@ fn send_waiting(
         let Some(peer) = mapping.peers.get_mut(&destination) else {
             return;
         };
+        // A relay's flow: its first datagram's header says where the app asked its proxy to go (unit U).
+        if std::mem::take(&mut peer.relay_first)
+            && let Some((target, _)) = socks5::parse_datagram(payload)
+        {
+            shared.relay_asked(&peer.opened, &target);
+        }
         let quic = read_quic(&mut peer.quic, payload);
         let step = gated(
             shared,
@@ -5127,7 +5145,7 @@ async fn answer_resolved(
 }
 
 /// What the engine knows of a new UDP flow once Android named its app: its number, name and DNS use.
-fn begin_udp(
+pub(super) fn begin_udp(
     shared: &Shared,
     app: SocketAddr,
     destination: SocketAddr,

@@ -609,7 +609,7 @@ pub struct Config {
 }
 
 /// How many counters [`Counters::snapshot`] gives.
-pub const COUNTERS: usize = 71;
+pub const COUNTERS: usize = 73;
 
 /// The counters, in the order of [`Counters::snapshot`].
 #[derive(Debug, Default)]
@@ -685,6 +685,8 @@ pub struct Counters {
     blocked_connections: AtomicU64,
     blocked_addresses: AtomicU64,
     blocking_holds: AtomicU64,
+    proxy_associations: AtomicU64,
+    proxy_relays_elsewhere: AtomicU64,
 }
 
 impl Counters {
@@ -764,7 +766,9 @@ impl Counters {
     /// names taken back when it did so later, and the hellos whose name, a messenger's cover, named no flow; then
     /// (W8, part 3a, ADR 0053) the lookups tracker blocking answered empty, the connections it refused (TCP and
     /// QUIC, by name or by address), those of them refused by their address alone, and the connections whose first
-    /// bytes were held while they read as an unfinished hello or request head. None
+    /// bytes were held while they read as an unfinished hello or request head; then (the proxy record's unit U) the
+    /// `UDP ASSOCIATE`s of apps' own SOCKS5 proxies whose relays are tied, and the replies among them whose relay named
+    /// another address than the proxy's own, which is not tied there. None
     /// names a destination: they can be read on any phone. New
     /// counters are only ever appended, so that scripts reading a column by its place keep reading the same one.
     #[must_use]
@@ -856,6 +860,8 @@ impl Counters {
             &self.blocked_connections,
             &self.blocked_addresses,
             &self.blocking_holds,
+            &self.proxy_associations,
+            &self.proxy_relays_elsewhere,
         ]
     }
 }

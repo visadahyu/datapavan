@@ -102,6 +102,11 @@ pub struct Request {
     pub inner: Option<usize>,
     /// For SOCKS5, the method the app then used (0 none, 2 RFC 1929's), which the server's choice must be.
     pub method: u8,
+    /// Whether it is SOCKS5's `UDP ASSOCIATE` (command 3), not a `CONNECT` (the proxy record's unit U). Its `DST` is
+    /// the client's own source (RFC 1928, section 6), never where it wants to go, so it is skipped unread: `asked` is
+    /// then the unspecified address and `port` 0, which nothing names a flow by, and there is no inner stream. The
+    /// destinations are in each datagram's header (section 7), and the relay in the reply ([`bound`]).
+    pub associate: bool,
 }
 
 /// What the start of a stream says about a proxy request.
@@ -182,8 +187,13 @@ fn socks5(b: &[u8]) -> Read {
     } else if first != 5 {
         return Ok(None);
     }
-    // The request: version 5, CONNECT (1), reserved 0, the address's type.
-    if at(b, i)? != 5 || at(b, i + 1)? != 1 || at(b, i + 2)? != 0 {
+    // The request: version 5, CONNECT (1) or UDP ASSOCIATE (3), reserved 0, the address's type.
+    let associate = match at(b, i + 1)? {
+        1 => false,
+        3 => true,
+        _ => return Ok(None),
+    };
+    if at(b, i)? != 5 || at(b, i + 2)? != 0 {
         return Ok(None);
     }
     let (asked, after) = match at(b, i + 3)? {
@@ -192,7 +202,13 @@ fn socks5(b: &[u8]) -> Read {
         3 => {
             let length = usize::from(at(b, i + 4)?);
             let name = b.get(i + 5..i + 5 + length).ok_or(Need)?;
-            let Some(name) = host_name(name) else {
+            // An associate's `DST` is the client's own, skipped by its length.
+            let name = if associate {
+                Some(Asked::Address(IpAddr::V4(Ipv4Addr::UNSPECIFIED)))
+            } else {
+                host_name(name)
+            };
+            let Some(name) = name else {
                 return Ok(None);
             };
             (name, i + 5 + length)
@@ -200,6 +216,17 @@ fn socks5(b: &[u8]) -> Read {
         _ => return Ok(None),
     };
     let port = port_at(b, after)?;
+    if associate {
+        return Ok(Some(Request {
+            kind: Kind::Socks5,
+            asked: Asked::Address(IpAddr::V4(Ipv4Addr::UNSPECIFIED)),
+            port: 0,
+            password,
+            inner: None,
+            method,
+            associate,
+        }));
+    }
     Ok(Some(Request {
         kind: Kind::Socks5,
         asked,
@@ -207,6 +234,7 @@ fn socks5(b: &[u8]) -> Read {
         password,
         inner: Some(after + 2),
         method,
+        associate,
     }))
 }
 
@@ -250,6 +278,7 @@ fn socks4(b: &[u8]) -> Read {
         password: false,
         inner: Some(after),
         method: 0,
+        associate: false,
     }))
 }
 
@@ -362,6 +391,7 @@ fn request(kind: Kind, asked: Asked, port: u16, password: bool, inner: Option<us
         password,
         inner,
         method: 0,
+        associate: false,
     }
 }
 
@@ -408,6 +438,34 @@ pub fn confirmed(request: &Request, reply: &[u8]) -> Option<bool> {
         }
         _ => Some(false),
     }
+}
+
+/// The most of a server's first bytes [`bound`] reads for a `UDP ASSOCIATE`: SOCKS5's choice and RFC 1929's success,
+/// then the reply whole, whose longest form names a host of 255 bytes ([`crate::socks5::MAX_REPLY`]).
+pub const ASSOCIATE_REPLY: usize = 4 + crate::socks5::MAX_REPLY;
+
+/// Where a confirmed `UDP ASSOCIATE` says its relay is (the proxy record's unit U): the reply's `BND.ADDR` and
+/// `BND.PORT`, read only once [`confirmed`] says `Some(true)`, by the parsers of the engine's own SOCKS5 client
+/// (`socks5::reply_length`, `socks5::reply`), which are fuzzed. `None` while more bytes are needed, `Some(None)` for no
+/// relay: not an associate, not confirmed, or a reply that does not parse. Read from the reply's own length, never past
+/// it, so that a reply cut at any byte gives none or the same as the whole (`fuzz_targets/proxies.rs`). The caller
+/// decides what the address means: the engine ties the relay at the control connection's own server, whatever
+/// `BND.ADDR` names (`engine::proxied`).
+#[must_use]
+pub fn bound(request: &Request, reply: &[u8]) -> Option<Option<crate::socks5::Target>> {
+    if !request.associate || request.kind != Kind::Socks5 {
+        return Some(None);
+    }
+    if !confirmed(request, reply)? {
+        return Some(None);
+    }
+    // The reply's header follows the choice, and RFC 1929's success where it was used.
+    let rest = reply.get(if request.method == 2 { 4 } else { 2 }..)?;
+    let head: [u8; 5] = rest.get(..5)?.try_into().ok()?;
+    let Ok(length) = crate::socks5::reply_length(head) else {
+        return Some(None);
+    };
+    Some(crate::socks5::reply(rest.get(..length)?).ok())
 }
 
 /// Whether a header line is `Proxy-Authorization` with the `Basic` scheme, whose credentials are only
@@ -466,7 +524,7 @@ fn authority(text: &[u8], default: Option<u16>) -> Option<(Asked, u16)> {
 
 /// A host name as a flow keeps it, from bytes an app sent: letters, digits, `-`, `_` and dots, 1 to 253
 /// bytes once a trailing dot is dropped, in lower case.
-fn host_name(bytes: &[u8]) -> Option<Asked> {
+pub(crate) fn host_name(bytes: &[u8]) -> Option<Asked> {
     let bytes = bytes.strip_suffix(b".").unwrap_or(bytes);
     let fits = !bytes.is_empty()
         && bytes.len() <= 253
@@ -550,6 +608,7 @@ pub fn whatsapp_header(start: &[u8]) -> Option<bool> {
 #[cfg(test)]
 pub(crate) mod tests {
     use super::*;
+    use std::net::SocketAddr;
 
     fn ip(text: &str) -> IpAddr {
         text.parse().unwrap_or(IpAddr::V4(Ipv4Addr::UNSPECIFIED))
@@ -613,15 +672,149 @@ pub(crate) mod tests {
         assert_eq!(r.port, 443);
     }
 
+    /// SOCKS5's `UDP ASSOCIATE` (unit U, audit M1 and m2): its `DST`, zeros, an address or a name, is the client's own
+    /// source, never read as a destination, and it carries no inner stream.
     #[test]
-    fn what_is_not_a_socks5_connect_is_none() {
-        // UDP ASSOCIATE and BIND name no destination of this flow.
+    fn a_udp_associate_names_no_destination_and_no_inner_stream() {
+        let unasked = Asked::Address(IpAddr::V4(Ipv4Addr::UNSPECIFIED));
+        let mut by_name = vec![5, 1, 0, 5, 3, 0, 3, 9];
+        by_name.extend_from_slice(b"phone.lan");
+        by_name.extend_from_slice(&[0x9c, 0x40]);
+        let mut by_v6 = vec![5, 1, 0, 5, 3, 0, 4];
+        by_v6.extend_from_slice(&ip6("2001:db8::7").octets());
+        by_v6.extend_from_slice(&[0x9c, 0x40]);
+        for b in [
+            vec![5, 1, 0, 5, 3, 0, 1, 0, 0, 0, 0, 0, 0],
+            vec![5, 1, 0, 5, 3, 0, 1, 10, 215, 173, 1, 0x9c, 0x40],
+            by_name,
+            by_v6,
+        ] {
+            let Declared::Request(r) = declared(&b) else {
+                unreachable!("not read: {b:?}");
+            };
+            assert!(r.associate, "{b:?}");
+            assert_eq!(r.kind, Kind::Socks5);
+            assert_eq!((&r.asked, r.port, r.inner), (&unasked, 0, None), "{b:?}");
+            for cut in 0..b.len() {
+                assert_eq!(declared(&b[..cut]), Declared::Incomplete, "at {cut}");
+            }
+        }
+        // With RFC 1929, the password is said to have crossed, as for a `CONNECT`.
+        let mut b = vec![5, 1, 2, 1, 4];
+        b.extend_from_slice(b"user");
+        b.push(4);
+        b.extend_from_slice(b"pass");
+        b.extend_from_slice(&[5, 3, 0, 1, 0, 0, 0, 0, 0, 0]);
+        let Declared::Request(r) = declared(&b) else {
+            unreachable!("not read");
+        };
+        assert!(r.associate && r.password);
+        assert_eq!(r.method, 2);
+        // A `CONNECT` is no associate.
+        let Declared::Request(r) = declared(&[5, 1, 0, 5, 1, 0, 1, 203, 0, 113, 5, 0, 80]) else {
+            unreachable!("not read");
+        };
+        assert!(!r.associate);
+    }
+
+    fn associate(method: u8) -> Request {
+        Request {
+            kind: Kind::Socks5,
+            asked: Asked::Address(IpAddr::V4(Ipv4Addr::UNSPECIFIED)),
+            port: 0,
+            password: method == 2,
+            inner: None,
+            method,
+            associate: true,
+        }
+    }
+
+    /// The relay a confirmed `UDP ASSOCIATE` names (unit U, audit M2): in IPv4, IPv6 and name forms, zeros included,
+    /// after RFC 1929's success too, and from a reply cut at any byte, none until it is whole and then the same.
+    #[test]
+    fn a_confirmed_associates_relay_is_read_whole_in_every_form() {
+        use crate::socks5::Target;
+        let v4 = |a: [u8; 4], port: u16| Target::Address(SocketAddr::from((a, port)));
+        let mut v6_reply = vec![5, 0, 5, 0, 0, 4];
+        v6_reply.extend_from_slice(&ip6("2001:db8::53").octets());
+        v6_reply.extend_from_slice(&[0x1f, 0x90]);
+        let mut name_reply = vec![5, 0, 5, 0, 0, 3, 11];
+        name_reply.extend_from_slice(b"relay.local");
+        name_reply.extend_from_slice(&[0x1f, 0x90]);
+        let mut password_v6 = vec![5, 2, 1, 0];
+        password_v6.extend_from_slice(&v6_reply[2..]);
+        let cases: Vec<(Request, Vec<u8>, Target)> = vec![
+            (
+                associate(0),
+                vec![5, 0, 5, 0, 0, 1, 203, 0, 113, 9, 0x1f, 0x90],
+                v4([203, 0, 113, 9], 8080),
+            ),
+            (
+                associate(0),
+                vec![5, 0, 5, 0, 0, 1, 0, 0, 0, 0, 0x1f, 0x90],
+                v4([0, 0, 0, 0], 8080),
+            ),
+            (
+                associate(0),
+                v6_reply,
+                Target::Address(SocketAddr::new(ip("2001:db8::53"), 8080)),
+            ),
+            (
+                associate(0),
+                name_reply,
+                Target::Name("relay.local".into(), 8080),
+            ),
+            (
+                associate(2),
+                password_v6,
+                Target::Address(SocketAddr::new(ip("2001:db8::53"), 8080)),
+            ),
+        ];
+        for (request, reply, relay) in cases {
+            assert_eq!(
+                bound(&request, &reply),
+                Some(Some(relay.clone())),
+                "{reply:?}"
+            );
+            for cut in 0..reply.len() {
+                assert_eq!(
+                    bound(&request, &reply[..cut]),
+                    None,
+                    "at {cut} of {reply:?}"
+                );
+            }
+            // Bytes past the reply's own length are the relay's or the tunnel's, never read.
+            let mut more = reply.clone();
+            more.extend_from_slice(&[0xde, 0xad]);
+            assert_eq!(bound(&request, &more), Some(Some(relay)), "{reply:?}");
+        }
+        // Refused, by another protocol, a malformed reply, or no associate: no relay.
+        assert_eq!(bound(&associate(0), &[5, 0, 5, 1, 0]), Some(None));
+        assert_eq!(bound(&associate(0), b"HTTP/1.1 200 OK"), Some(None));
         assert_eq!(
-            declared(&[5, 1, 0, 5, 3, 0, 1, 0, 0, 0, 0, 0, 0]),
+            bound(&associate(0), &[5, 0, 5, 0, 0, 9, 1, 2, 3]),
+            Some(None)
+        );
+        assert_eq!(bound(&associate(2), &[5, 0, 5, 0, 0, 1]), Some(None));
+        let connect = Request {
+            associate: false,
+            ..associate(0)
+        };
+        assert_eq!(
+            bound(&connect, &[5, 0, 5, 0, 0, 1, 203, 0, 113, 9, 0x1f, 0x90]),
+            Some(None)
+        );
+    }
+
+    #[test]
+    fn what_is_not_a_socks5_connect_or_associate_is_none() {
+        // BIND names no destination of this flow, and no other command is read.
+        assert_eq!(
+            declared(&[5, 1, 0, 5, 2, 0, 1, 1, 2, 3, 4, 0, 80]),
             Declared::Not
         );
         assert_eq!(
-            declared(&[5, 1, 0, 5, 2, 0, 1, 1, 2, 3, 4, 0, 80]),
+            declared(&[5, 1, 0, 5, 4, 0, 1, 1, 2, 3, 4, 0, 80]),
             Declared::Not
         );
         // No methods; a sub-negotiation not offered; a name with a space.
@@ -843,6 +1036,7 @@ pub(crate) mod tests {
             password: method == 2,
             inner: None,
             method,
+            associate: false,
         };
         let plain = socks5(0);
         assert_eq!(
