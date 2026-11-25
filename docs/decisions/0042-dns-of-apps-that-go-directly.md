@@ -249,6 +249,36 @@ were tightened after it), and the notification's permission on the emulator. Wha
 **Release gate for the maintainer:** each volunteer operator whose endpoint is a default (Numa, crypto.sx,
 dnscry.pt) is asked before a release ships it; Cloudflare's ODoH page states no logging policy of its own.
 
+### Android's proxy (2026-11-25)
+
+Measurements 7.1 (the strategy repository's `research/2026-11-proxy-record/measurements-7.md`) found that the
+resolver's DoH and ODoH exchanges went through a Wi-Fi network's proxy only when the network part's process had
+started while that proxy was set. Android gives a process its proxy at its start, and OkHttp asked the process's
+`ProxySelector`. The resolver now decides on purpose (`dns/NetworkProxy.kt`, `dns/ProxySocket.kt`):
+
+1. **Only the network beneath's own direct proxy,** from its `LinkProperties`. Never the global proxy: that is a third
+   party, such as a device owner's cloud proxy or one set over adb, which would learn when and how often the resolver
+   is used, and which servers. The network's own proxy sees only what the network sees anyway.
+2. **None for a PAC file,** told by its URL before its host and port, since Android reports a PAC as `localhost` and
+   its handler's port.
+3. **None for a proxy on the loopback, on a link-local address or on one of the phone's own addresses.** Such a proxy
+   is usually a tool's or a filter's local port, and the tool's path is the engine's choice alone. A server the
+   proxy's exclusion list names goes directly, by Android's rules for that list.
+4. **By address:** a `CONNECT` to the address the data pack gave, carrying `Host` and nothing else. So no name is ever
+   looked up, by the proxy either, the pins hold, and no `User-Agent` names the library. OkHttp itself is told no
+   proxy.
+5. **The proxy first, then directly.** A connection to the proxy that fails, any answer but a `2xx` (a 407 included,
+   since Android's setting carries no credentials), or a TLS failure inside the tunnel (a proxy that inspects TLS)
+   sends the same exchange to the proxy's next address, at most two, or directly. The proxy is then not asked again on
+   that network for ten minutes. Its connect and answer get 1.2 s of the 2.5 s connect budget. Outcomes through the
+   proxy are the proxy's.
+6. **Tied to its network:** the proxy is read for the network of one generation and used only on it. It is read
+   again on each change of that network's properties and on Android's proxy broadcast. A name is resolved only
+   through that network, off the main thread, and a late answer is dropped. The debug dump's `dns-proxy` line says
+   which proxy, and why.
+7. **DoT stays direct.** Most proxies refuse a `CONNECT` to port 853, and DoT is not HTTP. That, and a proxy that wants
+   a password, are limits.
+
 ## Consequences
 
 - **VPN.md's default.** VPN.md's DNS row and DESIGN.md's W3 and W8 rows point here. The network's resolver is not
