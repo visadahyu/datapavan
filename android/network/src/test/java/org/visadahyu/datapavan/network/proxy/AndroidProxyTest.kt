@@ -76,6 +76,28 @@ class AndroidProxyTest {
         assertEquals(listOf("proxy.example.net 3128", "203.0.113.5 8080"), lines)
     }
 
+    /**
+     * B5 (audit-B 17): the PAC proxy's UID counts only for Android's own app of that name with a UID of its own, a system
+     * app of an application UID with no shared user ID; then its row, and its row alone, carries the fact.
+     */
+    @Test
+    fun onlyAndroidsOwnPacProxyCarriesItsFact() {
+        val system = android.content.pm.ApplicationInfo.FLAG_SYSTEM
+        val updated = system or android.content.pm.ApplicationInfo.FLAG_UPDATED_SYSTEM_APP
+        // UID 10092 on Android 15 and 10122 on 17 (measurements 7.2).
+        assertTrue(PacHandler.owns(system, 10_092, null))
+        assertTrue(PacHandler.owns(updated, 10_122, null))
+        assertTrue("a package of that name installed later", !PacHandler.owns(0, 10_300, null))
+        assertTrue("a shared system UID", !PacHandler.owns(system, 1000, "android.uid.system"))
+        assertTrue("below the apps' UIDs", !PacHandler.owns(system, 9_999, null))
+        assertTrue("a shared user ID", !PacHandler.owns(system, 10_092, "android.uid.shared"))
+        assertEquals(ProxyLine(R.string.proxy_pac_handler), org.visadahyu.datapavan.network.ui.pacHandlerLine(10_092, 10_092))
+        assertNull(org.visadahyu.datapavan.network.ui.pacHandlerLine(10_092, 10_093))
+        assertNull(org.visadahyu.datapavan.network.ui.pacHandlerLine(10_092, null))
+        assertNull(org.visadahyu.datapavan.network.ui.pacHandlerLine(null, 10_092))
+        assertNull(org.visadahyu.datapavan.network.ui.pacHandlerLine(null, null))
+    }
+
     /** The holder the service publishes to: each part kept apart, and everything forgotten when the tunnel stops. */
     @Test
     fun theHolderKeepsWhatTheServicePublished() {
@@ -107,6 +129,14 @@ class AndroidProxyTest {
             for (word in listOf("Wi-Fi", "every app", "you set", "your proxy", "chose", "admin", "owner")) {
                 assertTrue("$name: $word", !text(name).contains(word, ignoreCase = true))
             }
+        }
+        // B5: the PAC proxy connects for others, never "its own"; and the left-out list says the exception (audit-B 15),
+        // in this file alone until its translations come back.
+        assertTrue(text("proxy_pac_handler").contains("connects for other apps, including apps you left out"))
+        assertTrue(!Regex("\\bown\\b").containsMatchIn(text("proxy_pac_handler")))
+        assertTrue(text("left_out_body").contains("One exception: where Android\\'s settings give a PAC file"))
+        for (values in File("src/main/res").listFiles().orEmpty().filter { it.name.startsWith("values") }) {
+            assertTrue(values.name, File(values, "strings.xml").takeIf { it.isFile }?.readText()?.contains("\"left_out_body\"") != true)
         }
     }
 }

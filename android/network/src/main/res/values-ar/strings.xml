@@ -65,7 +65,6 @@
     <!-- Apps and the VPN (ADR 0041) -->
     <string name="left_out_title">التطبيقات وشبكة VPN</string>
     <string name="vpn_seen">يُعلم Android كل تطبيق بأن شبكة VPN تعمل، ولا يستطيع Datapavan إخفاء ذلك. بعض التطبيقات تبلّغ عن ذلك، وبعضها يرفض العمل ما دامت شبكة VPN تعمل.</string>
-    <string name="left_out_body">إذا لم يعمل تطبيق مع شبكة VPN الخاصة بـ Datapavan، فاستثنِه. عندها يتصل بالإنترنت دون Datapavan: لا يرى Datapavan اتصالاته ولا يحتفظ بسجل لها، ولا يمر التطبيق عبر أداتك لتجاوز الحجب. لم يعد Android يُعلم هذا التطبيق بأن شبكته هي VPN، لكن التطبيق قد يكتشف مع ذلك أن في الهاتف واجهة VPN. ما دامت شبكة VPN تعمل، يستغرق التغيير لحظة، لأن Datapavan يعيد إعداد نفقه.</string>
     <string name="left_out_none">لم يُستثنَ أي تطبيق.</string>
     <plurals name="left_out_count">
         <item quantity="zero">لم يُستثنَ أي تطبيق.</item>

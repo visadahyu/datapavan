@@ -62,7 +62,6 @@
     <!-- Apps and the VPN (ADR 0041) -->
     <string name="left_out_title">Las apps y la VPN</string>
     <string name="vpn_seen">Android le dice a cada app que hay una VPN activada, y Datapavan no puede ocultarlo. Algunas apps lo informan, y otras se niegan a funcionar mientras haya una VPN activada.</string>
-    <string name="left_out_body">Si una app no funciona con la VPN de Datapavan, déjala fuera. Así se conecta a internet sin pasar por Datapavan: Datapavan no ve sus conexiones ni guarda registros de ellas, y la app tampoco pasa por tu herramienta para eludir bloqueos. Android ya no le dice a esa app que su red es una VPN, pero la app puede seguir detectando que el teléfono tiene una interfaz VPN. Mientras la VPN está activada, un cambio tarda un momento, porque Datapavan vuelve a configurar su túnel.</string>
     <string name="left_out_none">No has dejado fuera ninguna app.</string>
     <plurals name="left_out_count">
         <item quantity="one">Has dejado fuera %d app.</item>

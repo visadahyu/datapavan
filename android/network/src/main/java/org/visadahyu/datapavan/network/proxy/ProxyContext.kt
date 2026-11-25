@@ -15,7 +15,7 @@ object ProxyContext {
     data class State(
         /** Android's own proxy settings, as the service last read them. */
         val android: AndroidProxy = AndroidProxy(),
-        /** The UID of Android's PAC proxy, where it is Android's own app with a UID of its own (`PacHandler.uid`). */
+        /** The UID of Android's PAC proxy, where it is Android's own app with a UID of its own ([PacHandler.uid]). */
         val pacHandler: Int? = null,
         /**
          * The circumvention tools installed, by UID, each with the table's name for it (`chain.Tools.uids`): judged by

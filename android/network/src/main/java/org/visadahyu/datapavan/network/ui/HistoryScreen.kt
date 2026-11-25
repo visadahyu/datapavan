@@ -35,6 +35,7 @@ import org.visadahyu.datapavan.network.activity.Companies
 import org.visadahyu.datapavan.network.activity.History
 import org.visadahyu.datapavan.network.activity.TrackerMarks
 import org.visadahyu.datapavan.network.log.ConnectionLog
+import org.visadahyu.datapavan.network.proxy.ProxyContext
 
 /**
  * What an app's history shows: the app, how long the log keeps its records and how it keeps them shut, the
@@ -85,6 +86,8 @@ internal fun HistoryScreen(
     onLogSwitch: () -> Unit = {},
     blocking: BlockingView = BlockingView(),
     blockingActions: BlockingActions = BlockingActions(),
+    /** What the service knows of the proxies around the apps (the proxy record's unit B): the PAC proxy's UID and the tools'. */
+    proxies: ProxyContext.State = ProxyContext.State(),
 ) {
     val context = LocalContext.current
     val names = RowNames(blocking.facts, companies, trackers)
@@ -108,6 +111,8 @@ internal fun HistoryScreen(
                     modifier = Modifier.semantics { heading() },
                 )
                 Text(stringResource(R.string.history_intro), style = MaterialTheme.typography.bodyLarge)
+                // Android's PAC proxy connects for other apps, the apps left out included (B5): said once, on its page.
+                pacHandlerLine(proxies.pacHandler, view.app.uid)?.let { Text(lineText(it), style = MaterialTheme.typography.bodyMedium) }
                 LockFacts(view)
                 val day = view.days.getOrNull(view.index)
                 if (day != null) {

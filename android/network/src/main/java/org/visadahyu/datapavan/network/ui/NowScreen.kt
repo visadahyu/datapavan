@@ -190,7 +190,7 @@ internal fun NowScreen(
             BackHandler(onBack = onCloseHistory)
             HistoryScreen(
                 history, view.groups[history.app.uid], view.trackers, view.companies, onDay, onCloseHistory, view.tunnelNames, onLogSwitch,
-                view.blocking, blockingActions,
+                view.blocking, blockingActions, view.proxies,
             )
         } else {
             NowList(view, listState, onWindow, onSort, onAll, onHistory, onAllowAccess, onLogSwitch, blockingActions, onPause)
@@ -381,6 +381,7 @@ private fun AppRow(
             }
             Text(stringResource(R.string.now_state_now, stateName(app.now)), style = MaterialTheme.typography.bodyMedium)
             if (AppState.why(app.now) != 0) Text(whyName(AppState.why(app.now)), style = MaterialTheme.typography.bodyMedium)
+            pacHandlerLine(view.proxies.pacHandler, app.uid)?.let { Text(lineText(it), style = MaterialTheme.typography.bodyMedium) }
             if (app.isTool) {
                 Text(stringResource(R.string.now_is_tool), style = MaterialTheme.typography.bodyMedium)
                 // Its servers show only while the switch "Log where apps connect ..." is on (decision 3, 2026-11-19).
@@ -696,6 +697,16 @@ internal fun androidProxyLine(proxy: AndroidProxy): ProxyLine? {
         }
     }
 }
+
+/**
+ * The fact on the row of the app of [uid] where it is Android's PAC proxy, whose UID is [handler] (the proxy record's
+ * unit B, B5; [org.visadahyu.datapavan.network.proxy.PacHandler]), as a pure function the JVM tests hold: it connects for
+ * other apps, the apps left out included, so its connections are never said to be its own. In "Now" and on the app's
+ * history alike, by the UID alone: whether a PAC file was set when a record was made is not known, so the line says
+ * what the app is, not that a PAC file was in use.
+ */
+internal fun pacHandlerLine(handler: Int?, uid: Int?): ProxyLine? =
+    ProxyLine(R.string.proxy_pac_handler).takeIf { handler != null && uid == handler }
 
 /** A proxy's line as the user reads it: the kind's words set in first, then the other arguments. */
 @Composable

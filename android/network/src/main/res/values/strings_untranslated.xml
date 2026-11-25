@@ -2,13 +2,14 @@
 <!--
     The proxy record's unit A (ADR 0052, decision 8): what "Now" and the switch say of an app's own proxy's first hop,
     shown while its connection is open and for ten minutes after it ends, and not logged while the switch is off.
-    Unit B's facts beside them (decision 9): a record the engine could not tell was a messenger's proxy, and the line
-    of Android's own proxy setting in Now. In English only until ADR 0030's next round translates them, with their
-    review, into the seven other languages; they then move into strings.xml, where scripts/check-translations.py holds
-    them to every language. Until then the plain-language gate holds this file (scripts/check.sh), and lint's check
-    for missing translations is lifted for it alone. A release needs it gone (docs/RELEASE.md, "Strings"). They replace
-    log_switch_note, now_proxy_hidden and now_proxy_setting_hidden. Each quotes the switch's label (log_switch) word
-    for word, or writes Now without quotes.
+    Unit B's facts beside them (decision 9): a record the engine could not tell was a messenger's proxy, Android's PAC
+    proxy, and the line of Android's own proxy setting in Now; and left_out_body, whose English gained the PAC proxy's
+    exception, and which left strings.xml and the seven translations with it. In English only until ADR 0030's next
+    round translates them, with their review, into the seven other languages; they then move into strings.xml, where
+    scripts/check-translations.py holds them to every language. Until then the plain-language gate holds this file
+    (scripts/check.sh), and lint's check for missing translations is lifted for it alone. A release needs it gone
+    (docs/RELEASE.md, "Strings"). They replace log_switch_note, now_proxy_hidden and now_proxy_setting_hidden. Each
+    quotes the switch's label (log_switch) word for word, or writes Now without quotes.
 -->
 <resources xmlns:tools="http://schemas.android.com/tools" tools:ignore="MissingTranslation">
     <!-- In "Now", under a proxy whose address is shown while the switch is off: facts only. "While", not "because":
@@ -41,4 +42,11 @@
     <string name="now_proxy_network">This network\'s settings name a proxy: %1$s. Apps that were already running when Datapavan started use it, and so do the apps you left out. Others connect directly.</string>
     <!-- As above, a PAC file in the current network's settings. -->
     <string name="now_proxy_network_pac">This network\'s settings give a PAC file. Apps that start inside Datapavan\'s VPN do not use it.</string>
+    <!-- Unit B, on the row and the history of Android's PAC proxy (com.android.proxyhandler), which evaluates a PAC
+         file and connects for other apps. It never says the connections are its own. -->
+    <string name="proxy_pac_handler">This is Android\'s PAC proxy, which connects for other apps, including apps you left out.</string>
+    <!-- Apps and the VPN (ADR 0041), on the network screen: what leaving an app out of the tunnel does. Its English
+         gained the exception of Android's PAC proxy (unit B; measurements 7.2): an app left out that sends through it is
+         seen and logged as the PAC proxy's connections. -->
+    <string name="left_out_body">If an app does not work with Datapavan\'s VPN, leave it out. It then goes to the internet without Datapavan: Datapavan does not see or record its connections, and it does not go through your circumvention tool. One exception: where Android\'s settings give a PAC file, what the app sends through Android\'s PAC proxy can come back into the VPN, and Datapavan then sees and records it as that proxy\'s. Android no longer tells that app its network is a VPN, but the app may still find that the phone has a VPN interface. While the VPN is on, a change takes a moment, because Datapavan sets up its tunnel again.</string>
 </resources>
