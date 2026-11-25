@@ -25,7 +25,7 @@ class LogTest {
     @Test
     fun readsWhatTheEngineWrites() {
         val records = EngineRecords.records.map { it.first }
-        assertEquals(16, records.size)
+        assertEquals(18, records.size)
         val day = 1_794_873_600_000L
         fun at(hours: Int, minutes: Int) = day + (hours * 60L + minutes) * 60_000
         val tls = records[0] as LogRecord.Segment
@@ -128,7 +128,8 @@ class LogTest {
      */
     @Test
     fun readsTheProxiesTheEngineWrites() {
-        val records = EngineRecords.records.map { it.first }.filterIsInstance<LogRecord.Segment>().takeLast(5)
+        // Version 5's five proxies, before version 7's two.
+        val records = EngineRecords.records.map { it.first }.filterIsInstance<LogRecord.Segment>().dropLast(2).takeLast(5)
         val socks5 = records[0]
         assertEquals("example.org" to 5, socks5.name to socks5.namedBy)
         assertEquals("203.0.113.5" to 1080, socks5.address.hostAddress to socks5.port)
@@ -136,30 +137,58 @@ class LogTest {
         assertEquals(
             LogRecord.Proxy(
                 LogRecord.PROXY_SOCKS5, setting = true, password = true, asked = "example.org", askedPort = 443,
-                proxyName = "proxy.example.net", organisation = "Hetzner Online GmbH",
+                proxyName = "proxy.example.net", organisation = "Hetzner Online GmbH", local = false,
             ),
             socks5.proxy,
         )
         assertEquals(true to true, socks5.proxy?.declared to socks5.proxy?.kept)
         val connect = records[1]
-        assertEquals(LogRecord.Proxy(LogRecord.PROXY_CONNECT, asked = "2001:db8:0:0:0:0:0:7", askedPort = 8443), connect.proxy)
+        assertEquals(LogRecord.Proxy(LogRecord.PROXY_CONNECT, asked = "2001:db8:0:0:0:0:0:7", askedPort = 8443, local = false), connect.proxy)
         assertEquals("" to 4, connect.name to connect.namedBy)
         val mtproto = records[2]
         assertEquals(
-            LogRecord.Proxy(LogRecord.PROXY_MTPROTO, outsideMaker = true, organisation = "Hetzner Online GmbH", cover = "www.google.com"),
+            LogRecord.Proxy(LogRecord.PROXY_MTPROTO, outsideMaker = true, organisation = "Hetzner Online GmbH", cover = "www.google.com", local = false),
             mtproto.proxy,
         )
         assertEquals(false, mtproto.proxy?.declared)
         // Its destination left out: the kind alone, at an address of zeros, and no name; its trackers' marks stay.
         val hidden = records[3]
-        assertEquals(LogRecord.Proxy(LogRecord.PROXY_SOCKS4, leftOut = true, trackers = listOf(49, 312)), hidden.proxy)
+        assertEquals(LogRecord.Proxy(LogRecord.PROXY_SOCKS4, leftOut = true, trackers = listOf(49, 312), local = false), hidden.proxy)
         assertEquals(true to "", hidden.address.isAnyLocalAddress to hidden.name)
         assertEquals(false, hidden.proxy?.kept)
         // A plain request: its own name and address, with what it asked for left out, and not left out itself.
         val forward = records[4]
-        assertEquals(LogRecord.Proxy(LogRecord.PROXY_FORWARD, password = true), forward.proxy)
+        assertEquals(LogRecord.Proxy(LogRecord.PROXY_FORWARD, password = true, local = false), forward.proxy)
         assertEquals("cache.example.net" to "198.51.100.7", forward.name to forward.address.hostAddress)
         assertEquals(true, forward.proxy?.kept)
+    }
+
+    /**
+     * Version 7 (the proxy record's unit B), as the engine writes it: a proxy on the user's own network, its
+     * destination left out, says so; a record the engine could not tell was a messenger's proxy says so. In a version-6
+     * record either bit is malformed, and so is "unsure" on a declared kind or on a record not left out.
+     */
+    @Test
+    fun readsVersion7sLocalAndUnsureAndRefusesThemElsewhere() {
+        val (local, unsure) = EngineRecords.records.takeLast(2)
+        assertEquals(LogRecord.Proxy(LogRecord.PROXY_SOCKS5, leftOut = true, local = true), (local.first as LogRecord.Segment).proxy)
+        assertEquals(
+            LogRecord.Proxy(LogRecord.PROXY_MTPROTO, outsideMaker = true, leftOut = true, local = false, unsure = true),
+            (unsure.first as LogRecord.Segment).proxy,
+        )
+        // The proxy's kind and flags: three empty texts and no trackers after them, then no blocking row's SDK.
+        val flagsOf = { bytes: ByteArray -> bytes.size - 6 }
+        val six = { bytes: ByteArray -> bytes.copyOf().also { it[0] = 6 } }
+        assertNull("local in version 6", LogRecord.parse(six(local.second)))
+        assertNull("unsure in version 6", LogRecord.parse(six(unsure.second)))
+        val bytes = unsure.second
+        val flags = flagsOf(bytes)
+        assertEquals(0x54, bytes[flags].toInt())
+        assertNull("unsure on a declared kind", LogRecord.parse(bytes.copyOf().also { it[flags - 1] = LogRecord.PROXY_SOCKS5.toByte() }))
+        assertNull("unsure not left out", LogRecord.parse(bytes.copyOf().also { it[flags] = 0x44 }))
+        assertNull("bit 7", LogRecord.parse(bytes.copyOf().also { it[flags] = (0x54 or 0x80).toByte() }))
+        // A version-6 record without the bits reads, local not told.
+        assertNull((LogRecord.parse(six(EngineRecords.records[14].second)) as LogRecord.Segment).proxy?.local)
     }
 
     /** A version 4 segment reads with no proxy; a proxy's kind or flag the engine never writes is malformed. */

@@ -1649,12 +1649,14 @@ pub extern "system" fn Java_org_visadahyu_datapavan_network_Engine_nativeFlowRou
         .resolve::<ThrowRuntimeExAndDefault>()
 }
 
-/// `Engine.nativeProxies(families, uids, android, strictDns)`: the messengers' apps, each UID of `uids` of the
-/// family at the same place in `families` (0 Telegram, 1 `WhatsApp`, 2 Signal), the proxies Android's setting names,
-/// one `host port` a line in `android` (W8, part 2a; ADR 0052), and whether Private DNS is strict on the network part's
-/// network. Kept for the engines to come, as the chain is.
+/// `Engine.nativeProxies(families, uids, android, strictDns, onLink, transport)`: the messengers' apps, each UID of
+/// `uids` of the family at the same place in `families` (0 Telegram, 1 `WhatsApp`, 2 Signal), the proxies Android's
+/// setting names, one `host port` a line in `android` (W8, part 2a; ADR 0052), whether Private DNS is strict on the
+/// network part's network, and the network beneath's on-link prefixes, one `address length` a line in `onLink`, with
+/// its transport (0 unknown, 1 Wi-Fi, 2 Ethernet, 3 cellular, 4 other), for the "local" fact (the proxy record's unit
+/// B). Kept for the engines to come, as the chain is.
 // SAFETY: exported under the JNI name of the Kotlin method `external fun nativeProxies(families: IntArray, uids:
-// IntArray, android: String, strictDns: Boolean)`.
+// IntArray, android: String, strictDns: Boolean, onLink: String, transport: Int)`.
 #[unsafe(no_mangle)]
 pub extern "system" fn Java_org_visadahyu_datapavan_network_Engine_nativeProxies<'caller>(
     mut unowned_env: EnvUnowned<'caller>,
@@ -1663,6 +1665,8 @@ pub extern "system" fn Java_org_visadahyu_datapavan_network_Engine_nativeProxies
     uids: JIntArray<'caller>,
     android: JString<'caller>,
     strict_dns: jboolean,
+    on_link: JString<'caller>,
+    transport: jint,
 ) {
     unowned_env
         .with_env(|env| -> Result<_, Error> {
@@ -1673,8 +1677,10 @@ pub extern "system" fn Java_org_visadahyu_datapavan_network_Engine_nativeProxies
             };
             let (families, uids) = (read(&families, env)?, read(&uids, env)?);
             let android = android.try_to_string(env)?;
+            let on_link = on_link.try_to_string(env)?;
             let read = ProxySetting {
                 strict_dns,
+                on_link: on_link_of(&on_link, transport),
                 ..proxy_setting(&families, &uids, &android)
             };
             set_proxies(|proxies| *proxies = read);
@@ -1713,7 +1719,21 @@ fn proxy_setting(families: &[i32], uids: &[i32], android: &str) -> ProxySetting 
         android,
         trackers: None,
         strict_dns: false,
+        on_link: datapavan_net::local::OnLink::default(),
     }
+}
+
+/// The network beneath's on-link prefixes of `nativeProxies`: lines that do not parse are left out, and
+/// [`datapavan_net::local::OnLink::new`] keeps at most its bound, none of length 0 or wider than it allows.
+fn on_link_of(lines: &str, transport: jint) -> datapavan_net::local::OnLink {
+    let prefixes = lines
+        .lines()
+        .take(4 * datapavan_net::local::MAX_PREFIXES)
+        .filter_map(|line| {
+            let (address, length) = line.trim().split_once(' ')?;
+            Some((address.trim().parse().ok()?, length.trim().parse().ok()?))
+        });
+    datapavan_net::local::OnLink::new(prefixes, datapavan_net::local::Transport::from_code(transport))
 }
 
 /// `Engine.nativeMessengerClients()`: the messengers' client packages the engine's table holds, one `family
@@ -1738,6 +1758,38 @@ pub extern "system" fn Java_org_visadahyu_datapavan_network_Engine_nativeMesseng
         .resolve::<ThrowRuntimeExAndDefault>()
 }
 
+/// `Engine.nativeProxyOnLink()`: the network beneath's on-link prefixes and transport the engines were last handed,
+/// as `TRANSPORT ADDRESS/LENGTH...` (`unknown`, `wifi`, `ethernet`, `cellular` or `other`), for debug builds and the
+/// emulator check of the "local" fact (the proxy record's unit B).
+// SAFETY: exported under the JNI name of the Kotlin method `external fun nativeProxyOnLink(): String`.
+#[unsafe(no_mangle)]
+pub extern "system" fn Java_org_visadahyu_datapavan_network_Engine_nativeProxyOnLink<'caller>(
+    mut unowned_env: EnvUnowned<'caller>,
+    _class: JClass<'caller>,
+) -> JString<'caller> {
+    unowned_env
+        .with_env(|env| -> Result<_, Error> {
+            let line = setting().as_ref().map_or_else(String::new, |kept| {
+                let on_link = &kept.proxies.on_link;
+                let transport = match on_link.transport() {
+                    datapavan_net::local::Transport::Unknown => "unknown",
+                    datapavan_net::local::Transport::Wifi => "wifi",
+                    datapavan_net::local::Transport::Ethernet => "ethernet",
+                    datapavan_net::local::Transport::Cellular => "cellular",
+                    datapavan_net::local::Transport::Other => "other",
+                };
+                let prefixes: Vec<String> = on_link
+                    .prefixes()
+                    .iter()
+                    .map(|(address, length)| format!("{address}/{length}"))
+                    .collect();
+                format!("{transport} {}", prefixes.join(" "))
+            });
+            JString::from_str(env, line.trim_end())
+        })
+        .resolve::<ThrowRuntimeExAndDefault>()
+}
+
 /// `Engine.nativeFlowProxies()`: the kept flows that went through a proxy, one per line as [`proxy_line`]
 /// writes it, for debug builds and the emulator check. Empty when the engine keeps none.
 // SAFETY: exported under the JNI name of the Kotlin method `external fun nativeFlowProxies(): String`.
@@ -1758,7 +1810,8 @@ pub extern "system" fn Java_org_visadahyu_datapavan_network_Engine_nativeFlowPro
 /// A kept flow through a proxy, as `protocol app destination uid kind how flags asked proxy-name cover name`:
 /// `kind` `socks5`, `socks4`, `connect`, `forward`, `mtproto`, `whatsapp` or `signal`; `how` `read` or `inferred`;
 /// `flags` of `s` (Android's setting), `p` (a password crossed unencrypted), `o` (outside the maker's network) and
-/// `l` (its flow's own address and names left out, as "Log where these apps connect" said), `-` for none; `asked` the destination asked for as `host:port`, `[address]:port` or `-`; the proxy's own name and
+/// `l` (its flow's own address and names left out, as "Log where these apps connect" said) and `n` (its address is on
+/// the user's own network, the proxy record's unit B), `-` for none; `asked` the destination asked for as `host:port`, `[address]:port` or `-`; the proxy's own name and
 /// the cover its hello sent, `-` for none; and last the flow's name, which may hold spaces. No credential is kept,
 /// so none can be written.
 fn proxy_line(f: &Flow) -> Option<String> {
@@ -1783,6 +1836,7 @@ fn proxy_line(f: &Flow) -> Option<String> {
         (proxy.password, 'p'),
         (proxy.outside_maker, 'o'),
         (proxy.left_out, 'l'),
+        (proxy.local, 'n'),
     ] {
         if on {
             flags.push(flag);
@@ -2409,6 +2463,8 @@ mod tests {
                 cover: None,
                 left_out: false,
                 trackers: Vec::new(),
+                local: false,
+                unsure: false,
             })),
             blocked: None,
         };

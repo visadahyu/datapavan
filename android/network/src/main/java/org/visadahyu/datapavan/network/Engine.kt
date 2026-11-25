@@ -231,10 +231,17 @@ internal object Engine {
      * The messengers' apps whose built-in proxies the engine infers, each UID of [uids] of the family at the same
      * place in [families] (0 Telegram, 1 WhatsApp, 2 Signal), and the proxies Android's setting names, one `host port`
      * a line in [android] (W8, part 2a, ADR 0052), and whether Private DNS is strict on the network part's network
-     * ([strictDns]), which hides the apps' lookups from the network part. Kept for the engines to come, as the chain
-     * is.
+     * ([strictDns]), which hides the apps' lookups from the network part; and the network beneath's on-link prefixes,
+     * one `address length` a line in [onLink], with its [transport] (0 none, 1 Wi-Fi, 2 Ethernet, 3 cellular, 4 other),
+     * for the "local" fact (the proxy record's unit B). Kept for the engines to come, as the chain is.
      */
-    external fun nativeProxies(families: IntArray, uids: IntArray, android: String, strictDns: Boolean)
+    external fun nativeProxies(families: IntArray, uids: IntArray, android: String, strictDns: Boolean, onLink: String, transport: Int)
+
+    /**
+     * The network beneath's on-link prefixes and transport the engines were last handed, as `TRANSPORT ADDRESS/LENGTH...`
+     * (the proxy record's unit B, the "local" fact); debug builds only.
+     */
+    external fun nativeProxyOnLink(): String
 
     /** The messengers' client packages the engine's table holds (`data/messengers`), one `family package` a line. */
     external fun nativeMessengerClients(): String

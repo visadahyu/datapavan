@@ -258,7 +258,8 @@ class SnapshotTest {
         assertNull("version 2", Snapshot.parse(fixture.copyOf().also { it[0] = 2 }))
         assertNull("version 3", Snapshot.parse(fixture.copyOf().also { it[0] = 3 }))
         assertNull("version 4", Snapshot.parse(fixture.copyOf().also { it[0] = 4 }))
-        assertNull(Snapshot.parse(fixture.copyOf().also { it[0] = 6 }))
+        assertNull("version 5", Snapshot.parse(fixture.copyOf().also { it[0] = 5 }))
+        assertNull(Snapshot.parse(fixture.copyOf().also { it[0] = 7 }))
         assertNull("no engine runs", Snapshot.parse(ByteArray(0)))
     }
 }

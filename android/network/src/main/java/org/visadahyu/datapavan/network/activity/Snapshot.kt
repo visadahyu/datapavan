@@ -105,7 +105,8 @@ data class Snapshot(
     )
 
     companion object {
-        const val VERSION: Byte = 5
+        /** Version 6 (the proxy record's unit B): the proxy block's flags as the log's version 7 writes them. */
+        const val VERSION: Byte = 6
 
         const val NOTHING_YET = 0
         const val STATES = 1

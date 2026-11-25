@@ -4687,6 +4687,7 @@ fn telegrams_proxy_is_inferred_only_while_it_does_not_reach_its_own_ranges() -> 
                 android: Vec::new(),
                 trackers: None,
                 strict_dns: false,
+                on_link: datapavan_net::local::OnLink::default(),
             });
             let start = obfuscated_start();
             // A call's datagram to a relay in Telegram's ranges: no direct connection for substitution.

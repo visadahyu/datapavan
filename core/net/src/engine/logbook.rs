@@ -1318,6 +1318,8 @@ mod tests {
             cover: None,
             left_out: false,
             trackers: Vec::new(),
+            local: false,
+            unsure: false,
         };
         let segment = |flow: Flow, minute| Record::Segment {
             flow,
@@ -1394,6 +1396,8 @@ mod tests {
                     id: 23,
                     proxy: Some(Box::new(Proxied {
                         trackers: vec![49, 312],
+                        local: false,
+                        unsure: false,
                         ..proxy(Kind::Socks4)
                     })),
                     ..flow(23)
@@ -1413,6 +1417,31 @@ mod tests {
                     ..flow(24)
                 },
                 24,
+            ),
+            // Version 7 (the proxy record's unit B): a proxy on the user's own network, its destination left out, and
+            // a record the engine could not tell was a messenger's proxy, after a take-back.
+            segment(
+                without_destination(&Flow {
+                    id: 25,
+                    proxy: Some(Box::new(Proxied {
+                        local: true,
+                        ..proxy(Kind::Socks5)
+                    })),
+                    ..flow(25)
+                }),
+                25,
+            ),
+            segment(
+                without_destination(&Flow {
+                    id: 26,
+                    proxy: Some(Box::new(Proxied {
+                        outside_maker: true,
+                        unsure: true,
+                        ..proxy(Kind::MtProto)
+                    })),
+                    ..flow(26)
+                }),
+                26,
             ),
         ]
     }
@@ -1461,7 +1490,7 @@ mod tests {
         );
         let mut text = String::from(
             "# The network part's connection log: one batch of records as the engine writes them\n\
-             # (core/net/src/log.rs, version 6), in hex. Written by the engine's test the_kotlin_sides_fixture_is_what_the_engine_writes\n\
+             # (core/net/src/log.rs, version 7), in hex. Written by the engine's test the_kotlin_sides_fixture_is_what_the_engine_writes\n\
              # (core/net/src/engine/logbook.rs), which fails when the engine writes otherwise; run it with\n\
              # DATAPAVAN_WRITE_FIXTURE=1 to write it anew. Read by LogTest and LogDaysTest. Not edited by hand.\n",
         );

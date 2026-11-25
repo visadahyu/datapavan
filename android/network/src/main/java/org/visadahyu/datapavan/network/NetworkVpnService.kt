@@ -259,6 +259,8 @@ class NetworkVpnService : VpnService() {
             networkGeneration++
             recomputeResolverProxy()
             exchanger.networkChanged()
+            // The lost network's prefixes go with it (audit-B 1).
+            main.post { if (active) applyProxies() }
             setUnderlyingNetworks(null)
             Engine.nativeNetworkChanged("", true)
             told = null
@@ -452,21 +454,93 @@ class NetworkVpnService : VpnService() {
                 null
             }
         }.distinct().toList()
-        val proxies = buildList {
-            connectivity.defaultProxy?.let(::add)
+        // The global proxy (null network) and each network's own, as Android's settings give them.
+        val proxies = buildList<Pair<Network?, android.net.ProxyInfo>> {
+            connectivity.defaultProxy?.let { add(null to it) }
             @Suppress("DEPRECATION")
-            for (network in connectivity.allNetworks) connectivity.getLinkProperties(network)?.httpProxy?.let(::add)
+            for (network in connectivity.allNetworks) connectivity.getLinkProperties(network)?.httpProxy?.let { add(network to it) }
         }
-        // A proxy given by a PAC file is found by Android on the phone's loopback, which never enters the tunnel.
-        val android = proxies.filter { it.host != null && it.port in 1..65535 }.map { "${it.host} ${it.port}" }.distinct()
-        Engine.nativeProxies(
-            messengers.map { it.first }.toIntArray(),
-            messengers.map { it.second }.toIntArray(),
-            android.joinToString("\n"),
-            // With Private DNS strict, Android's resolver asks its provider over TLS: the network part sees no app's
-            // lookups, and a messenger's hello no answer tied is no evidence of its proxy (ADR 0052, fix round's S-M3).
-            dnsState.value is PrivateDns.Strict,
-        )
+        // A PAC file is no proxy's address: Android reports it as its handler on `localhost`, whose connections for other
+        // apps come into the tunnel under the handler's own UID (measurements 7.2); nor is a proxy on the loopback, which
+        // never enters the tunnel. Only a direct proxy's host and port are Android's setting here.
+        val direct = proxies.filter { (_, info) ->
+            (info.pacFileUrl == null || info.pacFileUrl == android.net.Uri.EMPTY) && info.host != null && info.port in 1..65535 &&
+                !loopbackHost(info.host)
+        }
+        val android = direct.map { (_, info) -> "${info.host} ${info.port}" }.distinct()
+        // With Private DNS strict, Android's resolver asks its provider over TLS: the network part sees no app's
+        // lookups, and a messenger's hello no answer tied is no evidence of its proxy (ADR 0052, fix round's S-M3). Nor
+        // does it see the names Android's resolver gives the setting's hosts, so it looks them up itself, through the
+        // same encrypted way (the proxy record's unit B, M5); outside strict it never does, so no proxy's name goes out
+        // in plain DNS.
+        val strict = dnsState.value is PrivateDns.Strict
+        val (onLink, transport) = onLinkOf(current)
+        val hand = { lines: List<String> ->
+            Engine.nativeProxies(
+                messengers.map { it.first }.toIntArray(),
+                messengers.map { it.second }.toIntArray(),
+                lines.distinct().joinToString("\n"),
+                strict,
+                onLink,
+                transport,
+            )
+        }
+        hand(android)
+        val ticket = ++settingLookups
+        val named = direct.filter { (_, info) -> org.visadahyu.datapavan.network.dns.Exchanger.numeric(info.host.removePrefix("[").removeSuffix("]")) == null }
+        if (!strict || named.isEmpty()) return
+        val on = current
+        resolverProxyLookups.execute {
+            val resolved = named.flatMap { (network, info) ->
+                try {
+                    // Each network's proxy through that network; the global one through the network beneath.
+                    ((network ?: on)?.getAllByName(info.host)?.toList() ?: emptyList()).map { "${it.hostAddress?.substringBefore('%')} ${info.port}" }
+                } catch (e: java.net.UnknownHostException) {
+                    emptyList()
+                } catch (e: SecurityException) {
+                    emptyList()
+                }
+            }
+            if (resolved.isEmpty()) return@execute
+            main.post { if (active && ticket == settingLookups) hand(android + resolved) }
+        }
+    }
+
+    /** Counts the hand-overs of Android's setting, so that a lookup of its names that ends after a newer one is dropped. Main thread. */
+    private var settingLookups = 0
+
+    /** Whether a proxy's host is the phone's own loopback, by name or address. */
+    private fun loopbackHost(host: String): Boolean = host.equals("localhost", ignoreCase = true) ||
+        org.visadahyu.datapavan.network.dns.Exchanger.numeric(host.removePrefix("[").removeSuffix("]"))?.isLoopbackAddress == true
+
+    /**
+     * The on-link prefixes of [network], the network beneath, one `address length` a line, and its transport's code (0 none,
+     * 1 Wi-Fi, 2 Ethernet, 3 cellular, 4 other), for the engine's "local" fact (the proxy record's unit B, R4): its link
+     * addresses' own prefixes, and on Wi-Fi and Ethernet its routes without a gateway too. Never a route of length 0, and
+     * none on a cellular network, where a data call is point to point and a modem may report its default route with no
+     * gateway (audit-B 1); the engine bounds the lengths again.
+     */
+    private fun onLinkOf(network: Network?): Pair<String, Int> {
+        network ?: return "" to 0
+        val capabilities = connectivity.getNetworkCapabilities(network)
+        val transport = when {
+            capabilities == null -> 0
+            capabilities.hasTransport(NetworkCapabilities.TRANSPORT_WIFI) -> 1
+            capabilities.hasTransport(NetworkCapabilities.TRANSPORT_ETHERNET) -> 2
+            capabilities.hasTransport(NetworkCapabilities.TRANSPORT_CELLULAR) -> 3
+            else -> 4
+        }
+        val properties = connectivity.getLinkProperties(network) ?: return "" to transport
+        val prefixes = properties.linkAddresses.map { it.address to it.prefixLength } +
+            if (transport == 1 || transport == 2) {
+                properties.routes.filter { !it.hasGateway() && it.destination.prefixLength > 0 }
+                    .map { it.destination.address to it.destination.prefixLength }
+            } else {
+                emptyList()
+            }
+        val lines = prefixes.filter { (_, length) -> length > 0 }
+            .map { (address, length) -> "${address.hostAddress?.substringBefore('%')} $length" }.distinct()
+        return lines.joinToString("\n") to transport
     }
 
     /**
@@ -1501,6 +1575,7 @@ class NetworkVpnService : VpnService() {
             writer.println("messenger-clear")
         }
         Engine.nativeFlowProxies().lineSequence().filter { it.isNotBlank() }.forEach { writer.println("flow-proxy $it") }
+        writer.println("proxy-on-link ${Engine.nativeProxyOnLink()}")
     }
 
     /**

@@ -2646,6 +2646,8 @@ mod tests {
                 cover: None,
                 left_out: false,
                 trackers: vec![312],
+                local: false,
+                unsure: false,
             })),
             ..flow(3, Some(UID + 1))
         }) else {
@@ -2759,6 +2761,8 @@ mod tests {
                 cover: None,
                 left_out: false,
                 trackers: Vec::new(),
+                local: false,
+                unsure: false,
             })),
             ..flow(id, Some(uid))
         }
@@ -2877,6 +2881,36 @@ mod tests {
     fn a_quiet_open_flow_keeps_its_first_hop_in_full() {
         let (shared, clock, _) = telling_at(T);
         let bytes = recorded(&shared, through_proxy(1, UID, 5));
+        up_at(&shared, &clock, &bytes, 500, 10);
+        clock.set(T + 1_500);
+        shared.tell(&on_since(T, T + 1_000, T));
+        clock.pass(30 * MINUTE);
+        assert!(
+            own_first_hop(&shown_places(&shared, UID, clock.wall_ms())[0].flow),
+            "open and quiet"
+        );
+        shared.finish(1);
+        clock.pass(10 * MINUTE - 1_000);
+        assert!(own_first_hop(
+            &shown_places(&shared, UID, clock.wall_ms())[0].flow
+        ));
+        clock.pass(1_000);
+        assert!(stripped(
+            &shown_places(&shared, UID, clock.wall_ms())[0].flow
+        ));
+    }
+
+    /// The proxy record's unit B, R7 (audit-B 2): a plain request to Android's setting is an own proxy's first hop
+    /// too, so the sweep keeps it in full while its connection is open, however long, and for ten minutes after.
+    #[test]
+    fn a_quiet_open_plain_request_to_the_setting_keeps_its_first_hop_in_full() {
+        let (shared, clock, _) = telling_at(T);
+        let mut flow = through_proxy(1, UID, 5);
+        if let Some(proxy) = flow.proxy.as_deref_mut() {
+            proxy.kind = crate::proxies::Kind::Forward;
+            proxy.setting = true;
+        }
+        let bytes = recorded(&shared, flow);
         up_at(&shared, &clock, &bytes, 500, 10);
         clock.set(T + 1_500);
         shared.tell(&on_since(T, T + 1_000, T));

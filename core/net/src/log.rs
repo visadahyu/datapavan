@@ -36,8 +36,8 @@ use crate::owners::NetworkKind;
 use crate::proxies::{Asked, Kind};
 use crate::states::Placed;
 
-/// The version of the record format.
-pub const VERSION: u8 = 6;
+/// The version of the record format: 7 since the proxy record's unit B, a proxy's local and unsure flags.
+pub const VERSION: u8 = 7;
 
 /// One record of the log.
 #[derive(Clone, Debug, PartialEq, Eq)]
@@ -177,7 +177,9 @@ pub(crate) fn named_by_code(named_by: NamedBy) -> u8 {
 /// and the cover name its hello sent, each a length byte and UTF-8, empty for none, and last the trackers matched
 /// on its names before anything was left out: a count byte (at most 8) and each one's εxodus id (u32). No
 /// credential is ever written: none is kept. Bit 4 and the trackers came in the fix round of W8 part 2a, before
-/// any release wrote version 5.
+/// any release wrote version 5. Version 7 (the proxy record's unit B) added bit 5, its address is on the user's own
+/// network ([`Proxied::local`]), and bit 6, the engine could not tell it was a messenger's proxy ([`Proxied::unsure`]),
+/// only on an inferred kind's record left out.
 pub(crate) fn push_proxy(out: &mut Vec<u8>, proxy: Option<&Proxied>) {
     let Some(proxy) = proxy else {
         out.push(0);
@@ -197,7 +199,9 @@ pub(crate) fn push_proxy(out: &mut Vec<u8>, proxy: Option<&Proxied>) {
             | u8::from(proxy.password) << 1
             | u8::from(proxy.outside_maker) << 2
             | u8::from(proxy.asked.is_some()) << 3
-            | u8::from(proxy.left_out) << 4,
+            | u8::from(proxy.left_out) << 4
+            | u8::from(proxy.local) << 5
+            | u8::from(proxy.unsure && proxy.left_out && !proxy.kind.declared()) << 6,
     );
     if let Some((asked, port)) = &proxy.asked {
         match asked {
@@ -386,7 +390,7 @@ mod tests {
             state: NOT_TOLD,
         };
         let bytes = record.encode();
-        let mut expected = vec![6, 1];
+        let mut expected = vec![VERSION, 1];
         expected.extend_from_slice(&7u64.to_le_bytes());
         expected.extend_from_slice(&10_123u32.to_le_bytes());
         for v in [1_000u64, 2_000, 300, 40_000, 820, 42_900] {
@@ -427,7 +431,7 @@ mod tests {
         };
         let bytes = segment(blocked.clone()).encode();
         let outcome = 1 + 1 + 8 + 4 + 6 * 8 + 1;
-        assert_eq!((bytes[0], bytes[outcome]), (6, 4));
+        assert_eq!((bytes[0], bytes[outcome]), (VERSION, 4));
         assert!(bytes.ends_with(b"\x00\x26com.google.firebase:firebase-analytics"));
         let not = segment(flow()).encode();
         assert_eq!((not[outcome], not.last().copied()), (0, Some(0)));
@@ -490,10 +494,10 @@ mod tests {
                 state,
             };
             let (segment, lookups) = (segment.encode(), lookups.encode());
-            assert_eq!((segment[0], segment[segment.len() - 8]), (6, state.code()));
+            assert_eq!((segment[0], segment[segment.len() - 8]), (VERSION, state.code()));
             assert_eq!(
                 (lookups[0], lookups.last().copied()),
-                (6, Some(state.code()))
+                (VERSION, Some(state.code()))
             );
             assert_eq!(Placed::from_code(state.code()), Some(state));
         }
@@ -529,7 +533,7 @@ mod tests {
         let bytes = record(false).encode();
         // Version, kind, number, UID, six times; protocol, outcome, named by, ECH, DNS, flags.
         let flags = 1 + 1 + 8 + 4 + 6 * 8 + 5;
-        assert_eq!((bytes[0], bytes[flags]), (6, 0b10));
+        assert_eq!((bytes[0], bytes[flags]), (VERSION, 0b10));
         assert_eq!(record(true).encode()[flags], 0b11);
         assert!(bytes.ends_with(b"\x0dother.example\x00\x0fwww.example.com\x50\0\0\0\0\0\0\0"));
     }

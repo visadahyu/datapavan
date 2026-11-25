@@ -83,6 +83,14 @@ pub struct Proxied {
     /// [`MAX_TRACKERS`]: kept whatever the switch says, as they name a tracker's company, never an address or a
     /// name (the fix round's S-M1).
     pub trackers: Vec<u32>,
+    /// Whether the proxy's address is on the user's own network ([`crate::local`], R4): decided where the proxy is
+    /// named, from the network beneath's on-link prefixes, and kept whatever the switch says, as a fact that names
+    /// nothing (the proxy record's unit B).
+    pub local: bool,
+    /// Whether the engine could not tell this was a messenger's proxy: a flow it named one and took the name back from,
+    /// or one it never named for substitution ([`TakenBack`]), left out as the proxy it was or would have been named.
+    /// Set on records only, never on a live flow (the proxy record's unit B, the take-back's mark).
+    pub unsure: bool,
 }
 
 impl Proxied {
@@ -126,6 +134,8 @@ pub struct ProxySetting {
     /// TLS, and the network part sees no app's lookups, so a hello no answer tied is no evidence (the fix round's
     /// S-M3).
     pub strict_dns: bool,
+    /// The network beneath's on-link prefixes and its transport, for the "local" fact ([`crate::local`]).
+    pub on_link: crate::local::OnLink,
 }
 
 /// A messenger app's direct connections to its maker's network: those open, and when the last one ended, in
@@ -271,6 +281,11 @@ impl Default for TakenBack {
 
 impl TakenBack {
     fn insert(&mut self, id: u64, proxy: Proxied) {
+        // Its records say that the engine could not tell (the take-back's mark, log version 7).
+        let proxy = Proxied {
+            unsure: true,
+            ..proxy
+        };
         if self.proxies.insert(id, proxy).is_none() {
             self.order.push_back(id);
             if self.order.len() > TAKEN_BACK
@@ -326,18 +341,20 @@ fn record_flow(record: &crate::log::Record) -> Option<u64> {
 
 /// Whether `flow` went through an app's own proxy, whose first hop the switch decides for (ADR 0052): a SOCKS or
 /// `CONNECT` proxy the server's reply confirmed, or a messenger's inferred one. A plain request in absolute form is
-/// not one: nothing confirms it, so its flow keeps its own address and names as any flow does.
+/// not one, since nothing confirms it, and its flow keeps its own address and names as any flow does; except one to
+/// Android's setting (R7, the proxy record's unit B), which is the user's shared proxy by its address or by a name
+/// Android's resolver gave it, never by what the app wrote, and is left out as a confirmed proxy's.
 pub(super) fn own_proxy(flow: &Flow) -> bool {
-    flow.proxy.as_ref().is_some_and(|p| p.kind != Kind::Forward)
+    flow.proxy
+        .as_ref()
+        .is_some_and(|p| p.kind != Kind::Forward || p.setting)
 }
 
 /// Whether `flow` shows an app's own proxy's first hop: its address and names, not left out. "Now" guards such a
 /// place against floods of other places (R8), whatever the switch, and shows it only within its window while its
 /// app's first hops are not kept ([`strips`]).
 pub(super) fn own_first_hop(flow: &Flow) -> bool {
-    flow.proxy
-        .as_ref()
-        .is_some_and(|p| p.kind != Kind::Forward && !p.left_out)
+    own_proxy(flow) && flow.proxy.as_ref().is_some_and(|p| !p.left_out)
 }
 
 /// Whether "Now" shows `flow`'s first hop for its window only, `keeps` saying whose apps' first hops are kept: an
@@ -386,6 +403,9 @@ pub(super) fn strip_for_log(
         return;
     }
     match flow.proxy.as_deref() {
+        Some(proxy) if proxy.kind == Kind::Forward && proxy.setting && !proxy.left_out => {
+            *flow = super::logbook::without_destination(flow);
+        }
         Some(proxy) if proxy.kind == Kind::Forward => {
             if proxy.asked.is_some() {
                 let unasked = proxy.without_asked();
@@ -398,7 +418,17 @@ pub(super) fn strip_for_log(
             if let Some(proxy) = taken_back.proxies.get(&flow.id) {
                 strip_unnamed(record, proxy);
             }
+            return;
         }
+    }
+    // A record of a flow taken back, left out as the inferred proxy it was named before, also as it entered the log or
+    // while it was held back: the engine no longer holds that it was one (the take-back's mark, audit-B 5).
+    if taken_back.proxies.contains_key(&flow.id)
+        && let Some(proxy) = flow.proxy.as_deref_mut()
+        && proxy.left_out
+        && !proxy.kind.declared()
+    {
+        proxy.unsure = true;
     }
 }
 
@@ -485,7 +515,7 @@ impl Shared {
                     return Some(true);
                 }
                 // An address of the user's own network is no company's network: a proxy on it is outside Meta's.
-                if is_local(address) {
+                if self.local(address) {
                     return Some(false);
                 }
                 let asn = self.organisations.as_ref()?.lookup(address)?.asn;
@@ -887,7 +917,7 @@ impl Shared {
             .as_ref()
             .filter(|f| f.named_by == NamedBy::Dns)
             .and_then(|f| f.name.clone());
-        let setting = self.android_setting(destination, proxy_name.as_deref());
+        let setting = self.android_setting(destination);
         let organisation = self.organisation(destination.ip());
         // The destination asked for names the flow: a name as it is, an address by the DNS answer it was
         // given for this app, if one is held, else by the address asked for itself, never by the proxy's (the
@@ -911,6 +941,8 @@ impl Shared {
             cover: None,
             left_out: false,
             trackers: self.marks(&hosts),
+            local: self.local(destination.ip()),
+            unsure: false,
         };
         let network = organisation.map(|(network, _)| network);
         self.name_proxied(opened, current.as_ref(), |flow, kept| {
@@ -937,10 +969,6 @@ impl Shared {
         }
         let destination = opened.destination;
         let current = self.flow_of(opened.id);
-        let dns_name = current
-            .as_ref()
-            .filter(|f| f.named_by == NamedBy::Dns)
-            .and_then(|f| f.name.clone());
         let mut hosts = Self::hosts_of(current.as_ref(), destination);
         hosts.push((
             match &request.asked {
@@ -951,7 +979,7 @@ impl Shared {
         ));
         let proxied = Proxied {
             kind: Kind::Forward,
-            setting: self.android_setting(destination, dns_name.as_deref()),
+            setting: self.android_setting(destination),
             password: request.password,
             outside_maker: false,
             asked: Some((request.asked.clone(), request.port)),
@@ -960,6 +988,8 @@ impl Shared {
             cover: None,
             left_out: false,
             trackers: self.marks(&hosts),
+            local: self.local(destination.ip()),
+            unsure: false,
         };
         self.name_proxied(opened, None, |flow, kept| {
             flow.proxy = Some(Box::new(if kept {
@@ -970,15 +1000,35 @@ impl Shared {
         });
     }
 
-    /// Whether Android's proxy setting names the proxy at `destination`, by its address or by `name`, the DNS
-    /// name its address had.
-    fn android_setting(&self, destination: std::net::SocketAddr, name: Option<&str>) -> bool {
-        let state = lock(&self.proxies);
-        state.setting.android.iter().any(|(host, port)| {
-            *port == destination.port()
-                && (host.parse::<IpAddr>().ok() == Some(destination.ip())
-                    || name.is_some_and(|n| n.eq_ignore_ascii_case(host.trim_end_matches('.'))))
+    /// Whether Android's proxy setting names the proxy at `destination`: by its address, or by a name of the setting
+    /// that Android's resolver gave this address, the shared scope of the names, never an app's own resolver's answer
+    /// (audit M5): otherwise an app's own resolver could make its own server read as the proxy in Android's settings.
+    /// The setting's hosts are copied out before the names are asked, so that no lock is held under another.
+    fn android_setting(&self, destination: std::net::SocketAddr) -> bool {
+        let address = destination.ip().to_canonical();
+        let hosts: Vec<String> = lock(&self.proxies)
+            .setting
+            .android
+            .iter()
+            .filter(|(_, port)| *port == destination.port())
+            .map(|(host, _)| host.clone())
+            .collect();
+        if hosts
+            .iter()
+            .any(|host| host.parse::<IpAddr>().ok().map(|h| h.to_canonical()) == Some(address))
+        {
+            return true;
+        }
+        let names = lock(&self.names);
+        hosts.iter().any(|host| {
+            host.parse::<IpAddr>().is_err()
+                && names.gave(address, None, host.trim_end_matches('.'), Instant::now())
         })
+    }
+
+    /// Whether the proxy at `address` is on the user's own network, by the network beneath's prefixes as told last.
+    fn local(&self, address: IpAddr) -> bool {
+        lock(&self.proxies).setting.on_link.is_local(address)
     }
 
     /// A messenger's first bytes had its proxy's shape, on a flow to an address outside its maker's network.
@@ -1150,6 +1200,8 @@ impl Shared {
             cover,
             left_out: false,
             trackers: self.marks(&hosts),
+            local: self.local(opened.destination.ip()),
+            unsure: false,
         };
         if self.went_directly_lately(uid) {
             Counters::add(&self.counters.proxies_substituted, 1);
@@ -1264,13 +1316,6 @@ impl Shared {
     }
 }
 
-/// Whether `address` is on the user's own network: private, link-local, or IPv6's unique local addresses.
-fn is_local(address: IpAddr) -> bool {
-    match address {
-        IpAddr::V4(a) => a.is_private() || a.is_link_local(),
-        IpAddr::V6(a) => a.is_unique_local() || a.is_unicast_link_local(),
-    }
-}
 
 /// What a TCP flow's first bytes are read for, as the relay passes them on: nothing is held back.
 ///
@@ -2366,6 +2411,7 @@ mod tests {
             ],
             trackers: None,
             strict_dns: false,
+            on_link: crate::local::OnLink::default(),
         });
         let (own, bytes) = open(&shared, UID, at([203, 0, 113, 6], 3128));
         relay(
@@ -2405,6 +2451,142 @@ mod tests {
         assert_eq!(setting(named.id), Some((Kind::Connect, true)));
     }
 
+    /// The proxy record's unit B, M5: a name of Android's setting matches only by an answer of Android's resolver,
+    /// never by one the app's own resolver gave, which would make the app's own server read as the setting; and a
+    /// mapped address matches its IPv4 setting.
+    #[test]
+    fn an_apps_own_resolver_cannot_make_its_server_androids_setting() {
+        let shared = engine(true);
+        shared.set_proxies(ProxySetting {
+            android: vec![
+                ("proxy.example.net".into(), 8080),
+                ("203.0.113.5".into(), 3128),
+            ],
+            ..ProxySetting::default()
+        });
+        // The app's own resolver says the setting's name is its own server.
+        lock(&shared.names).insert(
+            IpAddr::from([198, 51, 100, 9]),
+            Some(UID),
+            "proxy.example.net",
+            600,
+            (Instant::now(), shared.clock.since_boot()),
+        );
+        let (own, bytes) = open(&shared, UID, at([198, 51, 100, 9], 8080));
+        relay_replied(
+            &shared,
+            own,
+            &bytes,
+            &[b"CONNECT example.org:443 HTTP/1.1\r\n\r\n"],
+            CONNECTED,
+        );
+        assert_eq!(
+            live(&shared, own.id).proxy.map(|p| (p.kind, p.setting)),
+            Some((Kind::Connect, false))
+        );
+        // Android's resolver gives it to every app.
+        learn(&shared, "198.51.100.10", "proxy.example.net");
+        let (set, bytes) = open(&shared, UID, at([198, 51, 100, 10], 8080));
+        relay_replied(
+            &shared,
+            set,
+            &bytes,
+            &[b"CONNECT example.org:443 HTTP/1.1\r\n\r\n"],
+            CONNECTED,
+        );
+        assert_eq!(
+            live(&shared, set.id).proxy.map(|p| (p.kind, p.setting)),
+            Some((Kind::Connect, true))
+        );
+        let mapped = std::net::Ipv4Addr::new(203, 0, 113, 5).to_ipv6_mapped();
+        assert!(shared.android_setting(SocketAddr::from((mapped, 3128))));
+        assert!(!shared.android_setting(SocketAddr::from((mapped, 3129))));
+    }
+
+    /// The proxy record's unit B, R4: "local" is decided where the proxy is named, by the network beneath's on-link
+    /// prefixes and transport, and kept in the left-out record whatever the switch says.
+    #[test]
+    fn a_proxy_on_the_users_network_is_said_so_even_left_out() {
+        use crate::local::{OnLink, Transport};
+        let (shared, clock) = engine_at(false);
+        shared.set_proxies(ProxySetting {
+            on_link: OnLink::new([(IpAddr::from([100, 64, 7, 0]), 24)], Transport::Cellular),
+            ..ProxySetting::default()
+        });
+        let reads = socks5_reads();
+        let reads: Vec<&[u8]> = reads.iter().map(Vec::as_slice).collect();
+        let (on_link, bytes) = open(&shared, UID, at([100, 64, 7, 9], 1080));
+        relay_replied(&shared, on_link, &bytes, &reads, SOCKS5_REPLY);
+        // On a cellular network a private address off the link is not local.
+        let (private, bytes) = open(&shared, UID, at([10, 0, 0, 9], 1080));
+        relay_replied(&shared, private, &bytes, &reads, SOCKS5_REPLY);
+        let (public, bytes) = open(&shared, UID, at([203, 0, 113, 5], 1080));
+        relay_replied(&shared, public, &bytes, &reads, SOCKS5_REPLY);
+        let local = |id| live(&shared, id).proxy.map(|p| p.local);
+        assert_eq!(
+            (local(on_link.id), local(private.id), local(public.id)),
+            (Some(true), Some(false), Some(false))
+        );
+        for id in [on_link.id, private.id, public.id] {
+            shared.finish(id);
+        }
+        shared.flush();
+        clock.pass(11 * 60_000);
+        another_record(&shared);
+        let records = taken(&shared);
+        let written = of_flow(&records, on_link.id);
+        assert!(
+            !written.is_empty()
+                && written
+                    .iter()
+                    .all(|f| left_out(f) && f.proxy.as_ref().is_some_and(|p| p.local)),
+            "{written:?}"
+        );
+        assert!(!holds(&crate::log::batch(&records), &[100, 64, 7, 9]));
+    }
+
+    /// The proxy record's unit B, R7: with the switch off, a plain request to Android's setting is left out of the
+    /// record as a confirmed proxy's, while a plain request to another server keeps its own address.
+    #[test]
+    fn a_plain_request_to_androids_setting_is_left_out_of_the_record() {
+        let (shared, clock) = engine_at(false);
+        shared.set_proxies(ProxySetting {
+            android: vec![("203.0.113.5".into(), 3128)],
+            ..ProxySetting::default()
+        });
+        let (set, bytes) = open(&shared, UID, at([203, 0, 113, 5], 3128));
+        relay(&shared, set, &bytes, &[b"GET http://example.org/a HTTP/1.1\r\n\r\n"]);
+        let (other, bytes) = open(&shared, UID, at([198, 51, 100, 7], 3128));
+        relay(&shared, other, &bytes, &[b"GET http://example.org/a HTTP/1.1\r\n\r\n"]);
+        // "Now" shows the setting's first hop in full, for its window.
+        assert!(own_first_hop(&live(&shared, set.id)));
+        assert!(!own_first_hop(&live(&shared, other.id)));
+        for id in [set.id, other.id] {
+            shared.finish(id);
+        }
+        shared.flush();
+        clock.pass(11 * 60_000);
+        another_record(&shared);
+        let records = taken(&shared);
+        let batch = crate::log::batch(&records);
+        assert!(!holds(&batch, &[203, 0, 113, 5]), "the setting's address");
+        assert!(!holds(&batch, b"example.org"));
+        let set_records = of_flow(&records, set.id);
+        assert!(
+            !set_records.is_empty()
+                && set_records.iter().all(|f| left_out(f)
+                    && f.proxy.as_ref().is_some_and(|p| p.kind == Kind::Forward && p.setting)),
+            "{set_records:?}"
+        );
+        let other_records = of_flow(&records, other.id);
+        assert!(
+            !other_records.is_empty()
+                && other_records.iter().all(|f| f.destination == at([198, 51, 100, 7], 3128)
+                    && f.proxy.as_ref().is_some_and(|p| !p.left_out && p.asked.is_none())),
+            "{other_records:?}"
+        );
+    }
+
     #[test]
     fn a_flow_not_read_for_proxies_is_named_by_its_hello_alone() {
         let shared = engine(true);
@@ -2421,6 +2603,7 @@ mod tests {
             android: Vec::new(),
             trackers: None,
             strict_dns: false,
+            on_link: crate::local::OnLink::default(),
         });
     }
 
@@ -2548,6 +2731,7 @@ mod tests {
             android: Vec::new(),
             trackers: None,
             strict_dns: false,
+            on_link: crate::local::OnLink::default(),
         });
     }
 
@@ -2638,6 +2822,7 @@ mod tests {
             android: Vec::new(),
             trackers: None,
             strict_dns: false,
+            on_link: crate::local::OnLink::default(),
         });
     }
 
@@ -3207,11 +3392,13 @@ mod tests {
                     "{of_cdn:?}"
                 );
             } else {
+                // Every one, those cut before the take-back included, says that the engine could not tell
+                // (audit-B 5).
                 assert!(
                     of_cdn.iter().all(|f| left_out(f)
                         && f.proxy
                             .as_ref()
-                            .is_some_and(|p| p.kind == Kind::MtProto && p.outside_maker)),
+                            .is_some_and(|p| p.kind == Kind::MtProto && p.outside_maker && p.unsure)),
                     "{of_cdn:?}"
                 );
             }
@@ -3347,6 +3534,7 @@ mod tests {
         let mut setting = ProxySetting {
             messengers: vec![(Family::Telegram, UID)],
             strict_dns: true,
+            on_link: crate::local::OnLink::default(),
             ..ProxySetting::default()
         };
         shared.set_proxies(setting.clone());

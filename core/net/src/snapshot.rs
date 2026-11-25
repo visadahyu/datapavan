@@ -35,7 +35,9 @@
 //! Version 2 (W5's third part) added the window while the screen was off and the bytes in no state by
 //! why; version 3 (W7, part 1) each destination's route and each app's tunnel; version 4 (W8, part 2a, ADR 0052)
 //! each destination's proxy; version 5 (the proxy record's unit A, ADR 0052 decision 9) the flag of a first hop
-//! shown here only. Both sides ship in one build, so the Kotlin side reads version 5 only.
+//! shown here only; version 6 (the proxy record's unit B) the proxy block of the log's version 7, with its local flag
+//! (its unsure flag is the log's alone: "Now" shows a flow as it is). Both sides ship in one build, so the Kotlin side
+//! reads version 6 only.
 
 use crate::engine::{Flow, Network};
 use crate::log::{
@@ -44,7 +46,7 @@ use crate::log::{
 use crate::states::{Known, Placed, Screen};
 
 /// The version of the snapshot.
-pub const VERSION: u8 = 5;
+pub const VERSION: u8 = 6;
 
 /// Bytes up and down.
 pub type Ways = [u64; 2];
@@ -257,7 +259,7 @@ mod tests {
             }],
         };
         let out = encode(&snapshot);
-        let mut expected = vec![5];
+        let mut expected = vec![VERSION];
         expected.extend_from_slice(&1_000u64.to_le_bytes());
         expected.push(2);
         expected.extend_from_slice(&900u64.to_le_bytes());

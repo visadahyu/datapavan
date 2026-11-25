@@ -2633,6 +2633,8 @@ pub(super) mod tests {
                 cover: None,
                 left_out: false,
                 trackers: Vec::new(),
+                local: false,
+                unsure: false,
             })),
             ..flow(1, Some(UID))
         };
