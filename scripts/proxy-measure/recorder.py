@@ -14,7 +14,13 @@ On this computer's loopback alone, which an emulator reaches as 10.0.2.2, three 
 Each request is one line of the log (the second argument), tab-separated: milliseconds since 1970, the port's role,
 the request line, the Host header and the User-Agent. Nothing else of a request is kept, no credential header. Python's
 standard library alone; it runs until it is stopped.
+
+With a fifth argument `tunnel`, for the resolver unit's run on a network that requires its proxy (R-PLAN.md, "After
+the audit"): a CONNECT to an address, as the network part's resolver sends one (by the data pack's address, never a
+name), is carried to that address on port 443 from this computer, both ways, and logged as `proxy-tunnel`; a CONNECT
+to a name is answered as above. Nothing of what crosses the tunnel is read or kept.
 """
+import ipaddress
 import socket
 import socketserver
 import ssl
@@ -42,6 +48,7 @@ class Server(socketserver.ThreadingTCPServer):
 
 def main():
     base, path, cert, key = int(sys.argv[1]), sys.argv[2], sys.argv[3], sys.argv[4]
+    tunnels = len(sys.argv) > 5 and sys.argv[5] == "tunnel"
     log = open(path, "a", buffering=1, encoding="utf-8")
     tls = ssl.SSLContext(ssl.PROTOCOL_TLS_SERVER)
     tls.load_cert_chain(cert, key)
@@ -91,7 +98,9 @@ def main():
                 record(role, head)
                 target = head.split(" ")[1] if head.count(" ") >= 2 else ""
                 try:
-                    if role == "proxy" and head.startswith("CONNECT "):
+                    if role == "proxy" and head.startswith("CONNECT ") and tunnels and tunnel_to(target):
+                        carry(self.request, tunnel_to(target), seen.split(b"\r\n\r\n", 1)[1] if b"\r\n\r\n" in seen else b"")
+                    elif role == "proxy" and head.startswith("CONNECT "):
                         self.request.sendall(b"HTTP/1.1 200 Connection established\r\n\r\n")
                         names.value = "-"
                         try:
@@ -113,6 +122,50 @@ def main():
                     pass
 
         return Handler
+
+    def tunnel_to(authority):
+        """The address and port of a CONNECT to an address on port 443, or None for a name or another port."""
+        host, _, port = authority.rpartition(":")
+        try:
+            address = ipaddress.ip_address(host.strip("[]"))
+        except ValueError:
+            return None
+        return (str(address), 443) if port == "443" and address.is_global else None
+
+    def carry(client, where, early):
+        try:
+            upstream = socket.create_connection(where, timeout=10)
+        except OSError as e:
+            record("proxy-tunnel", f"TUNNEL {where[0]}:{where[1]} {type(e).__name__}")
+            reply(client, "502 Bad Gateway")
+            return
+        record("proxy-tunnel", f"TUNNEL {where[0]}:{where[1]} open")
+        client.sendall(b"HTTP/1.1 200 Connection established\r\n\r\n")
+        if early:
+            upstream.sendall(early)
+        client.settimeout(None)
+        upstream.settimeout(None)
+
+        def pipe(a, b):
+            try:
+                while True:
+                    data = a.recv(16384)
+                    if not data:
+                        break
+                    b.sendall(data)
+            except OSError:
+                pass
+            for s in (a, b):
+                try:
+                    s.shutdown(socket.SHUT_RDWR)
+                except OSError:
+                    pass
+
+        other = threading.Thread(target=pipe, args=(upstream, client), daemon=True)
+        other.start()
+        pipe(client, upstream)
+        other.join(30)
+        upstream.close()
 
     servers = [
         Server(("127.0.0.1", base), handler("proxy")),

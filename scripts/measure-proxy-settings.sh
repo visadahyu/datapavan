@@ -25,7 +25,17 @@
 # Four passes (PASSES="1 2 3 4" to choose): the VPN off; the Wi-Fi network's proxy and PAC set first and the VPN
 # started after them; the VPN on while each setting changes; and a process of the fixture that started before the VPN,
 # with the Wi-Fi network's own setting, used again once the VPN is up. Mobile data is off for the run, so that Wi-Fi is
-# the default network and the VPN's.
+# the default network and the VPN's. A fifth, PASSES=5, on an emulator that `adb root` takes (a google_apis image), is
+# a network that requires its proxy: with the Wi-Fi network's proxy set and the VPN on, the emulator's iptables reject
+# every connection out but to the recorder's proxy, so that the network part's resolver answers only through it.
+#
+# The resolver unit (the strategy repository's research/2026-11-proxy-record/R-PLAN.md, "After the audit", M8): with
+# the VPN on, each setting's part ends with what the network part's resolver did in it, as positive evidence, never as
+# an absence: the proxy it follows and why (the dump's `dns-proxy`), the exchanges that answered by each way since the
+# part began (`dns-latency`, cleared at its start), and the recorder's CONNECTs to an address on port 443, by
+# User-Agent. The resolver sends those by the data pack's address with no User-Agent; the recorder carries them to that
+# address from this computer (its `tunnel` mode), so that no hold of the resolver's comes from the proxy's path, and
+# answers every CONNECT to a name as before.
 #
 # Emulators only, named by ANDROID_SERIAL=emulator-N (a phone may be attached beside them): the device owner needs a
 # freshly booted emulator with no account, best a read-only instance. Everything it set is taken away at the end: the
@@ -90,7 +100,7 @@ DIRECT_URL="http://$HOST:$((BASE + 2))/direct"
 # A self-signed certificate for the recorder's TLS after a CONNECT, which the fixture refuses: made for this run.
 openssl req -x509 -newkey ec -pkeyopt ec_paramgen_curve:prime256v1 -nodes -days 1 -subj "/CN=$INNER" \
     -keyout "$OUT/tls/key.pem" -out "$OUT/tls/cert.pem" >/dev/null 2>&1
-python3 -I "$ROOT/scripts/proxy-measure/recorder.py" "$BASE" "$RECORDS" "$OUT/tls/cert.pem" "$OUT/tls/key.pem" \
+python3 -I "$ROOT/scripts/proxy-measure/recorder.py" "$BASE" "$RECORDS" "$OUT/tls/cert.pem" "$OUT/tls/key.pem" tunnel \
     >"$OUT/recorder.out" 2>&1 &
 RECORDER=$!
 for _ in $(seq 20); do grep -qx ready "$OUT/recorder.out" 2>/dev/null && break; sleep 0.5; done
@@ -102,9 +112,38 @@ STREAMER=$!
 
 OWNER_SET=""
 DATA_OFF=""
+EGRESS_SET=""
+# Pass 5's rules: every connection out of the emulator rejected but those on the loopback, into the VPN's interface and
+# to the recorder's proxy. Inserted first in OUTPUT, ahead of Android's own chains, and taken out again.
+egress_rules() {
+    local op=$1
+    adb shell iptables "$op" OUTPUT -o lo -j ACCEPT
+    adb shell iptables "$op" OUTPUT -o tun+ -j ACCEPT
+    adb shell iptables "$op" OUTPUT -d "$HOST" -p tcp --dport "$PROXY_PORT" -j ACCEPT
+    adb shell iptables "$op" OUTPUT -j REJECT
+    adb shell ip6tables "$op" OUTPUT -o lo -j ACCEPT
+    adb shell ip6tables "$op" OUTPUT -o tun+ -j ACCEPT
+    adb shell ip6tables "$op" OUTPUT -j REJECT
+}
+egress_only_proxy() {
+    # Inserted in reverse, each at the head, so that they run in the order above.
+    adb shell iptables -I OUTPUT 1 -j REJECT
+    adb shell iptables -I OUTPUT 1 -d "$HOST" -p tcp --dport "$PROXY_PORT" -j ACCEPT
+    adb shell iptables -I OUTPUT 1 -o tun+ -j ACCEPT
+    adb shell iptables -I OUTPUT 1 -o lo -j ACCEPT
+    adb shell ip6tables -I OUTPUT 1 -j REJECT
+    adb shell ip6tables -I OUTPUT 1 -o tun+ -j ACCEPT
+    adb shell ip6tables -I OUTPUT 1 -o lo -j ACCEPT
+    EGRESS_SET=1
+}
+egress_back() {
+    egress_rules -D >/dev/null 2>&1
+    EGRESS_SET=""
+}
 cleanup() {
     local status=$?
     set +e
+    [ -z "$EGRESS_SET" ] || egress_back
     adb shell settings delete global http_proxy >/dev/null 2>&1
     if [ -n "$OWNER_SET" ]; then
         owner global-none >/dev/null 2>&1
@@ -338,6 +377,9 @@ measure() {
     local setting=$1 how=$2
     say ""
     say "-- VPN $VPN, setting $setting ($how)"
+    local row_records
+    row_records=$(wc -l <"$RECORDS")
+    [ "$VPN" != on ] || dump dns-times-clear >/dev/null
     if [ "$how" = set ]; then
         # A process of the fixture that runs while the setting changes.
         fixture_as "$FIXTURE" fresh read >/dev/null
@@ -373,7 +415,22 @@ measure() {
         step "left out: webview" fixture_as "$OUTSIDE" fresh webview --es url "http://$INNER/webview"
     fi
     say "  PAC pieces after: $(pac_state)"
+    [ "$VPN" != on ] || resolver_evidence "$row_records"
     [ "$how" != set ] || clear_setting "$setting"
+}
+
+# What the network part's resolver did in a setting's part, since the recorder's line $1: the proxy it follows and why,
+# the way it is on, the exchanges that answered by each way, and the recorder's CONNECTs to an address on port 443, the
+# resolver's form, with no User-Agent and with one.
+resolver_evidence() {
+    local from=$1 state
+    state=$(dump dns-proxy)
+    say "  resolver: proxy $(sed -n 's/^ *dns-proxy //p' <<<"$state" | head -1); way $(sed -n 's/^ *dns-way //p' <<<"$state" | head -1)"
+    say "  resolver's answers by way: $(sed -n 's/^ *dns-latency \([^ ]*\) \([0-9]*\) .*/\1=\2/p' <<<"$state" | tr '\n' ' ')"
+    say "  resolver's CONNECTs by address: $(tail -n +"$((from + 1))" "$RECORDS" | awk -F'\t' '
+        $2 == "proxy" && $3 ~ /^CONNECT (\[[0-9a-fA-F:.]+\]|[0-9]+\.[0-9]+\.[0-9]+\.[0-9]+):443 HTTP/ { if ($5 == "-") bare++; else named++ }
+        $2 == "proxy-tunnel" && $3 ~ / open$/ { open++ }
+        END { printf "%d with no User-Agent, %d with one, %d tunnels opened", bare, named, open }')"
 }
 
 SETTINGS="none wifi-proxy wifi-pac global-setting global-owner global-pac"
@@ -402,6 +459,21 @@ for pass in ${PASSES:-1 2 3 4}; do
             vpn_start
             for setting in $SETTINGS; do measure "$setting" set; done
             vpn_stop
+            ;;
+        5)
+            say ""
+            say "== pass 5: a network that requires its proxy: the Wi-Fi network's own proxy set, the VPN on, every connection out rejected but to the proxy"
+            adb root >/dev/null 2>&1 || true
+            adb wait-for-device
+            [ "$(adb shell id -u | tr -d '\r')" = 0 ] || { echo "pass 5 needs an emulator that adb root takes" >&2; exit 2; }
+            say "  set before the VPN: $(set_setting wifi-proxy)"
+            vpn_start
+            egress_only_proxy
+            say "  egress: only to $HOST:$PROXY_PORT, the loopback and the VPN's interface"
+            measure wifi-proxy preset
+            egress_back
+            vpn_stop
+            clear_setting wifi-proxy
             ;;
         4)
             # Android tells a process its proxy when it starts and on a change of the proxy setting, by the UID's
