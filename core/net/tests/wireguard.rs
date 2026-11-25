@@ -185,13 +185,22 @@ fn engine_on(
     setting: &TunnelSetting,
     platform: Arc<dyn Platform>,
 ) -> io::Result<(Engine, UnixDatagram)> {
+    engine_with(setting, platform, &Limits::default())
+}
+
+/// As [`engine_on`], with `limits`.
+fn engine_with(
+    setting: &TunnelSetting,
+    platform: Arc<dyn Platform>,
+    limits: &Limits,
+) -> io::Result<(Engine, UnixDatagram)> {
     let (engine_end, app_end) = std::os::unix::net::UnixDatagram::pair()?;
     engine_end.set_nonblocking(true)?;
     app_end.set_nonblocking(true)?;
     let engine = Engine::start(
         OwnedFd::from(engine_end),
         Config {
-            limits: Limits::default(),
+            limits: *limits,
             mtu: 1500,
             keep_flows: 64,
             addresses: Addresses::COMMON,
@@ -900,6 +909,124 @@ async fn per_packet_cost() -> Outcome {
         read.iter().all(|&n| n > PACKETS),
         "the far ends read {read:?}: a path that delivers nothing measures something else"
     );
+    Ok(())
+}
+
+/// The CPU time so far, in nanoseconds, from `/proc`'s `schedstat` (the ticks of `stat` are 10 ms, longer than many
+/// opens together): of the engine's thread, and of every thread of the process, the blocking pool's among them, which
+/// asks Android whose a socket is and protects it.
+fn cpu_ns() -> Result<(u64, u64), Box<dyn std::error::Error>> {
+    let (mut engine, mut all) = (None, 0);
+    for task in std::fs::read_dir("/proc/self/task")? {
+        let path = task?.path();
+        let stat = std::fs::read_to_string(path.join("schedstat"))?;
+        let ns: u64 = stat.split(' ').next().ok_or("schedstat")?.parse()?;
+        all += ns;
+        if std::fs::read_to_string(path.join("comm"))?.trim() == "network-engine" {
+            engine = Some(ns);
+        }
+    }
+    Ok((engine.ok_or("no engine thread")?, all))
+}
+
+/// A lookup of `name`'s address, with the ID `id`.
+fn query(id: u16, name: &str) -> Vec<u8> {
+    let mut query = id.to_be_bytes().to_vec();
+    query.extend_from_slice(&[1, 0, 0, 1, 0, 0, 0, 0, 0, 0]);
+    for label in name.split('.') {
+        query.push(u8::try_from(label.len()).unwrap_or(63));
+        query.extend_from_slice(label.as_bytes());
+    }
+    query.extend_from_slice(&[0, 0, 1, 0, 1]);
+    query
+}
+
+/// What opening a UDP flow costs through the whole engine (the cold paths' size pass, ADR 0053): one datagram from each
+/// of `OPENS` new ports, each waited for at the far end before the next is sent, on three paths:
+/// - directly to a sink on this machine's address: Android is asked whose the socket is, and a mapping opens with a
+///   protected socket of its own;
+/// - a lookup to the network part's DNS address, as Android's resolver sends each from a new port: Android is asked,
+///   and a flow of lookups opens to the network's DNS server, here a sink, with a protected socket of its own;
+/// - through tunnel 1 to its server: Android is asked, and the tunnel's flow opens.
+///
+/// Prints the median and p90 of the time from the send to the arrival, and the CPU per open of the engine's thread and
+/// of the whole process. Each open hands work to the blocking pool and back, so a few hundred nanoseconds more or less
+/// are below what it resolves; the spread of runs is its resolution. `cargo test --release -- --ignored
+/// opening_a_udp_flow --nocapture`; built for Android too, and run on the emulator.
+#[tokio::test(flavor = "current_thread")]
+#[ignore = "a measurement, not a check: run it by name"]
+async fn opening_a_udp_flow() -> Outcome {
+    const OPENS: u16 = 400;
+    let mut server = Server::new(SERVER_KEY).await?;
+    let setting = one(&server, &[FIRST], "10.77.0.2/32", "0.0.0.0/0")?;
+    // Room for every mapping and flow: no open makes room by ending an older one.
+    let limits = Limits {
+        udp_mappings: 4_096,
+        udp_share: 4_096,
+        ..Limits::default()
+    };
+    let (engine, tunnel) = engine_with(&setting, Arc::new(ByPort), &limits)?;
+    let local = local_address()?;
+    let sink = UdpSocket::bind((local, 0)).await?;
+    let sink_at = sink.local_addr()?;
+    // The network's DNS server is a sink too, on its own port, which the lookups name.
+    let resolver = UdpSocket::bind((local, 0)).await?;
+    engine.network_changed(Some(IpAddr::V4(local)), false);
+    let dns = SocketAddr::from((Addresses::COMMON.dns4, resolver.local_addr()?.port()));
+    // The tunnel's session first: no open pays for its handshake.
+    let web = SocketAddr::from((WEB4, 9));
+    tunnel
+        .send(&packet::udp(tun4(40_000), web, b"first").ok_or("datagram")?)
+        .await?;
+    let _ = server.next().await?;
+    let mut buffer = vec![0u8; 2_048];
+    for (path, first, to) in [
+        ("direct", 42_000u16, sink_at),
+        ("lookup", 42_400, dns),
+        ("tunnelled", 40_001, web),
+    ] {
+        let mut times = Vec::with_capacity(usize::from(OPENS));
+        let before = cpu_ns()?;
+        for i in 0..OPENS {
+            let payload = if path == "lookup" {
+                query(i, &format!("a{i}.example.com"))
+            } else {
+                i.to_be_bytes().to_vec()
+            };
+            let datagram = packet::udp(tun4(first + i), to, &payload).ok_or("datagram")?;
+            let started = std::time::Instant::now();
+            tunnel.send(&datagram).await?;
+            let arrived = match path {
+                "direct" => {
+                    let n = tokio::time::timeout(STEP, sink.recv(&mut buffer)).await??;
+                    buffer[..n].to_vec()
+                }
+                "lookup" => {
+                    let n = tokio::time::timeout(STEP, resolver.recv(&mut buffer)).await??;
+                    buffer[..n].to_vec()
+                }
+                _ => server.next().await?,
+            };
+            times.push(started.elapsed());
+            assert!(
+                arrived.ends_with(&payload),
+                "{path} open {i}: another datagram arrived"
+            );
+        }
+        let after = cpu_ns()?;
+        times.sort();
+        let micros = |at: usize| times[at].as_secs_f64() * 1e6;
+        #[allow(clippy::cast_precision_loss)]
+        let per_open = |ns: u64| ns as f64 / 1e3 / f64::from(OPENS);
+        println!(
+            "{path}: {OPENS} opens, median {:.1} us, p90 {:.1} us from the send to the arrival; CPU per open {:.1} us of \
+             the engine's thread, {:.1} us of the process",
+            micros(times.len() / 2),
+            micros(times.len() * 9 / 10),
+            per_open(after.0 - before.0),
+            per_open(after.1 - before.1),
+        );
+    }
     Ok(())
 }
 
