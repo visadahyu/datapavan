@@ -26,6 +26,29 @@ class HistoryTest {
         }
     }
 
+    /**
+     * The proxy record's unit C (C8; audit-C 25): an app's page draws its switch "Log where APP connects through a proxy"
+     * where the choice can cover the app, and it is chosen, the user ended it here, or a proxy of the app was seen in
+     * "Now" or on any day read; never for a circumvention tool, Android's PAC proxy, Android's own UIDs, no app, or
+     * another user's copy.
+     */
+    @Test
+    fun anAppsPageDrawsItsSwitchByTheRule() {
+        val none = org.visadahyu.datapavan.network.ui.ProxyChoices(tools = setOf(10_124), pacHandler = 10_125)
+        val shown = { uid: Int?, choices: org.visadahyu.datapavan.network.ui.ProxyChoices, seen: Boolean ->
+            org.visadahyu.datapavan.network.ui.appSwitchShown(uid, choices, seen)
+        }
+        assertEquals(false, shown(10_123, none, false))
+        assertEquals(true, shown(10_123, none, true))
+        assertEquals(true, shown(10_123, none.copy(chosen = setOf(10_123)), false))
+        assertEquals(true, shown(10_123, none.copy(stopped = setOf(10_123)), false))
+        assertEquals(true, shown(20_123, none.copy(chosen = setOf(10_123)), false))
+        for (excluded in listOf(10_124, 20_124, 10_125, 1_000, 1_010_123)) {
+            assertEquals(excluded.toString(), false, shown(excluded, none.copy(chosen = setOf(excluded)), true))
+        }
+        assertEquals(false, shown(null, none, true))
+    }
+
     private val t = 1_794_953_400_000L
     private val app = 10_123
 

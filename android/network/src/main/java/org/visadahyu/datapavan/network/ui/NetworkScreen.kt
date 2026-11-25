@@ -96,6 +96,7 @@ internal fun NetworkScreen(
         proxiesSeen = logSwitch.proxiesSeen,
         asked = logSwitch.asked,
         on = chain.logDestinations,
+        chosen = logSwitch.chosen > 0,
     )
     val target = LogSwitch.target(places)
     val requester = remember { BringIntoViewRequester() }
@@ -155,9 +156,12 @@ internal fun NetworkScreen(
             // for a removed configuration is said to wait, never to go through one (fix round, screens review m1).
             val (through, waiting) = org.visadahyu.datapavan.network.tunnel.Routes.split(tunnels.routes, tunnels.configurations.map { it.slot }, leftOut)
             val tunnelled = through.mapValues { (_, slot) -> tunnels.names[slot] ?: stringResource(R.string.tunnel_closed_name) }
-            ChainSection(chain, privateDns, chainActions, tunnelled, waiting.keys, logSwitch = at(LogSwitch.Place.CHAIN))
+            ChainSection(chain, privateDns, chainActions, tunnelled, waiting.keys, logSwitch = at(LogSwitch.Place.CHAIN), chosen = logSwitch.chosen)
             // One setting, shown alike in every place: the chain's, which every place's change goes through.
-            TunnelsSection(tunnels.copy(logDestinations = chain.logDestinations), tunnelActions, leftOut, logSwitch = at(LogSwitch.Place.TUNNELS))
+            TunnelsSection(
+                tunnels.copy(logDestinations = chain.logDestinations), tunnelActions, leftOut, logSwitch = at(LogSwitch.Place.TUNNELS),
+                chosen = logSwitch.chosen,
+            )
             RoutesSection(
                 view = tunnels,
                 chain = ways,
@@ -169,7 +173,10 @@ internal fun NetworkScreen(
             LeftOutSection(leftOut, choices, onLoadApps, onLeaveOut)
             LogSettings(retentionDays, deleted, logLock, screenLock, onRetention, onDelete) {
                 if (LogSwitch.Place.ALONE in places) {
-                    LogSwitchAlone(chain.logDestinations, chainActions.onLogDestinations, Modifier.bringingIntoView(at(LogSwitch.Place.ALONE)))
+                    LogSwitchAlone(
+                        chain.logDestinations, chainActions.onLogDestinations, Modifier.bringingIntoView(at(LogSwitch.Place.ALONE)),
+                        chosen = logSwitch.chosen,
+                    )
                 }
             }
             ScreenshotSetting()

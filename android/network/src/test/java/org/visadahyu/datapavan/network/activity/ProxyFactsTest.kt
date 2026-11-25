@@ -196,8 +196,19 @@ class ProxyFactsTest {
         // Every row that names the switch names it as it reads.
         val label = proxy.getValue("log_switch")
         val naming = proxy.filterValues { "\\\"" in it }
-        assertTrue(naming.keys.toString(), naming.size >= 15)
+        assertTrue(naming.keys.toString(), naming.size >= 20)
         for ((name, text) in naming) assertTrue(name, text.contains("\\\"$label\\\""))
+        // Unit C: the strings of the user's choice for one app are in scope, and those that name the switch quote it; the
+        // confirmation's title is the app's switch word for word, as a question.
+        assertTrue(proxy.keys.toString(), proxy.size >= 60)
+        for (name in listOf(
+            "proxy_app_log_never", "proxy_app_log_switch_on", "now_proxy_live_only", "now_proxy_live_only_shared", "now_proxy_past",
+            "now_proxy_past_shared",
+        )) {
+            assertTrue(name, name in naming)
+        }
+        assertEquals(proxy.getValue("proxy_app_log") + "?", proxy.getValue("proxy_app_log_title"))
+        assertTrue(proxy.getValue("proxy_app_log_body").contains("if you set this app\\'s proxy yourself, leave this off."))
     }
 
     /**

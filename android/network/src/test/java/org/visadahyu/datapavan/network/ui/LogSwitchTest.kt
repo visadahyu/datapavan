@@ -61,6 +61,11 @@ class LogSwitchTest {
     fun aLinkOrTheSwitchOnDrawsIt() {
         assertEquals(setOf(LogSwitch.Place.ALONE), LogSwitch.places(false, false, proxiesSeen = false, asked = true, on = false))
         assertEquals(setOf(LogSwitch.Place.ALONE), LogSwitch.places(false, false, proxiesSeen = false, asked = false, on = true))
+        // The proxy record's unit C: an app the user chose one by one draws it too, with their count in its note.
+        assertEquals(
+            setOf(LogSwitch.Place.ALONE),
+            LogSwitch.places(false, false, proxiesSeen = false, asked = false, on = false, chosen = true),
+        )
     }
 
     /**

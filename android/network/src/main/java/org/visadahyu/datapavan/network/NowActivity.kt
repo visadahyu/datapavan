@@ -48,7 +48,11 @@ import org.visadahyu.datapavan.network.ui.NowScreen
 import org.visadahyu.datapavan.network.ui.NowView
 import org.visadahyu.datapavan.network.ui.RowNames
 import org.visadahyu.datapavan.network.ui.NetworkTheme
+import org.visadahyu.datapavan.network.ui.ProxyChoiceActions
+import org.visadahyu.datapavan.network.ui.ProxyChoices
 import org.visadahyu.datapavan.network.ui.rowOf
+import org.visadahyu.datapavan.network.proxy.LoggedApps
+import org.visadahyu.datapavan.network.proxy.ProxyChoice
 
 /**
  * The network part's view "Now" and each app's history (ADR 0046, decision 2 (d)), in the network process, opened by a
@@ -68,6 +72,10 @@ import org.visadahyu.datapavan.network.ui.rowOf
  * the setting again at once; it takes effect within seconds, since apps keep a failed lookup for a moment. A row's link
  * to "Log where apps connect ..." opens the network screen above this one, which stays where the user was beneath it,
  * the same app's row or its history ([MainActivity.logSwitchIntent]; the brief's point 11).
+ *
+ * The user's choice for one app, "Log where APP connects through a proxy" (the proxy record's unit C, R3), is read with
+ * each snapshot and when a history opens ([readChoices]): its rows' links and its page's switch write the store
+ * ([LoggedApps]) off the main thread, which has the running service hand it to the engine at once.
  */
 class NowActivity : ComponentActivity() {
     private val worker = Executors.newSingleThreadExecutor { Thread(it, "network-now") }.asCoroutineDispatcher()
@@ -100,6 +108,22 @@ class NowActivity : ComponentActivity() {
         onAllowEntries = { packages, hosts -> changeBlocking { settings, _ -> packages.forEach { settings.allowEntries(it, hosts) } } },
         onBlockEntriesAgain = { packages, hosts -> changeBlocking { settings, _ -> packages.forEach { settings.blockEntriesAgain(it, hosts) } } },
     )
+
+    /** The user's choice for one app as last read ([readChoices]; unit C). */
+    private val choices = mutableStateOf(ProxyChoices())
+
+    /** The apps whose choice the user ended on this screen, by app UID, for the note of what stays (audit-C 8). Main thread. */
+    @Volatile
+    private var stopped: Set<Int> = emptySet()
+
+    /** The circumvention tools' UIDs this screen read itself, while the service published none; worker only. */
+    private var ownTools: Set<Int>? = null
+
+    /** Whether the SDK Runtime is on, read once; worker only. */
+    private val sdkRuntime by lazy { org.visadahyu.datapavan.network.ui.sdkRuntimeOn() }
+
+    /** The choice's taps: a yes of the confirmation, or a stop, for the app's UID. */
+    private val proxyActions = ProxyChoiceActions(onLog = { changeChoice(it, stop = false) }, onStop = { changeChoice(it, stop = true) })
 
     /** Bumped when the rows are to sort anew, so that the view reads the order again. */
     private val sorts = mutableIntStateOf(0)
@@ -157,6 +181,7 @@ class NowActivity : ComponentActivity() {
                         blocking = blocking.value,
                         paused = paused.value,
                         proxies = proxies,
+                        choices = choices.value,
                     ),
                     history = history.value,
                     onPause = { paused.value = !paused.value },
@@ -177,6 +202,7 @@ class NowActivity : ComponentActivity() {
                     // this one.
                     onLogSwitch = { startActivity(MainActivity.logSwitchIntent(this)) },
                     blockingActions = blockingActions,
+                    proxyActions = proxyActions,
                 )
             }
         }
@@ -239,20 +265,65 @@ class NowActivity : ComponentActivity() {
         val seen = trackers.keys.toSet()
         val read = withContext(worker) {
             val read = Snapshot.parse(Engine.nativeActivity())
-            val named = read?.apps.orEmpty().map { it.uid }.filter { it !in known }.associateWith(appNames::of)
+            // An SDK Runtime UID's app too, whose name its choice's confirmation shows (unit C).
+            val uids = read?.apps.orEmpty().map { it.uid }
+            val named = (uids + uids.map { it?.let(ProxyChoice::appOf) }).distinct().filter { it !in known }.associateWith(appNames::of)
             val grouped = named.mapValues { (_, app) -> groupOf(app) }
             val blocked = readBlocking()
             // The rows blocking counted, at port 443, for the marks that group a company's trackers under one allow.
             val rows = blocked.tallies.mapNotNull { blocked.facts?.table?.row(it.host) }.map(RowNames::host)
             val hosts = (read?.apps.orEmpty().flatMap { app -> app.destinations.flatMap(::hostsOf) } + rows).distinct().filter { it !in seen }
-            Fetched(read, named, grouped, matchTrackers(hosts), namesOf(tunnelsOf(read)), blocked)
+            Fetched(read, named, grouped, matchTrackers(hosts), namesOf(tunnelsOf(read)), blocked, readChoices())
         }
         tunnelNames.putAll(read.tunnels)
         names.putAll(read.named)
         groups.putAll(read.grouped)
         keep(read.trackers)
         blocking.value = read.blocking
+        choices.value = read.choices
         snapshot.value = read.snapshot
+    }
+
+    /**
+     * The user's choice for one app as it stands, off the main thread (unit C): the app UIDs the hand-over gives the
+     * engine now, by the same rule ([LoggedApps.chosen]), why any ended in this run, the switch of every app, and the
+     * circumvention tools and Android's PAC handler, as the service published them or, while it published none, as this
+     * screen reads them itself, once.
+     */
+    private fun readChoices(): ProxyChoices {
+        val published = org.visadahyu.datapavan.network.proxy.ProxyContext.state.value
+        val tools = published.tools.keys.ifEmpty {
+            ownTools ?: org.visadahyu.datapavan.network.chain.Tools.uids(this).keys.also { ownTools = it }
+        }
+        val pacHandler = published.pacHandler ?: org.visadahyu.datapavan.network.proxy.PacHandler.uid(packageManager)
+        val store = LoggedApps.of(this)
+        return ProxyChoices(
+            switchOn = org.visadahyu.datapavan.network.chain.ChainSettings.of(this).logDestinations,
+            chosen = store.chosen(LoggedApps.packages(packageManager), tools, pacHandler),
+            ended = store.ended(),
+            stopped = stopped,
+            tools = tools,
+            pacHandler = pacHandler,
+            user = android.os.Process.myUid() / ProxyChoice.PER_USER_RANGE,
+            sdkRuntime = sdkRuntime,
+        )
+    }
+
+    /**
+     * A choice for the app [app] turned on, once its confirmation said yes, or off ([stop]): every package of its UID with
+     * its first install time written off the main thread, which has the running service hand it to the engine at once,
+     * and the view read again.
+     */
+    private fun changeChoice(app: Int, stop: Boolean) {
+        stopped = if (stop) stopped + app else stopped - app
+        lifecycleScope.launch {
+            choices.value = withContext(worker) {
+                val store = LoggedApps.of(this@NowActivity)
+                val packages = LoggedApps.packages(packageManager)
+                if (stop) store.stop(packages.packagesOf(app)) else store.choose(LoggedApps.entriesOfUid(packages, app))
+                readChoices()
+            }
+        }
     }
 
     /**
@@ -309,6 +380,7 @@ class NowActivity : ComponentActivity() {
         val trackers: Map<String, List<TrackerMarks.Match>>,
         val tunnels: Map<Long, String>,
         val blocking: BlockingView,
+        val choices: ProxyChoices,
     )
 
     /** The tunnels a snapshot names, by number. */
@@ -363,12 +435,19 @@ class NowActivity : ComponentActivity() {
                 val log = ConnectionLog.of(this@NowActivity)
                 val days = History.days(log.today(), log.retentionDays)
                 val secure = getSystemService(KeyguardManager::class.java)?.isDeviceSecure == true
-                HistoryView(
-                    named, log.retentionDays, log.lockNow(), secure, days, 0, null, reading = false, tool = tool,
-                    hideHosts = hidesHosts(named.packages, tool),
-                ) to readBlocking()
-            }.let { (view, blocked) ->
+                // A proxy of the app in "Now" draws its switch for the choice (unit C; audit-C 25).
+                val seen = snapshot.value?.apps.orEmpty().any { it.uid == uid && it.destinations.any { place -> place.proxy != null } }
+                Triple(
+                    HistoryView(
+                        named, log.retentionDays, log.lockNow(), secure, days, 0, null, reading = false, tool = tool,
+                        hideHosts = hidesHosts(named.packages, tool), proxiesSeen = seen,
+                    ),
+                    readBlocking(),
+                    readChoices(),
+                )
+            }.let { (view, blocked, chosen) ->
                 blocking.value = blocked
+                choices.value = chosen
                 view
             }
             history.value = shown
@@ -406,7 +485,9 @@ class NowActivity : ComponentActivity() {
             keep(withContext(worker) { matchTrackers(hosts) })
             val now = history.value
             if (now != null && now.index == index && now.app == shown.app) {
-                history.value = now.copy(day = read, reading = false, closed = read == null)
+                // Once any day read holds a proxy record of the app, its switch for the choice stays (audit-C 25).
+                val seen = now.proxiesSeen || read?.entries.orEmpty().any { it.proxy != null }
+                history.value = now.copy(day = read, reading = false, closed = read == null, proxiesSeen = seen)
             }
         }
     }

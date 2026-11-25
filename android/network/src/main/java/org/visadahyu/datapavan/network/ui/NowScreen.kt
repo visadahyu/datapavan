@@ -89,6 +89,8 @@ internal data class NowView(
      * proxy's UID and the circumvention tools' UIDs.
      */
     val proxies: ProxyContext.State = ProxyContext.State(),
+    /** The user's choice for one app, "Log where APP connects through a proxy" (the proxy record's unit C, R3). */
+    val choices: ProxyChoices = ProxyChoices(),
 )
 
 /** The marks of a destination of the app [uid], from its hosts' matches (ADR 0046, decision 2 (d)). */
@@ -179,10 +181,23 @@ internal fun NowScreen(
     onLogSwitch: () -> Unit = {},
     blockingActions: BlockingActions = BlockingActions(),
     onPause: () -> Unit = {},
+    proxyActions: ProxyChoiceActions = ProxyChoiceActions(),
 ) {
     // Kept here, above the history, so that coming back from it, or a rotation, finds the list where it was
     // (review c1 of W5's third part, screens, M2).
     val listState = rememberLazyListState()
+    // The app whose choice "Log where APP connects through a proxy" asks for its confirmation (unit C), kept across a
+    // rotation: an SDK Runtime UID's row asks for its app.
+    var asking by rememberSaveable { mutableStateOf<Int?>(null) }
+    val onChoice = { uid: Int?, choice: Choice ->
+        if (uid != null) {
+            val app = org.visadahyu.datapavan.network.proxy.ProxyChoice.appOf(uid)
+            when (choice) {
+                Choice.LOG -> asking = app
+                Choice.STOP -> proxyActions.onStop(app)
+            }
+        }
+    }
     // Stable names for the emulator scripts (scripts/talkback-walk.sh, scripts/screenshots.sh --now), as the audit's
     // screens give them.
     Surface(modifier = Modifier.fillMaxSize().semantics { testTagsAsResourceId = true }, color = MaterialTheme.colorScheme.background) {
@@ -190,11 +205,24 @@ internal fun NowScreen(
             BackHandler(onBack = onCloseHistory)
             HistoryScreen(
                 history, view.groups[history.app.uid], view.trackers, view.companies, onDay, onCloseHistory, view.tunnelNames, onLogSwitch,
-                view.blocking, blockingActions, view.proxies,
+                view.blocking, blockingActions, view.proxies, view.choices, onChoice,
             )
         } else {
-            NowList(view, listState, onWindow, onSort, onAll, onHistory, onAllowAccess, onLogSwitch, blockingActions, onPause)
+            NowList(view, listState, onWindow, onSort, onAll, onHistory, onAllowAccess, onLogSwitch, blockingActions, onPause, onChoice)
         }
+    }
+    asking?.let { app ->
+        val named = view.names[app] ?: history?.app?.takeIf { it.uid == app }
+        AppProxyChoiceDialog(
+            name = label(named, app),
+            packages = named?.packages.orEmpty(),
+            sdkRuntime = view.choices.sdkRuntime,
+            onYes = {
+                asking = null
+                proxyActions.onLog(app)
+            },
+            onNo = { asking = null },
+        )
     }
 }
 
@@ -210,6 +238,7 @@ private fun NowList(
     onLogSwitch: () -> Unit,
     blockingActions: BlockingActions,
     onPause: () -> Unit,
+    onChoice: (Int?, Choice) -> Unit,
 ) {
     val context = LocalContext.current
     val window = view.window
@@ -264,7 +293,7 @@ private fun NowList(
         }
         items(keys, key = { it ?: Int.MIN_VALUE }) { uid ->
             val app = byUid[uid]
-            if (app != null) AppRow(context, app, window, view, onHistory, onLogSwitch, blockingActions)
+            if (app != null) AppRow(context, app, window, view, onHistory, onLogSwitch, blockingActions, onChoice)
         }
         item { CannotSee() }
     }
@@ -360,6 +389,7 @@ private fun AppRow(
     onHistory: (Int?, Boolean) -> Unit,
     onLogSwitch: () -> Unit,
     blockingActions: BlockingActions,
+    onChoice: (Int?, Choice) -> Unit,
 ) {
     val named = view.names[app.uid]
     val historyLabel = stringResource(R.string.now_history)
@@ -382,6 +412,9 @@ private fun AppRow(
             Text(stringResource(R.string.now_state_now, stateName(app.now)), style = MaterialTheme.typography.bodyMedium)
             if (AppState.why(app.now) != 0) Text(whyName(AppState.why(app.now)), style = MaterialTheme.typography.bodyMedium)
             pacHandlerLine(view.proxies.pacHandler, app.uid)?.let { Text(lineText(it), style = MaterialTheme.typography.bodyMedium) }
+            // The user's choice for this app's proxy (unit C): ended here, or without the user in this run.
+            val choiceApp = app.uid?.let(org.visadahyu.datapavan.network.proxy.ProxyChoice::appOf)
+            AppChoiceLines(appChoiceLines(app.uid, view.names[choiceApp]?.packages ?: named?.packages.orEmpty(), view.choices))
             if (app.isTool) {
                 Text(stringResource(R.string.now_is_tool), style = MaterialTheme.typography.bodyMedium)
                 // Its servers show only while the switch "Log where apps connect ..." is on (decision 3, 2026-11-19).
@@ -426,14 +459,14 @@ private fun AppRow(
             val packages = named?.packages.orEmpty()
             appBlocking(view.blocking, app.uid, packages, { names.name(it, LogSwitch.hides(app)) }, names::company, LogSwitch.hides(app))
                 ?.let { AppBlockingLines(context, it, packages, blockingActions) }
-            Destinations(context, app, window, view, onLogSwitch)
+            Destinations(context, app, window, view, onLogSwitch, onChoice)
         }
     }
 }
 
 /** An app's destinations with bytes in the window, most bytes first, the first few and then all on request. */
 @Composable
-private fun Destinations(context: Context, app: Snapshot.App, window: Int, view: NowView, onLogSwitch: () -> Unit) {
+private fun Destinations(context: Context, app: Snapshot.App, window: Int, view: NowView, onLogSwitch: () -> Unit, onChoice: (Int?, Choice) -> Unit) {
     val places = app.destinations
         .filter { it.bytes[window * 2] + it.bytes[window * 2 + 1] > 0 }
         .sortedByDescending { it.bytes[window * 2] + it.bytes[window * 2 + 1] }
@@ -445,11 +478,15 @@ private fun Destinations(context: Context, app: Snapshot.App, window: Int, view:
         val proxy = placeProxyFacts(place, view.groups[app.uid], view.companies)
         // A circumvention tool's own flows say so on their proxy rows (B6).
         val toolName = app.uid?.let { view.proxies.tools[it] }
+        // What the user's choice for this app can do on this row (unit C): the engine's "local" fact and Android's
+        // setting, from the snapshot.
+        val choice = view.choices.row(app.uid, place.proxy?.setting == true, place.proxy?.local, tcp = place.protocol == 6)
+        val choose = { it: Choice -> onChoice(app.uid, it) }
         if (proxy != null && !proxy.kept) {
             // A proxy's flow the engine left out for the switch: its kind, how the network part knows, and the facts
             // that name nothing (ADR 0052), with the link to the switch.
             val marks = marksOf(emptyList(), view.groups[app.uid], view.trackers, view.companies, place.proxy?.trackers.orEmpty())
-            HiddenProxy(proxyRow(proxy, past = false, toolName), bytes, onLogSwitch, marks)
+            HiddenProxy(proxyRow(proxy, past = false, toolName, choice), bytes, onLogSwitch, marks, choose)
             continue
         }
         val (name, dns) = NowRows.destination(place.name, place.dnsName, place.address.hostAddress.orEmpty())
@@ -466,8 +503,9 @@ private fun Destinations(context: Context, app: Snapshot.App, window: Int, view:
             ),
             bytes = bytes,
             through = if (place.via == org.visadahyu.datapavan.network.log.LogRecord.VIA_TUNNEL) tunnelName(view, place.tunnel) else null,
-            proxy = proxy?.let { proxyRow(it, past = false, toolName) },
+            proxy = proxy?.let { proxyRow(it, past = false, toolName, choice) },
             onLogSwitch = onLogSwitch,
+            onChoice = choose,
         )
     }
     if (!all && places.size > FIRST_PLACES) {
@@ -491,6 +529,8 @@ internal fun Place(
     proxy: ProxyRow? = null,
     /** Opens the network screen at the switch, for a row that the switch leaves something out of. */
     onLogSwitch: () -> Unit = {},
+    /** The row's link to the user's choice for its app (unit C), if [proxy] has one. */
+    onChoice: (Choice) -> Unit = {},
 ) {
     Text(isolateLtr(name), style = MaterialTheme.typography.bodyLarge)
     through?.let { Text(stringResource(R.string.now_destination_tunnel, it), style = MaterialTheme.typography.bodySmall) }
@@ -514,6 +554,7 @@ internal fun Place(
     Text(bytes, style = MaterialTheme.typography.bodySmall)
     // Last, after the line of where the name came from, which the emulator checks read a place's name before.
     if (proxy?.toSwitch == true) LogSwitchLink(onLogSwitch)
+    proxy?.toChoice?.let { choice -> ChoiceLink(choice) { onChoice(choice) } }
 }
 
 /** A destination's tracker marks, one line each. */
@@ -531,15 +572,23 @@ private fun MarkLines(marks: List<TrackerMarks.Mark>) {
 
 /**
  * A proxy's flow left out for the switch: its kind, how the network part knows and the facts that name nothing, the
- * trackers' marks the engine kept of it (a tracker's company, never an address or a name), then the link.
+ * trackers' marks the engine kept of it (a tracker's company, never an address or a name), then the link, and the link
+ * to the user's choice for its app where the row has one (unit C).
  */
 @Composable
-internal fun HiddenProxy(row: ProxyRow, bytes: String, onLogSwitch: () -> Unit, marks: List<TrackerMarks.Mark> = emptyList()) {
+internal fun HiddenProxy(
+    row: ProxyRow,
+    bytes: String,
+    onLogSwitch: () -> Unit,
+    marks: List<TrackerMarks.Mark> = emptyList(),
+    onChoice: (Choice) -> Unit = {},
+) {
     row.header?.let { Text(lineText(it), style = MaterialTheme.typography.bodyMedium) }
     ProxyLines(row.lines)
     MarkLines(marks)
     Text(bytes, style = MaterialTheme.typography.bodySmall)
     if (row.toSwitch) LogSwitchLink(onLogSwitch)
+    row.toChoice?.let { choice -> ChoiceLink(choice) { onChoice(choice) } }
 }
 
 /**
@@ -591,10 +640,25 @@ internal data class ProxyLine(val text: Int, val kind: ProxyFacts.Kind? = null, 
 
 /**
  * What a destination's row says of its proxy (ADR 0052; fix round of W8 part 2a, screens review M3): the [header]
- * that stands for the destination where the engine left the flow out for the switch, the [lines], and whether the
- * row links to the switch ([toSwitch]).
+ * that stands for the destination where the engine left the flow out for the switch, the [lines], whether the
+ * row links to the switch ([toSwitch]), and the link to the user's choice for its app, if any ([toChoice]; unit C).
  */
-internal data class ProxyRow(val header: ProxyLine?, val lines: List<ProxyLine>, val toSwitch: Boolean)
+internal data class ProxyRow(val header: ProxyLine?, val lines: List<ProxyLine>, val toSwitch: Boolean, val toChoice: Choice? = null)
+
+/** A row's link to the user's choice for its app (the proxy record's unit C, R3): to log its proxy, or to stop. */
+internal enum class Choice { LOG, STOP }
+
+/**
+ * What a proxy row knows of the user's choice for its app (the proxy record's unit C, C8): whether the choice could cover
+ * it ([offered], [org.visadahyu.datapavan.network.proxy.ProxyChoice.offered], so never on Android's setting, a local
+ * proxy, a tool's row or the PAC handler's), whether its app is chosen ([chosen]), whether the switch of every app is on
+ * ([switchOn]), and whether the place is a TCP connection's ([tcp]), for the line of a destination asked for before its
+ * proxy was logged, which a SOCKS5 relay's datagrams never say.
+ */
+internal data class RowChoice(val offered: Boolean = false, val chosen: Boolean = false, val switchOn: Boolean = false, val tcp: Boolean = true) {
+    /** Whether the row offers to log its app's proxy: it could be covered, and neither the switch nor the choice keeps it. */
+    val toLog: Boolean get() = offered && !chosen && !switchOn
+}
 
 /**
  * The row of a destination's proxy [facts], in "Now" or, [past], in the history, as a pure function the JVM tests
@@ -611,12 +675,22 @@ internal data class ProxyRow(val header: ProxyLine?, val lines: List<ProxyLine>,
  * name, says so after the facts (the proxy record's unit B, B6), never "your proxy". A first hop "Now" shows only for
  * its window ends with why: for a declared proxy, that where the app asked it to go is not shown or logged, then that
  * its address is shown only so long; and links to the switch. The history never says so: what it shows was logged.
+ *
+ * The user's choice for one app ([choice]; the proxy record's unit C, C8, with audit-C 1): a row the choice could cover
+ * says so in its window's line and its header past the window, and links to the choice while neither the switch nor the
+ * choice keeps it; a row no choice covers (Android's setting, a local proxy, a tool's, the PAC proxy's) says that its
+ * proxy can carry other apps' connections, so only the switch logs it; a row of a chosen app left out before the
+ * choice says so. In "Now", a row the choice alone keeps says why it is shown in full, and links to stop; and a row read
+ * from the connection, kept with no destination asked for, says that it asked for it before its proxy was logged
+ * (review A-rest, note 11). A plain request is never said to be logged for the choice, which would call its server a
+ * proxy.
  */
-internal fun proxyRow(facts: ProxyFacts.Facts, past: Boolean, tool: String? = null): ProxyRow {
+internal fun proxyRow(facts: ProxyFacts.Facts, past: Boolean, tool: String? = null, choice: RowChoice = RowChoice()): ProxyRow {
     val lines = mutableListOf<ProxyLine>()
     val notMaker = ProxyLine(R.string.proxy_not_maker, args = listOf(isolate(facts.maker)))
     // A tool's own connection through a proxy: a fact of the app, which names no address, so it stays with the switch off.
     val toolLine = tool?.let { ProxyLine(R.string.proxy_tool, args = listOf(isolate(it))) }
+    val toLog = Choice.LOG.takeIf { choice.toLog }
     if (!facts.kept) {
         // A record the engine could not tell was a messenger's proxy (taken back, or never named for substitution) says
         // so in place of its proxy line, and so says nothing of how it was inferred: only the history has such records.
@@ -627,6 +701,10 @@ internal fun proxyRow(facts: ProxyFacts.Facts, past: Boolean, tool: String? = nu
                 facts.setting && past -> R.string.history_proxy_setting_hidden
                 facts.setting -> R.string.now_proxy_setting_past
                 past -> R.string.history_proxy_hidden
+                // Unit C: a proxy no choice for one app covers says so; a chosen app's place left out before the choice
+                // stays as it was, and says so (audit-C 1).
+                !choice.offered -> R.string.now_proxy_past_shared
+                choice.chosen && !choice.switchOn -> R.string.now_proxy_past_chosen
                 else -> R.string.now_proxy_past
             },
             kind = facts.kind,
@@ -640,7 +718,7 @@ internal fun proxyRow(facts: ProxyFacts.Facts, past: Boolean, tool: String? = nu
         }
         if (facts.password) lines += ProxyLine(R.string.proxy_password)
         if (!unsure) toolLine?.let { lines += it }
-        return ProxyRow(header, lines, toSwitch = true)
+        return ProxyRow(header, lines, toSwitch = true, toChoice = toLog)
     }
     if (facts.kind == ProxyFacts.Kind.REQUEST) {
         if (facts.askedLeftOut) {
@@ -655,9 +733,10 @@ internal fun proxyRow(facts: ProxyFacts.Facts, past: Boolean, tool: String? = nu
         if (facts.setting) toolLine?.let { lines += it }
         // A plain request to Android's setting is that proxy's first hop (R7): "Now" shows it only for its window, as any
         // own proxy's, and says so. The engine marks no other plain request so; were one marked, it is not called a proxy.
+        // No choice for one app covers Android's setting (unit C).
         val shownOnly = facts.shownOnly && facts.setting && !past
-        if (shownOnly) lines += ProxyLine(R.string.now_proxy_live_only)
-        return ProxyRow(null, lines, toSwitch = facts.askedLeftOut || shownOnly)
+        if (shownOnly) lines += ProxyLine(R.string.now_proxy_live_only_shared)
+        return ProxyRow(null, lines, toSwitch = facts.askedLeftOut || shownOnly, toChoice = toLog.takeIf { facts.askedLeftOut })
     }
     lines += when {
         !facts.declared -> ProxyLine(R.string.proxy_inferred, facts.kind, listOf(isolateLtr(facts.at)))
@@ -678,12 +757,19 @@ internal fun proxyRow(facts: ProxyFacts.Facts, past: Boolean, tool: String? = nu
     if (facts.setting) lines += ProxyLine(R.string.proxy_setting)
     if (facts.password) lines += ProxyLine(R.string.proxy_password)
     toolLine?.let { lines += it }
-    val shownOnly = facts.shownOnly && !past
-    if (shownOnly) {
+    if (past) return ProxyRow(null, lines, toSwitch = false)
+    if (facts.shownOnly) {
         if (facts.declared) lines += ProxyLine(R.string.now_proxy_asked_off)
-        lines += ProxyLine(R.string.now_proxy_live_only)
+        lines += ProxyLine(if (choice.offered) R.string.now_proxy_live_only else R.string.now_proxy_live_only_shared)
+        return ProxyRow(null, lines, toSwitch = true, toChoice = toLog)
     }
-    return ProxyRow(null, lines, toSwitch = shownOnly)
+    // Kept with no destination asked for: it opened while its proxy was not logged (note 11). A SOCKS5 relay's datagram
+    // asks for nothing of its own on its first read alone, so only a TCP connection's says so.
+    if (facts.declared && facts.asked.isEmpty() && choice.tcp) lines += ProxyLine(R.string.now_proxy_asked_earlier)
+    // Kept by the user's choice alone, the switch off.
+    val chosen = choice.offered && choice.chosen && !choice.switchOn
+    if (chosen) lines += ProxyLine(R.string.now_proxy_app_logged)
+    return ProxyRow(null, lines, toSwitch = false, toChoice = Choice.STOP.takeIf { chosen })
 }
 
 /**

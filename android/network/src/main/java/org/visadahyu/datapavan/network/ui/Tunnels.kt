@@ -167,6 +167,8 @@ internal fun TunnelsSection(
     leftOut: Set<String>,
     /** Brings the switch "Log where apps connect ..." into view, where the screen does so here for a row's link. */
     logSwitch: BringIntoViewRequester? = null,
+    /** How many apps the user chose to log one by one (the proxy record's unit C), for the switch's note. */
+    chosen: Int = 0,
 ) {
     Column(verticalArrangement = Arrangement.spacedBy(8.dp), modifier = Modifier.semantics { testTagsAsResourceId = true }) {
         Text(
@@ -233,7 +235,7 @@ internal fun TunnelsSection(
         if (view.configurations.isNotEmpty()) {
             Column(Modifier.bringingIntoView(logSwitch), verticalArrangement = Arrangement.spacedBy(8.dp)) {
                 Switching(stringResource(R.string.log_switch), view.logDestinations, actions.onLogDestinations)
-                Text(stringResource(R.string.log_switch_note_proxies), style = MaterialTheme.typography.bodyMedium)
+                LogSwitchNote(chosen)
             }
         }
     }

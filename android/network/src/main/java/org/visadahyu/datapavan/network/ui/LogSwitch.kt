@@ -14,6 +14,7 @@ import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.res.pluralStringResource
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.unit.dp
@@ -27,7 +28,9 @@ import org.visadahyu.datapavan.network.activity.Snapshot
  * tool's own servers and apps' own proxies alike. The screen draws it wherever anything is left out for it: in the
  * tool's section while the tool answers, in the WireGuard section while a configuration exists, and else on its own
  * in the log's section, while an app's own proxy has been seen since the engine started, while it is on (so that
- * what the user turned on can be turned off), or when a row of "Now" or the history linked to it.
+ * what the user turned on can be turned off), while the user chose any app to log one by one, whose count its note
+ * gives (the proxy record's unit C, the maintainer's decision of 2026-11-25), or when a row of "Now" or the history
+ * linked to it.
  */
 internal object LogSwitch {
     /** The places the network screen draws it, in the screen's order. */
@@ -35,21 +38,22 @@ internal object LogSwitch {
 
     /**
      * What the network screen knows for it: whether an app's own proxy was seen since the engine started
-     * ([proxiesSeen]), whether a row linked to it ([asked], kept across a rotation), and how many links are still
-     * to bring it into view ([asks]).
+     * ([proxiesSeen]), whether a row linked to it ([asked], kept across a rotation), how many links are still
+     * to bring it into view ([asks]), and how many apps the user chose to log one by one ([chosen], unit C).
      */
-    data class View(val proxiesSeen: Boolean = false, val asked: Boolean = false, val asks: Int = 0)
+    data class View(val proxiesSeen: Boolean = false, val asked: Boolean = false, val asks: Int = 0, val chosen: Int = 0)
 
     /**
      * Where the switch is drawn: in the tool's section while the tool answers ([toolAnswers]), in the WireGuard
      * section while a configuration exists ([tunnels]), and on its own when neither draws it and an app's own proxy
-     * was seen ([proxiesSeen]), a row linked to it ([asked]) or it is [on].
+     * was seen ([proxiesSeen]), a row linked to it ([asked]), it is [on], or the user chose any app one by one
+     * ([chosen]), whose count its note gives.
      */
-    fun places(toolAnswers: Boolean, tunnels: Boolean, proxiesSeen: Boolean, asked: Boolean, on: Boolean): Set<Place> =
+    fun places(toolAnswers: Boolean, tunnels: Boolean, proxiesSeen: Boolean, asked: Boolean, on: Boolean, chosen: Boolean = false): Set<Place> =
         buildSet {
             if (toolAnswers) add(Place.CHAIN)
             if (tunnels) add(Place.TUNNELS)
-            if (isEmpty() && (proxiesSeen || asked || on)) add(Place.ALONE)
+            if (isEmpty() && (proxiesSeen || asked || on || chosen)) add(Place.ALONE)
         }
 
     /** Where a row's link brings the user: the first place the switch is drawn, if any. */
@@ -96,9 +100,22 @@ internal fun LogSwitchLink(onClick: () -> Unit) {
     TextButton(onClick = onClick) { Text(stringResource(R.string.log_switch_open)) }
 }
 
+/**
+ * The switch's note, then, while the user chose any app to log one by one (the proxy record's unit C), how many: the
+ * note says such an app is logged in full all the same, and the count says how many there are (the maintainer's
+ * decision of 2026-11-25; their list is W9's, behind Advanced's lock).
+ */
+@Composable
+internal fun LogSwitchNote(chosen: Int) {
+    Text(stringResource(R.string.log_switch_note_proxies), style = MaterialTheme.typography.bodyMedium)
+    if (chosen > 0) {
+        Text(pluralStringResource(R.plurals.log_switch_note_chosen, chosen, chosen), style = MaterialTheme.typography.bodyMedium)
+    }
+}
+
 /** The switch on its own, with its note, where neither the tool's section nor the WireGuard section draws it. */
 @Composable
-internal fun LogSwitchAlone(on: Boolean, onChange: (Boolean) -> Unit, modifier: Modifier = Modifier) {
+internal fun LogSwitchAlone(on: Boolean, onChange: (Boolean) -> Unit, modifier: Modifier = Modifier, chosen: Int = 0) {
     Column(modifier, verticalArrangement = Arrangement.spacedBy(8.dp)) {
         Row(
             modifier = Modifier
@@ -110,6 +127,6 @@ internal fun LogSwitchAlone(on: Boolean, onChange: (Boolean) -> Unit, modifier: 
             Text(stringResource(R.string.log_switch), style = MaterialTheme.typography.bodyLarge, modifier = Modifier.weight(1f))
             Switch(checked = on, onCheckedChange = null)
         }
-        Text(stringResource(R.string.log_switch_note_proxies), style = MaterialTheme.typography.bodyMedium)
+        LogSwitchNote(chosen)
     }
 }

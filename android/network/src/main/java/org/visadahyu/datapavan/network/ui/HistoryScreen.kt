@@ -61,6 +61,12 @@ internal data class HistoryView(
      * part 3a; ADR 0053).
      */
     val hideHosts: Boolean = false,
+    /**
+     * Whether a proxy of the app was seen in "Now" when the page opened, or on any day read since (the proxy record's
+     * unit C; audit-C 25): its switch "Log where APP connects through a proxy" is then drawn, and stays while the page
+     * is open, whatever day is shown.
+     */
+    val proxiesSeen: Boolean = false,
 )
 
 /**
@@ -71,7 +77,9 @@ internal data class HistoryView(
  * removed, and are counted apart. A segment the switch "Log where apps connect ..." left out says why, by its
  * recorded route and proxy ([History.leftOut]), and links to the switch ([onLogSwitch]). Tracker blocking (W8, part 3a)
  * says at the top what it blocked in the app, with the app's undo and each tracker's ([blocking], [blockingActions]),
- * and under each segment whether it was blocked, or why a host it reached is not.
+ * and under each segment whether it was blocked, or why a host it reached is not. The user's choice for the app, "Log
+ * where APP connects through a proxy" (the proxy record's unit C, C8), is a switch at the top where it can cover the app
+ * ([appSwitchShown]), and a link on each record it could cover ([choices], [onChoice]).
  */
 @Composable
 internal fun HistoryScreen(
@@ -88,6 +96,9 @@ internal fun HistoryScreen(
     blockingActions: BlockingActions = BlockingActions(),
     /** What the service knows of the proxies around the apps (the proxy record's unit B): the PAC proxy's UID and the tools'. */
     proxies: ProxyContext.State = ProxyContext.State(),
+    /** The user's choice for one app (unit C), and its taps, by the app's UID. */
+    choices: ProxyChoices = ProxyChoices(),
+    onChoice: (Int?, Choice) -> Unit = { _, _ -> },
 ) {
     val context = LocalContext.current
     val names = RowNames(blocking.facts, companies, trackers)
@@ -115,6 +126,21 @@ internal fun HistoryScreen(
                 Text(stringResource(R.string.history_intro), style = MaterialTheme.typography.bodyLarge)
                 // Android's PAC proxy connects for other apps, the apps left out included (B5): said once, on its page.
                 pacHandlerLine(proxies.pacHandler, view.app.uid)?.let { Text(lineText(it), style = MaterialTheme.typography.bodyMedium) }
+                // The user's choice for this app (unit C, C8): its switch where the choice can cover it, else only why it
+                // ended, if it did.
+                val choiceLines = appChoiceLines(view.app.uid, view.app.packages, choices)
+                if (appSwitchShown(view.app.uid, choices, view.proxiesSeen)) {
+                    AppProxySwitch(
+                        name = label(view.app, view.app.uid),
+                        chosen = choices.chosen(view.app.uid),
+                        switchOn = choices.switchOn,
+                        lines = choiceLines,
+                        onAsk = { onChoice(view.app.uid, Choice.LOG) },
+                        onStop = { onChoice(view.app.uid, Choice.STOP) },
+                    )
+                } else {
+                    AppChoiceLines(choiceLines)
+                }
                 LockFacts(view)
                 val day = view.days.getOrNull(view.index)
                 if (day != null) {
@@ -176,13 +202,16 @@ internal fun HistoryScreen(
                         null
                     }
                     val proxy = entry.proxy?.let { proxyFacts(it, entry.ip, entry.port, entry.asn, appGroup, companies) }
+                    // What the user's choice for this app can do on this record (unit C).
+                    val choice = choices.row(view.app.uid, entry.proxy?.setting == true, entry.proxy?.local, tcp = entry.protocol == 6)
+                    val choose = { it: Choice -> onChoice(view.app.uid, it) }
                     val bytes = stringResource(R.string.now_destination_bytes, size(context, entry.sent), size(context, entry.received))
                     when (val why = History.leftOut(entry, view.tool)) {
                         // A proxy's flow the engine left out for the switch: its kind, how the network part knows, and
                         // the facts that name nothing (ADR 0052).
                         History.LeftOut.PROXY -> HiddenProxy(
-                            proxyRow(checkNotNull(proxy), past = true, toolName), bytes, onLogSwitch,
-                            marksOf(emptyList(), appGroup, trackers, companies, entry.proxy?.trackers.orEmpty()),
+                            proxyRow(checkNotNull(proxy), past = true, toolName, choice), bytes, onLogSwitch,
+                            marksOf(emptyList(), appGroup, trackers, companies, entry.proxy?.trackers.orEmpty()), choose,
                         )
                         null -> {
                             val hosts = listOf(entry.name, entry.dnsName, entry.address).filter { it.isNotEmpty() }.map { "$it\t${entry.port}" }
@@ -194,8 +223,9 @@ internal fun HistoryScreen(
                                 marks = marksOf(hosts, appGroup, trackers, companies, entry.proxy?.trackers.orEmpty()),
                                 bytes = bytes,
                                 through = tunnel,
-                                proxy = proxy?.let { proxyRow(it, past = true, toolName) },
+                                proxy = proxy?.let { proxyRow(it, past = true, toolName, choice) },
                                 onLogSwitch = onLogSwitch,
+                                onChoice = choose,
                             )
                         }
                         // No destination was logged: say why, as "Now" does, never show zeros as one (M3), and never

@@ -94,6 +94,8 @@ internal fun ChainSection(
     waiting: Set<String> = emptySet(),
     /** Brings the switch "Log where apps connect ..." into view, where the screen does so here for a row's link. */
     logSwitch: BringIntoViewRequester? = null,
+    /** How many apps the user chose to log one by one (the proxy record's unit C), for the switch's note. */
+    chosen: Int = 0,
 ) {
     val bidi = BidiFormatter.getInstance()
     Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
@@ -118,7 +120,7 @@ internal fun ChainSection(
                 )
                 OutlinedButton(onClick = actions.onSearch) { Text(stringResource(R.string.chain_search_again)) }
             }
-            is ToolSearch.Answering -> Answering(search, view, privateDns, actions, tunnelled, waiting, logSwitch)
+            is ToolSearch.Answering -> Answering(search, view, privateDns, actions, tunnelled, waiting, logSwitch, chosen)
         }
         // A chain that is on stays one tap from off, whatever the search says now: while the tool does
         // not answer, the apps sent through it wait, and the user must be able to let them go directly
@@ -163,6 +165,7 @@ private fun Answering(
     tunnelled: Map<String, String>,
     waiting: Set<String>,
     logSwitch: BringIntoViewRequester?,
+    chosen: Int,
 ) {
     val tool = BidiFormatter.getInstance().unicodeWrap(search.found.tool.name)
     Text(stringResource(R.string.chain_found, tool, search.found.port), style = MaterialTheme.typography.bodyMedium)
@@ -242,7 +245,7 @@ private fun Answering(
     // The one switch (LogSwitch), here while the tool answers.
     Column(Modifier.bringingIntoView(logSwitch), verticalArrangement = Arrangement.spacedBy(8.dp)) {
         LabelledSwitch(stringResource(R.string.log_switch), view.logDestinations, actions.onLogDestinations)
-        Text(stringResource(R.string.log_switch_note_proxies), style = MaterialTheme.typography.bodyMedium)
+        LogSwitchNote(chosen)
     }
 }
 
