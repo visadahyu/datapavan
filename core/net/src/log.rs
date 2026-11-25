@@ -494,7 +494,10 @@ mod tests {
                 state,
             };
             let (segment, lookups) = (segment.encode(), lookups.encode());
-            assert_eq!((segment[0], segment[segment.len() - 8]), (VERSION, state.code()));
+            assert_eq!(
+                (segment[0], segment[segment.len() - 8]),
+                (VERSION, state.code())
+            );
             assert_eq!(
                 (lookups[0], lookups.last().copied()),
                 (VERSION, Some(state.code()))

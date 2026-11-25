@@ -1733,7 +1733,10 @@ fn on_link_of(lines: &str, transport: jint) -> datapavan_net::local::OnLink {
             let (address, length) = line.trim().split_once(' ')?;
             Some((address.trim().parse().ok()?, length.trim().parse().ok()?))
         });
-    datapavan_net::local::OnLink::new(prefixes, datapavan_net::local::Transport::from_code(transport))
+    datapavan_net::local::OnLink::new(
+        prefixes,
+        datapavan_net::local::Transport::from_code(transport),
+    )
 }
 
 /// `Engine.nativeMessengerClients()`: the messengers' client packages the engine's table holds, one `family

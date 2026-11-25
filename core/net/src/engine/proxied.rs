@@ -1316,7 +1316,6 @@ impl Shared {
     }
 }
 
-
 /// What a TCP flow's first bytes are read for, as the relay passes them on: nothing is held back.
 ///
 /// The bytes of a proxy request, which may carry credentials, are gathered only in `request`, whose capacity is
@@ -2555,9 +2554,19 @@ mod tests {
             ..ProxySetting::default()
         });
         let (set, bytes) = open(&shared, UID, at([203, 0, 113, 5], 3128));
-        relay(&shared, set, &bytes, &[b"GET http://example.org/a HTTP/1.1\r\n\r\n"]);
+        relay(
+            &shared,
+            set,
+            &bytes,
+            &[b"GET http://example.org/a HTTP/1.1\r\n\r\n"],
+        );
         let (other, bytes) = open(&shared, UID, at([198, 51, 100, 7], 3128));
-        relay(&shared, other, &bytes, &[b"GET http://example.org/a HTTP/1.1\r\n\r\n"]);
+        relay(
+            &shared,
+            other,
+            &bytes,
+            &[b"GET http://example.org/a HTTP/1.1\r\n\r\n"],
+        );
         // "Now" shows the setting's first hop in full, for its window.
         assert!(own_first_hop(&live(&shared, set.id)));
         assert!(!own_first_hop(&live(&shared, other.id)));
@@ -2575,14 +2584,20 @@ mod tests {
         assert!(
             !set_records.is_empty()
                 && set_records.iter().all(|f| left_out(f)
-                    && f.proxy.as_ref().is_some_and(|p| p.kind == Kind::Forward && p.setting)),
+                    && f.proxy
+                        .as_ref()
+                        .is_some_and(|p| p.kind == Kind::Forward && p.setting)),
             "{set_records:?}"
         );
         let other_records = of_flow(&records, other.id);
         assert!(
             !other_records.is_empty()
-                && other_records.iter().all(|f| f.destination == at([198, 51, 100, 7], 3128)
-                    && f.proxy.as_ref().is_some_and(|p| !p.left_out && p.asked.is_none())),
+                && other_records
+                    .iter()
+                    .all(|f| f.destination == at([198, 51, 100, 7], 3128)
+                        && f.proxy
+                            .as_ref()
+                            .is_some_and(|p| !p.left_out && p.asked.is_none())),
             "{other_records:?}"
         );
     }
@@ -3396,9 +3411,9 @@ mod tests {
                 // (audit-B 5).
                 assert!(
                     of_cdn.iter().all(|f| left_out(f)
-                        && f.proxy
-                            .as_ref()
-                            .is_some_and(|p| p.kind == Kind::MtProto && p.outside_maker && p.unsure)),
+                        && f.proxy.as_ref().is_some_and(|p| p.kind == Kind::MtProto
+                            && p.outside_maker
+                            && p.unsure)),
                     "{of_cdn:?}"
                 );
             }

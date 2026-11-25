@@ -159,7 +159,10 @@ mod tests {
     #[test]
     fn every_vector_of_the_shared_table_holds() {
         let mut rows = 0;
-        for line in VECTORS.lines().filter(|l| !l.starts_with('#') && !l.trim().is_empty()) {
+        for line in VECTORS
+            .lines()
+            .filter(|l| !l.starts_with('#') && !l.trim().is_empty())
+        {
             let fields: Vec<&str> = line.split('\t').collect();
             assert_eq!(fields.len(), 4, "{line}");
             let address: IpAddr = fields[0].parse().unwrap_or_else(|_| unreachable!("{line}"));
@@ -195,6 +198,9 @@ mod tests {
         );
         assert_eq!(on_link.prefixes(), &[(IpAddr::from([192, 168, 1, 0]), 24)]);
         let many = (0..200u8).map(|i| (IpAddr::from([10, 1, i, 0]), 24));
-        assert_eq!(OnLink::new(many, Transport::Wifi).prefixes().len(), MAX_PREFIXES);
+        assert_eq!(
+            OnLink::new(many, Transport::Wifi).prefixes().len(),
+            MAX_PREFIXES
+        );
     }
 }
