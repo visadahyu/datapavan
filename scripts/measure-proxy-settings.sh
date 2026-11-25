@@ -27,13 +27,17 @@
 # with the Wi-Fi network's own setting, used again once the VPN is up. Mobile data is off for the run, so that Wi-Fi is
 # the default network and the VPN's. A fifth, PASSES=5, on an emulator that `adb root` takes (a google_apis image), is
 # a network that requires its proxy: with the Wi-Fi network's proxy set and the VPN on, the emulator's iptables reject
-# every connection out but to the recorder's proxy, so that the network part's resolver answers only through it.
+# every connection out but to the recorder's proxy, so that the network part's resolver answers only through it. A
+# sixth, PASSES=6, on the same kind of emulator, is that network with the global proxy alone: no proxy of the Wi-Fi
+# network's own, the global proxy set by `settings put global http_proxy` before the VPN starts, so that the resolver
+# answers only through the global proxy, its second way where the network has none (the maintainer's decision of
+# 2026-11-25, R-PLAN.md). Pass 3's global rows show the same choice made again on a change of the global proxy.
 #
 # The resolver unit (the strategy repository's research/2026-11-proxy-record/R-PLAN.md, "After the audit", M8): with
 # the VPN on, each setting's part ends with what the network part's resolver did in it, as positive evidence, never as
-# an absence: the proxy it follows and why (the dump's `dns-proxy`), the exchanges that answered by each way since the
-# part began (`dns-latency`, cleared at its start), and the recorder's CONNECTs to an address on port 443, by
-# User-Agent. The resolver sends those by the data pack's address with no User-Agent; the recorder carries them to that
+# an absence: the proxy it follows, `network` or `global`, or why none (the dump's `dns-proxy`), the exchanges that
+# answered by each way since the part began (`dns-latency`, cleared at its start), and the recorder's CONNECTs to an
+# address on port 443, by User-Agent. The resolver sends those by the data pack's address with no User-Agent; the recorder carries them to that
 # address from this computer (its `tunnel` mode), so that no hold of the resolver's comes from the proxy's path, and
 # answers every CONNECT to a name as before.
 #
@@ -479,6 +483,21 @@ for pass in ${PASSES:-1 2 3 4}; do
             egress_back
             vpn_stop
             clear_setting wifi-proxy
+            ;;
+        6)
+            say ""
+            say "== pass 6: a network that requires its proxy, with the global proxy alone: no proxy of the Wi-Fi network's own, the global proxy set, the VPN on, every connection out rejected but to the proxy"
+            adb root >/dev/null 2>&1 || true
+            adb wait-for-device
+            [ "$(adb shell id -u | tr -d '\r')" = 0 ] || { echo "pass 6 needs an emulator that adb root takes" >&2; exit 2; }
+            say "  set before the VPN: $(set_setting global-setting)"
+            vpn_start
+            egress_only_proxy
+            say "  egress: only to $HOST:$PROXY_PORT, the loopback and the VPN's interface"
+            measure global-setting preset
+            egress_back
+            vpn_stop
+            clear_setting global-setting
             ;;
         4)
             # Android tells a process its proxy when it starts and on a change of the proxy setting, by the UID's
