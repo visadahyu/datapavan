@@ -5310,7 +5310,7 @@ mod tests {
         let mut setting = lock(&shared.proxies).setting().clone();
         setting.logged = vec![UID + 1];
         shared.apply_proxies(setting);
-        assert!(!pending_of(off.id).is_empty());
+        assert!(!pending_of(off.id).is_empty(), "still pending after");
         assert!(
             pending_of(off.id)
                 .iter()
