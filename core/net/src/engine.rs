@@ -1058,7 +1058,8 @@ fn spawn_task(
 /// future is first polled, as `spawn_blocking`'s is when it is called, which makes no difference where the caller
 /// awaits it at once, as every caller does. The job fills a slot of its own with its answer, which the caller reads
 /// once the job has ended; a caller that stops waiting leaves the job to run on, as before, and its answer goes with
-/// the slot.
+/// the slot. Each call costs two allocations more than `spawn_blocking`'s, the job's box and the slot, one indirect
+/// call and two uncontended locks, beside the call to Android over Binder it carries.
 async fn on_pool<R: Send + 'static>(job: impl FnOnce() -> R + Send + 'static) -> Option<R> {
     let slot = Arc::new(Mutex::new(None));
     let filled = Arc::clone(&slot);
