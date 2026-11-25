@@ -66,27 +66,40 @@ class NetworkProxyTest {
         assertFalse(NetworkProxy.excluded("sub.dns.example", list))
         assertFalse(NetworkProxy.excluded("cloudflare-dns.com", list))
         assertFalse(NetworkProxy.excluded("", list))
+        // Android's wildcards anywhere in an entry.
+        assertTrue(NetworkProxy.excluded("10.1.2.3", listOf("10.*")))
+        assertFalse(NetworkProxy.excluded("110.1.2.3", listOf("10.*")))
+        assertTrue(NetworkProxy.excluded("host-7.corp.example", listOf("host-*.corp.example")))
         assertEquals("2001:db8::1", NetworkProxy.bare("[2001:db8::1]"))
     }
 
     @Test
-    fun aRefusalMovesToTheNextAddressThenDirectlyForAWhile() {
+    fun aWayComesFirstOnlyAfterItAnsweredWhereTheOtherGaveNone() {
         val one = InetSocketAddress(address("10.0.0.1"), 3128)
         val two = InetSocketAddress(address("10.0.0.2"), 3128)
         val route = ResolverProxy(3, NetworkProxy.Setting("proxy.example", 3128, false, emptyList()), listOf(one, two))
         val start = 1_000_000_000L
-        assertEquals(one, route.address(start))
-        route.refuse(one, all = false, now = start)
-        assertEquals(two, route.address(start))
-        route.refuse(two, all = false, now = start)
-        assertNull(route.address(start))
-        assertTrue(route.refused(start + 1))
-        // After the hold, the proxy is asked again from its first address.
-        val later = start + ResolverProxy.REFUSED_MS * 1_000_000 + 1
-        assertEquals(one, route.address(later))
-        // A TLS failure inside the tunnel refuses the proxy whole.
-        route.refuse(one, all = true, now = later)
-        assertNull(route.address(later))
+        // Directly first, by default.
+        assertEquals(listOf(null, one), route.ways(start))
+        // The proxy answered where directly gave nothing: it comes first on this network, for a while.
+        route.answeredBy(one, start)
+        assertEquals(listOf(one, null), route.ways(start))
+        assertTrue(route.proxyFirst(start + 1))
+        val later = start + ResolverProxy.PREFERRED_MS * 1_000_000 + 1
+        assertEquals(listOf(null, one), route.ways(later))
+        // Directly answered where the proxy gave nothing: the default order again at once.
+        route.answeredBy(one, later)
+        route.answeredBy(null, later)
+        assertEquals(listOf(null, one), route.ways(later))
+        // A way that answered first teaches nothing new.
+        route.answeredBy(null, later)
+        assertEquals(listOf(null, one), route.ways(later))
+        // A proxy address that could not be reached gives way to the next one.
+        route.unreachable(one)
+        assertEquals(listOf(null, two), route.ways(later))
+        // The same proxy, its addresses in another order.
+        assertTrue(route.same(ResolverProxy(3, route.setting, listOf(two, one))))
+        assertFalse(route.same(ResolverProxy(4, route.setting, listOf(one, two))))
     }
 
     @Test

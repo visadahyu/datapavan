@@ -4,20 +4,17 @@ import java.net.Inet6Address
 import java.net.InetAddress
 import java.net.InetSocketAddress
 import java.util.concurrent.atomic.AtomicInteger
-import java.util.concurrent.atomic.AtomicLong
 
 /**
- * The proxy the network part's resolver follows on purpose (ADR 0042, "Android's proxy"): the network beneath's own
+ * The proxy the network part's resolver takes on purpose (ADR 0042, "Android's proxy"): the network beneath's own
  * direct proxy, never the process's, which Android gives a process at its start and so depends on whether the network
  * part started before its own VPN (measurements 7.1, point 3).
  *
- * Only the network beneath's own proxy, never the global one: the network's proxy sees what the network sees anyway,
- * the servers' addresses, while a global proxy is a third party (a device owner's cloud proxy, or one set over adb)
- * that would learn when and how often the resolver is used. A PAC gives none, and so do a proxy on the loopback, on one
- * of the phone's own addresses or on a link-local one: such a proxy is a tool's or a filter's local port, through which
- * the resolver would loop through the tunnel or reach the tool by another door than the engine's choice. A server the
- * proxy's exclusion list names goes directly, as Android's own selector sends it. The rule is pure, over plain values,
- * so that the JVM tests hold it; [of] reads Android's `ProxyInfo` into it.
+ * A PAC gives none, and so do a proxy on the loopback, on one of the phone's own addresses or on a link-local one: such
+ * a proxy is a tool's or a filter's local port, through which the resolver would loop through the tunnel or reach the
+ * tool by another door than the engine's choice. A server the proxy's exclusion list names goes directly, as Android's
+ * own selector sends it. The rule is pure, over plain values, so that the JVM tests hold it; [of] reads Android's
+ * `ProxyInfo` into it.
  */
 object NetworkProxy {
     /** A network's proxy as Android's settings give it: [host] and [port], whether a PAC file is set, its exclusions. */
@@ -34,7 +31,7 @@ object NetworkProxy {
         UNRESOLVED("unresolved"),
     }
 
-    /** At most this many of a proxy name's addresses are tried, one an exchange, before it goes directly. */
+    /** At most this many of a proxy name's addresses are kept; a way through the proxy takes one, the next after one that could not be reached. */
     const val MAX_ADDRESSES = 2
 
     /**
@@ -67,9 +64,10 @@ object NetworkProxy {
     }
 
     /**
-     * Whether [server], a host name or an address, is in [exclusions], by Android's rules for a proxy's exclusion list:
-     * case-insensitive; `*.example.com` and `.example.com` take the subdomains of `example.com`; any other entry takes
-     * that host itself.
+     * Whether [server], a host name or an address, is in [exclusions], by the rules Android gives a proxy's exclusion
+     * list (it becomes the process's `http.nonProxyHosts`): case-insensitive; `*` matches any run of characters, so
+     * `*.example.com` takes the subdomains of `example.com` and `10.*` the addresses that start so; a leading `.` takes
+     * the subdomains too; any other entry takes that host itself.
      */
     fun excluded(server: String, exclusions: List<String>): Boolean {
         val host = server.trim().trimEnd('.').removePrefix("[").removeSuffix("]").lowercase()
@@ -78,12 +76,14 @@ object NetworkProxy {
             val entry = raw.trim().trimEnd('.').lowercase()
             when {
                 entry.isEmpty() -> false
-                entry.startsWith("*.") -> host.endsWith(entry.substring(1))
+                '*' in entry -> glob(entry).matches(host)
                 entry.startsWith(".") -> host.endsWith(entry)
                 else -> host == entry
             }
         }
     }
+
+    private fun glob(entry: String): Regex = Regex(entry.split('*').joinToString(".*") { Regex.escape(it) })
 
     /** A host as Android's setting writes it, with an IPv6 literal's brackets taken off. */
     fun bare(host: String): String = host.trim().removePrefix("[").removeSuffix("]")
@@ -103,44 +103,62 @@ object NetworkProxy {
 }
 
 /**
- * The network beneath's proxy the resolver follows, for the network of [generation] only: [setting] as read, and
- * [addresses] usable for it. It remembers a refusal ([refuse]): an address that failed is not tried again, and once no
- * address is left, or the proxy refused at the TLS step, the resolver goes directly on this network until
- * [REFUSED_MS] has passed or the proxy changes, which makes a new one.
+ * The network beneath's proxy the resolver may take, for the network of [generation] only: [setting] as read, and
+ * [addresses] usable for it. An exchange tries two ways within one deadline ([ways]): the first, then the other when
+ * the first gave no HTTP answer at all. Which comes first is learned only from an answer ([answeredBy]): after the
+ * other way answered where the first gave none, that other way comes first on this network for [PREFERRED_MS], then
+ * the default order again. A failure alone teaches nothing, since the server, not the way, may have failed.
  */
 class ResolverProxy(val generation: Int, val setting: NetworkProxy.Setting, val addresses: List<InetSocketAddress>) {
     private val next = AtomicInteger(0)
-    private val refusedAt = AtomicLong(NEVER)
 
-    /** The address to try now, or null to go directly. */
-    fun address(now: Long = System.nanoTime()): InetSocketAddress? {
-        val at = refusedAt.get()
-        if (at != NEVER && now - at < REFUSED_MS * 1_000_000) return null
-        if (at != NEVER) {
-            refusedAt.compareAndSet(at, NEVER)
-            next.set(0)
-        }
-        return addresses.getOrNull(next.get())
+    @Volatile
+    private var turnedUntil = NEVER
+
+    /** The two ways of an exchange now, the first first: directly (null) and through the proxy's address in turn. */
+    fun ways(now: Long = System.nanoTime()): List<InetSocketAddress?> {
+        val proxy = addresses[Math.floorMod(next.get(), addresses.size)]
+        val turned = turnedUntil.let { it != NEVER && now - it < 0 }
+        return if (PROXY_FIRST != turned) listOf(proxy, null) else listOf(null, proxy)
     }
 
-    /** [address] failed: the next one is tried, or, with none left or [all], the resolver goes directly for a while. */
-    fun refuse(address: InetSocketAddress?, all: Boolean, now: Long = System.nanoTime()) {
-        if (!all) {
-            val i = addresses.indexOf(address)
-            if (i >= 0) next.compareAndSet(i, i + 1)
-            if (next.get() < addresses.size) return
-        }
-        refusedAt.set(now)
+    /** Whether the proxy comes first now, for the debug dump. */
+    fun proxyFirst(now: Long = System.nanoTime()): Boolean = ways(now).first() != null
+
+    /**
+     * The second way [via] answered where the first gave no answer: it comes first on this network for a while. Null
+     * for directly.
+     */
+    fun answeredBy(via: InetSocketAddress?, now: Long = System.nanoTime()) {
+        if (via == ways(now).first()) return
+        // The way that answered is the default first one again, or the other, which comes first for a while.
+        val defaultFirst = (via != null) == PROXY_FIRST
+        turnedUntil = if (defaultFirst) NEVER else now + PREFERRED_MS * 1_000_000
     }
 
-    /** Whether the resolver goes directly on this network now, after a refusal. */
-    fun refused(now: Long = System.nanoTime()): Boolean = address(now) == null
+    /** The proxy at [address] could not be reached: its next address is the one tried next. */
+    fun unreachable(address: InetSocketAddress) {
+        val i = addresses.indexOf(address)
+        if (i >= 0) next.compareAndSet(i, i + 1)
+    }
+
+    /** Whether [other] is the same proxy, its addresses in whatever order. */
+    fun same(other: ResolverProxy): Boolean =
+        generation == other.generation && setting == other.setting && addresses.toSet() == other.addresses.toSet()
 
     override fun toString(): String = addresses.joinToString(",") { "${it.address.hostAddress}:${it.port}" }
 
     companion object {
-        /** How long a refusing proxy is not asked again, on the same network and setting. */
-        const val REFUSED_MS = 600_000L
+        /**
+         * Whether the proxy is the first way of an exchange by default. Directly first (the resolver unit's review,
+         * 2026-11-25): no proxy's operator learns when or where the resolver asks while the network lets it go
+         * directly; a network that requires its proxy costs the first exchanges after each change one failed direct try,
+         * and then the proxy comes first there.
+         */
+        const val PROXY_FIRST = false
+
+        /** How long a way learned from an answer comes first, on the same network and setting. */
+        const val PREFERRED_MS = 600_000L
 
         private const val NEVER = Long.MIN_VALUE
     }

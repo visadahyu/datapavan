@@ -178,6 +178,15 @@ class NetworkVpnService : VpnService() {
         Thread(task, "network-dns-proxy").apply { isDaemon = true }
     }
 
+    /** Runs [task] on [resolverProxyLookups]; nothing once the service is destroyed and the executor shut down. */
+    private fun lookUp(task: () -> Unit) {
+        try {
+            resolverProxyLookups.execute(task)
+        } catch (e: java.util.concurrent.RejectedExecutionException) {
+            // The service is gone: nothing to look up for.
+        }
+    }
+
     /** The data pack's public suffixes, read once, for the network's search domains. */
     private val suffixes by lazy { org.visadahyu.datapavan.network.dns.DnsSettings.suffixes(this) }
 
@@ -490,7 +499,7 @@ class NetworkVpnService : VpnService() {
         val named = direct.filter { (_, info) -> org.visadahyu.datapavan.network.dns.Exchanger.numeric(info.host.removePrefix("[").removeSuffix("]")) == null }
         if (!strict || named.isEmpty()) return
         val on = current
-        resolverProxyLookups.execute {
+        lookUp {
             val resolved = named.flatMap { (network, info) ->
                 try {
                     // Each network's proxy through that network; the global one through the network beneath.
@@ -501,7 +510,7 @@ class NetworkVpnService : VpnService() {
                     emptyList()
                 }
             }
-            if (resolved.isEmpty()) return@execute
+            if (resolved.isEmpty()) return@lookUp
             main.post { if (active && ticket == settingLookups) hand(android + resolved) }
         }
     }
@@ -559,10 +568,10 @@ class NetworkVpnService : VpnService() {
             org.visadahyu.datapavan.network.dns.NetworkProxy.of(properties?.httpProxy),
         )
         if (network == null || properties == null || setting == null) return settleResolverProxy(asked, generation, null, emptyList(), why)
-        val own = (properties.linkAddresses.map { it.address } + addresses.all.mapNotNull { org.visadahyu.datapavan.network.dns.Exchanger.numeric(it) }).toSet()
+        val own = properties.linkAddresses.map { it.address }.toSet()
         val literal = org.visadahyu.datapavan.network.dns.Exchanger.numeric(org.visadahyu.datapavan.network.dns.NetworkProxy.bare(setting.host))
         if (literal != null) return settleResolverProxy(asked, generation, setting, listOf(literal), why, own)
-        resolverProxyLookups.execute {
+        lookUp {
             val found = try {
                 network.getAllByName(setting.host).toList()
             } catch (e: java.net.UnknownHostException) {
@@ -585,10 +594,14 @@ class NetworkVpnService : VpnService() {
     ) {
         val changed = synchronized(resolverProxyLock) {
             if (asked != resolverProxyAsked || generation != networkGeneration) return
+            // The tunnel's own addresses as they are now, beside the network's link addresses read with the proxy.
+            val tunnel = addresses.all.mapNotNull { org.visadahyu.datapavan.network.dns.Exchanger.numeric(it) }.toSet()
             val (usable, because) = if (setting == null) {
                 emptyList<java.net.InetAddress>() to why
             } else {
-                org.visadahyu.datapavan.network.dns.NetworkProxy.usable(found.filterNot(org.visadahyu.datapavan.network.dns.NetworkProxy::zoned)) { it in own }
+                org.visadahyu.datapavan.network.dns.NetworkProxy.usable(found.filterNot(org.visadahyu.datapavan.network.dns.NetworkProxy::zoned)) {
+                    it in own || it in tunnel
+                }
             }
             val next = if (setting != null && usable.isNotEmpty()) {
                 org.visadahyu.datapavan.network.dns.ResolverProxy(generation, setting, usable.map { java.net.InetSocketAddress(it, setting.port) })
@@ -597,8 +610,8 @@ class NetworkVpnService : VpnService() {
             }
             resolverProxyWhy = if (next == null && setting != null && usable.isEmpty()) because else why
             val held = resolverProxy
-            val same = held != null && next != null && held.generation == next.generation && held.setting == next.setting &&
-                held.addresses == next.addresses
+            // The same proxy, its addresses in whatever order, keeps what it learned of which way comes first.
+            val same = held != null && next != null && held.same(next)
             if (same || (held == null && next == null)) {
                 false
             } else {
@@ -1280,6 +1293,7 @@ class NetworkVpnService : VpnService() {
         starts++
         close()
         measuring.shutdownNow()
+        resolverProxyLookups.shutdownNow()
         blocking.shutdown()
         super.onDestroy()
     }
@@ -1749,7 +1763,12 @@ class NetworkVpnService : VpnService() {
         if ("network-generation" in args) writer.println("network-generation $networkGeneration")
         if ("dns-proxy" in args) {
             val route = resolverProxy
-            writer.println("dns-proxy ${route?.generation ?: networkGeneration} ${route?.toString() ?: "none"} ${resolverProxyWhy.word}")
+            val first = when {
+                route == null -> "-"
+                route.proxyFirst() -> "proxy-first"
+                else -> "direct-first"
+            }
+            writer.println("dns-proxy ${route?.generation ?: networkGeneration} ${route?.toString() ?: "none"} ${resolverProxyWhy.word} $first")
         }
         var changed = "dns-apply" in args
         after("dns-strict", 1)?.let {

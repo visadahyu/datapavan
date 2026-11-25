@@ -161,7 +161,7 @@ class Exchanger(
         work.execute {
             try {
                 val generation = host.generation
-                client(null, routeFor("", generation)?.address(), generation, proxyEpoch)
+                client(null, routeFor("", generation)?.ways()?.first(), generation, proxyEpoch)
             } catch (e: RuntimeException) {
                 // The first exchange builds it again and says what failed.
             }
@@ -236,11 +236,13 @@ class Exchanger(
     }
 
     /**
-     * One exchange over HTTP. Through the network beneath's proxy where it has one ([routeFor]); a refusal by the proxy,
-     * or a TLS failure inside its tunnel, is the proxy's, not the server's: the same exchange is asked again by the next
-     * way, the proxy's next address or directly ([ResolverProxy.refuse]), [tries] counting the ways tried.
+     * One exchange over HTTP, within one deadline ([CALL_MS]) for all its tries. With a network beneath that names a
+     * proxy ([routeFor]), it has two ways, directly and through the proxy ([ResolverProxy.ways]): the first gets at most
+     * [FIRST_WAY_MS], and any failure with no HTTP answer, the proxy's refusal, a stall or a TLS failure alike, sends the
+     * same exchange the other way with what is left. A way learns to come first only from an answer
+     * ([ResolverProxy.answeredBy]), never from a failure, which may be the server's.
      */
-    private fun http(ticket: Long, url: String, server: String, known: List<InetAddress>, pins: List<String>, through: Through?, body: ByteArray?, type: String?, tries: Int = 0) {
+    private fun http(ticket: Long, url: String, server: String, known: List<InetAddress>, pins: List<String>, through: Through?, body: ByteArray?, type: String?) {
         val request = Request.Builder().url(url).tag(Pins::class.java, Pins(pins)).apply {
             if (body != null && type != null) {
                 header("Accept", type)
@@ -248,19 +250,43 @@ class Exchanger(
             }
         }.build()
         val generation = host.generation
-        val epoch = proxyEpoch
         val route = if (through == null) routeFor(server, generation) else null
-        val via = route?.address()
+        val ways = route?.ways() ?: listOf(null)
+        val deadline = System.nanoTime() + CALL_MS * 1_000_000
+        attempt(ticket, request, server, known, through, generation, proxyEpoch, route, ways, 0, deadline)
+    }
+
+    /** The try [i] of [ways] for the exchange [ticket], until [deadline] on the monotonic clock. */
+    private fun attempt(
+        ticket: Long,
+        request: Request,
+        server: String,
+        known: List<InetAddress>,
+        through: Through?,
+        generation: Int,
+        epoch: Int,
+        route: ResolverProxy?,
+        ways: List<InetSocketAddress?>,
+        i: Int,
+        deadline: Long,
+    ) {
+        val via = ways[i]
+        val last = i == ways.lastIndex
+        val left = (deadline - System.nanoTime()) / 1_000_000
         val client = client(through, via, server, known, generation, epoch)
-        client.newCall(request).enqueue(
+        val call = client.newCall(request)
+        call.timeout().timeout(if (last) left.coerceAtLeast(1) else left.coerceIn(1, FIRST_WAY_MS), TimeUnit.MILLISECONDS)
+        call.enqueue(
             object : Callback {
                 override fun onFailure(call: Call, e: IOException) {
                     leftBehind(client, generation, epoch)
-                    if (route != null && via != null && tries < MAX_TRIES) {
-                        val refused = refusal(e)
-                        if (refused != null || tls(e)) {
-                            route.refuse(via, all = refused == null)
-                            return http(ticket, url, server, known, pins, through, body, type, tries + 1)
+                    if (via != null && refusal(e)?.status == 0) route?.unreachable(via)
+                    if (!last && (deadline - System.nanoTime()) / 1_000_000 >= MIN_SECOND_WAY_MS) {
+                        // On OkHttp's thread: what `exchange` guards against on its own is guarded here too.
+                        try {
+                            return attempt(ticket, request, server, known, through, generation, epoch, route, ways, i + 1, deadline)
+                        } catch (e: RuntimeException) {
+                            return reply(ticket, REFUSED, null)
                         }
                     }
                     reply(ticket, outcomeOf(e), null)
@@ -268,6 +294,7 @@ class Exchanger(
 
                 override fun onResponse(call: Call, response: Response) {
                     try {
+                        if (i > 0) route?.answeredBy(via)
                         answer(response)
                     } finally {
                         leftBehind(client, generation, epoch)
@@ -501,8 +528,11 @@ class Exchanger(
         /** What a way through the network beneath's proxy may take to answer its `CONNECT`, of [CONNECT_MS]. */
         const val PROXY_MS = 1_200
 
-        /** The most ways one exchange tries: the proxy's addresses ([NetworkProxy.MAX_ADDRESSES]), then directly. */
-        const val MAX_TRIES = NetworkProxy.MAX_ADDRESSES
+        /** What the first of an exchange's two ways may take of its [CALL_MS], so that the other keeps room. */
+        const val FIRST_WAY_MS = 1_500L
+
+        /** The least time left that the second way is still tried with. */
+        const val MIN_SECOND_WAY_MS = 500L
 
         /** The network beneath's proxy's refusal behind [e], if it is one: OkHttp may give it as a cause or suppressed. */
         fun refusal(e: Throwable): ProxySocket.Refused? {
@@ -518,8 +548,6 @@ class Exchanger(
             return null
         }
 
-        /** Whether [e] is a TLS failure, which through the network beneath's proxy is the proxy's (one that inspects TLS). */
-        fun tls(e: Throwable): Boolean = generateSequence(e) { it.cause }.take(8).any { it is SSLException || it is CertificateException }
         const val IDLE_SECONDS = 60L
         const val IDLE_CONNECTIONS = 4
         const val MAX_BODY = 65_535L

@@ -78,8 +78,8 @@ class ExchangerTest {
         server.start(InetAddress.getLoopbackAddress(), 0)
     }
 
-    private fun http(exchanger: Exchanger, ticket: Long, carry: Int, server: MockWebServer, pins: String = "") = exchanger.exchange(
-        ticket, carry, "https://doh.dnslab.test:${server.port}/dns-query", "doh.dnslab.test", "127.0.0.1", pins, "",
+    private fun http(exchanger: Exchanger, ticket: Long, carry: Int, server: MockWebServer, pins: String = "", known: String = "127.0.0.1") = exchanger.exchange(
+        ticket, carry, "https://doh.dnslab.test:${server.port}/dns-query", "doh.dnslab.test", known, pins, "",
         ByteArray(0), ByteArray(0), query,
     )
 
@@ -113,7 +113,7 @@ class ExchangerTest {
      * A proxy on the loopback that records each request's head in [seen]: [status] 200 opens a tunnel to the address
      * the `CONNECT` asked for and pipes it both ways; any other is answered and closed.
      */
-    private fun connectProxy(seen: ArrayBlockingQueue<String>, status: Int): ServerSocket {
+    private fun connectProxy(seen: ArrayBlockingQueue<String>, status: Int, stall: Boolean = false, remap: (String) -> String = { it }): ServerSocket {
         val proxy = ServerSocket(0, 8, InetAddress.getLoopbackAddress()).also { servers += it }
         Thread {
             while (!proxy.isClosed) {
@@ -132,7 +132,14 @@ class ExchangerTest {
                             return@Thread
                         }
                         val authority = head.substringAfter("CONNECT ").substringBefore(' ')
-                        val target = Socket(authority.substringBeforeLast(':'), authority.substringAfterLast(':').toInt())
+                        if (stall) {
+                            // The tunnel is opened, and then nothing ever comes through it.
+                            client.getOutputStream().write("HTTP/1.1 200 Connection established\r\n\r\n".toByteArray())
+                            Thread.sleep(10_000)
+                            client.close()
+                            return@Thread
+                        }
+                        val target = Socket(remap(authority.substringBeforeLast(':')), authority.substringAfterLast(':').toInt())
                         client.getOutputStream().write("HTTP/1.1 200 Connection established\r\n\r\n".toByteArray())
                         Thread { runCatching { target.getInputStream().copyTo(client.getOutputStream()) }; runCatching { client.close() } }
                             .apply { isDaemon = true; start() }
@@ -521,42 +528,81 @@ class ExchangerTest {
     }
 
     /**
-     * The resolver unit: through the network beneath's own proxy, DoH goes by a `CONNECT` to the data pack's address,
-     * with `Host` alone (no `User-Agent` names the library), and answers through the tunnel.
+     * The resolver unit: on a network that lets it go directly, the resolver does, and the network's proxy learns
+     * nothing of it.
      */
     @Test
-    fun throughTheNetworksProxyTheConnectAsksForTheAddressWithNothingElse() {
+    fun whileTheNetworkLetsItGoDirectlyNoProxyIsAsked() {
         val server = webServer()
         val seen = ArrayBlockingQueue<String>(4)
-        val proxy = connectProxy(seen, 200)
-        val exchanger = exchanger(listOf(certificate("ca")), route(proxy))
-        val answer = ByteArray(40) { it.toByte() }
-        server.enqueue(MockResponse.Builder().code(200).body(Buffer().write(answer)).build())
+        val route = route(connectProxy(seen, 200))
+        val exchanger = exchanger(listOf(certificate("ca")), route)
+        server.enqueue(MockResponse.Builder().code(200).body(Buffer().write(byteArrayOf(1))).build())
         http(exchanger, 60, Exchanger.CARRY_DOH, server)
-        val (ticket, outcome, body) = reply()
-        assertEquals(60L, ticket)
-        assertEquals(Exchanger.OK, outcome)
-        assertArrayEquals(answer, body)
-        assertEquals("CONNECT 127.0.0.1:${server.port} HTTP/1.1\r\nHost: 127.0.0.1:${server.port}\r\n\r\n", seen.poll(5, TimeUnit.SECONDS))
+        assertEquals(Exchanger.OK, reply().second)
+        assertNull(seen.poll(500, TimeUnit.MILLISECONDS))
+        assertFalse(route.proxyFirst())
     }
 
-    /** A proxy that refuses the tunnel costs the exchange nothing: it goes directly, and so do the next ones. */
+    /**
+     * On a network that requires its proxy, the exchange that finds no way directly goes through the proxy, by a
+     * `CONNECT` to the data pack's address with `Host` alone (no `User-Agent` names the library), within the same
+     * deadline; and the proxy comes first on that network from then on.
+     */
     @Test
-    fun aProxyThatRefusesIsLeftForADirectConnection() {
+    fun aNetworkThatRequiresItsProxyIsReachedThroughIt() {
         val server = webServer()
         val seen = ArrayBlockingQueue<String>(4)
-        val proxy = connectProxy(seen, 403)
-        val route = route(proxy)
+        // Nothing listens at 127.0.0.2 directly; the proxy carries the tunnel to the server.
+        val route = route(connectProxy(seen, 200) { "127.0.0.1" })
         val exchanger = exchanger(listOf(certificate("ca")), route)
-        repeat(2) { server.enqueue(MockResponse.Builder().code(200).body(Buffer().write(byteArrayOf(1))).build()) }
-        http(exchanger, 61, Exchanger.CARRY_DOH, server)
+        val answer = ByteArray(40) { it.toByte() }
+        repeat(2) { server.enqueue(MockResponse.Builder().code(200).body(Buffer().write(answer)).build()) }
+        http(exchanger, 61, Exchanger.CARRY_DOH, server, known = "127.0.0.2")
+        val (ticket, outcome, body) = reply()
+        assertEquals(61L, ticket)
+        assertEquals(Exchanger.OK, outcome)
+        assertArrayEquals(answer, body)
+        assertEquals("CONNECT 127.0.0.2:${server.port} HTTP/1.1\r\nHost: 127.0.0.2:${server.port}\r\n\r\n", seen.poll(5, TimeUnit.SECONDS))
+        assertTrue(route.proxyFirst())
+        http(exchanger, 62, Exchanger.CARRY_DOH, server, known = "127.0.0.2")
         assertEquals(Exchanger.OK, reply().second)
-        assertTrue(route.refused())
-        http(exchanger, 62, Exchanger.CARRY_DOH, server)
-        assertEquals(Exchanger.OK, reply().second)
-        // The proxy was asked once, by the first exchange only.
-        assertTrue(seen.poll(1, TimeUnit.SECONDS) != null)
-        assertNull(seen.poll(500, TimeUnit.MILLISECONDS))
+    }
+
+    /**
+     * A proxy that comes first and refuses, or opens its tunnel and then stalls (a filter that peeks and holds), costs the
+     * exchange no more than its first way's share: it goes directly with what is left, and directly comes first again.
+     */
+    @Test
+    fun aProxyThatRefusesOrStallsGivesWayToADirectConnection() {
+        for (stall in listOf(false, true)) {
+            val server = webServer()
+            val seen = ArrayBlockingQueue<String>(4)
+            val route = route(connectProxy(seen, if (stall) 200 else 403, stall = stall))
+            route.answeredBy(route.addresses.first())
+            assertTrue(route.proxyFirst())
+            val exchanger = exchanger(listOf(certificate("ca")), route)
+            server.enqueue(MockResponse.Builder().code(200).body(Buffer().write(byteArrayOf(1))).build())
+            val started = System.nanoTime()
+            http(exchanger, 63, Exchanger.CARRY_DOH, server)
+            assertEquals("stall $stall", Exchanger.OK, reply().second)
+            assertTrue("stall $stall", (System.nanoTime() - started) / 1_000_000 < Exchanger.CALL_MS + 500)
+            assertTrue(seen.poll(1, TimeUnit.SECONDS) != null)
+            assertFalse("stall $stall", route.proxyFirst())
+        }
+    }
+
+    /** A failure that is the server's, on both ways, teaches nothing: the order stays. */
+    @Test
+    fun aServersOwnFailureTeachesNoWay() {
+        val server = webServer()
+        val seen = ArrayBlockingQueue<String>(4)
+        val route = route(connectProxy(seen, 200))
+        val exchanger = exchanger(listOf(certificate("ca")), route)
+        // A pin that matches nothing of the chain: tampering, whichever way.
+        http(exchanger, 64, Exchanger.CARRY_DOH, server, pins = "sha256/AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA=")
+        assertEquals(Exchanger.TAMPERED, reply().second)
+        assertFalse(route.proxyFirst())
     }
 
     /**
