@@ -313,9 +313,11 @@ told no proxy.
    is none where there is none, and which way comes first: `direct-first`, `proxy-first`, or `direct-only` for the
    global proxy while the network lets the resolver connect directly.
    - **Measured** on Android 15 alone (`dp-api35-ci`; the strategy repository's `measurements-7.md`, "After the
-     resolver's global proxy"): the global proxy read inside the tunnel, read anew on a change with the VPN on, and
-     used on a network that lets only the proxy through. That `defaultProxy` inside the VPN gives the global proxy
-     alone was measured on Android 15 and 17 (measurements 7.1). Android 10 to 14 and 16 are not measured.
+     resolver's global proxy"): the global proxy read inside the tunnel, read anew on a change with the VPN on, used
+     on a network that lets only the proxy through (`scripts/measure-proxy-settings.sh`, pass 6), and left unasked on
+     an open network with one server refused at the connection (pass 7). That `defaultProxy` inside the VPN gives the
+     global proxy alone was measured on Android 15 and 17 (measurements 7.1). Android 10 to 14 and 16 are not
+     measured.
 7. **Limits:** DoT stays direct, since most proxies refuse a `CONNECT` to port 853 and DoT is not HTTP; a proxy that
    wants a password is refused, and the exchange goes directly.
 
