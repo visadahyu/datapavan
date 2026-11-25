@@ -1478,10 +1478,7 @@ impl Engine {
     /// Sets the messengers' apps, by UID, and the proxies Android's setting names (W8, part 2a; ADR 0052): each
     /// app's new flows are read by them from now on, and the open ones keep how they were named.
     pub fn proxies(&self, setting: ProxySetting) {
-        // An app left the user's choice (R6): what it kept goes at once, as a switch turned off strips.
-        if self.shared.set_proxies(setting) {
-            self.shared.leave_out_first_hops();
-        }
+        self.shared.apply_proxies(setting);
     }
 
     /// Sets tracker blocking (W8, part 3a; ADR 0053), whole: every lookup and connection is decided by it from now

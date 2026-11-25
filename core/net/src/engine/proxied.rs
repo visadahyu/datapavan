@@ -591,6 +591,14 @@ impl Shared {
     /// The set of chosen apps is built before `proxies` is locked and swapped after it is let go, one lock after the
     /// other, never one inside the other (unit C, C2). Whether an app left that set, whose kept first hops and
     /// destinations must then go ([`super::Engine::proxies`]).
+    /// [`Shared::set_proxies`], as the network part hands it (`Engine::proxies`): an app that left the user's choice
+    /// loses at once what it kept (R6), as a switch turned off strips.
+    pub(super) fn apply_proxies(&self, setting: ProxySetting) {
+        if self.set_proxies(setting) {
+            self.leave_out_first_hops();
+        }
+    }
+
     pub(super) fn set_proxies(&self, setting: ProxySetting) -> bool {
         let logged = Arc::new(LoggedApps::of(&setting));
         {
@@ -5043,5 +5051,286 @@ mod tests {
         }
         assert_eq!(state.associations.len(), ASSOCIATIONS);
         assert_eq!(of(&state, 1), 1, "the app with one keeps it");
+    }
+
+    /// The apps whose own proxies the user chose to log, the rest of the setting as it is (unit C's R3).
+    fn choose(shared: &Shared, logged: &[u32]) {
+        let mut setting = lock(&shared.proxies).setting().clone();
+        setting.logged = logged.to_vec();
+        let _ = shared.set_proxies(setting);
+    }
+
+    /// A SOCKS5 proxy at 203.0.113.5:1080 asked for `example.com` with an inner hello, by `uid`, confirmed: its flow.
+    fn socks5_of(shared: &Shared, uid: u32, at_address: [u8; 4]) -> Opened {
+        let (socks, bytes) = open(shared, uid, at(at_address, 1080));
+        let reads = socks5_reads();
+        let reads: Vec<&[u8]> = reads.iter().map(Vec::as_slice).collect();
+        relay_replied(shared, socks, &bytes, &reads, SOCKS5_REPLY);
+        socks
+    }
+
+    /// Unit C, test 1: with the switch off, a chosen app's own proxy keeps its first hop and destination, live and in
+    /// the log, as with the switch on; another app's, at the same time, keeps its first hop alone.
+    #[test]
+    fn a_chosen_apps_proxy_keeps_its_first_hop_and_destination_with_the_switch_off() {
+        let (shared, clock) = engine_at(false);
+        learn(&shared, "203.0.113.5", "proxy.example.net");
+        choose(&shared, &[UID]);
+        let chosen = socks5_of(&shared, UID, [203, 0, 113, 5]);
+        let other = socks5_of(&shared, UID + 1, [203, 0, 113, 5]);
+        let named = live(&shared, chosen.id);
+        assert_eq!(named.name.as_deref(), Some("example.com"), "{named:?}");
+        assert!(
+            named
+                .proxy
+                .as_ref()
+                .is_some_and(|p| p.asked.is_some() && !p.left_out)
+        );
+        assert!(!lock(&shared.live).get(&chosen.id).is_some_and(|l| l.unkept));
+        let stripped = live(&shared, other.id);
+        assert!(stripped.proxy.as_ref().is_some_and(|p| p.asked.is_none()));
+        assert!(lock(&shared.live).get(&other.id).is_some_and(|l| l.unkept));
+        for id in [chosen.id, other.id] {
+            shared.finish(id);
+        }
+        shared.flush();
+        clock.pass(11 * 60_000);
+        another_record(&shared);
+        let records = taken(&shared);
+        let kept = of_flow(&records, chosen.id);
+        assert!(
+            !kept.is_empty()
+                && kept
+                    .iter()
+                    .all(|f| f.destination == at([203, 0, 113, 5], 1080)
+                        && f.proxy
+                            .as_ref()
+                            .is_some_and(|p| p.asked.is_some() && !p.left_out)),
+            "{kept:?}"
+        );
+        let left = of_flow(&records, other.id);
+        assert!(!left.is_empty() && left.iter().all(left_out), "{left:?}");
+    }
+
+    /// Unit C, test 3: the choice never covers Android's setting, nor a proxy on the user's own network: for a chosen
+    /// app, both keep only their first hop with the switch off.
+    #[test]
+    fn the_choice_never_covers_androids_setting_or_a_local_proxy() {
+        use crate::local::{OnLink, Transport};
+        let shared = engine(false);
+        let _ = shared.set_proxies(ProxySetting {
+            android: vec![("203.0.113.5".into(), 1080)],
+            on_link: OnLink::new([(IpAddr::from([192, 168, 1, 0]), 24)], Transport::Wifi),
+            logged: vec![UID],
+            ..ProxySetting::default()
+        });
+        let setting = socks5_of(&shared, UID, [203, 0, 113, 5]);
+        let local = socks5_of(&shared, UID, [192, 168, 1, 7]);
+        for id in [setting.id, local.id] {
+            let flow = live(&shared, id);
+            assert!(
+                flow.proxy.as_ref().is_some_and(|p| p.asked.is_none()),
+                "{flow:?}"
+            );
+            assert!(lock(&shared.live).get(&id).is_some_and(|l| l.unkept));
+        }
+    }
+
+    /// Unit C, test 4: a UID that is a tool, or Android's PAC handler, is never chosen, whatever the network part hands.
+    #[test]
+    fn the_choice_never_covers_a_tool_or_the_pac_handler() {
+        for setting in [
+            ProxySetting {
+                logged: vec![UID],
+                tools: vec![UID],
+                ..ProxySetting::default()
+            },
+            ProxySetting {
+                logged: vec![UID],
+                pac_handler: Some(UID),
+                ..ProxySetting::default()
+            },
+        ] {
+            let shared = engine(false);
+            let _ = shared.set_proxies(setting);
+            let socks = socks5_of(&shared, UID, [203, 0, 113, 5]);
+            assert!(
+                live(&shared, socks.id)
+                    .proxy
+                    .is_some_and(|p| p.asked.is_none())
+            );
+        }
+    }
+
+    /// Unit C, test 5: an SDK Runtime's UID, ten thousand above its app's in each user's range, follows its app's
+    /// choice, and a tool's sandbox never counts.
+    #[test]
+    fn an_apps_sdk_runtime_follows_its_choice() {
+        assert_eq!(app_of(20_123), 10_123);
+        assert_eq!(app_of(1_020_123), 1_010_123);
+        assert_eq!(app_of(10_123), 10_123);
+        assert_eq!(app_of(30_000), 30_000);
+        let shared = engine(false);
+        choose(&shared, &[UID]);
+        let sandbox = socks5_of(&shared, UID + 10_000, [203, 0, 113, 5]);
+        assert!(
+            live(&shared, sandbox.id)
+                .proxy
+                .is_some_and(|p| p.asked.is_some())
+        );
+        let shared = engine(false);
+        let _ = shared.set_proxies(ProxySetting {
+            logged: vec![UID],
+            tools: vec![UID],
+            ..ProxySetting::default()
+        });
+        let sandbox = socks5_of(&shared, UID + 10_000, [203, 0, 113, 5]);
+        assert!(
+            live(&shared, sandbox.id)
+                .proxy
+                .is_some_and(|p| p.asked.is_none())
+        );
+    }
+
+    /// Unit C, test 6 (audit 16): turning the choice off for an app strips what it kept at once, as the switch turned
+    /// off does: its open flow goes back to its first hop and is unkept, and the record gathered for the next batch is
+    /// stripped. Another chosen app's flow is untouched.
+    #[test]
+    fn turning_the_choice_off_strips_its_app_at_once() {
+        let shared = &engine(false);
+        learn(shared, "203.0.113.5", "proxy.example.net");
+        choose(shared, &[UID, UID + 1]);
+        let off = socks5_of(shared, UID, [203, 0, 113, 5]);
+        let stays = socks5_of(shared, UID + 1, [203, 0, 113, 5]);
+        assert_eq!(live(shared, off.id).name.as_deref(), Some("example.com"));
+        let mut setting = lock(&shared.proxies).setting().clone();
+        setting.logged = vec![UID + 1];
+        shared.apply_proxies(setting);
+        let back = live(shared, off.id);
+        assert_eq!(back.name.as_deref(), Some("proxy.example.net"), "{back:?}");
+        assert!(back.proxy.as_ref().is_some_and(|p| p.asked.is_none()));
+        assert!(lock(&shared.live).get(&off.id).is_some_and(|l| l.unkept));
+        assert_eq!(live(shared, stays.id).name.as_deref(), Some("example.com"));
+        assert!(lock(&shared.pending_log).iter().all(|r| match r {
+            Record::Segment { flow, .. } if flow.id == off.id =>
+                flow.proxy.as_ref().is_some_and(|p| p.asked.is_none()),
+            _ => true,
+        }));
+    }
+
+    /// Unit C, test 7: turning the choice on names no open flow anew: an unkept flow's later hello does not name it.
+    #[test]
+    fn turning_the_choice_on_names_no_open_flow_anew() {
+        let shared = engine(false);
+        learn(&shared, "203.0.113.5", "proxy.example.net");
+        let socks = socks5_of(&shared, UID, [203, 0, 113, 5]);
+        choose(&shared, &[UID]);
+        let ServerName::Found(hello) =
+            tls::server_name(&crate::tls::tests::hello("late.example", 1000))
+        else {
+            unreachable!("a hello")
+        };
+        shared.hello(socks, &hello, NamedBy::Tls);
+        let flow = live(&shared, socks.id);
+        assert_eq!(flow.name.as_deref(), Some("proxy.example.net"), "{flow:?}");
+        assert!(flow.proxy.is_some_and(|p| p.asked.is_none()));
+    }
+
+    /// Unit C, test 9: a UID the choice no longer names is stripped from then on, as when its app was removed and
+    /// its UID came to another app.
+    #[test]
+    fn a_uid_the_choice_no_longer_names_is_stripped_from_then_on() {
+        let shared = engine(false);
+        choose(&shared, &[UID]);
+        choose(&shared, &[]);
+        let socks = socks5_of(&shared, UID, [203, 0, 113, 5]);
+        assert!(
+            live(&shared, socks.id)
+                .proxy
+                .is_some_and(|p| p.asked.is_none())
+        );
+    }
+
+    /// Unit C, test 11 (the lock-order mutant L1): the choice is read without the proxies' lock, nor `held_back`'s,
+    /// so that a reading of the log's never waits on `infer`, which takes `held_back` under `proxies`.
+    #[test]
+    fn the_choice_is_read_without_the_proxies_lock() {
+        let shared = engine(false);
+        choose(&shared, &[UID]);
+        for held in ["proxies", "held_back"] {
+            let (tx, rx) = std::sync::mpsc::channel();
+            std::thread::scope(|scope| {
+                let _proxies = (held == "proxies").then(|| lock(&shared.proxies));
+                let _held_back = (held == "held_back").then(|| lock(&shared.held_back));
+                let reader = &shared;
+                let tx = tx.clone();
+                scope.spawn(move || {
+                    let keeps = reader.keeps_first_hops();
+                    let _ = tx.send(keeps.apps.apps.len());
+                });
+                assert_eq!(
+                    rx.recv_timeout(Duration::from_secs(1)).ok(),
+                    Some(1),
+                    "the choice waited on {held}"
+                );
+            });
+        }
+    }
+
+    /// Unit C, test 12: the set keeps application UIDs only, at most 512.
+    #[test]
+    fn the_choice_is_held_to_its_bounds() {
+        let mut logged: Vec<u32> = (10_000..10_600).collect();
+        logged.extend([0, 1000, 9_999, 30_000, 99_999]);
+        let set = LoggedApps::of(&ProxySetting {
+            logged,
+            ..ProxySetting::default()
+        });
+        assert_eq!(set.apps.len(), MAX_LOGGED);
+        assert!(set.apps.iter().all(|&uid| application(uid)));
+    }
+
+    /// Unit C, test 13: the rule matches the vectors the network part's Kotlin side reads too.
+    #[test]
+    fn the_cover_rule_matches_the_vectors() {
+        let uids = |field: &str| -> Vec<u32> {
+            if field == "-" {
+                Vec::new()
+            } else {
+                field.split(',').filter_map(|u| u.parse().ok()).collect()
+            }
+        };
+        let mut rows = 0;
+        for line in include_str!("../../testdata/logged-apps.tsv").lines() {
+            if line.starts_with('#') || line.trim().is_empty() {
+                continue;
+            }
+            let fields: Vec<&str> = line.split('\t').collect();
+            assert_eq!(fields.len(), 7, "{line}");
+            let set = LoggedApps::of(&ProxySetting {
+                logged: uids(fields[1]),
+                tools: uids(fields[2]),
+                pac_handler: uids(fields[3]).first().copied(),
+                ..ProxySetting::default()
+            });
+            let proxy = Proxied {
+                kind: Kind::Socks5,
+                setting: fields[4] == "1",
+                password: false,
+                outside_maker: false,
+                asked: None,
+                proxy_name: None,
+                organisation: None,
+                cover: None,
+                left_out: false,
+                trackers: Vec::new(),
+                local: fields[5] == "1",
+                unsure: false,
+            };
+            let uid = fields[0].parse::<u32>().ok();
+            assert_eq!(set.covers(uid, &proxy), fields[6] == "1", "{line}");
+            rows += 1;
+        }
+        assert!(rows >= 13);
     }
 }

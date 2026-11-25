@@ -1,0 +1,18 @@
+# The rule of the user's choice for one app (the proxy record's unit C, R3), read by the engine's LoggedApps and by
+# the network part's Kotlin side. Columns: the flow's UID; the UIDs chosen, the tools and the PAC handler, each a
+# comma-separated list or "-"; whether the flow's proxy is Android's setting, and whether it is local (1 or 0); and
+# whether the choice covers the flow (1 or 0).
+# uid	logged	tools	pac	setting	local	covers
+10123	10123	-	-	0	0	1
+10124	10123	-	-	0	0	0
+20123	10123	-	-	0	0	1
+1020123	1010123	-	-	0	0	1
+1020123	10123	-	-	0	0	0
+9999	9999	-	-	0	0	0
+30000	30000	-	-	0	0	0
+10123	10123	10123	-	0	0	0
+20123	10123	10123	-	0	0	0
+10123	10123	-	10123	0	0	0
+10123	10123	-	-	1	0	0
+10123	10123	-	-	0	1	0
+10123	-	-	-	0	0	0
