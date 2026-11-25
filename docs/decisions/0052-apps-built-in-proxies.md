@@ -64,10 +64,29 @@ chaining is, and must follow the same switch.
 3. **Skipped:** the user's circumvention tool's own flows, and the apps Advanced chains through it or sends through a
    WireGuard tunnel: what they carry is the tool's (ADR 0046, decision 3), and a tool whose upstream is plain SOCKS5
    or HTTP would otherwise show every chained destination under its row.
-4. **Android's proxy setting** (the global one, and each network's), which every app that follows it shares, is told
-   apart from an app's own: the network part hands the engine its hosts and ports at each start and change, and a
-   declared proxy at one of them says "This is the proxy in Android's settings, which other apps can use too." A proxy
-   given by a PAC file is found by Android on the phone's own loopback, which never enters the tunnel: not seen.
+4. **Android's proxy setting** is told apart from an app's own: the network part hands the engine the hosts and ports of
+   the global proxy and of each network's own at each start and change, and a declared proxy at one of them says "This
+   is the proxy in Android's settings, which other apps can use too." Corrected by measurements 7.1 and 7.2 (the
+   proxy record's unit B, 2026-11-25; the strategy repository's `research/2026-11-proxy-record/measurements-7.md`):
+   - **The global proxy** reaches every app inside the VPN that follows Android's setting.
+   - **A network's own proxy** reaches into the tunnel only through apps that were running before the VPN started,
+     Google Play services among them, and through the apps the user left out, outside it. Apps that start inside the
+     VPN connect directly. Its address stays in the list, so that those apps' flows are named so.
+   - **A PAC file** is not a proxy's address: Android reports it as its handler on `localhost`, which is never handed
+     to the engine. Most apps connect to the proxies the file names themselves, under their own UIDs. Android's PAC
+     handler, `com.android.proxyhandler`, connects for the others, left-out apps included, under its own UID inside the
+     tunnel, and its rows say so: "This is Android's PAC proxy, which connects for other apps, including apps you left
+     out."
+   - **Matched by address, or by a name Android's resolver gave the address,** never by an answer of the app's own
+     resolver, which would let an app make its own server read as the setting (the brief audit's M5). Under strict
+     Private DNS, which hides the apps' lookups, the network part looks the setting's names up itself, through
+     Android's resolver and so the same encrypted way; otherwise it never does, so no proxy name goes out in plain DNS.
+   - **A plain request to the setting** is the user's shared proxy, by its address or that name, never by what the app
+     wrote: with the switch off it is left out of the record as a confirmed proxy's and shown live by R2 (R7). It is
+     the one plain request a row calls by a proxy's name, since Android names it so (decision 1's exception).
+   - **"Now" shows Android's own setting** in one line while any is set (the brief audit's note 24): the global proxy
+     first, then this network's own, or a PAC file, each with what it does inside the VPN. A global proxy set over adb
+     or by a device owner shows in none of Android's own Wi-Fi screens.
 5. **Messengers' proxies are inferred, each with substitution,** and worded "Through a KIND at ADDRESS. Inferred from
    where and how it connects.", followed by a sentence that where it goes from there is encrypted and cannot be seen.
    The clients are their makers' own packages (`data/messengers/clients.tsv`). A proxy is named only while, in the
@@ -168,9 +187,9 @@ chaining is, and must follow the same switch.
        substitution, is shown in "Now" as the flow it is. While the switch is off, the log keeps of it what it keeps of an own proxy
        flow: a record stripped as it entered stays so, and its other records are stripped as it was, or would have
        been, named. No proxy's address and no cover reaches the history with the switch off. The record keeps the
-       kind, the time, the bytes and the trackers. The mark that the inference was taken back needs a flag of the
-       log's next version, and comes with unit B. Unit C's choice for one app keeps such records whole where the user
-       picks it.
+       kind, the time, the bytes and the trackers, and, from log version 7 (unit B), the mark that the engine could
+       not tell it was the messenger's proxy, on every record of the flow, those held back before the take-back
+       included. Unit C's choice for one app keeps such records whole where the user picks it.
    - **R2, live.** With the switch off, "Now" shows the first hop of every own proxy flow: its address and port, DNS
      name, organisation and network, and for an inferred proxy its cover line. The flow is placed under the proxy
      server's own name. The destination is never live while the switch is off: live flows never hold it (C1), and the
@@ -231,15 +250,24 @@ chaining is, and must follow the same switch.
      it. A release's dump writes the six proxy counters as `-`. The substitution's state is a few instants and name
      hashes per messenger, in memory. Nothing reaches a summary, the widget or the tile (ADR 0046, decision 3).
    - **The other units.** R3, the per-app choice "Keep where APP connects through a proxy": unit C, which accepts this
-     record. R4, the facts said whatever the switch, with R7, plain requests to Android's setting or a local address:
-     unit B. R10, the tool's own row: unit D.
-9. **The records.** The log's records are version 6 ([ADR 0053](0053-tracker-blocking.md), which added the blocked
-   outcome and the row's SDK), unchanged by decision 8; the live view's snapshot is version 5. Each has a proxy block
-   after the route (`log::push_proxy`): the kind, the flags (bit 4: the flow left out), the destination asked for, the
-   proxy's own name, its network's organisation, the cover and the trackers' ids (at most eight); six counters are
-   appended (declared, with a password, inferred, substituted, taken back, covers kept out). Version 5 of the snapshot
-   adds one bit, bit 1 of the destination's flags: the first hop is shown here only. The network part's Kotlin side
-   reads the log's versions 1 to 6.
+     record. R4, the facts said whatever the switch, with R7, plain requests to Android's setting: unit B, built
+     (decisions 4 and 9). A plain request to a local address keeps its own address, as before (the brief audit's
+     finding 15). SOCKS5's `UDP ASSOCIATE`: unit U. R10, the tool's own row: unit D.
+9. **The records.** The log's records are version 7 (unit B; version 6 was [ADR 0053](0053-tracker-blocking.md)'s,
+   which added the blocked outcome and the row's SDK); the live view's snapshot is version 6. Each has a proxy block
+   after the route (`log::push_proxy`): the kind, the flags (bit 4: the flow left out; bit 5, from version 7: the
+   proxy's address is on the user's own network; bit 6, from version 7: the engine could not tell it was a messenger's
+   proxy, only on an inferred kind's record left out), the destination asked for, the proxy's own name, its network's
+   organisation, the cover and the trackers' ids (at most eight); six counters are appended (declared, with a password,
+   inferred, substituted, taken back, covers kept out). Version 5 of the snapshot added one bit, bit 1 of the
+   destination's flags: the first hop is shown here only; version 6 carries the log's version 7 block, its bit 6 never
+   set. The network part's Kotlin side reads the log's versions 1 to 7, bits 5 and 6 only from version 7.
+   - **"On your local network"** is one rule (`core/net/src/local.rs`, with a table of vectors both sides hold),
+     decided where the proxy is named from the network beneath's on-link prefixes, which the network part hands over
+     with its transport, and kept whatever the switch says, since it names nothing: link-local; an on-link prefix,
+     global IPv6 included, never of length 0 nor wider than `/16` or `/48`, and on a cellular network only the link
+     addresses' own, since a data call may report its default route with no gateway; private addresses on Wi-Fi and
+     Ethernet only; CGNAT and `fec0::/10` only by a prefix.
 
 ## Consequences
 
@@ -248,8 +276,24 @@ chaining is, and must follow the same switch.
 - **Accepted limits**, each with its reason:
   - Proxies inside TLS or QUIC (HTTPS proxies, Signal's own inner TLS, QUIC-based proxies): their request is encrypted.
     Signal's and WhatsApp's are inferred instead; others are not seen as proxies.
-  - Apps pointed at a proxy on the phone itself (Orbot's SOCKS port, a PAC proxy): loopback never enters the tunnel, so
-    their traffic shows as the proxy app's, as chaining's tool.
+  - Apps pointed at a proxy on the phone itself (Orbot's SOCKS port): loopback never enters the tunnel, so their traffic
+    shows as the proxy app's, as chaining's tool. Android's PAC handler is the exception: its connections for other
+    apps come into the tunnel under its own UID (decision 4).
+  - **Under a PAC file,** an app's connection to the proxy the file names is shown as the app's own proxy, since the
+    network part has the file's proxies only through the app's own bytes. A check per flow through `ProxySelector` would
+    tell a global PAC's apart; it is left for the unit that measures a PAC on a VPN's link.
+  - **A browser engine inside an app** may use Android's PAC proxy, which is then shown as Android's, or may not use
+    Android's setting at all inside the VPN (WebView 124 went through the handler; WebView 145 ignored both the global
+    proxy and the global PAC inside the VPN, in measurements 7).
+  - **Android's setting by name** matches only where Android's resolver gave the name: a fronted proxy whose address
+    also serves others strips every app's plain requests to it at that port; a `CONNECT` to the setting that it refuses,
+    a 407 for example, is unconfirmed and keeps its address; a link-local host with a zone never matches.
+  - **"Local"** follows the prefixes the network part last handed over: until the first change of the link properties
+    after a start, the rule is the one for no network; a proxy on the user's own laptop behind the phone's hotspot is
+    not local; on Wi-Fi from another phone's hotspot, the carrier's private addresses beyond it count as local. A
+    history row says "local" only from log version 7 on, or by its kept address before.
+  - **The PAC handler** is known by its UID, only a system app's with an application UID of its own; a history row of
+    that UID cannot say whether a PAC was set then.
   - Only the first request on a connection is read: a plain HTTP proxy's later requests on a kept-alive connection to
     other hosts are counted under the first.
   - An inferred proxy's destination beyond it is encrypted: Advanced shows the proxy, not where it leads.
@@ -278,8 +322,8 @@ chaining is, and must follow the same switch.
   - **The take-back's window** (F2): ten minutes after a naming; a direct connection later, as when the user turns the
     proxy off, takes nothing back, as the proxy was real until then. Past 1,024 held-back records, the oldest is
     written as it is. Past 4,096 flows taken back or substituted, the oldest is forgotten, and a record of it that
-    comes later still is written as it is. Until unit B, a taken-back flow's records say, left out, what it was
-    inferred to be, with no mark that it was taken back (decision 8, R1).
+    comes later still is written as it is. A taken-back flow's records say, left out, what it was inferred to be, with
+    the mark that the engine could not tell (log version 7); a batch already handed to the logger keeps no mark.
   - **Signal's window after a third party** (F7): ten minutes; a 3-D Secure challenge longer than that, or a page
     Signal opens without a listed host before it, is named its proxy while Signal goes through one.
   - **The packet path is not zeroed** (S-m6): the tunnel's packet buffer, the fragment reassembler and a held Fast Open
@@ -304,7 +348,7 @@ chaining is, and must follow the same switch.
     shown.
   - **SOCKS5's `UDP ASSOCIATE`** (unit A's plan audit, finding 22): it is read as no proxy, so its control flow and its
     relay's UDP flows are ordinary flows, logged with their first hop while the switch is off, as before decision 8.
-    Telling them takes the parser, its fuzz target, and the relay's flows tied to their association: unit B.
+    Telling them takes the parser, its fuzz target, and the relay's flows tied to their association: unit U.
   - The false positives that need a maker's own network (a Telegram CDN data centre beside its ranges, WhatsApp's link
     previews and backups) are checked in the engine's tests and its network lab, not on the emulator, which must reach
     no outside server.

@@ -1117,7 +1117,12 @@ A40 and the maintainer's word. The proxy record's unit A, on `proxy-record`, 202
 maintainer decided on 2026-11-22): with the switch off, "Now" shows where an app's own proxy is while the connection
 is open and for ten minutes after it ends, on the time since the phone started, and the log keeps its kind, the
 trackers' marks and the facts that name nothing, while where the app asked it to go is neither shown nor logged (a
-plain request to an HTTP proxy, and SOCKS5's `UDP ASSOCIATE`, keep their server's address until unit B).
+plain request to an HTTP proxy that is not Android's setting keeps its server's address, and SOCKS5's `UDP ASSOCIATE`
+does until unit U). Unit B, on `proxy-record-b`, 2026-11-25 (R4 and R7): Android's setting matched never by an app's
+own resolver's answer, "On your local network" decided once by the network beneath's on-link prefixes and kept in the
+log's version 7, the mark of a flow the engine took back or never named for substitution, a plain request to Android's
+setting left out as a confirmed proxy's, Android's PAC handler and the user's tool, by its signing key, said on their
+rows, and Android's own setting shown in "Now".
 
 Its fix round, on `watch-w8b-fix`, 2026-11-21, after one review round of two reviewers, with the coordinator's
 decisions written into ADR 0052: a SOCKS or `CONNECT` proxy is named only once the server's reply confirms it, and a

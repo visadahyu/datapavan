@@ -208,7 +208,7 @@ footer p{margin:.2rem 0;color:var(--mute);font-size:.95rem}
 <details class="lng"><summary aria-label="Language: English">English</summary><ul><li><a href="../privacy/index.html" hreflang="en" lang="en" aria-current="true">English</a></li><li><a href="../fr/privacy/index.html" hreflang="fr" lang="fr">Français</a></li><li><a href="../de/privacy/index.html" hreflang="de" lang="de">Deutsch</a></li><li><a href="../es/privacy/index.html" hreflang="es" lang="es">Español</a></li><li><a href="../ru/privacy/index.html" hreflang="ru" lang="ru">Русский</a></li><li><a href="../zh/privacy/index.html" hreflang="zh" lang="zh">简体中文</a></li><li><a href="../ar/privacy/index.html" hreflang="ar" lang="ar">العربية</a></li><li><a href="../fa/privacy/index.html" hreflang="fa" lang="fa">فارسی</a></li></ul></details></header></div>
 <main id="main"><section><div class="w prose"><h1>Privacy policy</h1><ul>
 <li><strong>Effective:</strong> 2026-11-07</li>
-<li><strong>Updated:</strong> 2026-11-24, with Datapavan Advanced&rsquo;s lines for 0.2.0, which is not yet released</li>
+<li><strong>Updated:</strong> 2026-11-25, with Datapavan Advanced&rsquo;s lines for 0.2.0, which is not yet released</li>
 <li><strong>Responsible:</strong> the Datapavan maintainer (mehdashti), until the Visadahyu Foundation is established</li>
 </ul>
 <p><strong>Datapavan collects no data about you.</strong></p>
@@ -244,21 +244,22 @@ on a phone with a screen lock, earlier days can be read only while it is unlocke
 deleted with their keys, and one tap deletes everything. For apps you send through your circumvention tool, the
 log keeps no destination unless you turn that on. When an app uses a proxy of its own, the record keeps by
 default that the app used a proxy, which kind, when, the facts that name no address (such as whether a password
-was sent unencrypted, or whether it is the proxy in Android&rsquo;s settings), and which known trackers its
+was sent unencrypted, whether it is the proxy in Android&rsquo;s settings, whether it is on your local network, and
+whether Datapavan could not tell it was a messenger&rsquo;s proxy), and which known trackers its
 connection&rsquo;s names matched (by their εxodus ids, which name a tracker&rsquo;s company, not a destination). Only while
 &ldquo;Log where apps connect through your tool, WireGuard or a proxy&rdquo; is on does it also keep where the proxy is (its
 address and the name a DNS answer gave it), what the app asked it for and, for a messenger&rsquo;s proxy, the name its
 connection sent in place of its destination. It never keeps a proxy&rsquo;s password, which Datapavan reads past and
 does not store, and says only that one was sent unencrypted. The records of a connection taken for a messenger&rsquo;s
 proxy wait ten minutes in memory before they are written, so that one Datapavan corrects in that time is written
-correct. When tracker blocking refused a connection, its record says so, with the name of the tracker&rsquo;s software
+correct. A request an app sends to the proxy in Android&rsquo;s settings is kept the same way. When tracker blocking refused a connection, its record says so, with the name of the tracker&rsquo;s software
 package (for example <code>com.google.firebase:firebase-analytics</code>), which names a tracker, never a destination, and
 is kept whatever the switch for your tool says.</li>
 <li><strong>Each app&rsquo;s recent traffic, for the &ldquo;Now&rdquo; view,</strong> in memory only. It is gone when the firewall stops. Where an
 app&rsquo;s own proxy is (its address, name and network, and for a messenger&rsquo;s proxy the name its connection sent) is
 shown there, in memory only, while the connection is open and for ten minutes after it ends, whatever &ldquo;Log where
 apps connect through your tool, WireGuard or a proxy&rdquo; says. Where the app asked the proxy to go is shown only
-while that switch is on. To tell Telegram&rsquo;s, WhatsApp&rsquo;s and Signal&rsquo;s own connections from their proxies&rsquo;, it
+while that switch is on. &ldquo;Now&rdquo; also shows the proxy set in Android&rsquo;s own settings, while one is set. To tell Telegram&rsquo;s, WhatsApp&rsquo;s and Signal&rsquo;s own connections from their proxies&rsquo;, it
 also notes in memory, until the firewall stops (and across the tunnel&rsquo;s own restarts, which hand it on): when
 each of them last connected to its maker&rsquo;s network, which counts for ten minutes; the names Telegram and
 WhatsApp looked up through Datapavan, as hashes that cannot be read back, each for an hour; and when Signal last

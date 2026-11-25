@@ -1,7 +1,7 @@
 # Privacy policy
 
 - **Effective:** 2026-11-07
-- **Updated:** 2026-11-24, with Datapavan Advanced's lines for 0.2.0, which is not yet released
+- **Updated:** 2026-11-25, with Datapavan Advanced's lines for 0.2.0, which is not yet released
 - **Responsible:** the Datapavan maintainer (mehdashti), until the Visadahyu Foundation is established
 
 **Datapavan collects no data about you.**
@@ -39,21 +39,22 @@ your unlocked phone can see it, as they can see the rest of the app.
   deleted with their keys, and one tap deletes everything. For apps you send through your circumvention tool, the
   log keeps no destination unless you turn that on. When an app uses a proxy of its own, the record keeps by
   default that the app used a proxy, which kind, when, the facts that name no address (such as whether a password
-  was sent unencrypted, or whether it is the proxy in Android's settings), and which known trackers its
+  was sent unencrypted, whether it is the proxy in Android's settings, whether it is on your local network, and
+  whether Datapavan could not tell it was a messenger's proxy), and which known trackers its
   connection's names matched (by their εxodus ids, which name a tracker's company, not a destination). Only while
   "Log where apps connect through your tool, WireGuard or a proxy" is on does it also keep where the proxy is (its
   address and the name a DNS answer gave it), what the app asked it for and, for a messenger's proxy, the name its
   connection sent in place of its destination. It never keeps a proxy's password, which Datapavan reads past and
   does not store, and says only that one was sent unencrypted. The records of a connection taken for a messenger's
   proxy wait ten minutes in memory before they are written, so that one Datapavan corrects in that time is written
-  correct. When tracker blocking refused a connection, its record says so, with the name of the tracker's software
+  correct. A request an app sends to the proxy in Android's settings is kept the same way. When tracker blocking refused a connection, its record says so, with the name of the tracker's software
   package (for example `com.google.firebase:firebase-analytics`), which names a tracker, never a destination, and
   is kept whatever the switch for your tool says.
 - **Each app's recent traffic, for the "Now" view,** in memory only. It is gone when the firewall stops. Where an
   app's own proxy is (its address, name and network, and for a messenger's proxy the name its connection sent) is
   shown there, in memory only, while the connection is open and for ten minutes after it ends, whatever "Log where
   apps connect through your tool, WireGuard or a proxy" says. Where the app asked the proxy to go is shown only
-  while that switch is on. To tell Telegram's, WhatsApp's and Signal's own connections from their proxies', it
+  while that switch is on. "Now" also shows the proxy set in Android's own settings, while one is set. To tell Telegram's, WhatsApp's and Signal's own connections from their proxies', it
   also notes in memory, until the firewall stops (and across the tunnel's own restarts, which hand it on): when
   each of them last connected to its maker's network, which counts for ten minutes; the names Telegram and
   WhatsApp looked up through Datapavan, as hashes that cannot be read back, each for an hour; and when Signal last
