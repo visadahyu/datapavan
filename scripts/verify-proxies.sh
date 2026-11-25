@@ -154,17 +154,24 @@ for family in telegram whatsapp signal; do
 done
 grep -q "log-destinations on" <<<"$(dump log-destinations on)" || fail "the switch \"Log where apps connect ...\" was not turned on"
 grep -q "log-retention 1 set" <<<"$(dump log-retention 1)" || fail "the log's retention was not set"
+# The "local" fact (the proxy record's unit B): the engine was handed the network beneath's on-link prefix that holds
+# the lab's address, whichever network that is here (the emulator's Wi-Fi or its radio), so the lab's proxies below are
+# local (the flag n) by that prefix, not only by the rule for private addresses.
+on_link=$(dump | sed -n 's/^ *proxy-on-link //p') || fail "the network part's dump could not be read"
+echo "   the network beneath, as the engine holds it: ${on_link:-nothing}"
+grep -qE "(^| )10\.0\.2\.[0-9]+/24( |$)" <<<"$on_link" ||
+    fail "the engine was not handed the network beneath's prefix of $HOST: ${on_link:-nothing}"
 sleep 1
 lab=(--es host "$HOST" --es user "$PROXYLAB_USER" --es password "$PROXYLAB_PASSWORD")
 
 # Declared: each named by the destination asked for, a password unencrypted said, none of them Android's setting.
 fixture "$FIXTURE" socks5 echoed "${lab[@]}" --es port "$PROXYLAB_PORT"
-proxied "$APP_UID" "$PROXYLAB_PORT" "socks5 read p inner\.proxylab\.test:443 - - inner\.proxylab\.test"
+proxied "$APP_UID" "$PROXYLAB_PORT" "socks5 read pn inner\.proxylab\.test:443 - - inner\.proxylab\.test"
 fixture "$FIXTURE" connect echoed "${lab[@]}" --es port "$PROXYLAB_PORT_HTTP"
-proxied "$APP_UID" "$PROXYLAB_PORT_HTTP" "connect read p inner\.proxylab\.test:443 - - inner\.proxylab\.test"
+proxied "$APP_UID" "$PROXYLAB_PORT_HTTP" "connect read pn inner\.proxylab\.test:443 - - inner\.proxylab\.test"
 fixture "$FIXTURE" forward 204 "${lab[@]}" --es port "$PROXYLAB_PORT_HTTP"
 # A plain request cannot be confirmed by its reply: its flow keeps its own name, and says what it asked for.
-proxied "$APP_UID" "$PROXYLAB_PORT_HTTP" "forward read p inner\.proxylab\.test:80 - - [^i].*"
+proxied "$APP_UID" "$PROXYLAB_PORT_HTTP" "forward read pn inner\.proxylab\.test:80 - - [^i].*"
 echo "ok: SOCKS5 with a password and CONNECT with Basic named by the destination asked for once the proxy confirmed it, a plain request keeping its own name"
 
 # Android's proxy setting, told apart from an app's own.
@@ -172,7 +179,7 @@ PROXY_SET=1
 adb shell settings put global http_proxy "$HOST:$PROXYLAB_PORT_OPEN"
 sleep 2
 fixture "$FIXTURE" setting 204
-proxied "$APP_UID" "$PROXYLAB_PORT_OPEN" "forward read s inner\.proxylab\.test:80 - - [^i].*"
+proxied "$APP_UID" "$PROXYLAB_PORT_OPEN" "forward read sn inner\.proxylab\.test:80 - - [^i].*"
 adb shell settings put global http_proxy :0
 adb shell settings delete global http_proxy >/dev/null 2>&1 || true
 PROXY_SET=""
@@ -180,19 +187,19 @@ echo "ok: Android's proxy setting told apart from an app's own"
 
 # Inferred: Telegram's obfuscated start and fake-TLS hello to mtg, WhatsApp's clear header, Signal's proxy by its name.
 fixture "$FIXTURE.telegram" obfuscated sent --es host "$HOST" --es port "$PROXYLAB_PORT_MTG"
-proxied "$TELEGRAM_UID" "$PROXYLAB_PORT_MTG" "mtproto inferred o - - - .*"
+proxied "$TELEGRAM_UID" "$PROXYLAB_PORT_MTG" "mtproto inferred on - - - .*"
 # A hello no answer tied is evidence only where the network part sees the app's lookups: the fixture looks a name up
 # first.
 fixture "$FIXTURE.telegram" lookup asked --es name lookup.proxylab.test
 fixture "$FIXTURE.telegram" faketls accepted --es host "$HOST" --es port "$PROXYLAB_PORT_MTG" --es secret "$PROXYLAB_MTG_SECRET"
-proxied "$TELEGRAM_UID" "$PROXYLAB_PORT_MTG" "mtproto inferred o - - cover\.proxylab\.test .*"
+proxied "$TELEGRAM_UID" "$PROXYLAB_PORT_MTG" "mtproto inferred on - - cover\.proxylab\.test .*"
 if grep -E "^tcp [^ ]+ ${HOST//./\\.}:$PROXYLAB_PORT_MTG $TELEGRAM_UID " <<<"$(dump | sed -n 's/^ *flow //p')" | grep -q "cover\.proxylab\.test"; then
     fail "the fake-TLS cover named Telegram's flow"
 fi
 fixture "$FIXTURE.whatsapp" whatsapp echoed --es host "$HOST" --es port "$PROXYLAB_PORT_ECHO"
-proxied "$WHATSAPP_UID" "$PROXYLAB_PORT_ECHO" "whatsapp inferred o - - - .*"
+proxied "$WHATSAPP_UID" "$PROXYLAB_PORT_ECHO" "whatsapp inferred on - - - .*"
 fixture "$FIXTURE.signal" hello echoed --es host "$HOST" --es port "$PROXYLAB_PORT_TLS" --es name signal-proxy.proxylab.test
-proxied "$SIGNAL_UID" "$PROXYLAB_PORT_TLS" "signal inferred - - - - signal-proxy\.proxylab\.test"
+proxied "$SIGNAL_UID" "$PROXYLAB_PORT_TLS" "signal inferred n - - - signal-proxy\.proxylab\.test"
 echo "ok: Telegram's MTProto proxy (obfuscated and fake TLS, the cover naming nothing), WhatsApp's and Signal's inferred"
 
 # The switch the rows point to is on the network screen, though this phone has no circumvention tool and no WireGuard
@@ -222,12 +229,12 @@ echo "ok: Signal's own fronting and its captcha are not named a proxy, and its f
 
 # "Now" and the log hold the same: the destination asked for and the proxy's kind.
 now=$(dump | sed -n 's/^ *activity-proxy //p') || fail "the network part's dump could not be read"
-grep -qE "^$APP_UID socks5:read:p:inner\.proxylab\.test@443:- ${HOST//./\\.}:$PROXYLAB_PORT named-by=1 inner\.proxylab\.test 10m=[0-9]+/[0-9]+$" <<<"$now" ||
+grep -qE "^$APP_UID socks5:read:pn:inner\.proxylab\.test@443:- ${HOST//./\\.}:$PROXYLAB_PORT named-by=1 inner\.proxylab\.test 10m=[0-9]+/[0-9]+$" <<<"$now" ||
     fail "\"Now\" does not hold the SOCKS5 proxy as named: $now"
-grep -qE "^$TELEGRAM_UID mtproto:inferred:o:-:- " <<<"$now" || fail "\"Now\" does not hold Telegram's proxy: $now"
+grep -qE "^$TELEGRAM_UID mtproto:inferred:on:-:- " <<<"$now" || fail "\"Now\" does not hold Telegram's proxy: $now"
 dump log-flush >/dev/null
 log=$(dump log-today | sed -n 's/^ *log-record //p')
-grep -qE "^tcp $APP_UID ${HOST//./\\.}:$PROXYLAB_PORT .* inner\.proxylab\.test .*proxy=socks5:read:p:inner\.proxylab\.test@443:-$" <<<"$log" ||
+grep -qE "^tcp $APP_UID ${HOST//./\\.}:$PROXYLAB_PORT .* inner\.proxylab\.test .*proxy=socks5:read:pn:inner\.proxylab\.test@443:-$" <<<"$log" ||
     fail "the log does not hold the SOCKS5 proxy as named"
 echo "ok: \"Now\" and the log hold the proxies as named"
 
@@ -239,8 +246,8 @@ within 5 none_asked_now || fail "with the switch off, \"Now\" still holds where 
 # The flows of the part before reached the same first hops, which stay in "Now" for their ten minutes, so the flows
 # opened now are told apart by the bytes they add there (audit-A 1), and in the log by when their records start.
 # The flag `v`: shown there only, for its window, as the switch is off.
-SOCKS_HOP="^$APP_UID socks5:read:pv:-:- ${HOST//./\\.}:$PROXYLAB_PORT named-by=4 - 10m="
-TELEGRAM_HOP="^$TELEGRAM_UID mtproto:inferred:ov:-:- ${HOST//./\\.}:$PROXYLAB_PORT_MTG "
+SOCKS_HOP="^$APP_UID socks5:read:pnv:-:- ${HOST//./\\.}:$PROXYLAB_PORT named-by=4 - 10m="
+TELEGRAM_HOP="^$TELEGRAM_UID mtproto:inferred:onv:-:- ${HOST//./\\.}:$PROXYLAB_PORT_MTG "
 # The bytes up and down in the last 10 minutes of the "Now" lines that match the pattern $1, all together. One awk,
 # no grep: under pipefail a grep that finds nothing would end the script (the pattern goes by the environment, which
 # awk reads without turning its backslashes into escapes).
@@ -273,15 +280,15 @@ none_asked_now || fail "with the switch off, \"Now\" holds where an app asked it
 # for nor by the hello inside.
 newest=$(proxies | awk -v port="$HOST:$PROXYLAB_PORT" -v uid="$APP_UID" '$1 == "tcp" && $3 == port && $4 == uid { line = $0 } END { print line }') ||
     fail "the network part's kept flows could not be read"
-[[ $newest =~ \ socks5\ read\ p\ -\ -\ -\ -$ ]] ||
+[[ $newest =~ \ socks5\ read\ pn\ -\ -\ -\ -$ ]] ||
     fail "with the switch off, the request or the inner hello named the SOCKS5 flow: ${newest:-none}"
 dump log-flush >/dev/null
 log=$(dump log-today | sed -n 's/^ *log-record //p')
-grep -qE "^tcp $APP_UID 0\.0\.0\.0:0 .* - .*proxy=socks5:read:pl:-:-$" <<<"$log" ||
+grep -qE "^tcp $APP_UID 0\.0\.0\.0:0 .* - .*proxy=socks5:read:pln:-:-$" <<<"$log" ||
     fail "with the switch off, the log does not hold the SOCKS5 proxy's kind alone"
 # No record of the fixture's SOCKS5 proxy with its first hop starts after the switch went off, a second's margin
 # allowed for the phone's whole seconds.
-kept=$(SINCE="$off_since" APP="$APP_UID" awk '$1 == "tcp" && $2 == ENVIRON["APP"] && /proxy=socks5:read:p:/ {
+kept=$(SINCE="$off_since" APP="$APP_UID" awk '$1 == "tcp" && $2 == ENVIRON["APP"] && /proxy=socks5:read:pn:/ {
     for (i = 1; i <= NF; i++) if ($i ~ /^at=/) { split(substr($i, 4), t, "-"); if (t[1] + 1000 >= ENVIRON["SINCE"] + 0) print t[1] }
 }' <<<"$log")
 [ -z "$kept" ] || fail "with the switch off, the log got a record of the SOCKS5 proxy with its first hop (at=${kept%%$'\n'*})"
@@ -294,6 +301,35 @@ kept=$(SINCE="$off_since" APP="$APP_UID" awk '$1 == "tcp" && $2 == ENVIRON["APP"
 ! grep -qE "^tcp $TELEGRAM_UID " <<<"$log" ||
     fail "the log got a record of a Telegram flow to its inferred proxy, unmarked, within the window of take-back: $(grep -E "^tcp $TELEGRAM_UID " <<<"$log" | head -2)"
 echo "ok: with the switch off, \"Now\" shows the proxies' first hops and nothing asked, the log keeps their kind alone, and an inferred one's records wait for their window"
+
+# R7 (the proxy record's unit B): with the switch off, a plain request to Android's setting is left out of the record as
+# a confirmed proxy's, and "Now" shows its first hop in full for its window. The part with the switch on reached the
+# same first hop minutes before, so the new flow is told apart by the bytes it adds there, and in the log by when its
+# records start (audit-B 11).
+SETTING_HOP="^$APP_UID forward:read:snv:-:- ${HOST//./\\.}:$PROXYLAB_PORT_OPEN "
+setting_before=$(ten_minutes "$SETTING_HOP") || fail "the network part's dump could not be read"
+PROXY_SET=1
+adb shell settings put global http_proxy "$HOST:$PROXYLAB_PORT_OPEN"
+sleep 2
+phone_time=$(adb shell date +%s </dev/null | tr -d '\r') || fail "the phone's time could not be read"
+[[ $phone_time =~ ^[0-9]+$ ]] || fail "the phone's time could not be read: ${phone_time:-nothing}"
+setting_since=$((phone_time * 1000))
+fixture "$FIXTURE" setting 204
+setting_now() { [ "$(ten_minutes "$SETTING_HOP")" -gt "$setting_before" ]; }
+within 15 setting_now ||
+    fail "with the switch off, \"Now\" did not show the first hop of the plain request to Android's setting within 15 s: $(proxies_now)"
+adb shell settings put global http_proxy :0
+adb shell settings delete global http_proxy >/dev/null 2>&1 || true
+PROXY_SET=""
+dump log-flush >/dev/null
+log=$(dump log-today | sed -n 's/^ *log-record //p')
+grep -qE "^tcp $APP_UID 0\.0\.0\.0:0 .*proxy=forward:read:sln:-:-$" <<<"$log" ||
+    fail "with the switch off, the log does not hold the plain request to Android's setting left out"
+kept=$(SINCE="$setting_since" APP="$APP_UID" awk '$1 == "tcp" && $2 == ENVIRON["APP"] && /proxy=forward:read:sn:/ {
+    for (i = 1; i <= NF; i++) if ($i ~ /^at=/) { split(substr($i, 4), t, "-"); if (t[1] + 1000 >= ENVIRON["SINCE"] + 0) print t[1] }
+}' <<<"$log")
+[ -z "$kept" ] || fail "with the switch off, the log got a record of the plain request to Android's setting with its address (at=${kept%%$'\n'*})"
+echo "ok: with the switch off, a plain request to Android's setting is shown in full in \"Now\" for its window and left out of the log"
 
 # No password anywhere the network part writes or Android logs.
 shown="$(dump)

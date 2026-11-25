@@ -2079,12 +2079,16 @@ class NetworkVpnService : VpnService() {
      */
     /**
      * A proxy as the debug builds' dump writes it: `kind:how:flags:asked:proxy-name`, `-` for none; no credential is
-     * kept. The flag `v`, a first hop "Now" shows only, is given by the caller: a record of the log never has it.
+     * kept. The flags are `s`, `p`, `o`, `l`, then `n` (local) and `u` (unsure) from log version 7, as the engine's own
+     * dump writes them. The flag `v`, a first hop "Now" shows only, is given by the caller: a record of the log never
+     * has it.
      */
     private fun proxyWords(proxy: LogRecord.Proxy, shownOnly: Boolean = false): String {
         val kind = listOf("-", "socks5", "socks4", "connect", "forward", "mtproto", "whatsapp", "signal").getOrElse(proxy.kind) { "?" }
         val flags = listOfNotNull(
             "s".takeIf { proxy.setting }, "p".takeIf { proxy.password }, "o".takeIf { proxy.outsideMaker }, "l".takeIf { proxy.leftOut },
+            // Version 7 (the proxy record's unit B): on the user's own network, and the engine could not tell.
+            "n".takeIf { proxy.local == true }, "u".takeIf { proxy.unsure },
             "v".takeIf { shownOnly },
         ).joinToString("").ifEmpty { "-" }
         val asked = if (proxy.askedPort >= 0) "${proxy.asked}@${proxy.askedPort}" else "-"
