@@ -286,6 +286,35 @@ class ProxyRowTest {
     }
 
     /**
+     * The proxy record's unit B, B6: a circumvention tool's own flow says so on its proxy row, after the facts and before
+     * a first hop's window words, kept or left out, in "Now" and the history. Never on a plain request to a server that
+     * is not Android's setting, which nothing says is a proxy, nor on a record the engine could not tell about.
+     */
+    @Test
+    fun aToolsOwnFlowSaysSoOnItsProxyRow() {
+        val socks = ProxyFacts.of(LogRecord.Proxy(LogRecord.PROXY_SOCKS5, organisation = "Hetzner Online GmbH"), hetzner, 1080)
+        val kept = proxyRow(socks, past = false, tool = "Orbot")
+        assertEquals(listOf(R.string.proxy_declared, R.string.proxy_network, R.string.proxy_tool), texts(kept))
+        assertEquals(ProxyLine(R.string.proxy_tool, args = listOf(isolate("Orbot"))), kept.lines.last())
+        assertEquals(
+            listOf(R.string.proxy_declared, R.string.proxy_network, R.string.proxy_tool, R.string.now_proxy_asked_off, R.string.now_proxy_live_only),
+            texts(proxyRow(socks.copy(shownOnly = true), past = false, tool = "Orbot")),
+        )
+        val leftOut = ProxyFacts.of(LogRecord.Proxy(LogRecord.PROXY_CONNECT, leftOut = true), zeros, 0)
+        assertEquals(
+            listOf(R.string.history_proxy_hidden, R.string.proxy_how_read, R.string.proxy_tool),
+            texts(proxyRow(leftOut, past = true, tool = "Orbot")),
+        )
+        val setting = ProxyFacts.of(LogRecord.Proxy(LogRecord.PROXY_FORWARD, setting = true), hetzner, 3128)
+        assertEquals(R.string.proxy_tool, texts(proxyRow(setting, past = false, tool = "Orbot")).last())
+        val request = ProxyFacts.of(LogRecord.Proxy(LogRecord.PROXY_FORWARD), hetzner, 8080)
+        val unsure = ProxyFacts.of(LogRecord.Proxy(LogRecord.PROXY_MTPROTO, leftOut = true, unsure = true), zeros, 0)
+        for (row in listOf(proxyRow(request, past = false, tool = "Orbot"), proxyRow(unsure, past = true, tool = "Orbot"), proxyRow(socks, past = false))) {
+            assertTrue(texts(row).toString(), R.string.proxy_tool !in texts(row))
+        }
+    }
+
+    /**
      * Fix brief point 2: the history never says a flow went through the user's tool unless its recorded route says so;
      * a direct one, the tool's own and one of a record with no route have words of their own.
      */

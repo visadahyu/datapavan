@@ -96,6 +96,8 @@ internal fun HistoryScreen(
     val date = DateFormat.getDateInstance(DateFormat.MEDIUM)
     // Named for screen readers, which say it as the history opens over "Now" (the accessibility unit, part 2).
     val paneName = stringResource(R.string.history_title, label(view.app, view.app.uid))
+    // A circumvention tool's own flows say so on their proxy rows (B6).
+    val toolName = view.app.uid?.let { proxies.tools[it] }
     LazyColumn(
         modifier = Modifier.safeDrawingPadding().testTag("history").semantics { paneTitle = paneName },
         contentPadding = PaddingValues(24.dp),
@@ -179,7 +181,7 @@ internal fun HistoryScreen(
                         // A proxy's flow the engine left out for the switch: its kind, how the network part knows, and
                         // the facts that name nothing (ADR 0052).
                         History.LeftOut.PROXY -> HiddenProxy(
-                            proxyRow(checkNotNull(proxy), past = true), bytes, onLogSwitch,
+                            proxyRow(checkNotNull(proxy), past = true, toolName), bytes, onLogSwitch,
                             marksOf(emptyList(), appGroup, trackers, companies, entry.proxy?.trackers.orEmpty()),
                         )
                         null -> {
@@ -192,7 +194,7 @@ internal fun HistoryScreen(
                                 marks = marksOf(hosts, appGroup, trackers, companies, entry.proxy?.trackers.orEmpty()),
                                 bytes = bytes,
                                 through = tunnel,
-                                proxy = proxy?.let { proxyRow(it, past = true) },
+                                proxy = proxy?.let { proxyRow(it, past = true, toolName) },
                                 onLogSwitch = onLogSwitch,
                             )
                         }

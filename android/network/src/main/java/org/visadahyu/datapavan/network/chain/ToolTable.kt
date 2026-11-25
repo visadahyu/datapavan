@@ -23,6 +23,8 @@ data class KnownTool(
     val udp: Boolean?,
     /** Its SOCKS5 proxy takes host names, which ADR 0038 needs. */
     val names: Boolean?,
+    /** It runs as Android's VPN (the proxy record's unit B, B6: a tool by its key). */
+    val vpnMode: Boolean = false,
 ) {
     /** The listeners the network part may greet: SOCKS5 ones only, on the loopback. */
     val socksListeners: List<Listener> get() = listeners.filter { it.socks }
@@ -42,14 +44,17 @@ object ToolTable {
         .map { it.split('\t') }
         .filter { it.size >= 9 }
         .map { c ->
+            // A mode the research could not settle ("vpn?") is the table's best guess, and counts.
+            val modes = c[2].split(',').map { it.trim().removeSuffix("?") }
             KnownTool(
                 packageName = c[0],
                 name = c[1],
-                proxyMode = "proxy" in c[2].split(',').map { it.removeSuffix("?") },
+                proxyMode = "proxy" in modes,
                 listeners = listeners(c[4]),
                 auth = c[6].removeSuffix("?").takeIf { it in authValues },
                 udp = flag(c[7]),
                 names = flag(c[8]),
+                vpnMode = "vpn" in modes,
             )
         }
         .toList()

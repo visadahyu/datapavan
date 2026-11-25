@@ -23,15 +23,18 @@ object ToolKeys {
     private const val STALE_MONTHS = 6L
 
     /** The verdict on the installed copy of [packageName], or null when nothing can be said. */
-    fun verdict(context: Context, packageName: String, today: LocalDate = LocalDate.now()): SignatureVerdict? {
+    fun verdict(context: Context, packageName: String, today: LocalDate = LocalDate.now()): SignatureVerdict? =
+        judge(context, today)?.invoke(packageName)
+
+    /**
+     * A judge of many installed packages, each as [verdict] judges it, with the keys read and parsed once for all of
+     * them (the proxy record's unit B, B6: the tools' UIDs judge some sixty packages); null when the keys cannot be
+     * read. Blocking, the judge too: call both off the main thread.
+     */
+    fun judge(context: Context, today: LocalDate = LocalDate.now()): ((String) -> SignatureVerdict?)? {
         val signers = try {
             AppSigners.parse(asset(context, AppSigners.APPS_PATH), asset(context, AppSigners.SIGNERS_PATH))
         } catch (e: IOException) {
-            return null
-        }
-        val info = try {
-            context.packageManager.getPackageInfo(packageName, PackageManager.GET_SIGNING_CERTIFICATES)
-        } catch (e: PackageManager.NameNotFoundException) {
             return null
         }
         val fresh = try {
@@ -39,7 +42,14 @@ object ToolKeys {
         } catch (e: IOException) {
             false
         }
-        return signers.judge(packageName, appSigning(info), fresh)
+        return { packageName ->
+            val info = try {
+                context.packageManager.getPackageInfo(packageName, PackageManager.GET_SIGNING_CERTIFICATES)
+            } catch (e: PackageManager.NameNotFoundException) {
+                null
+            }
+            info?.let { signers.judge(packageName, appSigning(it), fresh) }
+        }
     }
 
     /** Whether the keys in [source] (data/app-signers' SOURCE) were read less than six months before [today]. */

@@ -18,6 +18,11 @@ class ToolTableTest {
         val proxies = table.filter { it.proxyMode }
         assertEquals(29, proxies.size)
         assertTrue("every proxy tool takes names", proxies.all { it.names != false })
+        // The proxy record's unit B, B6: the VPN mode too, a guessed one ("vpn?") counting as the table's best guess.
+        assertEquals(55, table.count { it.vpnMode })
+        assertTrue(tool("com.psiphon3.subscription").vpnMode)
+        assertTrue(tool("com.nebula.karing").let { it.vpnMode && it.proxyMode })
+        assertFalse(tool("org.telegram.messenger").vpnMode || tool("org.telegram.messenger").proxyMode)
     }
 
     @Test

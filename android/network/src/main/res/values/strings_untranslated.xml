@@ -3,13 +3,14 @@
     The proxy record's unit A (ADR 0052, decision 8): what "Now" and the switch say of an app's own proxy's first hop,
     shown while its connection is open and for ten minutes after it ends, and not logged while the switch is off.
     Unit B's facts beside them (decision 9): a record the engine could not tell was a messenger's proxy, Android's PAC
-    proxy, and the line of Android's own proxy setting in Now; and left_out_body, whose English gained the PAC proxy's
-    exception, and which left strings.xml and the seven translations with it. In English only until ADR 0030's next
-    round translates them, with their review, into the seven other languages; they then move into strings.xml, where
-    scripts/check-translations.py holds them to every language. Until then the plain-language gate holds this file
-    (scripts/check.sh), and lint's check for missing translations is lifted for it alone. A release needs it gone
-    (docs/RELEASE.md, "Strings"). They replace log_switch_note, now_proxy_hidden and now_proxy_setting_hidden. Each
-    quotes the switch's label (log_switch) word for word, or writes Now without quotes.
+    proxy, a circumvention tool's own connection, and the line of Android's own proxy setting in Now; and
+    left_out_body, whose English gained the PAC proxy's exception, and which left strings.xml and the seven
+    translations with it. In English only until ADR 0030's next round translates them, with their review, into the
+    seven other languages; they then move into strings.xml, where scripts/check-translations.py holds them to every
+    language. Until then the plain-language gate holds this file (scripts/check.sh), and lint's check for missing
+    translations is lifted for it alone. A release needs it gone (docs/RELEASE.md, "Strings"). They replace
+    log_switch_note, now_proxy_hidden and now_proxy_setting_hidden. Each quotes the switch's label (log_switch) word
+    for word, or writes Now without quotes.
 -->
 <resources xmlns:tools="http://schemas.android.com/tools" tools:ignore="MissingTranslation">
     <!-- In "Now", under a proxy whose address is shown while the switch is off: facts only. "While", not "because":
@@ -45,6 +46,10 @@
     <!-- Unit B, on the row and the history of Android's PAC proxy (com.android.proxyhandler), which evaluates a PAC
          file and connects for other apps. It never says the connections are its own. -->
     <string name="proxy_pac_handler">This is Android\'s PAC proxy, which connects for other apps, including apps you left out.</string>
+    <!-- Unit B, on a proxy row of a circumvention tool's own flow, the tool known by its signing key: %1$s is the
+         tool's name. A fact, never "your proxy" or "your tool": an installed tool is not always the one the user chose
+         for the chain, and a tool in proxy mode also carries the apps that use its port. -->
+    <string name="proxy_tool">%1$s is a circumvention tool. This is its own connection through a proxy.</string>
     <!-- Apps and the VPN (ADR 0041), on the network screen: what leaving an app out of the tunnel does. Its English
          gained the exception of Android's PAC proxy (unit B; measurements 7.2): an app left out that sends through it is
          seen and logged as the PAC proxy's connections. -->

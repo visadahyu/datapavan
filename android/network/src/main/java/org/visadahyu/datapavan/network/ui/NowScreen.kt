@@ -443,11 +443,13 @@ private fun Destinations(context: Context, app: Snapshot.App, window: Int, view:
         HorizontalDivider(Modifier.padding(vertical = 4.dp))
         val bytes = stringResource(R.string.now_destination_bytes, size(context, place.bytes[window * 2]), size(context, place.bytes[window * 2 + 1]))
         val proxy = placeProxyFacts(place, view.groups[app.uid], view.companies)
+        // A circumvention tool's own flows say so on their proxy rows (B6).
+        val toolName = app.uid?.let { view.proxies.tools[it] }
         if (proxy != null && !proxy.kept) {
             // A proxy's flow the engine left out for the switch: its kind, how the network part knows, and the facts
             // that name nothing (ADR 0052), with the link to the switch.
             val marks = marksOf(emptyList(), view.groups[app.uid], view.trackers, view.companies, place.proxy?.trackers.orEmpty())
-            HiddenProxy(proxyRow(proxy, past = false), bytes, onLogSwitch, marks)
+            HiddenProxy(proxyRow(proxy, past = false, toolName), bytes, onLogSwitch, marks)
             continue
         }
         val (name, dns) = NowRows.destination(place.name, place.dnsName, place.address.hostAddress.orEmpty())
@@ -464,7 +466,7 @@ private fun Destinations(context: Context, app: Snapshot.App, window: Int, view:
             ),
             bytes = bytes,
             through = if (place.via == org.visadahyu.datapavan.network.log.LogRecord.VIA_TUNNEL) tunnelName(view, place.tunnel) else null,
-            proxy = proxy?.let { proxyRow(it, past = false) },
+            proxy = proxy?.let { proxyRow(it, past = false, toolName) },
             onLogSwitch = onLogSwitch,
         )
     }
@@ -604,14 +606,17 @@ internal data class ProxyRow(val header: ProxyLine?, val lines: List<ProxyLine>,
  * that setting's name, since Android names it so (the proxy record's unit B, R7): left out, it has the setting's
  * headers, and within its window in "Now" it ends as a first hop does. A record the engine could not tell was a
  * messenger's proxy says so in the kind's own words in place of its proxy line ([ProxyFacts.Facts.unsure]), never that
- * it went through one, nor how that was inferred. Where the network part cannot name the network,
- * the maker's network the address is not in is still said (ADR 0052, decision 6). A first hop "Now" shows only for
+ * it went through one, nor how that was inferred. Where the network part cannot name the network, the maker's network
+ * the address is not in is still said (ADR 0052, decision 6). The row of a circumvention tool's own flow, [tool] its
+ * name, says so after the facts (the proxy record's unit B, B6), never "your proxy". A first hop "Now" shows only for
  * its window ends with why: for a declared proxy, that where the app asked it to go is not shown or logged, then that
  * its address is shown only so long; and links to the switch. The history never says so: what it shows was logged.
  */
-internal fun proxyRow(facts: ProxyFacts.Facts, past: Boolean): ProxyRow {
+internal fun proxyRow(facts: ProxyFacts.Facts, past: Boolean, tool: String? = null): ProxyRow {
     val lines = mutableListOf<ProxyLine>()
     val notMaker = ProxyLine(R.string.proxy_not_maker, args = listOf(isolate(facts.maker)))
+    // A tool's own connection through a proxy: a fact of the app, which names no address, so it stays with the switch off.
+    val toolLine = tool?.let { ProxyLine(R.string.proxy_tool, args = listOf(isolate(it))) }
     if (!facts.kept) {
         // A record the engine could not tell was a messenger's proxy (taken back, or never named for substitution) says
         // so in place of its proxy line, and so says nothing of how it was inferred: only the history has such records.
@@ -634,6 +639,7 @@ internal fun proxyRow(facts: ProxyFacts.Facts, past: Boolean): ProxyRow {
             facts.maker.isNotEmpty() -> lines += notMaker
         }
         if (facts.password) lines += ProxyLine(R.string.proxy_password)
+        if (!unsure) toolLine?.let { lines += it }
         return ProxyRow(header, lines, toSwitch = true)
     }
     if (facts.kind == ProxyFacts.Kind.REQUEST) {
@@ -645,6 +651,8 @@ internal fun proxyRow(facts: ProxyFacts.Facts, past: Boolean): ProxyRow {
         }
         if (facts.setting) lines += ProxyLine(R.string.proxy_setting)
         if (facts.password) lines += ProxyLine(R.string.proxy_request_password)
+        // Through Android's setting, a tool's plain request goes through a proxy; to any other server it is not said to.
+        if (facts.setting) toolLine?.let { lines += it }
         // A plain request to Android's setting is that proxy's first hop (R7): "Now" shows it only for its window, as any
         // own proxy's, and says so. The engine marks no other plain request so; were one marked, it is not called a proxy.
         val shownOnly = facts.shownOnly && facts.setting && !past
@@ -669,6 +677,7 @@ internal fun proxyRow(facts: ProxyFacts.Facts, past: Boolean): ProxyRow {
     }
     if (facts.setting) lines += ProxyLine(R.string.proxy_setting)
     if (facts.password) lines += ProxyLine(R.string.proxy_password)
+    toolLine?.let { lines += it }
     val shownOnly = facts.shownOnly && !past
     if (shownOnly) {
         if (facts.declared) lines += ProxyLine(R.string.now_proxy_asked_off)
