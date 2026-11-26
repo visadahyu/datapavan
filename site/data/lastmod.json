@@ -9,7 +9,7 @@
  },
  "/ar/": {
   "date": "2026-11-26",
-  "sha256": "bbb58de49eebf08af98079811f4a5805b8f2e2c1206731b5b770048486e7fc6a"
+  "sha256": "ca57e6e33403c2c5ec8e6cd2c0d66af27f5151473f29e2d95e0e4fa9e9554046"
  },
  "/ar/accessibility/": {
   "date": "2026-11-26",
@@ -37,7 +37,7 @@
  },
  "/de/": {
   "date": "2026-11-26",
-  "sha256": "b502d2866427e9cdde369a0ff2a64cc8bfffa3dac5211d34d3b0bc5f37323f53"
+  "sha256": "5b56b14811c619d89da9e9986737ac98ae18076e8cdf71f2d615d8bd8eeddfe0"
  },
  "/de/accessibility/": {
   "date": "2026-11-26",
@@ -61,7 +61,7 @@
  },
  "/es/": {
   "date": "2026-11-26",
-  "sha256": "ba6b58109f556494079085d413f7e72506ea6dd07b93dfb4af838cd3c6afc2b1"
+  "sha256": "78eb49f1b633e833b3053c1ddf5d901aeff9b3b19a3ebe0d14b598a3dee55ab6"
  },
  "/es/accessibility/": {
   "date": "2026-11-26",
@@ -85,7 +85,7 @@
  },
  "/fa/": {
   "date": "2026-11-26",
-  "sha256": "8c14eb0b97b86914f4915bf42b2d79693f2546be3f1f22e4c536ca687f3b4d5b"
+  "sha256": "9600cbe30e336ea262a1197594b0ea3ae99ebb1762331a429089bf98db9f3853"
  },
  "/fa/accessibility/": {
   "date": "2026-11-26",
@@ -109,7 +109,7 @@
  },
  "/fr/": {
   "date": "2026-11-26",
-  "sha256": "a1b955dabaf6aec3729f8900d563f9a30dfeb9573e8da97b9cf8690cff04ba1b"
+  "sha256": "f8dd57d848d0e72946c8a40aa3f551b9a4465b8579713b0a96de1ab2c8081626"
  },
  "/fr/accessibility/": {
   "date": "2026-11-26",
@@ -345,7 +345,7 @@
  },
  "/ru/": {
   "date": "2026-11-26",
-  "sha256": "88a64ac0c9d6054f8267d82b0efb625ab82ead3971b6ea0cf1a9c7631f54777f"
+  "sha256": "e61816245c7bdd2b0735aa6d12b5503607c27ad2d8ac1ad8c42945d6392f8ade"
  },
  "/ru/accessibility/": {
   "date": "2026-11-26",
@@ -369,7 +369,7 @@
  },
  "/zh/": {
   "date": "2026-11-26",
-  "sha256": "03789f298d7189f2c46ae10ac466bca5d17863e4e2575f10d5ee68e427e5834a"
+  "sha256": "349e7dddb5ff890bd055828ff1af9ac602b2693a25b207f68078b8a2c4a4f87f"
  },
  "/zh/accessibility/": {
   "date": "2026-11-26",
