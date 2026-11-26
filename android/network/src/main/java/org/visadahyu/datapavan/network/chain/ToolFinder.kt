@@ -179,8 +179,17 @@ class ToolFinder(
             val tool = socket.remoteSocketAddress as InetSocketAddress
             val own = socket.localSocketAddress as InetSocketAddress
             // Asked at once, while the other end is surely open: a proxy that refuses the greeting
-            // closes it, and a closed connection has no owner left to name.
-            val early = ownerOf(tool, own)
+            // closes it, and a closed connection has no owner left to name. Just after connect() returns,
+            // the tool's end may still be half-open, which the lookup names root: asked again a moment
+            // apart before the greeting, for a proxy that asks for a password answers it by closing, and
+            // asked after it would name none (unit D's chain shard, 2026-11-26, twice in a row).
+            var early = ownerOf(tool, own)
+            var tries = 0
+            while (early == ROOT && tries < EARLY_TRIES) {
+                pause(EARLY_PAUSE_MS)
+                tries++
+                early = ownerOf(tool, own)
+            }
             socket.soTimeout = READ_MS
             socket.getOutputStream().apply {
                 write(byteArrayOf(5, 1, 0))
@@ -209,6 +218,10 @@ class ToolFinder(
 
         /** Long enough for a tool to open its proxy again after a change of settings; paid only when none answered. */
         const val REFUSED_PAUSE_MS = 1_000L
+
+        /** How often, and how far apart, a tool's end named root just after connect() is asked about again. */
+        const val EARLY_TRIES = 5
+        const val EARLY_PAUSE_MS = 20L
 
         /** The UID the kernel's socket lookup (inet_diag) gives a half-open or TIME_WAIT end: root's. */
         const val ROOT = 0

@@ -18,6 +18,9 @@ class ToolFinderTest {
     private val server = ServerSocket(0, 50, InetAddress.getLoopbackAddress())
     @Volatile private var method = 0
 
+    /** Whether the greeter answered a greeting, after which a proxy that asks for a password has closed. */
+    @Volatile private var answered = false
+
     init {
         thread(isDaemon = true) {
             while (true) {
@@ -34,6 +37,7 @@ class ToolFinderTest {
                             write(byteArrayOf(5, method.toByte()))
                             flush()
                         }
+                        answered = true
                         // Open until the network part closes, as a proxy waits for the request after the greeting.
                         while (input.read() >= 0) Unit
                     }
@@ -62,7 +66,8 @@ class ToolFinderTest {
         val finder = ToolFinder(
             uidOf = { if (it == PKG) UID else null },
             table = listOf(tool),
-            ownerOf = { local, _ -> asked += local; owners[next++] },
+            ownerOf = { local, _ -> asked += local; owners[minOf(next++, owners.size - 1)] },
+            pause = {},
             userId = 0,
         )
         return finder.search() to asked
@@ -103,6 +108,26 @@ class ToolFinderTest {
         assertEquals("another app named at once is not asked about again", 1, asked.size)
         // Root at once, then another app: still not the tool.
         assertTrue(search(0, OTHER).first is ToolSearch.NotAnswering)
+    }
+
+    @Test
+    fun aHalfOpenEndIsAskedAgainBeforeAGreetingThatClosesIt() {
+        // A proxy that asks for a password answers the greeting by closing (0xff), and a closed end names no owner:
+        // the end named root at once is asked again before the greeting, never only after it (unit D's chain shard).
+        method = 0xff
+        var asks = 0
+        val pauses = mutableListOf<Long>()
+        val finder = ToolFinder(
+            uidOf = { if (it == PKG) UID else null },
+            table = listOf(tool),
+            ownerOf = { _, _ -> if (asks++ == 0) 0 else if (answered) null else UID },
+            userId = 0,
+            pause = { pauses += it },
+        )
+        val found = finder.search() as ToolSearch.Answering
+        assertEquals(true, found.found.ownerConfirmed)
+        assertTrue(found.found.needsPassword)
+        assertEquals("one short pause before asking again", listOf(20L), pauses)
     }
 
     @Test
