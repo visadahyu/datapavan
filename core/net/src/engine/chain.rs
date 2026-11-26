@@ -871,12 +871,16 @@ mod tests {
         /// Review-D-engine major 1: the chained tool's flow whose hello names what the chain asked the tool for, by name
         /// at the flow's port, is tied at the hello, and its records already cut and waiting are stripped under the tool's
         /// choice; nothing live changes, and the hello names the flow as any does. A hello naming anything else, or the
-        /// name at another port, ties nothing; nor does another app's hello.
+        /// name at another port, ties nothing; nor does the hello of a tool that is not chained.
         #[test]
         fn a_hello_naming_a_chained_request_ties_its_flow_and_strips_what_waits() {
             use super::super::super::{DnsUse, Opened};
             let (shared, clock) = chained(false);
-            choose_tool(&shared, &[TOOL]);
+            // `DIRECT` is a tool too, not chained, and its own connections are chosen as well.
+            let mut setting = lock(&shared.proxies).setting().clone();
+            setting.tools = vec![TOOL, DIRECT];
+            setting.logged_tools = vec![TOOL, DIRECT];
+            shared.apply_proxies(setting);
             let Some(asked) = Target::name("news.domestic.example", 443) else {
                 unreachable!("a name")
             };
