@@ -578,7 +578,17 @@ scroll_to_top
 tap_tag tool-log-link || fail "the tool's place in \"Now\" offers no link to log where the tool connects for itself"
 within 10 has_id tool-log-yes || fail "the link did not ask for its confirmation"
 tap_tag tool-log-yes || fail "the confirmation's yes could not be tapped"
+# Back only once the confirmation has gone, or it closes the dialog and leaves "Now" in front of the network screen,
+# which a later step then cannot bring back; and "Now" is checked gone.
+now_gone() {
+    local screen
+    dump_screen || return 1
+    screen=$(adb shell cat "$DUMP" 2>/dev/null) || return 1
+    ! grep -qF 'text="Pause updates"' <<<"$screen"
+}
+within 10 gone_id tool-log-yes || fail "the confirmation did not close after its yes"
 adb shell input keyevent KEYCODE_BACK
+within 10 now_gone || fail "Back did not leave \"Now\" after the tool was chosen on its row"
 within 10 tool_handed || fail "the hand-over did not give the engine the tool chosen on the screen: $(dump | sed 's/^ *//' | grep '^proxy-logged-tools')"
 no_window() { [ -z "$(awk '$2 == "v"' <<<"$(tool_places)")" ]; }
 within 10 no_window || fail "with the tool chosen, \"Now\" still shows its places only for their window: $(tool_places | tr '\n' ';')"
