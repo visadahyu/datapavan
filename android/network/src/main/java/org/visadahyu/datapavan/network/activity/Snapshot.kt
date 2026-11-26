@@ -37,7 +37,10 @@ data class Snapshot(
         val uid: Int?,
         /** Its state in the last second told, an [AppState] code; [AppState.NOT_YET] while not told. */
         val now: Int,
-        /** Whether it is the user's circumvention tool, which carries the chained apps' traffic. */
+        /**
+         * Whether it is the chain's tool, the user's circumvention tool, which carries the chained apps' traffic. Another
+         * tool whose own connections follow R10 is not marked here: the screens know it from the tools' set (unit D).
+         */
         val isTool: Boolean,
         /** Whether it went through the tool with its destinations not kept ("Log where these apps connect" off). */
         val throughTool: Boolean,
@@ -50,8 +53,10 @@ data class Snapshot(
         val bytes: LongArray,
         val destinations: List<Destination>,
         /**
-         * Whether it is the user's tool with its own servers not kept, as while "Log where these apps connect" is
-         * off (ADR 0046, decision 3, as decided on 2026-11-19): the engine says so, the view does not guess it.
+         * Whether it is a circumvention tool with bytes that have no place in the view's windows (the proxy record's
+         * unit D, R10): its own connections' places that "Now" showed only for their window, dropped once it ended,
+         * while "Log where apps connect ..." was off and the user had not chosen to log where it connects for itself. The
+         * engine says so, the view does not guess it; any tool, chained or not, the same bit as before.
          */
         val serversHidden: Boolean = false,
         /**
@@ -99,7 +104,8 @@ data class Snapshot(
         val proxy: org.visadahyu.datapavan.network.log.LogRecord.Proxy? = null,
         /**
          * Whether it is an app's own proxy's first hop that "Now" shows only for its window, its app's first hops not
-         * being logged (version 5; ADR 0052, R2): the engine decides it, so the screen repeats no rule.
+         * being logged (version 5; ADR 0052, R2), or a circumvention tool's own connection that "Now" shows only so, with
+         * no proxy (unit D, R10): the engine decides it, so the screen repeats no rule.
          */
         val shownOnly: Boolean = false,
     )
@@ -216,12 +222,16 @@ data class Snapshot(
             val proxy = org.visadahyu.datapavan.network.log.LogRecord.Proxy.read(b, org.visadahyu.datapavan.network.log.LogRecord.VERSION_7)
             // "Unsure" marks records only: "Now" shows a flow as it is.
             require(proxy?.unsure != true)
-            // Shown here only is an app's own proxy's first hop, kept whole: never with no proxy or left out, and of a
-            // plain request only one to Android's setting (R7), which the engine never marks otherwise.
+            // Shown here only is an app's own proxy's first hop, kept whole: never left out, and of a plain request only
+            // one to Android's setting (R7), which the engine never marks otherwise. Or (unit D, R10) a circumvention
+            // tool's own connection, with no proxy, at its own address: never one of zeros, which stands for none.
             val shownOnly = flags and 2 != 0
             require(
-                !shownOnly || proxy != null && !proxy.leftOut &&
-                    (proxy.kind != org.visadahyu.datapavan.network.log.LogRecord.PROXY_FORWARD || proxy.setting),
+                !shownOnly || if (proxy == null) {
+                    !address.isAnyLocalAddress
+                } else {
+                    !proxy.leftOut && (proxy.kind != org.visadahyu.datapavan.network.log.LogRecord.PROXY_FORWARD || proxy.setting)
+                },
             )
             return Destination(
                 protocol, namedBy, ech, dns, flags and 1 != 0, address, port, asn, network,

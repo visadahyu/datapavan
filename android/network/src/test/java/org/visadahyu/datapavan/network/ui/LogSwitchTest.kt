@@ -107,6 +107,8 @@ class LogSwitchTest {
         assertFalse(LogSwitch.hides(app()))
         assertTrue(LogSwitch.hides(app(throughTool = true)))
         assertTrue(LogSwitch.hides(app(isTool = true, serversHidden = true)))
+        // Unit D: a tool that is not chained, whose own connections are no longer shown, links to the switch too.
+        assertTrue(LogSwitch.hides(app(serversHidden = true)))
         assertTrue(LogSwitch.hides(app(throughTunnel = 3)))
         assertFalse(LogSwitch.hides(app(isTool = true)))
     }

@@ -90,9 +90,10 @@ class SnapshotTest {
     }
 
     /**
-     * Version 5: a destination's flags' bit 1 says "shown here only", read only on an app's own proxy's first hop kept
-     * whole. On a destination with no proxy, one left out, or a plain request, which the engine never marks so, and any
-     * bit above it, the snapshot is refused.
+     * Version 5: a destination's flags' bit 1 says "shown here only", read on an app's own proxy's first hop kept whole,
+     * and (unit D, R10) on a circumvention tool's own connection, with no proxy, at an address that is not one of zeros.
+     * On one left out, a plain request, or a destination with no proxy at an address of zeros, which the engine never
+     * marks so, and any bit above it, the snapshot is refused.
      */
     @Test
     fun readsAFirstHopShownOnlyAndRefusesTheBitElsewhere() {
@@ -106,7 +107,17 @@ class SnapshotTest {
         val set = { bytes: ByteArray, at: Int, value: Int -> bytes.copyOf().also { it[at] = value.toByte() } }
         assertEquals(0b10, fixture[third].toInt())
         assertEquals(false, Snapshot.parse(set(fixture, third, 0))?.apps?.get(2)?.destinations?.single()?.shownOnly)
-        assertNull("no proxy", Snapshot.parse(set(fixture, noProxy, fixture[noProxy].toInt() or 0b10)))
+        // Unit D: with no proxy, a tool's own place shown here only, at its own address; at one of zeros, refused.
+        val own = checkNotNull(Snapshot.parse(set(fixture, noProxy, fixture[noProxy].toInt() or 0b10))) { "a tool's own place" }
+        val place = own.apps[0].destinations.single()
+        assertEquals(true to null, place.shownOnly to place.proxy)
+        assertEquals(false, place.address.isAnyLocalAddress)
+        val length = fixture[noProxy + 1].toInt()
+        val zeros = set(fixture, noProxy, fixture[noProxy].toInt() or 0b10).also { bytes -> for (i in 0 until length) bytes[noProxy + 2 + i] = 0 }
+        assertNull("no proxy at an address of zeros", Snapshot.parse(zeros))
+        // The same address of zeros without the bit is read: a place left out, as the log's.
+        val unmarked = fixture.copyOf().also { bytes -> for (i in 0 until length) bytes[noProxy + 2 + i] = 0 }
+        assertEquals(true, Snapshot.parse(unmarked)?.apps?.get(0)?.destinations?.single()?.address?.isAnyLocalAddress)
         assertNull("left out", Snapshot.parse(set(fixture, kind + 1, fixture[kind + 1].toInt() or 16)))
         val forward = org.visadahyu.datapavan.network.log.LogRecord.PROXY_FORWARD
         assertNull("a plain request", Snapshot.parse(set(fixture, kind, forward)))
@@ -186,8 +197,9 @@ class SnapshotTest {
     }
 
     /**
-     * The flags' third bit says the user's tool's own servers are not kept ("Log where these apps connect" off,
-     * decision 3 as decided on 2026-11-19), and only for the app it is set on: the view says so from it.
+     * The flags' third bit says a circumvention tool has bytes with no place in the view's windows (unit D, R10: its
+     * own connections' places dropped once their window ended), and only for the app it is set on: the view says so from
+     * it. The chain's tool (bit 0) and a tool that is not chained, which the bit 0 does not mark, alike.
      */
     @Test
     fun readsTheToolsServersHidden() {
@@ -198,6 +210,10 @@ class SnapshotTest {
         val app = checkNotNull(Snapshot.parse(hidden)).apps
         assertEquals(listOf(false, true, false), app.map { it.serversHidden })
         assertEquals(true to false, app[1].isTool to app[1].throughTool)
+        // A tool that is not chained: the bit alone.
+        val unchained = fixture.copyOf().also { it[second + 5] = (it[second + 5].toInt() or 0b100).toByte() }
+        val read = checkNotNull(Snapshot.parse(unchained)).apps[1]
+        assertEquals(Triple(true, false, false), Triple(read.serversHidden, read.isTool, read.throughTool))
     }
 
     /**

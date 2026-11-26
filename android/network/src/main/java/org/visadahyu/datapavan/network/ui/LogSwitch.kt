@@ -25,12 +25,12 @@ import org.visadahyu.datapavan.network.activity.Snapshot
  * The one switch "Log where apps connect through your tool, WireGuard or a proxy" (`log_switch`; W6's
  * `chain_log_destinations`, reworded in the fix round of W8 part 2a, screens review M4). One setting holds it,
  * `ChainSettings.logDestinations`, which the engine reads with every route, for chained and tunnelled apps, the
- * tool's own servers and apps' own proxies alike. The screen draws it wherever anything is left out for it: in the
+ * circumvention tools' own connections (unit D, R10) and apps' own proxies alike. The screen draws it wherever anything is left out for it: in the
  * tool's section while the tool answers, in the WireGuard section while a configuration exists, and else on its own
  * in the log's section, while an app's own proxy has been seen since the engine started, while it is on (so that
- * what the user turned on can be turned off), while the user chose any app to log one by one, whose count its note
- * gives (the proxy record's unit C, the maintainer's decision of 2026-11-25), or when a row of "Now" or the history
- * linked to it.
+ * what the user turned on can be turned off), while the user chose any app or tool to log one by one, whose count its
+ * note gives (the proxy record's units C and D, the maintainer's decision of 2026-11-25), or when a row of "Now" or the
+ * history linked to it.
  */
 internal object LogSwitch {
     /** The places the network screen draws it, in the screen's order. */
@@ -74,8 +74,12 @@ internal object LogSwitch {
      */
     fun seen(before: Boolean, running: Boolean, counters: () -> LongArray): Boolean = running && (before || proxiesSeen(counters()))
 
-    /** Whether an app's row in "Now" leaves out where it went for the switch: through the tool, the tool's own servers, or a tunnel. */
-    fun hides(app: Snapshot.App): Boolean = app.throughTool || (app.isTool && app.serversHidden) || app.throughTunnel != 0L
+    /**
+     * Whether an app's row in "Now" leaves out where it went for the switch: through the tool, a tunnel, or a
+     * circumvention tool's own connections no longer shown (unit D, R10), chained or not: the engine sets
+     * [Snapshot.App.serversHidden] only on a tool's row.
+     */
+    fun hides(app: Snapshot.App): Boolean = app.throughTool || app.serversHidden || app.throughTunnel != 0L
 
     /** The counters' places (`Counters::snapshot` in core/net): the proxy requests declared, and the proxies inferred. */
     const val DECLARED = 61
