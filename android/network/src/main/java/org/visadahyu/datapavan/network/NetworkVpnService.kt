@@ -567,6 +567,7 @@ class NetworkVpnService : VpnService() {
                 logged,
                 tools.toIntArray(),
                 pacHandler ?: -1,
+                IntArray(0),
             )
         }
         hand(android + known.orEmpty())

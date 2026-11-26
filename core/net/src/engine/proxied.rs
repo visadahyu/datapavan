@@ -149,6 +149,8 @@ pub struct ProxySetting {
     pub tools: Vec<u32>,
     /// Android's PAC handler's UID, if one runs (unit B's B5): never chosen.
     pub pac_handler: Option<u32>,
+    /// The tools whose own connections the user chose to log, by UID, as the network part hands them (R10, unit D).
+    pub logged_tools: Vec<u32>,
 }
 
 /// The most apps whose own proxies the user can choose to log (R3): the live view's bound on apps.
@@ -2907,6 +2909,7 @@ mod tests {
             logged: Vec::new(),
             tools: Vec::new(),
             pac_handler: None,
+            logged_tools: Vec::new(),
         });
         let (own, bytes) = open(&shared, UID, at([203, 0, 113, 6], 3128));
         relay(
@@ -3140,6 +3143,7 @@ mod tests {
             logged: Vec::new(),
             tools: Vec::new(),
             pac_handler: None,
+            logged_tools: Vec::new(),
         });
     }
 
@@ -3271,6 +3275,7 @@ mod tests {
             logged: Vec::new(),
             tools: Vec::new(),
             pac_handler: None,
+            logged_tools: Vec::new(),
         });
     }
 
@@ -3365,6 +3370,7 @@ mod tests {
             logged: Vec::new(),
             tools: Vec::new(),
             pac_handler: None,
+            logged_tools: Vec::new(),
         });
     }
 

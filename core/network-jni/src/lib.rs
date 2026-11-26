@@ -1667,16 +1667,18 @@ pub extern "system" fn Java_org_visadahyu_datapavan_network_Engine_nativeFlowRou
         .resolve::<ThrowRuntimeExAndDefault>()
 }
 
-/// `Engine.nativeProxies(families, uids, android, strictDns, onLink, transport, logged, tools, pacHandler)`: the
+/// `Engine.nativeProxies(families, uids, android, strictDns, onLink, transport, logged, tools, pacHandler,
+/// loggedTools)`: the
 /// messengers' apps, each UID of `uids` of the family at the same place in `families` (0 Telegram, 1 `WhatsApp`, 2
 /// Signal), the proxies Android's setting names, one `host port` a line in `android` (W8, part 2a; ADR 0052), whether
 /// Private DNS is strict on the network part's network, and the network beneath's on-link prefixes, one `address
 /// length` a line in `onLink`, with its transport (0 unknown, 1 Wi-Fi, 2 Ethernet, 3 cellular, 4 other), for the
 /// "local" fact (the proxy record's unit B); and (unit C) the apps whose own proxies the user chose to log, the tools,
-/// and Android's PAC handler's UID, or -1 for none. Kept for the engines to come, as the chain is.
+/// and Android's PAC handler's UID, or -1 for none; and (unit D) the tools whose own connections the user chose to log.
+/// Kept for the engines to come, as the chain is.
 // SAFETY: exported under the JNI name of the Kotlin method `external fun nativeProxies(families: IntArray, uids:
 // IntArray, android: String, strictDns: Boolean, onLink: String, transport: Int, logged: IntArray, tools: IntArray,
-// pacHandler: Int)`.
+// pacHandler: Int, loggedTools: IntArray)`.
 #[unsafe(no_mangle)]
 #[allow(clippy::too_many_arguments)]
 pub extern "system" fn Java_org_visadahyu_datapavan_network_Engine_nativeProxies<'caller>(
@@ -1691,6 +1693,7 @@ pub extern "system" fn Java_org_visadahyu_datapavan_network_Engine_nativeProxies
     logged: JIntArray<'caller>,
     tools: JIntArray<'caller>,
     pac_handler: jint,
+    logged_tools: JIntArray<'caller>,
 ) {
     unowned_env
         .with_env(|env| -> Result<_, Error> {
@@ -1701,6 +1704,7 @@ pub extern "system" fn Java_org_visadahyu_datapavan_network_Engine_nativeProxies
             };
             let (families, uids) = (read(&families, env)?, read(&uids, env)?);
             let (logged, tools) = (read(&logged, env)?, read(&tools, env)?);
+            let logged_tools = read(&logged_tools, env)?;
             let android = android.try_to_string(env)?;
             let on_link = on_link.try_to_string(env)?;
             let read = ProxySetting {
@@ -1709,6 +1713,7 @@ pub extern "system" fn Java_org_visadahyu_datapavan_network_Engine_nativeProxies
                 logged: uids_of(&logged, 512, true),
                 tools: uids_of(&tools, 256, false),
                 pac_handler: u32::try_from(pac_handler).ok(),
+                logged_tools: uids_of(&logged_tools, 64, true),
                 ..proxy_setting(&families, &uids, &android)
             };
             set_proxies(|proxies| *proxies = read);
@@ -1751,12 +1756,13 @@ fn proxy_setting(families: &[i32], uids: &[i32], android: &str) -> ProxySetting 
         logged: Vec::new(),
         tools: Vec::new(),
         pac_handler: None,
+        logged_tools: Vec::new(),
     }
 }
 
-/// The UIDs of `nativeProxies`' chosen apps or tools (the proxy record's unit C): those that do not fit a UID are left
-/// out, and for the chosen apps all but application UIDs too (10,000 to 19,999 in each user's range), before at most
-/// `most` are kept, so that no other UID takes a chosen app's place.
+/// The UIDs of `nativeProxies`' chosen apps, tools or chosen tools (the proxy record's units C and D): those that do
+/// not fit a UID are left out, and for the chosen apps and chosen tools all but application UIDs too (10,000 to 19,999
+/// in each user's range), before at most `most` are kept, so that no other UID takes a chosen app's place.
 fn uids_of(values: &[i32], most: usize, applications: bool) -> Vec<u32> {
     values
         .iter()

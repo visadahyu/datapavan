@@ -235,7 +235,8 @@ internal object Engine {
      * one `address length` a line in [onLink], with its [transport] (0 none, 1 Wi-Fi, 2 Ethernet, 3 cellular, 4 other),
      * for the "local" fact (the proxy record's unit B); and (unit C) the apps whose own proxies the user chose to log,
      * by UID ([logged]), the circumvention tools by UID ([tools]), and Android's PAC handler's UID, or -1 for none
-     * ([pacHandler]), which the engine never counts among the chosen. Kept for the engines to come, as the chain is.
+     * ([pacHandler]), which the engine never counts among the chosen; and (unit D) the tools whose own connections the
+     * user chose to log, by UID ([loggedTools]). Kept for the engines to come, as the chain is.
      */
     external fun nativeProxies(
         families: IntArray,
@@ -247,6 +248,7 @@ internal object Engine {
         logged: IntArray,
         tools: IntArray,
         pacHandler: Int,
+        loggedTools: IntArray,
     )
 
     /**
