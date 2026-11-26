@@ -53,11 +53,18 @@ browser takes the page's paper in each scheme (site/assets/style.css). */}}
 <meta property="og:description" content="{{ $desc }}">
 <meta property="og:type" content="{{ cond (and .IsPage (eq .Section "news")) "article" "website" }}">
 <meta property="og:url" content="{{ .Permalink }}">
-<meta property="og:image" content="{{ "images/icon-512.png" | absURL }}">
-<meta property="og:image:width" content="512">
-<meta property="og:image:height" content="512">
+{{- /* The page's language, and its translations, as link previews name them (ogp.me: language_TERRITORY). */}}
+<meta property="og:locale" content="{{ site.Language.Params.locale }}">
+{{- range .Translations }}
+<meta property="og:locale:alternate" content="{{ .Language.Params.locale }}">
+{{- end }}
+{{- /* One card for every language: the mark and the name, with no sentence (scripts/site-images.sh). */}}
+<meta property="og:image" content="{{ "images/card.png" | absURL }}">
+<meta property="og:image:type" content="image/png">
+<meta property="og:image:width" content="1200">
+<meta property="og:image:height" content="630">
 <meta property="og:image:alt" content="Datapavan">
-<meta name="twitter:card" content="summary">
+<meta name="twitter:card" content="summary_large_image">
 <meta name="twitter:image:alt" content="Datapavan">
 {{- with .OutputFormats.Get "rss" }}
 <link rel="alternate" type="application/rss+xml" title="Datapavan" href="{{ .Permalink }}">

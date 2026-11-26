@@ -66,8 +66,9 @@ this: the engines' own consoles report searches and clicks.
 - **Each page's head** (`layouts/baseof.html`): its own title (the main page's says what Datapavan is, `home_title`,
   while its heading keeps the slogan), a description of its own (`desc_*`, `news_lead` and `a11y_aim` in
   `data/text`; a guide's opening), one canonical address, matching `og:url`, its translations, and a link
-  preview with the store icon (`static/images/icon-512.png`, from `scripts/store-images.sh icon`). The main page's
-  hero says what Datapavan is in one sentence too (`home_define`).
+  preview: one large card for every language (`static/images/card.png`), and `og:locale` with an alternate for each
+  translation (each language's `locale` in `hugo.toml`). The main page's hero says what Datapavan is in one sentence
+  too (`home_define`).
 - **`llms.txt`** (`layouts/home.llms.txt`, [llmstxt.org](https://llmstxt.org)): what Datapavan is and every page, in
   plain text for AI assistants, written from the same data as the pages. No large engine has said it reads the file;
   it costs nothing to keep. Only the root one is kept, and it links the other languages.

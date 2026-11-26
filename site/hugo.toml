@@ -30,54 +30,63 @@ home = ["html", "llms"]
 section = ["html", "rss"]
 page = ["html"]
 
+# locale: the page's og:locale, in the form link previews take (ogp.me), with the territories Facebook lists.
 [languages.en]
 label = "English"
 direction = "ltr"
 weight = 1
 [languages.en.params]
 script = "latin"
+locale = "en_US"
 [languages.fr]
 label = "Français"
 direction = "ltr"
 weight = 2
 [languages.fr.params]
 script = "latin"
+locale = "fr_FR"
 [languages.de]
 label = "Deutsch"
 direction = "ltr"
 weight = 3
 [languages.de.params]
 script = "latin"
+locale = "de_DE"
 [languages.es]
 label = "Español"
 direction = "ltr"
 weight = 4
 [languages.es.params]
 script = "latin"
+locale = "es_ES"
 [languages.ru]
 label = "Русский"
 direction = "ltr"
 weight = 5
 [languages.ru.params]
 script = "ru"
+locale = "ru_RU"
 [languages.zh]
 label = "简体中文"
 direction = "ltr"
 weight = 6
 [languages.zh.params]
 script = "zh"
+locale = "zh_CN"
 [languages.ar]
 label = "العربية"
 direction = "rtl"
 weight = 7
 [languages.ar.params]
 script = "rtl"
+locale = "ar_AR"
 [languages.fa]
 label = "فارسی"
 direction = "rtl"
 weight = 8
 [languages.fa.params]
 script = "rtl"
+locale = "fa_IR"
 
 [params]
 repo = "https://github.com/visadahyu/datapavan"

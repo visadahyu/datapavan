@@ -90,6 +90,10 @@ def main():
     home = pages and (SITE / "index.html").read_text(encoding="utf-8")
     if not home or FP not in home:
         bad.append("index.html: no signing fingerprint")
+    card = SITE / "images/card.png"
+    if not card.exists() or card.read_bytes()[16:24] != (1200).to_bytes(4, "big") + (630).to_bytes(4, "big") \
+            or card.stat().st_size >= 300_000:
+        bad.append("images/card.png, the link preview, is missing, not 1200 x 630, or not under 300 KB")
     security = SITE / ".well-known/security.txt"
     if not security.exists():
         bad.append(".well-known/security.txt is missing")
@@ -174,6 +178,16 @@ def search(pages):
         if address != BASE + name.removesuffix("index.html"):
             bad.append(f"{name}: canonical {address} is not this page's address")
         addresses[address] = name
+        # A link preview: the card, large, and the page's locale with one alternate per translation.
+        if '<meta property="og:image" content="https://datapavan.org/images/card.png">' not in html or \
+                '<meta name="twitter:card" content="summary_large_image">' not in html:
+            bad.append(f"{name}: needs the card as og:image and twitter:card summary_large_image")
+        locales = re.findall(r'<meta property="og:locale" content="([a-z]{2}_[A-Z]{2})">', html)
+        alternates = re.findall(r'<meta property="og:locale:alternate" content="([a-z]{2}_[A-Z]{2})">', html)
+        translations = re.findall(r'<link rel="alternate" hreflang="(?!x-default)[^"]+"', html)
+        if len(locales) != 1 or len(set(alternates)) != len(alternates) or len(alternates) != len(translations) - 1 \
+                or locales[0] in alternates:
+            bad.append(f"{name}: needs one og:locale and an og:locale:alternate for each translation")
         robots = re.findall(r'<meta name="robots" content="([^"]*)"', html)
         if robots:
             if robots != ["noindex, follow"]:
