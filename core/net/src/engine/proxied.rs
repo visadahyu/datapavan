@@ -309,6 +309,14 @@ impl Keeps {
         self.all || uid.is_some_and(|uid| self.apps.tools_kept.binary_search(&uid).is_ok())
     }
 
+    /// Whether the tool `uid`'s own choice keeps the first hop of its own proxy's flow through `proxy` with no window, in
+    /// "Now" and in the log, as it keeps its plain flows' (review-D-rest M1): for a tool only, and never for Android's
+    /// setting nor a proxy on the user's own network, which no choice covers (unit C; review-D-engine minor 3). Where the
+    /// flow asked its proxy to go stays [`Keeps::proxy`]'s (audit-D m1).
+    fn tool_proxy_kept(&self, uid: Option<u32>, proxy: &Proxied) -> bool {
+        !proxy.setting && !proxy.local && self.tool(uid) && self.tool_kept(uid)
+    }
+
     /// Whether a name `flow` carries, its address among them, matches a tracker's signature (audit-D M3): a tool's flow
     /// that does is kept whole, live and in the log, since a stripped plain record keeps no name, and so no mark. It
     /// only ever keeps more. A scan of the signatures, so asked last, for a tool's plain flows only.
@@ -627,11 +635,16 @@ pub(super) fn shows_first_hop(flow: &Flow, keeps: &Keeps) -> bool {
     own_first_hop(flow) || (tool_own(flow, keeps) && !keeps.tracker(flow))
 }
 
-/// [`strips`], the tracker rule aside: an own proxy's first hop of an app whose first hops are not kept, or a tool's own
-/// flow whose tool's are not. Cheap: the tracker rule is asked after it, where it may still change something.
+/// [`strips`], the tracker rule aside: an own proxy's first hop of an app whose first hops are not kept, unless it is a
+/// tool's own proxy that the tool's choice keeps, or a tool's own flow whose tool's are not. Cheap: the tracker rule is
+/// asked after it, where it may still change something.
 pub(super) fn windowed(flow: &Flow, keeps: &Keeps) -> bool {
     if own_first_hop(flow) {
         !keeps.flow(flow)
+            && !flow
+                .proxy
+                .as_deref()
+                .is_some_and(|proxy| keeps.tool_proxy_kept(flow.uid, proxy))
     } else {
         tool_own(flow, keeps) && !keeps.tool_kept(flow.uid)
     }
@@ -725,14 +738,19 @@ pub(super) fn strip_for_log(
 ///   (`logbook::without_destination`), as the chained tool's records always were: the app, the bytes, the times, the
 ///   state, the route, and a blocked flow's SDK.
 /// - an own proxy's flow, an unchained tool's SOCKS or `CONNECT` upstream, keeps its first hop under the user's choice
-///   for the tool with the switch off, as named with no `asked`; one that holds where it asked to go, written while the
-///   switch was on, is left out whole. With the switch on, or neither, the own proxies' rule decides.
+///   for the tool with the switch off, as named with no `asked`, but to Android's setting or a proxy on the user's own
+///   network, which no choice covers; one that holds where it asked to go, written while the switch was on, is left
+///   out whole. With the switch on, or neither, the own proxies' rule decides.
 #[cold]
 #[inline(never)]
 fn strip_tool(flow: &mut Flow, keeps: &Keeps, taken_back: &TakenBack) -> bool {
     let asked = flow.proxy.as_ref().is_some_and(|p| p.asked.is_some());
     if own_proxy(flow) {
-        if keeps.all || !keeps.tool_kept(flow.uid) {
+        let chosen = flow
+            .proxy
+            .as_deref()
+            .is_some_and(|proxy| keeps.tool_proxy_kept(flow.uid, proxy));
+        if keeps.all || !chosen {
             return false;
         }
         if asked {
@@ -5492,6 +5510,85 @@ mod tests {
             .flat_map(|a| a.places)
             .any(|p| p.flow.destination == at([192, 0, 2, 45], 443) && p.shown_only);
         assert!(windowed, "shown here only once more");
+    }
+
+    /// Review-D-rest M1: under the tool's own choice, with the switch off, the first hop of a tool's own SOCKS5 upstream
+    /// is shown in "Now" with no window and no "shown here only" mark, as its record keeps it; the request is named by
+    /// the first hop alone, unit C's predicate. Review-D-engine minor 3: one to Android's setting, or to a proxy on the
+    /// user's own network, keeps neither, as no choice covers those.
+    #[test]
+    fn the_tools_choice_shows_its_own_proxys_first_hop_with_no_window() {
+        use super::super::clock::Clock;
+        use crate::local::{OnLink, Transport};
+        let (shared, clock) = engine_at(false);
+        let shared = &shared;
+        learn(shared, "203.0.113.5", "proxy.example.net");
+        let mut setting = lock(&shared.proxies).setting().clone();
+        setting.tools = vec![UID];
+        setting.logged_tools = vec![UID];
+        setting.android = vec![("198.51.100.7".into(), 1080)];
+        setting.on_link = OnLink::new([(IpAddr::from([192, 168, 1, 0]), 24)], Transport::Wifi);
+        shared.apply_proxies(setting);
+        let flows = [[203, 0, 113, 5], [198, 51, 100, 7], [192, 168, 1, 7]]
+            .map(|address| socks5_of(shared, UID, address));
+        let own = at([203, 0, 113, 5], 1080);
+        assert!(
+            live(shared, flows[0].id)
+                .proxy
+                .is_some_and(|p| p.asked.is_none()),
+            "named by its first hop"
+        );
+        let marks = |now: u64| -> Vec<(SocketAddr, bool)> {
+            let mut marks: Vec<_> = shared
+                .now_view(now)
+                .apps
+                .into_iter()
+                .filter(|a| a.uid == Some(UID))
+                .flat_map(|a| {
+                    a.places
+                        .into_iter()
+                        .map(|p| (p.flow.destination, p.shown_only))
+                })
+                .collect();
+            marks.sort();
+            marks
+        };
+        assert_eq!(
+            marks(clock.wall_ms()),
+            vec![
+                (at([192, 168, 1, 7], 1080), true),
+                (at([198, 51, 100, 7], 1080), true),
+                (own, false),
+            ]
+        );
+        for flow in &flows {
+            shared.finish(flow.id);
+        }
+        clock.pass(11 * 60_000);
+        assert_eq!(
+            marks(clock.wall_ms())
+                .into_iter()
+                .filter(|(address, _)| !address.ip().is_unspecified())
+                .collect::<Vec<_>>(),
+            vec![(own, false)],
+            "past ten minutes, only the chosen tool's own proxy"
+        );
+        shared.flush();
+        another_record(shared);
+        let records = taken(shared);
+        let kept = of_flow(&records, flows[0].id);
+        assert!(
+            !kept.is_empty()
+                && kept.iter().all(|f| f.destination == own
+                    && f.proxy
+                        .as_ref()
+                        .is_some_and(|p| p.asked.is_none() && !p.left_out)),
+            "{kept:?}"
+        );
+        for flow in &flows[1..] {
+            let left = of_flow(&records, flow.id);
+            assert!(!left.is_empty() && left.iter().all(left_out), "{left:?}");
+        }
     }
 
     /// Unit C, test 1: with the switch off, a chosen app's own proxy keeps its first hop and destination, live and in
