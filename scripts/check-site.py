@@ -2,8 +2,8 @@
 """Checks the built website in docs/site (site/README.md): no script, nothing from another server, about
 200 KB or less on a first load before images, and every link inside the site leads somewhere. For search engines
 (site/README.md, "Search engines"): robots.txt, one sitemap at the root that lists every page and nothing else,
-llms.txt's links, the IndexNow key file, and on every page one canonical address, matching its og:url, with a title no other page of its
-language has. For accessibility (site/README.md, "Accessibility"), what needs no browser: each page's language and direction,
+llms.txt's links, the IndexNow key file, and on every page one canonical address, matching its og:url, with a title and a description no other page of
+its language has. For accessibility (site/README.md, "Accessibility"), what needs no browser: each page's language and direction,
 one h1 and no skipped heading level, names for links, controls, pictures and drawings, the language list's languages, one
 main with a link to it first, zoom allowed, and the contrast of the stylesheet's colours in both schemes. The rest is
 scripts/a11y-site.sh's, run locally."""
@@ -140,7 +140,7 @@ def search(pages):
     keys = [f for f in SITE.glob("*.txt") if re.fullmatch(r"[0-9a-f]{32}", f.stem)]
     if len(keys) != 1 or keys[0].read_text(encoding="utf-8").strip() != keys[0].stem:
         bad.append("needs exactly one IndexNow key file, <key>.txt holding the key (site/static)")
-    addresses, titles = {}, {}
+    addresses, titles, descriptions = {}, {}, {}
     for page in pages:
         name = str(page.relative_to(SITE))
         html = page.read_text(encoding="utf-8")
@@ -166,6 +166,15 @@ def search(pages):
             bad.append(f"{name}: same title as {titles[language, title[1]]}")
         else:
             titles[language, title[1]] = name
+        # Each page says what it is in a description of its own: one shared by several pages tells a search engine
+        # nothing about any of them (the site for search engines, fix 3).
+        description = re.findall(r'<meta name="description" content="([^"]*)"', html)
+        if len(description) != 1 or not description[0].strip():
+            bad.append(f"{name}: needs one description")
+        elif (language, description[0]) in descriptions:
+            bad.append(f"{name}: same description as {descriptions[language, description[0]]}")
+        else:
+            descriptions[language, description[0]] = name
     llms = SITE / "llms.txt"
     if not llms.exists() or not llms.read_text(encoding="utf-8").startswith("# Datapavan\n"):
         bad.append("llms.txt is missing or does not start with its title")
