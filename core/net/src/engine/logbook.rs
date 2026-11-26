@@ -222,7 +222,8 @@ impl FlowBytes {
 }
 
 /// A flow that is open, for the log: what is known of it, its bytes, and where its current segment
-/// starts.
+/// starts. Its facts are each a yes or a no.
+#[allow(clippy::struct_excessive_bools)]
 pub(super) struct Live {
     pub(super) flow: Flow,
     pub(super) bytes: Arc<FlowBytes>,
@@ -243,6 +244,10 @@ pub(super) struct Live {
     /// Whether it went directly, not through the user's tool, when it opened: a flow hidden by a chain
     /// set after it opened goes on directly (review b2 of W5's second part, N3).
     pub(super) direct: bool,
+    /// Whether it is the chained tool's, tied at its birth or its hello to what the chain asked the tool for (R10,
+    /// `chain::Carried`): a chained app's destination, whose place and end give way before the tool's own
+    /// (review-D-engine major 2).
+    pub(super) tied: bool,
 }
 
 /// An app's lookups to the network part's own DNS address: since when, and since the first, how many and the
@@ -361,6 +366,7 @@ impl Shared {
                             flow: live.flow.clone(),
                             hidden: live.hidden,
                             direct: live.direct,
+                            tied: live.tied,
                         },
                         uid: live.flow.uid,
                         start: live.start,
@@ -428,12 +434,10 @@ impl Shared {
             return None;
         }
         // R10's tie (option (c)): a flow of the chained tool, decided at its birth. The cheap test first.
-        if self
+        let tied = self
             .chain()
             .is_some_and(|chain| flow.uid == Some(chain.tool))
-        {
-            self.tie_carried(flow);
-        }
+            && self.tie_carried(flow);
         let hidden = via.is_some_and(|chain| !chain.log_destinations)
             || self.hides(flow.uid, flow.destination);
         let direct = via.is_none();
@@ -453,6 +457,7 @@ impl Shared {
                     flow: flow.clone(),
                     hidden,
                     direct,
+                    tied,
                 },
                 uid: flow.uid,
                 start: now,
@@ -482,6 +487,7 @@ impl Shared {
                 hidden,
                 unkept: false,
                 direct,
+                tied,
             },
         );
         self.log_ready.notify_one();
@@ -585,24 +591,26 @@ impl Shared {
     fn end_live(&self, id: u64, boot: Duration) -> Option<Live> {
         let mut live = lock(&self.live);
         let ended = live.remove(&id)?;
-        self.ended(&ended.flow, boot);
+        self.ended(&ended.flow, boot, ended.tied);
         Some(ended)
     }
 
     /// [`Shared::ended`] now, for a flow recorded as it ended: a UDP flow whose way could not be opened.
     pub(super) fn ended_now(&self, flow: &Flow) {
-        self.ended(flow, self.clock.since_boot());
+        self.ended(flow, self.clock.since_boot(), false);
     }
 
     /// A flow that showed an app's own proxy's first hop ended at `boot`: noted with its first hop, which is how
     /// "Now" places it once the switch is off, so that its place stays in full for its window (R2). A circumvention
     /// tool's own flow too (R10), whose first hop is the flow itself, apart: most flows are neither.
-    fn ended(&self, flow: &Flow, boot: Duration) {
+    fn ended(&self, flow: &Flow, boot: Duration, tied: bool) {
         if super::proxied::own_first_hop(flow) {
             let first_hop = self.first_hop(flow);
-            lock(&self.activity).counts.end(flow.uid, first_hop, boot);
+            lock(&self.activity)
+                .counts
+                .end(flow.uid, first_hop, boot, false);
         } else if !super::proxied::own_proxy(flow) {
-            self.tool_ended(flow, boot);
+            self.tool_ended(flow, boot, tied);
         }
     }
 
@@ -610,12 +618,12 @@ impl Shared {
     /// (`proxied::shows_first_hop`), as the tools and the switch read now. Out of line, off the common end's code.
     #[cold]
     #[inline(never)]
-    fn tool_ended(&self, flow: &Flow, boot: Duration) {
+    fn tool_ended(&self, flow: &Flow, boot: Duration, tied: bool) {
         let keeps = self.keeps_first_hops();
         if super::proxied::shows_first_hop(flow, &keeps) {
             lock(&self.activity)
                 .counts
-                .end(flow.uid, flow.clone(), boot);
+                .end(flow.uid, flow.clone(), boot, tied);
         }
     }
 
@@ -659,6 +667,7 @@ impl Shared {
                     flow: live.flow.clone(),
                     hidden: live.hidden,
                     direct: live.direct,
+                    tied: live.tied,
                 },
                 uid: live.flow.uid,
                 start: live.start,
@@ -690,7 +699,7 @@ impl Shared {
             let mut live = lock(&self.live);
             let ended: Vec<Live> = live.drain().map(|(_, l)| l).collect();
             for l in &ended {
-                self.ended(&l.flow, boot);
+                self.ended(&l.flow, boot, l.tied);
             }
             ended
         };
@@ -912,6 +921,7 @@ fn piece(live: Live, end: u64, continues: bool) -> Piece {
             flow: live.flow,
             hidden: live.hidden,
             direct: live.direct,
+            tied: live.tied,
         },
     }
 }

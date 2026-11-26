@@ -62,11 +62,13 @@ pub(super) const WINDOWS: [u64; 2] = [10, 60];
 pub(super) const SHOWN: Duration = Duration::from_mins(10);
 
 /// An app's own proxy's connection that ended, for its first hop's window in "Now": its app, its first hop as a
-/// place keys it, and when it ended, in time since the phone started.
+/// place keys it, when it ended, in time since the phone started, and whether it was the chained tool's flow tied to
+/// what the chain asked the tool for, whose end gives way first (R10, review-D-engine major 2).
 struct End {
     uid: Option<u32>,
     flow: Flow,
     at: Duration,
+    tied: bool,
 }
 
 /// Whether an end of the app `uid` whose window still runs at `boot` is the place `flow`'s, or the app is a tool
@@ -125,6 +127,9 @@ fn add_minute<T: Default>(minutes: &mut Minutes<T>, minute: u64, add: impl FnOnc
 #[derive(Clone, Copy)]
 pub(super) enum Seen<'a> {
     Flow(&'a Flow),
+    /// A flow of the chained tool tied to what the chain asked the tool for (R10): shown as the tool's own, its place
+    /// not guarded, as it is a chained app's destination (review-D-engine major 2).
+    Tied(&'a Flow),
     Routed(&'a Flow),
     Hidden,
     /// A flow not through the tool whose destination stays out: through a `WireGuard` tunnel (W7) with
@@ -141,15 +146,18 @@ impl<'a> Seen<'a> {
                 flow,
                 hidden,
                 direct,
-            } => Self::live(flow, *hidden, *direct),
+                tied,
+            } => Self::live(flow, *hidden, *direct, *tied),
             Of::Lookups => Self::Lookups,
         }
     }
 
-    /// A live flow, by whether its destination stays out of the log and whether it went directly: only
-    /// a flow that went through the tool marks its app so (review b2 of W5's second part, N3).
-    pub(super) fn live(flow: &'a Flow, hidden: bool, direct: bool) -> Self {
+    /// A live flow, by whether its destination stays out of the log, whether it went directly, and whether it is the
+    /// chained tool's, tied: only a flow that went through the tool marks its app so (review b2 of W5's second part,
+    /// N3).
+    pub(super) fn live(flow: &'a Flow, hidden: bool, direct: bool, tied: bool) -> Self {
         match (hidden, direct) {
+            (false, true) if tied => Self::Tied(flow),
             // An app's own proxy with its destination left out keeps a place of its own: its kind, with no
             // address or name (ADR 0052).
             (true, true) if flow.proxy.is_some() => Self::Flow(flow),
@@ -490,7 +498,7 @@ impl Counts {
     /// place stays in full for [`SHOWN`] more. A later end of the same place takes the earlier's place. Past an app's
     /// bound its own oldest end goes, and past the bound of all the oldest of the app that holds the most. An end
     /// read as `Duration::MAX`, the clock's failure, is not kept: its place is stripped once its flow is gone.
-    pub(super) fn end(&mut self, uid: Option<u32>, flow: Flow, at: Duration) {
+    pub(super) fn end(&mut self, uid: Option<u32>, flow: Flow, at: Duration, tied: bool) {
         if at == Duration::MAX {
             return;
         }
@@ -500,9 +508,15 @@ impl Counts {
             .find(|end| end.uid == uid && same_place(&end.flow, &flow))
         {
             end.at = end.at.max(at);
+            end.tied &= tied;
             return;
         }
-        self.ended.push(End { uid, flow, at });
+        self.ended.push(End {
+            uid,
+            flow,
+            at,
+            tied,
+        });
         let over = if self.ended.iter().filter(|end| end.uid == uid).count() > PLACES_PER_APP {
             Some(uid)
         } else if self.ended.len() > PLACES {
@@ -517,10 +531,11 @@ impl Counts {
         } else {
             None
         };
+        // A tied end, a chained app's destination's, gives way before the tool's own (review-D-engine major 2).
         if let Some(over) = over
             && let Some(oldest) = (0..self.ended.len())
                 .filter(|&i| self.ended[i].uid == over)
-                .min_by_key(|&i| self.ended[i].at)
+                .min_by_key(|&i| (!self.ended[i].tied, self.ended[i].at))
         {
             self.ended.swap_remove(oldest);
         }
@@ -698,9 +713,10 @@ impl Counts {
         let app = self.apps.entry(uid).or_default();
         app.add(minute, placed, [up, down], in_session);
         app.last = app.last.max(second);
-        let (flow, routed) = match seen {
-            Seen::Flow(flow) => (flow, false),
-            Seen::Routed(flow) => (flow, true),
+        let (flow, routed, tied) = match seen {
+            Seen::Flow(flow) => (flow, false, false),
+            Seen::Tied(flow) => (flow, false, true),
+            Seen::Routed(flow) => (flow, true, false),
             Seen::Hidden => {
                 app.through_tool = Some(app.through_tool.map_or(second, |s| s.max(second)));
                 return;
@@ -723,30 +739,29 @@ impl Counts {
         let at = if let Some(at) = known {
             at
         } else {
-            {
-                let tool = tool_own(flow, &self.keeps);
-                if app.places.len() >= PLACES_PER_APP {
-                    if let Some(oldest) = oldest_place(&app.places) {
-                        app.places.swap_remove(oldest);
-                        self.places -= 1;
-                    }
-                } else if self.places >= PLACES {
-                    self.forget_oldest_place();
+            // A tied place is a chained app's destination, no tool's own to guard (review-D-engine major 2).
+            let tool = !tied && tool_own(flow, &self.keeps);
+            if app.places.len() >= PLACES_PER_APP {
+                if let Some(oldest) = oldest_place(&app.places) {
+                    app.places.swap_remove(oldest);
+                    self.places -= 1;
                 }
-                let Some(app) = self.apps.get_mut(&uid) else {
-                    return;
-                };
-                app.places.push(Place {
-                    flow: flow.clone(),
-                    minutes: VecDeque::new(),
-                    session: Ways::default(),
-                    last: second,
-                    routed: None,
-                    tool,
-                });
-                self.places += 1;
-                app.places.len() - 1
+            } else if self.places >= PLACES {
+                self.forget_oldest_place();
             }
+            let Some(app) = self.apps.get_mut(&uid) else {
+                return;
+            };
+            app.places.push(Place {
+                flow: flow.clone(),
+                minutes: VecDeque::new(),
+                session: Ways::default(),
+                last: second,
+                routed: None,
+                tool,
+            });
+            self.places += 1;
+            app.places.len() - 1
         };
         let Some(place) = self
             .apps
@@ -889,7 +904,7 @@ impl Shared {
             // The seconds not placed yet: in the live flows and the segments held.
             for live in live.values() {
                 let marks = lock(&live.bytes.marks);
-                let seen = Seen::live(&live.flow, live.hidden, live.direct);
+                let seen = Seen::live(&live.flow, live.hidden, live.direct, live.tied);
                 view.waiting(live.flow.uid, &marks, (live.bytes.now(), seen), &keeps);
             }
             for piece in &activity.held {
@@ -1174,7 +1189,7 @@ impl View {
                     app.through_tool = true;
                     continue;
                 }
-                Seen::Flow(flow) | Seen::Routed(flow) => flow,
+                Seen::Flow(flow) | Seen::Tied(flow) | Seen::Routed(flow) => flow,
                 Seen::HiddenDirect(Some(t)) => {
                     app.through_tunnel = Some(t);
                     continue;
@@ -1193,7 +1208,8 @@ impl View {
                     .iter()
                     .position(|(f, _)| same_place(f, flow))
                     .or_else(|| {
-                        let first_hop = own_first_hop(flow) || tool_own(flow, keeps);
+                        let first_hop = own_first_hop(flow)
+                            || (!matches!(seen, Seen::Tied(_)) && tool_own(flow, keeps));
                         let held = if first_hop {
                             app.first_hops
                         } else {
@@ -2215,6 +2231,66 @@ mod tests {
             "{records:?}"
         );
         assert!(!of(2).is_empty() && of(2).iter().all(|f| no_destination(f)));
+    }
+
+    /// Review-D-engine major 2: the chained apps' destinations the chained tool opens directly, tied at their birth,
+    /// give way before the tool's own server in "Now". With the chain's tool's server flow quiet and open, 130 tied
+    /// places push out tied places, never the server's; and once the server's flow ends before all of theirs, its end
+    /// outlives theirs in the table, so that its place stays for its window.
+    #[test]
+    fn chained_destinations_never_push_the_tools_own_server_out() {
+        let (shared, clock, _) = telling_at(T);
+        *lock(&shared.chain) = Some(chain_of(UID, false));
+        let server = recorded(&shared, to_server(1, TOOL));
+        up_at(&shared, &clock, &server, 100, 10);
+        let tied = PLACES_PER_APP as u64 + 2;
+        for i in 0..tied {
+            let site = SocketAddr::from(([203, 0, 113, u8::try_from(i).unwrap_or(0)], 443));
+            assert!(shared.tool_target(site).is_some());
+            let bytes = recorded(
+                &shared,
+                Flow {
+                    destination: site,
+                    name: None,
+                    named_by: NamedBy::Unknown,
+                    ..flow(100 + i, Some(TOOL))
+                },
+            );
+            assert!(lock(&shared.live).get(&(100 + i)).is_some_and(|l| l.tied));
+            up_at(&shared, &clock, &bytes, 1_000 + i, 5);
+        }
+        clock.set(T + 3_000);
+        shared.tell(&on_since(T, T + 2_500, T));
+        let has_server = |now| {
+            shown_places(&shared, TOOL, now)
+                .iter()
+                .any(|p| p.flow.destination == SERVER)
+        };
+        assert!(has_server(T + 3_000), "the quiet open server stays");
+        assert_eq!(counted_places(&shared, TOOL).len(), PLACES_PER_APP);
+        // The ends: the server's first, then every tied flow's.
+        shared.finish(1);
+        clock.pass(1_000);
+        for i in 0..tied {
+            shared.finish(100 + i);
+        }
+        {
+            let activity = lock(&shared.activity);
+            let ends: Vec<_> = activity
+                .counts
+                .ended
+                .iter()
+                .filter(|end| end.uid == Some(TOOL))
+                .collect();
+            assert!(ends.len() <= PLACES_PER_APP);
+            assert!(
+                ends.iter()
+                    .any(|end| end.flow.destination == SERVER && !end.tied),
+                "the server's end stays"
+            );
+        }
+        clock.pass(5 * MINUTE);
+        assert!(has_server(clock.wall_ms()), "within its window");
     }
 
     /// The audit's m7, R10's late tools: a tool's flow that ended before the set named its UID a tool, its place in

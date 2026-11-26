@@ -192,12 +192,14 @@ impl Force {
 
 /// What a segment held for its state is: a flow's, or an app's lookups'.
 pub(super) enum Of {
-    /// A flow, as it was when cut, whether its destination stays out of the log, and whether it went
-    /// directly, not through the user's tool.
+    /// A flow, as it was when cut, whether its destination stays out of the log, whether it went
+    /// directly, not through the user's tool, and whether it is the chained tool's, tied to what the chain asked
+    /// it for (R10, `Live::tied`).
     Flow {
         flow: Flow,
         hidden: bool,
         direct: bool,
+        tied: bool,
     },
     /// An app's lookups to the network part's own DNS address: its counts are the lookups, nought, and their bytes
     /// up and down on the tunnel.
@@ -990,7 +992,10 @@ impl Shared {
                     let now = live.bytes.now();
                     let flow = &live.flow;
                     *settled.entry(flow.uid).or_default() += activity.settle_open(
-                        (flow.uid, Seen::live(flow, live.hidden, live.direct)),
+                        (
+                            flow.uid,
+                            Seen::live(flow, live.hidden, live.direct, live.tied),
+                        ),
                         (
                             &mut live.start,
                             &mut live.base,
@@ -2653,7 +2658,7 @@ pub(super) mod tests {
                 .count(Some(UID), T / 1000, [10, 0, 0, 0], IN_USE, Seen::Flow(&hop));
             activity
                 .counts
-                .end(Some(UID), hop.clone(), clock.since_boot());
+                .end(Some(UID), hop.clone(), clock.since_boot(), false);
         }
         let full = |engine: &Engine| {
             engine
@@ -2747,12 +2752,15 @@ pub(super) mod tests {
             // The first ended eleven minutes before, the second one minute.
             activity
                 .counts
-                .end(Some(TOOL), server(1, 44), clock.since_boot());
+                .end(Some(TOOL), server(1, 44), clock.since_boot(), false);
         }
         clock.pass(10 * 60_000);
-        lock(&engine.shared.activity)
-            .counts
-            .end(Some(TOOL), server(2, 45), clock.since_boot());
+        lock(&engine.shared.activity).counts.end(
+            Some(TOOL),
+            server(2, 45),
+            clock.since_boot(),
+            false,
+        );
         clock.pass(60_000);
         let shown = |engine: &Engine| {
             engine

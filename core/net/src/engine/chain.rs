@@ -264,12 +264,13 @@ impl Shared {
     /// no lock of the engine's order held, before `live`. Out of line.
     #[cold]
     #[inline(never)]
-    pub(super) fn tie_carried(&self, flow: &super::Flow) {
+    pub(super) fn tie_carried(&self, flow: &super::Flow) -> bool {
         let now = self.clock.since_boot();
         let tied = lock(&self.carried).ties(flow, now);
         if tied {
             lock(&self.held_back).tie(flow.id);
         }
+        tied
     }
 
     /// The chained tool's flow `opened` sent a hello that names `name` (review-D-engine major 1): tied if the chain asked
@@ -286,6 +287,10 @@ impl Shared {
         let tied = lock(&self.carried).holds(key, now);
         if !tied {
             return;
+        }
+        // Its place and end give way before the tool's own from now on (review-D-engine major 2).
+        if let Some(live) = lock(&self.live).get_mut(&opened.id) {
+            live.tied = true;
         }
         let mut back = lock(&self.held_back);
         let mut pending = lock(&self.pending_log);
@@ -920,6 +925,10 @@ mod tests {
             }
             let tied: Vec<bool> = flows.iter().map(|&(id, ..)| tied(&shared, id)).collect();
             assert_eq!(tied, vec![true, false, false, false]);
+            assert!(
+                lock(&shared.live).get(&1).is_some_and(|l| l.tied),
+                "its place gives way before the tool's own from now on"
+            );
             let stripped = waiting(1);
             assert!(
                 !stripped.is_empty()
