@@ -461,7 +461,10 @@ def quote_yaml(text):
 
 def index_markdown(data):
     w = data.words
-    out = ["---", f"title: {quote_yaml(w['guide_index_title'])}", "---", "", markdown_escape(w["guide_index_intro"]), ""]
+    # The guides' index is a page only: the section's feed is the news's, whose items the guides are not (the site
+    # for search engines, fix 5).
+    out = ["---", f"title: {quote_yaml(w['guide_index_title'])}", 'outputs: ["html"]', "---", "",
+           markdown_escape(w["guide_index_intro"]), ""]
     for page, heading in (("proxy", "guide_index_proxy"), ("wireguard", "guide_index_wireguard"), ("vpn", "guide_index_vpn"),
                           ("waiting", "guide_index_waiting")):
         out += [f"## {markdown_escape(w[heading])}", ""]
