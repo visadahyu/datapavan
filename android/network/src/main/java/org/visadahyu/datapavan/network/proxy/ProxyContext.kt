@@ -30,6 +30,12 @@ object ProxyContext {
          * covers them.
          */
         val carriers: Map<Int, String> = emptyMap(),
+        /**
+         * Whether the last hand-over could hand the apps and tools the user chose: the tools were read in this run and,
+         * under strict Private DNS, the setting's addresses are known (unit D; review D-rest n8). The screens show a
+         * tool chosen as the engine has it: none while this is false.
+         */
+        val handReady: Boolean = false,
     )
 
     private val held = MutableStateFlow(State())
@@ -42,6 +48,9 @@ object ProxyContext {
 
     /** The tools' UIDs, read off the main thread at the tunnel's start and at each change of the apps. Any thread. */
     fun publishTools(tools: Map<Int, String>, carriers: Map<Int, String>) = held.update { it.copy(tools = tools, carriers = carriers) }
+
+    /** Whether the hand-over could hand the choices, at each hand-over. Any thread. */
+    fun publishReady(ready: Boolean) = held.update { it.copy(handReady = ready) }
 
     /** Forgets everything, when the tunnel stops. */
     fun clear() {

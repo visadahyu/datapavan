@@ -21,8 +21,10 @@ import org.visadahyu.datapavan.network.NetworkVpnService
  * lives, its rows say so, as they do when the network part saw only the new first install time (review C-rest 1). A UID
  * is handed only while every package that holds it now was chosen, so a package that joins it ends the choice; never
  * Android's own UIDs, a circumvention tool's or Android's PAC handler's. A tool's choice is handed only while its UID is
- * a tool's that can carry traffic inside the VPN (`chain.Tools.carriers`); one that is no tool now is dropped, and says
- * nothing (D7). Neither kind is handed before the tools were read in a run (audit-D m8). The engine decides what is
+ * a tool's that can carry traffic inside the VPN (`chain.Tools.carriers`); while it is not (its key changed, the chain
+ * is off or chains another tool, a reading of the keys failed), it is kept and handed nothing, so that a passing reading
+ * never deletes it (D7; review D-rest m3). Neither kind is handed before the tools were read in a run (audit-D m8). The
+ * engine decides what is
  * logged, per flow, and leaves out a flow it reads as through Android's setting or a local proxy whatever is handed.
  *
  * Under ADR 0047's profile ([setProfile]) nothing of it is written: the lines live in this process alone
@@ -160,10 +162,19 @@ class LoggedApps internal constructor(
 
     /**
      * The tools' UIDs the hand-over hands now ([handed]'s [Handed.tools]), for the screens, by the same rule, [tools]
-     * being the tools whose own connections follow R10 (unit D). It writes nothing.
+     * being the tools whose own connections follow R10 (unit D), and [ready] whether the running service's last
+     * hand-over could hand any (`ProxyContext.State.handReady`; review D-rest n8): while it could not, none, as the
+     * engine has none. It writes nothing.
      */
-    fun toolsChosen(packages: Packages, tools: Set<Int>): Set<Int> =
-        handed(emptySet(), packages, tools, null, ready = true, toolEntries = entries(Kind.TOOL)).tools.toSet()
+    fun toolsChosen(packages: Packages, tools: Set<Int>, ready: Boolean = true): Set<Int> =
+        handed(emptySet(), packages, tools, null, ready = ready, toolEntries = entries(Kind.TOOL)).tools.toSet()
+
+    /**
+     * How many apps and tools the user chose to log one by one, as the hand-over hands them ([chosen] and
+     * [toolsChosen]): one count, for the switch's note (the maintainer's decision on unit C's list). It writes nothing.
+     */
+    fun chosenCount(packages: Packages, tools: Set<Int>, pacHandler: Int?, ready: Boolean = true): Int =
+        chosen(packages, tools, pacHandler).size + toolsChosen(packages, tools, ready).size
 
     /**
      * ADR 0047's profile on or off, by W9's switch (and the debug builds' `tunnel-profile on|off`). On, the lines on disk
@@ -251,10 +262,12 @@ class LoggedApps internal constructor(
          * package found gone at an earlier hand-over ([before], [Ended.REMOVED]) and installed now was installed again.
          *
          * The tools chosen ([toolEntries], unit D, D7) by the same rule, but the other way round: once [ready], a tool's
-         * UID is handed only while it is one of [tools], the tools whose own connections follow R10, and its entries are
-         * stale while it is not (its key changed, or the chain's tool is another now). Before, none is handed and none is
-         * found stale for it, as the apps wait (audit-D m8): a choice is never lost in the seconds after a start. A
-         * tool's choice that ended keeps no reason: its rows say nothing of it.
+         * UID is handed only while it is one of [tools], the tools whose own connections follow R10. While it is not (its
+         * key changed, the chain is off or chains another tool, the keys could not be read), its entries are kept and it
+         * is handed nothing: they become stale only when the package is removed, installed again or joined by another,
+         * so that a passing reading never deletes the user's choice (review D-rest m3). Before [ready], none is handed,
+         * as the apps wait (audit-D m8). A tool's choice that ended keeps no reason: its confirmation said beforehand
+         * what ends it.
          */
         fun handed(
             entries: Set<Entry>,
@@ -319,9 +332,9 @@ class LoggedApps internal constructor(
                 val chosen = fresh.map { it.packageName }.toSet()
                 when {
                     !ProxyChoice.application(uid) || packages.packagesOf(uid).any { it !in chosen } -> staleTools += fresh
-                    !ready -> continue
-                    uid in tools -> toolUids += uid
-                    else -> staleTools += fresh
+                    ready && uid in tools -> toolUids += uid
+                    // Not ready yet, or no tool for now: kept, handed nothing.
+                    else -> continue
                 }
             }
             return Handed(uids.sorted(), stale, ended, toolUids.sorted(), staleTools)

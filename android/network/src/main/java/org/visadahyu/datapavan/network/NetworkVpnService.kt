@@ -572,6 +572,7 @@ class NetworkVpnService : VpnService() {
             toolEntries = choice.entries(org.visadahyu.datapavan.network.proxy.LoggedApps.Kind.TOOL),
         )
         choice.drop(handed)
+        org.visadahyu.datapavan.network.proxy.ProxyContext.publishReady(toolsRead && !waiting)
         val logged = handed.uids.toIntArray()
         val loggedTools = handed.tools.toIntArray()
         loggedHanded = logged

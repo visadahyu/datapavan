@@ -323,11 +323,12 @@ class MainActivity : ComponentActivity() {
             val store = org.visadahyu.datapavan.network.proxy.LoggedApps.of(this)
             val packages = org.visadahyu.datapavan.network.proxy.LoggedApps.packages(packageManager)
             val tools = published.carriers.keys.ifEmpty { org.visadahyu.datapavan.network.chain.Tools.read(this).carriers.keys }
-            val count = store.chosen(
+            val count = store.chosenCount(
                 packages,
                 tools,
                 published.pacHandler ?: org.visadahyu.datapavan.network.proxy.PacHandler.uid(packageManager),
-            ).size + store.toolsChosen(packages, tools).size
+                ready = !NetworkVpnService.running.value || published.handReady,
+            )
             runOnUiThread { if (count != logSwitch.value.chosen) logSwitch.value = logSwitch.value.copy(chosen = count) }
         }
     }

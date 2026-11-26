@@ -322,7 +322,8 @@ class NowActivity : ComponentActivity() {
             pacHandler = pacHandler,
             user = android.os.Process.myUid() / ProxyChoice.PER_USER_RANGE,
             sdkRuntime = sdkRuntime,
-            toolsChosen = store.toolsChosen(packages, tools),
+            // As the engine has them: none while the running service's hand-over could hand none (review D-rest n8).
+            toolsChosen = store.toolsChosen(packages, tools, ready = !NetworkVpnService.running.value || published.handReady),
             toolsStopped = toolsStopped,
         )
     }

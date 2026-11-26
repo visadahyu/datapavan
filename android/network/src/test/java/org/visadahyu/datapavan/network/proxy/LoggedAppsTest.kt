@@ -319,24 +319,32 @@ class LoggedAppsTest {
     }
 
     /**
-     * A tool chosen that is no tool now, its key changed, or the chain's tool another, is stale and dropped once the
-     * tools were read, saying nothing; so is one removed, installed again, or joined by another package (D7).
+     * A tool chosen that is no tool for now, its key changed, the chain off or chaining another tool, or a reading of the
+     * keys that failed, is kept and handed nothing (review D-rest m3): once it is a tool again, it is handed again, with no
+     * new choice. One removed, installed again, or joined by another package is stale and dropped, saying nothing (D7).
      */
     @Test
-    fun aToolChosenThatIsNoToolNowIsStale() {
+    fun aToolChosenThatIsNoToolForNowIsKeptAndHandedNothing() {
         store.choose(LoggedApps.entriesOfUid(phone, 10_123), Kind.TOOL)
         store.choose(LoggedApps.entriesOfUid(phone, 10_124), Kind.TOOL)
         assertEquals(listOf(10_123, 10_124), handed(tools = setOf(10_123, 10_124)).tools)
-        val handed = handed(tools = setOf(10_124))
-        assertEquals(listOf(10_124), handed.tools)
-        assertEquals(setOf(Entry("com.example.messenger", 1_000)), handed.staleTools)
-        store.drop(handed)
-        assertEquals(setOf(Entry("com.example.other", 2_000)), store.entries(Kind.TOOL))
+        // The chain turned off: 10_123 counted only as the chain's tool.
+        val off = handed(tools = setOf(10_124))
+        assertEquals(listOf(10_124), off.tools)
+        assertEquals(emptySet<Entry>(), off.staleTools)
+        store.drop(off)
+        assertEquals(setOf(Entry("com.example.messenger", 1_000), Entry("com.example.other", 2_000)), store.entries(Kind.TOOL))
+        // A reading of the keys that failed: none counts, none goes.
+        assertEquals(emptyList<Int>(), hand(tools = emptySet()))
+        assertEquals(2, store.entries(Kind.TOOL).size)
+        // The chain on again: handed with no new choice.
+        assertEquals(listOf(10_123, 10_124), handed(tools = setOf(10_123, 10_124)).tools)
         assertEquals(emptyMap<String, Ended>(), store.ended())
         // Installed again: a new first install time, whatever its UID.
         phone.installed["com.example.other"] = 10_124 to 2_500L
-        assertEquals(emptyList<Int>(), hand(tools = setOf(10_124)))
-        assertEquals(emptySet<Entry>(), store.entries(Kind.TOOL))
+        assertEquals(setOf(Entry("com.example.other", 2_000)), handed(tools = setOf(10_124)).staleTools)
+        hand(tools = setOf(10_124))
+        assertEquals(setOf(Entry("com.example.messenger", 1_000)), store.entries(Kind.TOOL))
         // Joined by a package not chosen.
         store.choose(LoggedApps.entriesOfUid(phone, 10_124), Kind.TOOL)
         phone.installed["com.example.joined"] = 10_124 to 3_000L
@@ -348,9 +356,26 @@ class LoggedAppsTest {
     }
 
     /**
-     * Before the tools were read once in this run, no tool chosen is handed, and none is found stale for not being a tool
-     * (audit-D m8): the set is not known yet, so a choice is never lost in the seconds after a start. Once read, it is
-     * handed. One removed needs no tools, and goes at once.
+     * The screens count and show the choices as the hand-over hands them (review D-rest m10 and n8): one count of the apps
+     * and the tools for the switch's note, and no tool while the running service's hand-over could hand none.
+     */
+    @Test
+    fun theScreensCountAndShowTheChoicesAsTheHandOverHandsThem() {
+        store.choose(LoggedApps.entriesOfUid(phone, 10_123))
+        store.choose(LoggedApps.entriesOfUid(phone, 10_124), Kind.TOOL)
+        assertEquals(2, store.chosenCount(phone, setOf(10_124), null))
+        assertEquals(1, store.chosenCount(phone, setOf(10_124), null, ready = false))
+        assertEquals(setOf(10_124), store.toolsChosen(phone, setOf(10_124)))
+        assertEquals(emptySet<Int>(), store.toolsChosen(phone, setOf(10_124), ready = false))
+        // A tool for now no more: not counted, still kept.
+        assertEquals(1, store.chosenCount(phone, emptySet(), null))
+        assertEquals(1, store.entries(Kind.TOOL).size)
+    }
+
+    /**
+     * Before the tools were read once in this run, no tool chosen is handed (audit-D m8): the set is not known yet, so a
+     * choice is never lost in the seconds after a start. Once read, it is handed. One removed needs no tools, and goes at
+     * once.
      */
     @Test
     fun theToolsChosenWaitForTheToolsToBeRead() {
