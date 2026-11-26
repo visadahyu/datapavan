@@ -85,7 +85,7 @@ struct Fifo<K, V> {
 impl<K, V> Default for Fifo<K, V> {
     fn default() -> Self {
         Self {
-            entries: HashMap::new(),
+            entries: crate::map(),
             order: VecDeque::new(),
         }
     }

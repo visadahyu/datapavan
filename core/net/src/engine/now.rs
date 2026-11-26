@@ -520,7 +520,7 @@ impl Counts {
         let over = if self.ended.iter().filter(|end| end.uid == uid).count() > PLACES_PER_APP {
             Some(uid)
         } else if self.ended.len() > PLACES {
-            let mut by_app: HashMap<Option<u32>, usize> = HashMap::new();
+            let mut by_app: HashMap<Option<u32>, usize> = crate::map();
             for end in &self.ended {
                 *by_app.entry(end.uid).or_default() += 1;
             }
@@ -916,13 +916,14 @@ impl Shared {
                 activity.told_until(),
                 activity.screen(),
                 activity.counts.session,
-                view.apps
-                    .keys()
-                    .map(|&uid| (uid, activity.now(uid)))
-                    .collect::<HashMap<_, _>>(),
+                {
+                    let mut now: HashMap<_, _> = crate::map();
+                    now.extend(view.apps.keys().map(|&uid| (uid, activity.now(uid))));
+                    now
+                },
             );
             // The organisations already known; the others to look up, out of the locks.
-            let mut found = HashMap::new();
+            let mut found = crate::map();
             for app in view.apps.values() {
                 for (flow, _) in &app.places {
                     let address = flow.destination.ip();

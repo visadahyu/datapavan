@@ -56,14 +56,15 @@ pub(crate) fn keys() -> std::hash::RandomState {
     std::hash::RandomState::new()
 }
 
-/// An empty map with keys of its own: `HashMap::new()`, its keys made out of line ([`keys`]).
+/// An empty map with keys of its own: `HashMap::new()`, its keys made out of line (`keys`). Public for the JNI bridge
+/// (`network-jni`), whose maps take this maker too, not a second copy of it (the cold paths' second pass, ADR 0053).
 #[must_use]
-pub(crate) fn map<K, V>() -> std::collections::HashMap<K, V> {
+pub fn map<K, V>() -> std::collections::HashMap<K, V> {
     std::collections::HashMap::with_hasher(keys())
 }
 
-/// An empty set with keys of its own: `HashSet::new()`, its keys made out of line ([`keys`]).
+/// An empty set with keys of its own: `HashSet::new()`, its keys made out of line (`keys`), as [`map`]'s.
 #[must_use]
-pub(crate) fn set<T>() -> std::collections::HashSet<T> {
+pub fn set<T>() -> std::collections::HashSet<T> {
     std::collections::HashSet::with_hasher(keys())
 }

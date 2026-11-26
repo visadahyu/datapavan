@@ -132,7 +132,7 @@ async fn run(
         }
     };
     let (mut reader, mut writer) = stream.into_split();
-    let mut waiting: HashMap<u16, Waiting> = HashMap::new();
+    let mut waiting: HashMap<u16, Waiting> = crate::map();
     let mut next_id: u16 = 0;
     let mut received = Vec::with_capacity(4096);
     let mut taking = true;
