@@ -426,6 +426,8 @@
  "a11y_aim": "Datapavan 力求让每个人都能使用，包括使用屏幕阅读器、大字体、高对比度或键盘的人：本网站和两个版本在所有语言中都以 WCAG 2.2 AA 级为目标。",
  "a11y_tell": "如果某些内容无法与您的屏幕阅读器、字号、颜色或键盘正常配合使用，请告诉我们：在 [GitHub](https://github.com/visadahyu/datapavan/issues) 上提交 issue；如果您不想公开发帖，也可以发邮件至 security@datapavan.org。请说明您使用的手机、Android 版本、屏幕阅读器和语音。",
  "a11y_full": "完整声明：Datapavan 如何接受检查，以及已知的不足之处（英文）",
+ "notfound_title": "Page not found",
+ "notfound_body": "There is no page at this address. Datapavan’s main page in each language:",
  "foot_source": "源代码",
  "foot_licence": "依据 Apache License 2.0 发布的自由软件。",
  "foot_clean": "此页面不设置 Cookie，也不从其他服务器加载任何内容。",

@@ -20,6 +20,9 @@ LIMIT = 200 * 1024
 FP = "FA:6A:24:04:2A:BC:AC:8B"
 BASE = "https://datapavan.org/"
 LANGS = ("fr", "de", "es", "ru", "zh", "ar", "fa")
+# The page a missing address gets: the server answers 404 with it at any address (server/site.sh in the strategy
+# repository), so it has no address of its own, and every link on it starts at the site's root.
+NOT_FOUND = "404.html"
 
 
 def main():
@@ -108,6 +111,26 @@ def internal(page, link):
     return (page.parent / path).resolve()
 
 
+def not_found(html):
+    """The page for a missing address: kept out of the indexes, with no address of its own, linking every language's
+    main page from the root, since it is served at any depth."""
+    bad = []
+    if '<meta name="robots" content="noindex">' not in html:
+        bad.append(f"{NOT_FOUND}: needs <meta name=\"robots\" content=\"noindex\">")
+    if re.search(r'<link rel="(canonical|alternate)"|property="og:url"', html):
+        bad.append(f"{NOT_FOUND}: has an address of its own (a canonical, alternate or og:url)")
+    links = re.findall(r'(?:href|src)="?([^"\s>]+)', html) + re.findall(r"url\(([^)\"']+)\)", html)
+    for link in links:
+        if not re.match(r"/(?!/)|[a-z]+:|#", link):
+            bad.append(f"{NOT_FOUND}: link {link} does not start at the site's root, so it breaks below the root")
+    main = html[html.find("<main"):html.find("</main>")]
+    for lang in ("en",) + LANGS:
+        home = "/" if lang == "en" else f"/{lang}/"
+        if not re.search(rf'<a href="{home}" hreflang="{lang}" lang="{lang}"', main):
+            bad.append(f"{NOT_FOUND}: does not link the main page in {lang}, {home}")
+    return bad
+
+
 def search(pages):
     """What search engines read: robots.txt, the sitemap, the IndexNow key, and each page's address and title."""
     bad = []
@@ -121,6 +144,9 @@ def search(pages):
     for page in pages:
         name = str(page.relative_to(SITE))
         html = page.read_text(encoding="utf-8")
+        if name == NOT_FOUND:
+            bad += not_found(html)
+            continue
         canonical = re.findall(r'<link rel="canonical" href="([^"]+)"', html)
         og = re.findall(r'<meta property="og:url" content="([^"]+)"', html)
         if len(canonical) != 1 or og != canonical:
@@ -321,7 +347,7 @@ def site_map(pages):
     """Each language's map lists every page of its language, and, outside English, the English pages that have no
     translation in it (the guides), each of those marked as English (WCAG 2.4.5 and 3.1.2)."""
     bad = []
-    names = {str(p.relative_to(SITE)) for p in pages}
+    names = {str(p.relative_to(SITE)) for p in pages} - {NOT_FOUND}
     def language(name):
         return name.split("/")[0] if name.split("/")[0] in LANGS else "en"
     for lang in ("en",) + LANGS:

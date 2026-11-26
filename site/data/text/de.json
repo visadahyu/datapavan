@@ -426,6 +426,8 @@
  "a11y_aim": "Datapavan hat das Ziel, für alle zu funktionieren, auch für Menschen, die einen Screenreader, große Schrift, hohen Kontrast oder eine Tastatur nutzen: WCAG 2.2 auf Stufe AA für diese Website und für beide Editionen, in jeder Sprache.",
  "a11y_tell": "Wenn etwas mit Ihrem Screenreader, Ihrer Schriftgröße, Ihren Farben oder Ihrer Tastatur nicht funktioniert, sagen Sie es uns bitte: Erstellen Sie ein Issue auf [GitHub](https://github.com/visadahyu/datapavan/issues) oder schreiben Sie an security@datapavan.org, wenn Sie lieber nicht öffentlich schreiben möchten. Nennen Sie bitte Ihr Telefon, Ihre Android-Version, Ihren Screenreader und die Stimme, die Sie nutzen.",
  "a11y_full": "Die vollständige Erklärung: wie Datapavan geprüft wird und welche Mängel bekannt sind (auf Englisch)",
+ "notfound_title": "Page not found",
+ "notfound_body": "There is no page at this address. Datapavan’s main page in each language:",
  "foot_source": "Quellcode",
  "foot_licence": "Freie Software unter der Apache-Lizenz 2.0.",
  "foot_clean": "Diese Seite setzt keine Cookies und lädt nichts von anderen Servern.",

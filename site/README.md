@@ -66,6 +66,9 @@ this: the engines' own consoles report searches and clicks.
   it costs nothing to keep. Only the root one is kept, and it links the other languages.
 - **schema.org data** (`layouts/home.html`): the site's name, with the names in other scripts, and the app as a
   SoftwareApplication, as microdata rather than JSON-LD, so that the site keeps no script tag at all.
+- **`404.html`** (`layouts/404.html`): the page a missing address gets, with the 404 status, from the server's
+  `handle_errors` (`server/site.sh` in the strategy repository). It is kept out of the indexes and links every
+  language's main page; only the root one is kept, and since it is served at any depth, its links start at the root.
 - **IndexNow:** the key file `static/<key>.txt`. After a deploy, `scripts/indexnow.py --send` tells Bing, Yandex,
   Naver and Seznam which pages exist; Google reads the sitemap.
 - **The consoles:** Google Search Console holds datapavan.org as a domain property, and Yandex Webmaster holds it too,

@@ -426,6 +426,8 @@
  "a11y_aim": "يسعى Datapavan إلى أن يعمل للجميع، ومنهم من يستخدم قارئ الشاشة أو النص الكبير أو التباين العالي أو لوحة المفاتيح: المستوى AA من WCAG 2.2 لهذا الموقع وللطبعتين كلتيهما، بكل اللغات.",
  "a11y_tell": "إن لم يعمل شيء مع قارئ الشاشة أو حجم النص أو الألوان أو لوحة المفاتيح لديك، فأخبرنا من فضلك: افتح بلاغًا (issue) على [GitHub](https://github.com/visadahyu/datapavan/issues)، أو اكتب إلى security@datapavan.org إن كنت تفضّل ألا تنشر علنًا. واذكر من فضلك أي هاتف وأي إصدار من Android وأي قارئ شاشة وأي صوت تستخدم.",
  "a11y_full": "البيان الكامل: كيف يُفحص Datapavan، وأوجه القصور المعروفة فيه (بالإنجليزية)",
+ "notfound_title": "Page not found",
+ "notfound_body": "There is no page at this address. Datapavan’s main page in each language:",
  "foot_source": "الرمز المصدري",
  "foot_licence": "برنامج حر بموجب Apache License 2.0.",
  "foot_clean": "لا تضع هذه الصفحة ملفات تعريف ارتباط ولا تحمّل شيئًا من خوادم أخرى.",

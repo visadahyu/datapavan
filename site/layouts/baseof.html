@@ -1,9 +1,11 @@
 {{- $t := index site.Data.text site.Language.Lang -}}
 {{- $isHome := .IsHome -}}
+{{- /* The page for a missing address is served at any depth, so its links start at the site's root (site/layouts/404.html). */ -}}
+{{- $is404 := eq .Kind "404" -}}
 {{- /* Up from this page to its language's home: one "../" per folder below it (a guide is two deep, W8 part 3b). */ -}}
 {{- $below := strings.TrimPrefix (cond (eq site.Language.Lang "en") "/" (printf "/%s/" site.Language.Lang)) .RelPermalink -}}
-{{- $toLang := strings.Repeat (strings.Count "/" $below) "../" -}}
-{{- $toSite := cond (eq site.Language.Lang "en") $toLang (printf "%s../" $toLang) -}}
+{{- $toLang := cond $is404 "/" (strings.Repeat (strings.Count "/" $below) "../") -}}
+{{- $toSite := cond (or $is404 (eq site.Language.Lang "en")) $toLang (printf "%s../" $toLang) -}}
 {{- $script := printf "script-%s.css" site.Params.script -}}
 <!doctype html>
 <!-- Built by Hugo from site/. It loads nothing from anywhere else: no fonts, scripts, analytics, cookies or images from other servers. -->
@@ -14,13 +16,16 @@
 <meta name="referrer" content="no-referrer">
 {{- /* For search engines and the AI assistants that answer from them (site/README.md, "Search engines"): each page's
 own title and description, its one address, its translations, and a link preview. Nothing here loads anything. */ -}}
-{{- $title := cond $isHome (printf "%sDatapavan · %s" (cond (ne $t.name_native "") (printf "%s · " $t.name_native) "") $t.h1) (printf "%s · %sDatapavan" .Title (cond (ne $t.name_native "") (printf "%s · " $t.name_native) "")) -}}
+{{- $title := cond $is404 (printf "%s · Datapavan" $t.notfound_title) (cond $isHome (printf "%sDatapavan · %s" (cond (ne $t.name_native "") (printf "%s · " $t.name_native) "") $t.h1) (printf "%s · %sDatapavan" .Title (cond (ne $t.name_native "") (printf "%s · " $t.name_native) ""))) -}}
 {{- $desc := $t.tagline -}}
 {{- /* A guide's own opening says what it is for; other pages keep the tagline unless they set a description. */ -}}
 {{- with .Description }}{{ $desc = . }}{{ else }}{{ if and .IsPage (eq .Section "guides") }}{{ with .Summary }}{{ $desc = . | plainify | htmlUnescape | replaceRE `\s+` " " | strings.TrimSpace | truncate 160 }}{{ end }}{{ end }}{{ end }}
-<meta name="description" content="{{ $desc }}">
 <title>{{ $title }}</title>
 <link rel="icon" href="{{ $toSite }}favicon.svg" type="image/svg+xml">
+{{- if $is404 }}
+<meta name="robots" content="noindex">
+{{- else }}
+<meta name="description" content="{{ $desc }}">
 <link rel="canonical" href="{{ .Permalink }}">
 {{- range .AllTranslations }}
 <link rel="alternate" hreflang="{{ .Language.Lang }}" href="{{ .Permalink }}">
@@ -42,6 +47,7 @@ own title and description, its one address, its translations, and a link preview
 {{- with .OutputFormats.Get "rss" }}
 <link rel="alternate" type="application/rss+xml" title="Datapavan" href="index.xml">
 {{- end }}
+{{- end }}
 <style>
 {{ replace (resources.Get $script).Content "@@ROOT@@" $toSite | safeCSS }}
 {{ (resources.Get "style.css").Content | safeCSS }}</style>
@@ -59,7 +65,7 @@ own title and description, its one address, its translations, and a link preview
 {{- $lang := .Language.Lang -}}
 {{- $page := $here -}}
 {{- with $here.AllTranslations -}}{{- range . -}}{{- if eq .Language.Lang $lang -}}{{- $page = . -}}{{- end -}}{{- end -}}{{- end -}}
-{{- $target := cond (eq $page.Language.Lang $lang) (strings.TrimPrefix "/" $page.RelPermalink) (cond (eq $lang "en") "" (printf "%s/" $lang)) -}}
+{{- $target := cond (and (not $is404) (eq $page.Language.Lang $lang)) (strings.TrimPrefix "/" $page.RelPermalink) (cond (eq $lang "en") "" (printf "%s/" $lang)) -}}
 {{- $link := printf "%s%s" $toSite $target | default "./" -}}
 <li><a href="{{ $link | safeURL }}" hreflang="{{ $lang }}" lang="{{ $lang }}"{{ if eq $lang site.Language.Lang }} aria-current="true"{{ end }}>{{ .Language.Label }}</a></li>
 {{- end -}}

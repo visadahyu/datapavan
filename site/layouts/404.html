@@ -1,0 +1,12 @@
+{{ define "main" }}
+{{- /* The page a missing address gets (the server answers 404 with it, server/site.sh in the strategy repository). Only
+the root one is kept (scripts/build-site.sh), and it is served at any depth, so every link on it starts at the site's
+root. It links the main page of every language, each with its own words for what happened. */ -}}
+{{- $t := index site.Data.text site.Language.Lang -}}
+<main id="main"><section><div class="w prose"><h1>{{ $t.notfound_title }}</h1><p>{{ $t.notfound_body }}</p><ul class="map">
+{{- range .Sites }}{{ $w := index site.Data.text .Language.Lang }}
+<li><a href="{{ .Home.RelPermalink }}" hreflang="{{ .Language.Lang }}" lang="{{ .Language.Lang }}" dir="{{ .Language.Direction }}">{{ .Language.Label }}</a>
+{{- if ne .Language.Lang site.Language.Lang }} · <span lang="{{ .Language.Lang }}" dir="{{ .Language.Direction }}">{{ $w.notfound_title }}</span>{{ end }}</li>
+{{- end }}
+</ul></div></section></main>
+{{ end }}

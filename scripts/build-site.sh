@@ -89,9 +89,10 @@ PY
 
 # Hugo also writes a sitemap per language. The one at the root (site/layouts/sitemapindex.xml) lists every page of
 # every language, and English's own would sit under /en/, where a sitemap may not list the root's pages. llms.txt
-# is the same: the root one lists the other languages.
+# is the same: the root one lists the other languages. So is the page for a missing address: the server answers every
+# one with the root's (site/layouts/404.html), which links every language.
 prune() {
-    rm -f "$1"/*/sitemap.xml "$1"/*/llms.txt
+    rm -f "$1"/*/sitemap.xml "$1"/*/llms.txt "$1"/*/404.html
     rmdir "$1/en"
 }
 
