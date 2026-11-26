@@ -427,6 +427,13 @@ impl Shared {
         if self.is_tunnel_dns(flow.destination.ip()) {
             return None;
         }
+        // R10's tie (option (c)): a flow of the chained tool, decided at its birth. The cheap test first.
+        if self
+            .chain()
+            .is_some_and(|chain| flow.uid == Some(chain.tool))
+        {
+            self.tie_carried(flow);
+        }
         let hidden = via.is_some_and(|chain| !chain.log_destinations)
             || self.hides(flow.uid, flow.destination);
         let direct = via.is_none();

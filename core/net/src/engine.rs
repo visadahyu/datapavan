@@ -1004,6 +1004,9 @@ struct Shared {
     uncached_answers: AtomicBool,
     /// The user's tool and the apps sent through it, while a chain is on (W6).
     chain: Mutex<Option<Arc<Chain>>>,
+    /// What the chain asked the tool for in the last ten seconds, to tell what the tool opens directly for a chained
+    /// app from its own connections (R10, the proxy record's unit D): a leaf lock, taken alone.
+    carried: Mutex<chain::Carried>,
     /// How many times the chain was set, on or off: a UDP mapping asks again whether its way still
     /// holds only when this changed.
     chains: AtomicU64,
@@ -1242,6 +1245,7 @@ impl Engine {
             flush_wanted: Notify::new(),
             uncached_answers: AtomicBool::new(uncached_answers),
             chain: Mutex::new(chain),
+            carried: Mutex::default(),
             chains: AtomicU64::new(0),
             stand_ins: Mutex::new(stand_ins),
             direct_answers: Mutex::default(),
@@ -1448,7 +1452,17 @@ impl Engine {
     pub fn chain(&self, chain: Option<Chain>) {
         let on = chain.is_some() || self.shared.tunnels.any();
         let tool = chain.as_ref().map(|chain| chain.tool);
-        let before = std::mem::replace(&mut *lock(&self.shared.chain), chain.map(Arc::new));
+        let chain = chain.map(Arc::new);
+        let before = std::mem::replace(&mut *lock(&self.shared.chain), chain.clone());
+        // What the chain asked the tool for goes only when the chain goes off, or its tool changes, not at each chain set
+        // anew, as every change of an app's package sets it (audit-D m4).
+        if !before
+            .as_deref()
+            .zip(chain.as_deref())
+            .is_some_and(|(before, after)| before.same_tool(after))
+        {
+            lock(&self.shared.carried).clear();
+        }
         // A tool chained anew that the network part had not handed as one is a tool from now on (R10's late tools).
         if let Some(tool) = tool
             && before.as_ref().is_none_or(|before| before.tool != tool)
@@ -2095,6 +2109,7 @@ mod tests {
             flush_wanted: Notify::new(),
             uncached_answers: AtomicBool::new(false),
             chain: Mutex::new(None),
+            carried: Mutex::default(),
             chains: AtomicU64::new(0),
             stand_ins: Mutex::default(),
             direct_answers: Mutex::default(),

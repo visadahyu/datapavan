@@ -13,10 +13,94 @@ use crate::socks5::{self, Command, Credentials, Target};
 use crate::standins::is_stand_in;
 use std::collections::HashSet;
 use std::io;
-use std::net::SocketAddr;
+use std::net::{IpAddr, SocketAddr};
 use std::os::fd::AsFd;
 use std::sync::Arc;
+use std::time::Duration;
 use tokio::net::{TcpSocket, TcpStream};
+
+/// How long what the chain asked the tool for ties the chained tool's direct flows to it (R10, the proxy record's unit
+/// D): ten seconds on the boot clock, sleep included.
+pub(super) const CARRIED: Duration = Duration::from_secs(10);
+
+/// The most requests [`Carried`] holds at once: past it, the oldest is forgotten, and a direct flow the tool opens for
+/// it later counts as the tool's own (ADR 0052's limits, audit-D m5).
+pub(super) const CARRIES: usize = 256;
+
+/// What the chain asked the tool for within [`CARRIED`] (R10, the proxy record's unit D, option (c)): each request's
+/// key, with when it was asked on the boot clock, in a fixed ring of [`CARRIES`]. A key is a 64-bit FNV-1a hash of the
+/// request's address, in canonical form, or of its name, in lower case without a trailing dot, with its port: the ring
+/// holds no name or address, and allocates nothing after it is made. Two requests whose keys meet tie more, never
+/// less, and a chained app that crafted such a name could have asked the tool for the address itself. Only Datapavan's own facts: what it asked the tool for itself, never what an app or the tool sends. A flow of
+/// the chained tool that one matches at its birth is what the tool opened directly for a chained app: "Now" shows it as
+/// the tool's own, and the tool's own choice keeps its records out of the log. Entries are not used up: a dual-stack
+/// dial or a retry opens two flows for one request. A leaf lock of its own (`Shared::carried`), taken alone; never
+/// shown, never in a dump, not handed over; cleared only when the chain goes off or its tool changes (audit-D m4).
+pub(super) struct Carried {
+    asked: Vec<(u64, Option<Duration>)>,
+    next: usize,
+}
+
+impl Default for Carried {
+    fn default() -> Self {
+        Self {
+            asked: vec![(0, None); CARRIES],
+            next: 0,
+        }
+    }
+}
+
+impl Carried {
+    /// The key of a destination at `port`: its address's, canonical, or else its name's, told apart by a first byte.
+    #[inline(never)]
+    fn key(address: Option<IpAddr>, name: &str, port: u16) -> u64 {
+        let step =
+            |hash: u64, byte: u8| (hash ^ u64::from(byte)).wrapping_mul(0x0000_0100_0000_01b3);
+        let mut hash = 0xcbf2_9ce4_8422_2325;
+        match address.map(|address| address.to_canonical()) {
+            Some(IpAddr::V4(address)) => {
+                hash = address.octets().into_iter().fold(step(hash, 4), step);
+            }
+            Some(IpAddr::V6(address)) => {
+                hash = address.octets().into_iter().fold(step(hash, 6), step);
+            }
+            None => {
+                let name = name.trim_end_matches('.').bytes();
+                hash = name.fold(step(hash, 0), |hash, byte| {
+                    step(hash, byte.to_ascii_lowercase())
+                });
+            }
+        }
+        port.to_be_bytes().into_iter().fold(hash, step)
+    }
+
+    /// Whether `flow` goes where the chain asked the tool to within [`CARRIED`] before `now`: by its address and port,
+    /// or by the DNS name its address was given (its name by DNS, or the one beside a hello's) at the same port.
+    fn ties(&self, flow: &super::Flow, now: Duration) -> bool {
+        let port = flow.destination.port();
+        let address = Self::key(Some(flow.destination.ip()), "", port);
+        let by_dns = (flow.named_by == super::NamedBy::Dns)
+            .then_some(flow.name.as_deref())
+            .flatten();
+        let keys = [by_dns, flow.dns_name.as_deref()]
+            .map(|name| name.map_or(address, |name| Self::key(None, name, port)));
+        self.asked.iter().any(|&(key, at)| {
+            at.is_some_and(|at| now.saturating_sub(at) < CARRIED)
+                && (key == address || keys.contains(&key))
+        })
+    }
+
+    /// Forgets every request: the chain went off, or its tool changed.
+    pub(super) fn clear(&mut self) {
+        self.asked.fill((0, None));
+    }
+
+    /// How many requests are held, of any age.
+    #[cfg(test)]
+    fn held(&self) -> usize {
+        self.asked.iter().filter(|(_, at)| at.is_some()).count()
+    }
+}
 
 /// The user's tool and the apps sent through it.
 #[derive(Clone, Debug)]
@@ -151,19 +235,52 @@ impl Shared {
         }
     }
 
+    /// The chain asks the tool for `target` (R10): noted for [`CARRIED`], so that the direct flow the tool may open for
+    /// it is told from its own. Out of line, once per request through the tool ([`Shared::tool_target`]).
+    #[cold]
+    #[inline(never)]
+    fn carry(&self, target: &Target) {
+        let key = match target {
+            Target::Address(at) => Carried::key(Some(at.ip()), "", at.port()),
+            Target::Name(name, port) => Carried::key(None, name, *port),
+        };
+        let now = self.clock.since_boot();
+        let mut carried = lock(&self.carried);
+        let next = carried.next;
+        carried.asked[next] = (key, Some(now));
+        carried.next = (next + 1) % CARRIES;
+    }
+
+    /// A flow of the chained tool is born (R10, option (c)): tied, whatever the switch (audit-D M2), if it goes where the
+    /// chain asked the tool to within [`CARRIED`] ([`Carried`]). A tie never hides anything live; it only keeps the
+    /// flow's records out of the log under the tool's own choice. The table is let go before `held_back` is taken, with
+    /// no lock of the engine's order held, before `live`. Out of line.
+    #[cold]
+    #[inline(never)]
+    pub(super) fn tie_carried(&self, flow: &super::Flow) {
+        let now = self.clock.since_boot();
+        let tied = lock(&self.carried).ties(flow, now);
+        if tied {
+            lock(&self.held_back).tie(flow.id);
+        }
+    }
+
     /// What to ask the tool for: the name behind a stand-in address, or the address itself. `None` for
-    /// a stand-in the map no longer holds.
+    /// a stand-in the map no longer holds. Each request through the tool, a TCP connection's (`connect_through`) or a
+    /// UDP peer's (`udp::PeerWay::toward`), asks this once, which notes it ([`Shared::carry`], R10).
     pub(super) fn tool_target(&self, destination: SocketAddr) -> Option<Target> {
         // DNS over TCP to the network part's own address, which Android's resolver uses when an answer was cut
         // short, goes to the resolver of chained apps (ADR 0038). Its answers are not rebuilt.
-        if self.is_tunnel_dns(destination.ip()) {
-            return Some(Target::Address(RESOLVERS[0]));
-        }
-        if !is_stand_in(destination.ip()) {
-            return Some(Target::Address(destination));
-        }
-        let name = lock(&self.stand_ins).name(destination.ip())?;
-        Target::name(&name, destination.port())
+        let target = if self.is_tunnel_dns(destination.ip()) {
+            Target::Address(RESOLVERS[0])
+        } else if !is_stand_in(destination.ip()) {
+            Target::Address(destination)
+        } else {
+            let name = lock(&self.stand_ins).name(destination.ip())?;
+            Target::name(&name, destination.port())?
+        };
+        self.carry(&target);
+        Some(target)
     }
 }
 
@@ -503,6 +620,294 @@ mod tests {
             socks5::Error::Io(io::ErrorKind::ConnectionRefused),
         ] {
             assert_eq!(io_error(error).kind(), io::ErrorKind::HostUnreachable);
+        }
+    }
+
+    /// The chained tool's flows the chain asked for (R10, the proxy record's unit D, option (c)).
+    mod carried {
+        use super::super::super::activity::tests::{T, flow, taken, telling_at};
+        use super::super::super::clock::ManualClock;
+        use super::super::super::{Flow, NamedBy, Shared, TunnelSetting};
+        use super::*;
+
+        /// A server of the chained app's, which the tool reaches directly for it by its own routing rules.
+        const SITE: SocketAddr =
+            SocketAddr::new(std::net::IpAddr::V4(Ipv4Addr::new(192, 0, 2, 80)), 443);
+
+        /// The engine's state with a chain of `CHAINED` through `TOOL`, "Log where these apps connect" as `log`
+        /// says, in the chain and in the tunnels' table alike, as the network part hands it to both.
+        fn chained(log: bool) -> (Shared, Arc<ManualClock>) {
+            let (shared, clock, _) = telling_at(T);
+            switch(&shared, log);
+            (shared, clock)
+        }
+
+        /// The switch turned on or off, in the chain and the tunnels' table.
+        fn switch(shared: &Shared, log: bool) {
+            *lock(&shared.chain) = Some(Arc::new(Chain {
+                log_destinations: log,
+                ..chain(Some(&[CHAINED]))
+            }));
+            shared.tunnels.set(&TunnelSetting {
+                log_destinations: log,
+                ..TunnelSetting::default()
+            });
+            shared.hide_chained();
+        }
+
+        /// The flow `id` of `uid` to `destination`, named `name` by DNS, or by nothing.
+        fn to(id: u64, uid: u32, destination: SocketAddr, name: Option<&str>) -> Flow {
+            Flow {
+                destination,
+                name: name.map(str::to_owned),
+                named_by: if name.is_some() {
+                    NamedBy::Dns
+                } else {
+                    NamedBy::Unknown
+                },
+                ..flow(id, Some(uid))
+            }
+        }
+
+        /// Records `flow`, as the engine does at its birth; whether it is live.
+        fn born(shared: &Shared, flow: Flow) -> bool {
+            shared.record(flow).is_some()
+        }
+
+        fn tied(shared: &Shared, id: u64) -> bool {
+            lock(&shared.held_back).taken_back().tied(id)
+        }
+
+        /// The live flow `id`: whether it is hidden, and its destination.
+        fn live(shared: &Shared, id: u64) -> Option<(bool, SocketAddr)> {
+            lock(&shared.live)
+                .get(&id)
+                .map(|l| (l.hidden, l.flow.destination))
+        }
+
+        /// D-PLAN test 6, rewritten to (c), and the audit's M2: the chain asks the tool for an address, and the tool's
+        /// flow there within ten seconds is tied at its birth, whatever the switch; it is never hidden live, and "Now"
+        /// shows its place as the tool's own. With the switch off its record keeps no address, as any of the tool's;
+        /// with the switch on it is shown and logged, as chained destinations are.
+        #[test]
+        fn a_carried_flow_is_tied_at_its_birth_and_shown_live() {
+            for log in [false, true] {
+                let (shared, clock) = chained(log);
+                shared.carry(&Target::Address(SITE));
+                clock.pass(2_000);
+                assert!(born(&shared, to(1, TOOL, SITE, None)));
+                assert!(tied(&shared, 1), "tied, the switch {log}");
+                assert_eq!(live(&shared, 1), Some((false, SITE)), "not hidden");
+                if let Some(bytes) = lock(&shared.live).get(&1).map(|l| Arc::clone(&l.bytes)) {
+                    clock.set(T + 2_500);
+                    bytes.up(&shared, 10, 50);
+                }
+                let snapshot = shared.now_view(T + 3_000);
+                let places: Vec<_> = snapshot
+                    .apps
+                    .iter()
+                    .filter(|a| a.uid == Some(TOOL))
+                    .flat_map(|a| a.places.iter().map(|p| (p.flow.destination, p.shown_only)))
+                    .collect();
+                assert_eq!(places, vec![(SITE, !log)], "the switch {log}");
+                shared.finish(1);
+                shared.flush();
+                let records: Vec<_> = taken(&shared)
+                    .into_iter()
+                    .filter_map(|r| match r {
+                        crate::log::Record::Segment { flow, .. } if flow.id == 1 => Some(flow),
+                        _ => None,
+                    })
+                    .collect();
+                assert!(!records.is_empty(), "the switch {log}: written");
+                assert!(
+                    records
+                        .iter()
+                        .all(|f| (f.destination == SITE) == log && f.uid == Some(TOOL)),
+                    "the switch {log}: {records:?}"
+                );
+            }
+        }
+
+        /// D-PLAN test 7, rewritten to (c), which has no hello path: a request by name ties the tool's flow whose
+        /// address Datapavan's names gave that name, at the same port, by its DNS name or the DNS name beside a hello's;
+        /// not one named by its hello alone, which the tool writes, nor one at another port.
+        #[test]
+        fn carried_by_address_and_by_dns_name() {
+            let (shared, clock) = chained(false);
+            let Some(asked) = Target::name("Domestic.Example.", 443) else {
+                unreachable!("a name")
+            };
+            shared.carry(&asked);
+            shared.carry(&Target::Address(SITE));
+            clock.pass(1_000);
+            let other = SocketAddr::from(([192, 0, 2, 81], 443));
+            assert!(born(&shared, to(1, TOOL, other, Some("domestic.example"))));
+            let renamed = Flow {
+                name: Some("cover.example".into()),
+                named_by: NamedBy::Tls,
+                dns_name: Some("domestic.example.".into()),
+                ..to(2, TOOL, other, None)
+            };
+            assert!(born(&shared, renamed));
+            let by_hello = Flow {
+                name: Some("domestic.example".into()),
+                named_by: NamedBy::Tls,
+                ..to(3, TOOL, other, None)
+            };
+            assert!(born(&shared, by_hello));
+            let port_80 = SocketAddr::from(([192, 0, 2, 81], 80));
+            assert!(born(
+                &shared,
+                to(4, TOOL, port_80, Some("domestic.example"))
+            ));
+            let mapped = SocketAddr::from((Ipv4Addr::new(192, 0, 2, 80).to_ipv6_mapped(), 443));
+            assert!(born(&shared, to(5, TOOL, mapped, None)));
+            let tied: Vec<bool> = (1..=5).map(|id| tied(&shared, id)).collect();
+            assert_eq!(tied, vec![true, true, false, false, true]);
+        }
+
+        /// D-PLAN test 8: a request ties the tool's flows for ten seconds on the boot clock, and no longer.
+        #[test]
+        fn a_carried_match_ends_after_ten_seconds() {
+            let (shared, clock) = chained(false);
+            shared.carry(&Target::Address(SITE));
+            clock.pass(9_999);
+            assert!(born(&shared, to(1, TOOL, SITE, None)));
+            assert!(tied(&shared, 1), "within ten seconds");
+            assert!(born(&shared, to(2, TOOL, SITE, None)));
+            assert!(tied(&shared, 2), "not used up");
+            clock.pass(1_001);
+            assert!(born(&shared, to(3, TOOL, SITE, None)));
+            assert!(!tied(&shared, 3), "eleven seconds after: the tool's own");
+        }
+
+        /// D-PLAN test 9, rewritten to (c): a tie never hides anything live. A chained app that asks the tool for the
+        /// tool's own server's address, while a server flow there is open, makes the tool's next flow there tied, and it
+        /// stays shown in full, as the first is.
+        #[test]
+        fn a_tie_never_hides_anything_live() {
+            let (shared, clock) = chained(false);
+            let server = SocketAddr::from(([203, 0, 113, 9], 443));
+            assert!(born(
+                &shared,
+                to(1, TOOL, server, Some("server.tool.example"))
+            ));
+            shared.carry(&Target::Address(server));
+            clock.pass(500);
+            assert!(born(
+                &shared,
+                to(2, TOOL, server, Some("server.tool.example"))
+            ));
+            assert!(tied(&shared, 2) && !tied(&shared, 1));
+            for id in [1, 2] {
+                assert_eq!(live(&shared, id), Some((false, server)), "{id}");
+            }
+            for (id, bytes) in [1, 2].map(|id| {
+                (
+                    id,
+                    lock(&shared.live).get(&id).map(|l| Arc::clone(&l.bytes)),
+                )
+            }) {
+                if let Some(bytes) = bytes {
+                    clock.set(T + 1_000 + id);
+                    bytes.up(&shared, 10, 50);
+                }
+            }
+            let snapshot = shared.now_view(T + 2_000);
+            let names: Vec<_> = snapshot
+                .apps
+                .iter()
+                .filter(|a| a.uid == Some(TOOL))
+                .flat_map(|a| {
+                    a.places
+                        .iter()
+                        .map(|p| (p.flow.destination, p.flow.name.clone()))
+                })
+                .collect();
+            assert_eq!(
+                names,
+                vec![(server, Some("server.tool.example".to_owned()))]
+            );
+        }
+
+        /// D-PLAN test 10: only the chained tool's flows are tied: an unchained tool's, another app's, and any flow with
+        /// no chain, to the address the chain asked for, are not.
+        #[test]
+        fn only_the_chained_tools_flows_are_carried() {
+            let (shared, clock) = chained(false);
+            let mut setting = lock(&shared.proxies).setting().clone();
+            setting.tools = vec![TOOL, DIRECT];
+            shared.apply_proxies(setting);
+            shared.carry(&Target::Address(SITE));
+            clock.pass(500);
+            assert!(born(&shared, to(1, DIRECT, SITE, None)));
+            assert!(born(&shared, to(2, DIRECT + 1, SITE, None)));
+            *lock(&shared.chain) = None;
+            assert!(born(&shared, to(3, TOOL, SITE, None)));
+            assert!(
+                (1..=3).all(|id| !tied(&shared, id)),
+                "an unchained tool's, another app's, none without a chain"
+            );
+        }
+
+        /// The audit's m4: the table of what the chain asked goes when the chain goes off or its tool changes, not at
+        /// each chain set anew with the same tool, as every change of an app's package sets it.
+        #[test]
+        fn the_table_is_cleared_only_when_the_chain_goes_off_or_its_tool_changes() {
+            let (shared, _) = chained(false);
+            let engine = crate::engine::Engine {
+                shared: Arc::new(shared),
+                stop: tokio::sync::watch::channel(false).0,
+                network: tokio::sync::watch::channel(0).0,
+                swaps: tokio::sync::mpsc::unbounded_channel().0,
+                thread: None,
+            };
+            let held = |engine: &crate::engine::Engine| lock(&engine.shared.carried).held();
+            engine.chain(Some(chain(Some(&[CHAINED]))));
+            engine.shared.carry(&Target::Address(SITE));
+            engine.chain(Some(Chain {
+                log_destinations: true,
+                ..chain(Some(&[CHAINED, DIRECT]))
+            }));
+            assert_eq!(held(&engine), 1, "the same tool, other apps, the switch on");
+            engine.chain(Some(Chain {
+                tool: TOOL + 1,
+                ..chain(Some(&[CHAINED]))
+            }));
+            assert_eq!(held(&engine), 0, "another tool");
+            engine.shared.carry(&Target::Address(SITE));
+            engine.chain(Some(Chain {
+                proxy: SocketAddr::from(([127, 0, 0, 1], 1_080)),
+                tool: TOOL + 1,
+                ..chain(Some(&[CHAINED]))
+            }));
+            assert_eq!(held(&engine), 0, "the tool reached another way");
+            engine.shared.carry(&Target::Address(SITE));
+            engine.chain(None);
+            assert_eq!(held(&engine), 0, "the chain off");
+        }
+
+        /// The audit's m5: the table holds at most 256 requests, the oldest forgotten first, and a flow the tool opens
+        /// for a forgotten one is the tool's own; the tied flows are at most 4,096, the oldest forgotten first.
+        #[test]
+        fn the_table_and_the_tied_flows_are_bounded() {
+            let (shared, clock) = chained(false);
+            let at = |n: u16| SocketAddr::from(([192, 0, 2, 90], 1_000 + n));
+            for n in 0..=u16::try_from(CARRIES).unwrap_or(u16::MAX) {
+                shared.carry(&Target::Address(at(n)));
+            }
+            assert_eq!(lock(&shared.carried).held(), CARRIES);
+            clock.pass(100);
+            assert!(born(&shared, to(1, TOOL, at(0), None)));
+            assert!(born(&shared, to(2, TOOL, at(1), None)));
+            assert!(!tied(&shared, 1) && tied(&shared, 2), "the oldest went");
+            let mut held = super::super::super::proxied::HeldBack::default();
+            for id in 0..=4_096 {
+                held.tie(id);
+            }
+            let tied = held.taken_back();
+            assert!(!tied.tied(0) && tied.tied(1) && tied.tied(4_096));
         }
     }
 }

@@ -437,6 +437,11 @@ impl HeldBack {
     pub(super) fn taken_back(&self) -> &TakenBack {
         &self.taken_back
     }
+
+    /// The chained tool's flow `id` was tied to what the chain asked the tool for ([`TakenBack`]).
+    pub(super) fn tie(&mut self, id: u64) {
+        self.taken_back.tie(id);
+    }
 }
 
 /// The flows a messenger's direct connection took the name of its proxy back from, or that it never named for
@@ -446,9 +451,15 @@ impl HeldBack {
 /// (the maintainer, 2026-11-24, review A's major 1; ADR 0052). The flow itself is shown in "Now" as it is. A mark
 /// that the inference was taken back needs a flag of the log's next version (unit B). Bounded by [`TAKEN_BACK`],
 /// the oldest forgotten first.
+///
+/// Beside them, the flows of the chained tool tied at their birth to what the chain asked the tool for (R10, the proxy
+/// record's unit D, option (c); `chain::Carried`): what the tool opened directly for a chained app. "Now" shows them as
+/// the tool's own; the tool's own choice, which covers the tool's own connections only, keeps their records out of the
+/// log. Bounded by [`TIED`], the oldest forgotten first, and handed over with the rest.
 pub(super) struct TakenBack {
     proxies: HashMap<u64, Proxied>,
     order: std::collections::VecDeque<u64>,
+    tied: std::collections::VecDeque<u64>,
 }
 
 impl Default for TakenBack {
@@ -456,11 +467,32 @@ impl Default for TakenBack {
         Self {
             proxies: crate::map(),
             order: std::collections::VecDeque::new(),
+            tied: std::collections::VecDeque::new(),
         }
     }
 }
 
+/// The most flows of the chained tool remembered as tied ([`TakenBack`]); past it the oldest is forgotten, and a record
+/// of it that comes later is kept by the tool's own choice as the tool's own (ADR 0052's limits, audit-D m5).
+const TIED: usize = 4096;
+
 impl TakenBack {
+    /// The chained tool's flow `id` was tied to what the chain asked the tool for, at its birth, once. A list read from
+    /// the back, as the newest are asked of most: it is read only for a tool's records under its own choice.
+    fn tie(&mut self, id: u64) {
+        self.tied.push_back(id);
+        if self.tied.len() > TIED {
+            self.tied.pop_front();
+        }
+    }
+
+    /// Whether the flow `id` was tied to what the chain asked the tool for: read by the tool's own choice, which comes
+    /// next (the proxy record's unit D, commit 4); by tests until then.
+    #[cfg(test)]
+    pub(super) fn tied(&self, id: u64) -> bool {
+        self.tied.iter().rev().any(|&tied| tied == id)
+    }
+
     fn insert(&mut self, id: u64, proxy: Proxied) {
         // Its records say that the engine could not tell (the take-back's mark, log version 7).
         let proxy = Proxied {
