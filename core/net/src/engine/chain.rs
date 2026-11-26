@@ -53,7 +53,7 @@ impl Default for Carried {
 impl Carried {
     /// The key of a destination at `port`: its address's, canonical, or else its name's, told apart by a first byte.
     #[inline(never)]
-    fn key(address: Option<IpAddr>, name: &str, port: u16) -> u64 {
+    pub(super) fn key(address: Option<IpAddr>, name: &str, port: u16) -> u64 {
         let step =
             |hash: u64, byte: u8| (hash ^ u64::from(byte)).wrapping_mul(0x0000_0100_0000_01b3);
         let mut hash = 0xcbf2_9ce4_8422_2325;
@@ -273,15 +273,27 @@ impl Shared {
         tied
     }
 
+    /// A circumvention tool's flow `opened` sent a hello that names `name`: the chained tool's may be tied by it, and any
+    /// tool's has the trackers' rule decided for the name now, out of the engine's locks. Out of line.
+    #[cold]
+    #[inline(never)]
+    pub(super) fn tool_hello(&self, opened: &super::Opened, name: &str) {
+        if self
+            .chain()
+            .is_some_and(|chain| opened.uid == Some(chain.tool))
+        {
+            self.tie_at_hello(opened, name);
+        }
+        self.tool_marks(None, Some((name, opened.destination.port())));
+    }
+
     /// The chained tool's flow `opened` sent a hello that names `name` (review-D-engine major 1): tied if the chain asked
     /// the tool for that name at the flow's port within [`CARRIED`], as a DNS name its address had at its birth would
     /// have tied it. The hello is the tool's to write, so under (c) it may only take from the user's choice, as the tool's
     /// own resolver's answers already can: nothing live changes, and the records of the flow already cut and waiting,
     /// held back or gathered for the next batch, are stripped as the tie says (audit-D m9). The table is let go before
     /// `held_back` is taken, then `pending_log`, in `to_log`'s order. Out of line.
-    #[cold]
-    #[inline(never)]
-    pub(super) fn tie_at_hello(&self, opened: &super::Opened, name: &str) {
+    fn tie_at_hello(&self, opened: &super::Opened, name: &str) {
         let now = self.clock.since_boot();
         let key = Carried::key(None, name, opened.destination.port());
         let tied = lock(&self.carried).holds(key, now);

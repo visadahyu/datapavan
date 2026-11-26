@@ -433,11 +433,16 @@ impl Shared {
         if self.is_tunnel_dns(flow.destination.ip()) {
             return None;
         }
-        // R10's tie (option (c)): a flow of the chained tool, decided at its birth. The cheap test first.
-        let tied = self
-            .chain()
-            .is_some_and(|chain| flow.uid == Some(chain.tool))
-            && self.tie_carried(flow);
+        // R10's tie (option (c)): a flow of the chained tool, decided at its birth; and for any tool's, the trackers'
+        // rule. The cheap test first.
+        let chain_tool = self.chain().map(|chain| chain.tool);
+        let tied = flow.uid.is_some() && flow.uid == chain_tool && self.tie_carried(flow);
+        if flow
+            .uid
+            .is_some_and(|uid| chain_tool == Some(uid) || self.handed_tool(uid))
+        {
+            self.tool_marks(Some(flow), None);
+        }
         let hidden = via.is_some_and(|chain| !chain.log_destinations)
             || self.hides(flow.uid, flow.destination);
         let direct = via.is_none();
@@ -612,7 +617,7 @@ impl Shared {
             lock(&self.activity)
                 .counts
                 .end(flow.uid, first_hop, boot, false);
-        } else if !super::proxied::own_proxy(flow) {
+        } else if !super::proxied::own_proxy(flow) && self.is_tool(flow.uid) {
             self.tool_ended(flow, boot, tied);
         }
     }

@@ -172,12 +172,52 @@ const MAX_LOGGED_TOOLS: usize = 64;
 /// UIDs only, at most [`MAX_LOGGED_TOOLS`]; and the trackers' signatures, for the rule that keeps a tool's flow to a
 /// tracker whole (audit-D M3). The chain's tool is a tool too, read with the chain when [`Keeps`] is built (audit-D
 /// m2); the network part hands it among the tools, and so among those chosen when it is.
-#[derive(Debug, Default, PartialEq, Eq)]
+#[derive(Debug, Default)]
 pub(super) struct LoggedApps {
     apps: Box<[u32]>,
     tools: Box<[u32]>,
     tools_kept: Box<[u32]>,
     trackers: Option<Arc<NetworkSignatures>>,
+    marks: Arc<Mutex<Marks>>,
+}
+
+/// The most hosts the trackers' rule keeps its answers for ([`Marks`]): past it, the oldest is scanned for anew.
+const MARKS: usize = 512;
+
+/// The trackers' rule's answers for circumvention tools' hosts (audit-D M3; review-D-engine minor 2): each host's and
+/// port's key (`chain::Carried::key`), with whether it matches a signature, in a ring of [`MARKS`]. The signatures are
+/// scanned for a host once, at a tool's flow's birth or its hello, out of the engine's locks where it can be; the answer
+/// is looked up after, at the flow's end under `live`, as its records enter the log under five locks, and at each view.
+/// Shared by the sets an engine builds while the signatures are the same; a leaf lock, taken alone.
+#[derive(Debug, Default)]
+pub(super) struct Marks {
+    known: Vec<(u64, bool)>,
+    next: usize,
+    /// How many hosts were scanned for, for the tests that a scan is not made again.
+    #[cfg(test)]
+    scans: usize,
+}
+
+impl Marks {
+    fn get(&self, key: u64) -> Option<bool> {
+        self.known
+            .iter()
+            .find(|(known, _)| *known == key)
+            .map(|&(_, mark)| mark)
+    }
+
+    fn put(&mut self, key: u64, mark: bool) {
+        #[cfg(test)]
+        {
+            self.scans += 1;
+        }
+        if self.known.len() < MARKS {
+            self.known.push((key, mark));
+        } else {
+            self.known[self.next] = (key, mark);
+            self.next = (self.next + 1) % MARKS;
+        }
+    }
 }
 
 impl LoggedApps {
@@ -215,6 +255,49 @@ impl LoggedApps {
             tools: tools.into_boxed_slice(),
             tools_kept: tools_kept.into_boxed_slice(),
             trackers: setting.trackers.clone(),
+            marks: Arc::default(),
+        }
+    }
+
+    /// Whether the host `address`, or else `name`, at `port` matches a tracker's signature in `table`: the answer kept
+    /// for it, else a scan, kept ([`Marks`]).
+    fn marked(
+        &self,
+        table: &NetworkSignatures,
+        (address, name): (Option<IpAddr>, &str),
+        port: u16,
+    ) -> bool {
+        let key = super::chain::Carried::key(address, name, port);
+        if let Some(mark) = lock(&self.marks).get(key) {
+            return mark;
+        }
+        let host = address.map_or_else(|| name.to_owned(), |a| a.to_canonical().to_string());
+        let mark = !table.matches(&host, port).is_empty();
+        lock(&self.marks).put(key, mark);
+        mark
+    }
+
+    /// Whether a name `flow` carries matches a tracker's signature: its address, its name where it names a host (not an
+    /// organisation's), and the DNS name beside it, at its port. None before the network part handed the signatures.
+    pub(super) fn tracker(&self, flow: &Flow) -> bool {
+        let Some(table) = self.trackers.as_deref() else {
+            return false;
+        };
+        let port = flow.destination.port();
+        let name = (flow.named_by != NamedBy::Organisation)
+            .then_some(flow.name.as_deref())
+            .flatten();
+        self.marked(table, (Some(flow.destination.ip()), ""), port)
+            || [name, flow.dns_name.as_deref()]
+                .into_iter()
+                .flatten()
+                .any(|name| self.marked(table, (None, name), port))
+    }
+
+    /// [`LoggedApps::tracker`] for the name a tool's hello sent at `port`, before it names the flow.
+    pub(super) fn tracker_name(&self, name: &str, port: u16) {
+        if let Some(table) = self.trackers.as_deref() {
+            self.marked(table, (None, name), port);
         }
     }
 
@@ -321,12 +404,7 @@ impl Keeps {
     /// that does is kept whole, live and in the log, since a stripped plain record keeps no name, and so no mark. It
     /// only ever keeps more. A scan of the signatures, so asked last, for a tool's plain flows only.
     fn tracker(&self, flow: &Flow) -> bool {
-        let Some(table) = self.apps.trackers.as_deref() else {
-            return false;
-        };
-        Shared::hosts_of(Some(flow), flow.destination)
-            .iter()
-            .any(|(host, port)| !table.matches(host, *port).is_empty())
+        self.apps.tracker(flow)
     }
 }
 
@@ -967,7 +1045,19 @@ impl Shared {
     /// after. Out of line, so that its two callers share it.
     #[inline(never)]
     pub(super) fn swap_proxies(&self, setting: ProxySetting) -> (Arc<LoggedApps>, Arc<LoggedApps>) {
-        let logged = Arc::new(LoggedApps::of(&setting));
+        let mut logged = LoggedApps::of(&setting);
+        {
+            // The trackers' rule's answers stay while the signatures are the same.
+            let before = lock(&self.kept_apps);
+            if match (&before.trackers, &logged.trackers) {
+                (Some(before), Some(after)) => Arc::ptr_eq(before, after),
+                (None, None) => true,
+                _ => false,
+            } {
+                logged.marks = Arc::clone(&before.marks);
+            }
+        }
+        let logged = Arc::new(logged);
         {
             let mut state = lock(&self.proxies);
             state.families = crate::map();
@@ -984,6 +1074,29 @@ impl Shared {
     /// may be known late (R10).
     pub(super) fn handed_tool(&self, uid: u32) -> bool {
         lock(&self.kept_apps).is_tool(uid)
+    }
+
+    /// Whether `uid` is a circumvention tool's, the chain's or one handed, as [`Keeps::tool`] says, from the two leaves
+    /// alone: the cheap test before a tool's paths.
+    pub(super) fn is_tool(&self, uid: Option<u32>) -> bool {
+        uid.is_some_and(|uid| {
+            self.chain().is_some_and(|chain| chain.tool == uid) || self.handed_tool(uid)
+        })
+    }
+
+    /// A circumvention tool's flow was born, or sent a hello naming `hello` (review-D-engine minor 2): the trackers' rule
+    /// is decided for its hosts now, out of the engine's locks, and kept, so that the flow's end, its records and the
+    /// views look the answer up. Out of line.
+    #[cold]
+    #[inline(never)]
+    pub(super) fn tool_marks(&self, flow: Option<&Flow>, hello: Option<(&str, u16)>) {
+        let apps = Arc::clone(&lock(&self.kept_apps));
+        if let Some(flow) = flow {
+            apps.tracker(flow);
+        }
+        if let Some((name, port)) = hello {
+            apps.tracker_name(name, port);
+        }
     }
 
     /// The messenger an app is, if the network part named it one.
@@ -5580,6 +5693,67 @@ mod tests {
             .flat_map(|a| a.places)
             .any(|p| p.flow.destination == at([192, 0, 2, 45], 443) && p.shown_only);
         assert!(windowed, "shown here only once more");
+    }
+
+    /// Review-D-engine minor 2: the trackers' rule is decided for a tool's hosts once each, at its flow's birth and at
+    /// its hello, out of the engine's locks. The flow's end, its records as they enter the log, the views and the
+    /// sweeps look the answer up and scan nothing again, and the answers are those a scan gives.
+    #[test]
+    fn the_trackers_rule_scans_a_tools_hosts_once() {
+        use super::super::clock::Clock;
+        let (shared, clock) = engine_at(false);
+        let shared = &shared;
+        with_trackers(shared);
+        choose_tools(shared, &[UID], &[]);
+        learn(shared, "192.0.2.47", "ads.tracker.example");
+        let scans = || lock(&lock(&shared.kept_apps).marks).scans;
+        let (ads, bytes) = open(shared, UID, at([192, 0, 2, 47], 443));
+        assert_eq!(scans(), 2, "its address and its name, at its birth");
+        let (other, other_bytes) = open(shared, UID, at([192, 0, 2, 48], 443));
+        assert_eq!(scans(), 3, "an address alone");
+        let hello = Hello {
+            name: "cdn.tracker.example".into(),
+            ech: false,
+        };
+        shared.hello(other, &hello, NamedBy::Tls);
+        assert_eq!(scans(), 4, "the hello's name, at the hello");
+        // A hand-over of the setting with the same signatures keeps the answers.
+        choose_tools(shared, &[UID], &[]);
+        assert_eq!(scans(), 4, "the answers kept across it");
+        bytes.up(shared, 10, 50);
+        other_bytes.up(shared, 10, 50);
+        cut_and_tell(shared, &clock);
+        let _ = shared.now_view(clock.wall_ms());
+        for id in [ads.id, other.id] {
+            shared.finish(id);
+        }
+        shared.flush();
+        clock.pass(11 * 60_000);
+        let shown = shared.now_view(clock.wall_ms());
+        assert_eq!(scans(), 4, "looked up after, never scanned again");
+        let places: Vec<_> = shown
+            .apps
+            .iter()
+            .filter(|a| a.uid == Some(UID))
+            .flat_map(|a| a.places.iter().map(|p| (p.flow.destination, p.shown_only)))
+            .collect();
+        assert_eq!(
+            places.len(),
+            2,
+            "both kept whole past ten minutes: {places:?}"
+        );
+        assert!(places.iter().all(|(_, shown_only)| !shown_only));
+        let records = taken(shared);
+        for (id, name) in [
+            (ads.id, "ads.tracker.example"),
+            (other.id, "cdn.tracker.example"),
+        ] {
+            let kept = of_flow(&records, id);
+            assert!(
+                !kept.is_empty() && kept.iter().all(|f| f.name.as_deref() == Some(name)),
+                "{kept:?}"
+            );
+        }
     }
 
     /// Review-D-rest M1: under the tool's own choice, with the switch off, the first hop of a tool's own SOCKS5 upstream
