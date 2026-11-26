@@ -1900,11 +1900,15 @@ class NetworkVpnService : VpnService() {
      * `activity-late` how many usage events came later than a reading's margin, and the latest by how much; one
      * `activity-app` line for each app, its UID (`-` for flows of no app), its state now (an
      * [org.visadahyu.datapavan.network.log.AppState] name, which says why where there is none), whether it is
-     * the user's tool and whether it went through it, how many destinations it reached, and its bytes up and
+     * the user's tool and whether it went through it, how many destinations it reached, whether some of a tool's bytes
+     * have no place in the windows (`servers-hidden`, the proxy record's unit D), and its bytes up and
      * down in each window (`10m`, `1h`, `screen`, and `off`, while the screen was off), for each column: no
      * state, in use, with its notification, in the background, not told yet, then the bytes in no state by
-     * why (no usage access, no events, told too late, no app, not told); and `activity-off` the window while
-     * the screen was off, when the screen went off and came on again (0 for none, and while still off).
+     * why (no usage access, no events, told too late, no app, not told); after it, for an app's own proxies, one
+     * `activity-proxy` line each, and (unit D, audit-D M5) for a circumvention tool's places with no proxy, the chain's
+     * tool's or another's that the last hand-over named, one `activity-place UID ADDRESS:PORT FLAGS named-by=N NAME
+     * 10m=UP/DOWN` line each, FLAGS `v` for a place shown here only, for its window, or `-`; and `activity-off` the window
+     * while the screen was off, when the screen went off and came on again (0 for none, and while still off).
      * `activity-clear` first clears the live view's memory, as ADR 0047's profile will at each screen-off,
      * and says so; `activity-tracker [HOST PORT]` reads the table of trackers from the data pack, says how many
      * trackers, alternatives and refused alternatives it holds, and which trackers it finds for the host given,
@@ -1953,6 +1957,8 @@ class NetworkVpnService : VpnService() {
         writer.println("activity-late $late latest-ms $latest")
         writer.println("activity-off ${snapshot.offFrom} ${snapshot.offUntil}")
         val windows = listOf("10m", "1h", "screen", "off")
+        // The tools the last hand-over named, the chain's among them (unit D), and the chain's tool by the snapshot's own bit.
+        val tools = toolsHanded.toSet()
         for (app in snapshot.apps) {
             val bytes = windows.indices.joinToString(" ") { window ->
                 windows[window] + "=" + (0 until org.visadahyu.datapavan.network.activity.Snapshot.COLUMNS)
@@ -1961,20 +1967,32 @@ class NetworkVpnService : VpnService() {
             writer.println(
                 "activity-app ${app.uid ?: "-"} now=${org.visadahyu.datapavan.network.log.AppState.name(app.now)} " +
                     "tool=${if (app.isTool) 1 else 0} through-tool=${if (app.throughTool) 1 else 0} " +
-                    "places=${app.destinations.size} $bytes",
+                    "places=${app.destinations.size} servers-hidden=${if (app.serversHidden) 1 else 0} $bytes",
             )
             // An app's own proxies as "Now" holds them (ADR 0052): its kind, what was asked and the proxy's name where kept,
             // and the place's bytes up and down in the last 10 minutes, by which scripts/verify-proxies.sh tells a flow
             // opened after the switch went off from an earlier one that reached the same first hop.
+            val tenMinutes = org.visadahyu.datapavan.network.activity.Snapshot.TEN_MINUTES * 2
             for (place in app.destinations) {
                 val proxy = place.proxy ?: continue
-                val tenMinutes = org.visadahyu.datapavan.network.activity.Snapshot.TEN_MINUTES * 2
                 writer.println(
                     "activity-proxy ${app.uid ?: "-"} ${proxyWords(proxy, place.shownOnly)} " +
                         "${place.address.hostAddress}:${place.port} " +
                         "named-by=${place.namedBy} ${place.name.ifEmpty { "-" }} " +
                         "10m=${place.bytes[tenMinutes]}/${place.bytes[tenMinutes + 1]}",
                 )
+            }
+            // A circumvention tool's own places, with no proxy (unit D, audit-D M5): the chain shard counts them by address
+            // and port, and reads whether each is shown here only.
+            if (app.isTool || app.uid in tools) {
+                for (place in app.destinations) {
+                    if (place.proxy != null) continue
+                    writer.println(
+                        "activity-place ${app.uid ?: "-"} ${place.address.hostAddress}:${place.port} " +
+                            "${if (place.shownOnly) "v" else "-"} named-by=${place.namedBy} ${place.name.ifEmpty { "-" }} " +
+                            "10m=${place.bytes[tenMinutes]}/${place.bytes[tenMinutes + 1]}",
+                    )
+                }
             }
         }
     }
