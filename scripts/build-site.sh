@@ -96,15 +96,23 @@ prune() {
     rmdir "$1/en"
 }
 
+# The sitemap's lastmod comes from site/data/lastmod.json, the hash of each page's <main> and the date it last
+# changed (scripts/lastmod.py). A build updates it from what it built and builds again, so that the sitemap carries the
+# new dates; the check only reads it, so that it gives the same site on any day.
 if [ "${1:-}" = --check ]; then
     OUT="$(mktemp -d)"
     trap 'rm -rf "$OUT"' EXIT
     "$HUGO" --source "$ROOT/site" --destination "$OUT" --logLevel error
     prune "$OUT"
+    python3 -I "$ROOT/scripts/lastmod.py" --check "$OUT"
     diff -r "$OUT" "$ROOT/docs/site"
     python3 -I "$ROOT/scripts/check-site.py" "$OUT"
 else
     "$HUGO" --source "$ROOT/site" --destination "$ROOT/docs/site" --cleanDestinationDir --logLevel error
     prune "$ROOT/docs/site"
+    python3 -I "$ROOT/scripts/lastmod.py" "$ROOT/docs/site"
+    "$HUGO" --source "$ROOT/site" --destination "$ROOT/docs/site" --cleanDestinationDir --logLevel error
+    prune "$ROOT/docs/site"
+    python3 -I "$ROOT/scripts/lastmod.py" --check "$ROOT/docs/site"
     python3 -I "$ROOT/scripts/check-site.py"
 fi

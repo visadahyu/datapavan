@@ -57,7 +57,10 @@ this: the engines' own consoles report searches and clicks.
   source and wants models to describe it correctly. Only `/download/`, the signed APKs, is left out.
 - **`sitemap.xml`** (`layouts/sitemapindex.xml`): one file at the root with every page of every language, each with its
   translations and English as `x-default`. Hugo's per-language sitemaps are removed by `scripts/build-site.sh`,
-  since English's would sit under `/en/`, where a sitemap may not list the root's pages.
+  since English's would sit under `/en/`, where a sitemap may not list the root's pages. Each page's `lastmod` is the
+  date its `<main>` last changed, from `data/lastmod.json`, which `scripts/lastmod.py` keeps: a build moves a date
+  only when that page's hash does, and `--check` fails if the ledger is behind. A guide whose steps wait is left out
+  (`noindex, follow`, from `scripts/guides.py`), and stays on the guides' index.
 - **Each page's head** (`layouts/baseof.html`): its own title (the main page's says what Datapavan is, `home_title`,
   while its heading keeps the slogan), a description of its own (`desc_*`, `news_lead` and `a11y_aim` in
   `data/text`; a guide's opening), one canonical address, matching `og:url`, its translations, and a link

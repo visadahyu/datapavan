@@ -202,6 +202,10 @@ def search(pages):
         return bad + ["sitemap.xml is missing"]
     ns = {"s": "http://www.sitemaps.org/schemas/sitemap/0.9"}
     listed = [loc.text for loc in ET.parse(sitemap).getroot().iterfind("s:url/s:loc", ns)]
+    # Every address with the date its content last changed (scripts/lastmod.py).
+    for url in ET.parse(sitemap).getroot().iterfind("s:url", ns):
+        if not re.fullmatch(r"\d{4}-\d{2}-\d{2}", url.findtext("s:lastmod", "", ns)):
+            bad.append(f"sitemap.xml gives {url.findtext('s:loc', '', ns)} no lastmod")
     for address in sorted(set(listed) - set(addresses)):
         bad.append(f"sitemap.xml lists {address}, which is no page here")
     for address in sorted(set(addresses) - set(listed) - hidden):

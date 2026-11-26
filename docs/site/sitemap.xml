@@ -2,7 +2,7 @@
 <urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9" xmlns:xhtml="http://www.w3.org/1999/xhtml">
 <url>
 <loc>https://datapavan.org/</loc>
-<lastmod>2026-10-12</lastmod>
+<lastmod>2026-11-26</lastmod>
 <xhtml:link rel="alternate" hreflang="en" href="https://datapavan.org/"/>
 <xhtml:link rel="alternate" hreflang="fr" href="https://datapavan.org/fr/"/>
 <xhtml:link rel="alternate" hreflang="de" href="https://datapavan.org/de/"/>
@@ -15,7 +15,7 @@
 </url>
 <url>
 <loc>https://datapavan.org/news/</loc>
-<lastmod>2026-10-12</lastmod>
+<lastmod>2026-11-23</lastmod>
 <xhtml:link rel="alternate" hreflang="en" href="https://datapavan.org/news/"/>
 <xhtml:link rel="alternate" hreflang="fr" href="https://datapavan.org/fr/news/"/>
 <xhtml:link rel="alternate" hreflang="de" href="https://datapavan.org/de/news/"/>
@@ -28,6 +28,7 @@
 </url>
 <url>
 <loc>https://datapavan.org/accessibility/</loc>
+<lastmod>2026-11-24</lastmod>
 <xhtml:link rel="alternate" hreflang="en" href="https://datapavan.org/accessibility/"/>
 <xhtml:link rel="alternate" hreflang="fr" href="https://datapavan.org/fr/accessibility/"/>
 <xhtml:link rel="alternate" hreflang="de" href="https://datapavan.org/de/accessibility/"/>
@@ -40,72 +41,95 @@
 </url>
 <url>
 <loc>https://datapavan.org/guides/amnezia-vpn/</loc>
+<lastmod>2026-11-23</lastmod>
 </url>
 <url>
 <loc>https://datapavan.org/guides/amneziawg/</loc>
+<lastmod>2026-11-23</lastmod>
 </url>
 <url>
 <loc>https://datapavan.org/guides/byebyedpi/</loc>
+<lastmod>2026-11-23</lastmod>
 </url>
 <url>
 <loc>https://datapavan.org/guides/clash-meta/</loc>
+<lastmod>2026-11-23</lastmod>
 </url>
 <url>
 <loc>https://datapavan.org/guides/dnstt-xyz/</loc>
+<lastmod>2026-11-23</lastmod>
 </url>
 <url>
 <loc>https://datapavan.org/guides/exclave/</loc>
+<lastmod>2026-11-23</lastmod>
 </url>
 <url>
 <loc>https://datapavan.org/guides/flclash/</loc>
+<lastmod>2026-11-23</lastmod>
 </url>
 <url>
 <loc>https://datapavan.org/guides/geph/</loc>
+<lastmod>2026-11-23</lastmod>
 </url>
 <url>
 <loc>https://datapavan.org/guides/hiddify/</loc>
+<lastmod>2026-11-23</lastmod>
 </url>
 <url>
 <loc>https://datapavan.org/guides/husi/</loc>
+<lastmod>2026-11-23</lastmod>
 </url>
 <url>
 <loc>https://datapavan.org/guides/invizible/</loc>
+<lastmod>2026-11-23</lastmod>
 </url>
 <url>
 <loc>https://datapavan.org/guides/lantern/</loc>
+<lastmod>2026-11-23</lastmod>
 </url>
 <url>
 <loc>https://datapavan.org/guides/masterdnsvpn/</loc>
+<lastmod>2026-11-23</lastmod>
 </url>
 <url>
 <loc>https://datapavan.org/guides/masterdnsvpn-android/</loc>
+<lastmod>2026-11-23</lastmod>
 </url>
 <url>
 <loc>https://datapavan.org/guides/masterdnsvpn-gg/</loc>
+<lastmod>2026-11-23</lastmod>
 </url>
 <url>
 <loc>https://datapavan.org/guides/mdv-hn/</loc>
+<lastmod>2026-11-23</lastmod>
 </url>
 <url>
 <loc>https://datapavan.org/guides/mullvad/</loc>
+<lastmod>2026-11-23</lastmod>
 </url>
 <url>
 <loc>https://datapavan.org/guides/nekobox/</loc>
+<lastmod>2026-11-23</lastmod>
 </url>
 <url>
 <loc>https://datapavan.org/guides/oblivion/</loc>
+<lastmod>2026-11-23</lastmod>
 </url>
 <url>
 <loc>https://datapavan.org/guides/openvpn-android/</loc>
+<lastmod>2026-11-23</lastmod>
 </url>
 <url>
 <loc>https://datapavan.org/guides/orbot/</loc>
+<lastmod>2026-11-23</lastmod>
 </url>
 <url>
 <loc>https://datapavan.org/guides/outline/</loc>
+<lastmod>2026-11-23</lastmod>
 </url>
 <url>
 <loc>https://datapavan.org/privacy/</loc>
+<lastmod>2026-11-25</lastmod>
 <xhtml:link rel="alternate" hreflang="en" href="https://datapavan.org/privacy/"/>
 <xhtml:link rel="alternate" hreflang="fr" href="https://datapavan.org/fr/privacy/"/>
 <xhtml:link rel="alternate" hreflang="de" href="https://datapavan.org/de/privacy/"/>
@@ -118,21 +142,27 @@
 </url>
 <url>
 <loc>https://datapavan.org/guides/proton-vpn/</loc>
+<lastmod>2026-11-23</lastmod>
 </url>
 <url>
 <loc>https://datapavan.org/guides/psiphon/</loc>
+<lastmod>2026-11-23</lastmod>
 </url>
 <url>
 <loc>https://datapavan.org/guides/sagernet/</loc>
+<lastmod>2026-11-23</lastmod>
 </url>
 <url>
 <loc>https://datapavan.org/guides/shadowsocks/</loc>
+<lastmod>2026-11-23</lastmod>
 </url>
 <url>
 <loc>https://datapavan.org/guides/sing-box/</loc>
+<lastmod>2026-11-23</lastmod>
 </url>
 <url>
 <loc>https://datapavan.org/map/</loc>
+<lastmod>2026-11-26</lastmod>
 <xhtml:link rel="alternate" hreflang="en" href="https://datapavan.org/map/"/>
 <xhtml:link rel="alternate" hreflang="fr" href="https://datapavan.org/fr/map/"/>
 <xhtml:link rel="alternate" hreflang="de" href="https://datapavan.org/de/map/"/>
@@ -145,18 +175,23 @@
 </url>
 <url>
 <loc>https://datapavan.org/guides/slipnet/</loc>
+<lastmod>2026-11-23</lastmod>
 </url>
 <url>
 <loc>https://datapavan.org/guides/tor-vpn/</loc>
+<lastmod>2026-11-23</lastmod>
 </url>
 <url>
 <loc>https://datapavan.org/guides/v2rayng/</loc>
+<lastmod>2026-11-23</lastmod>
 </url>
 <url>
 <loc>https://datapavan.org/guides/wg-tunnel/</loc>
+<lastmod>2026-11-23</lastmod>
 </url>
 <url>
 <loc>https://datapavan.org/bots/</loc>
+<lastmod>2026-11-23</lastmod>
 <xhtml:link rel="alternate" hreflang="en" href="https://datapavan.org/bots/"/>
 <xhtml:link rel="alternate" hreflang="fr" href="https://datapavan.org/fr/bots/"/>
 <xhtml:link rel="alternate" hreflang="de" href="https://datapavan.org/de/bots/"/>
@@ -169,22 +204,27 @@
 </url>
 <url>
 <loc>https://datapavan.org/guides/whitedns/</loc>
+<lastmod>2026-11-23</lastmod>
 </url>
 <url>
 <loc>https://datapavan.org/guides/windscribe/</loc>
+<lastmod>2026-11-23</lastmod>
 </url>
 <url>
 <loc>https://datapavan.org/guides/wireguard/</loc>
+<lastmod>2026-11-23</lastmod>
 </url>
 <url>
 <loc>https://datapavan.org/guides/</loc>
+<lastmod>2026-11-26</lastmod>
 </url>
 <url>
 <loc>https://datapavan.org/guides/zedsecure/</loc>
+<lastmod>2026-11-23</lastmod>
 </url>
 <url>
 <loc>https://datapavan.org/fr/news/</loc>
-<lastmod>2026-10-12</lastmod>
+<lastmod>2026-11-23</lastmod>
 <xhtml:link rel="alternate" hreflang="en" href="https://datapavan.org/news/"/>
 <xhtml:link rel="alternate" hreflang="fr" href="https://datapavan.org/fr/news/"/>
 <xhtml:link rel="alternate" hreflang="de" href="https://datapavan.org/de/news/"/>
@@ -197,7 +237,7 @@
 </url>
 <url>
 <loc>https://datapavan.org/fr/</loc>
-<lastmod>2026-10-12</lastmod>
+<lastmod>2026-11-26</lastmod>
 <xhtml:link rel="alternate" hreflang="en" href="https://datapavan.org/"/>
 <xhtml:link rel="alternate" hreflang="fr" href="https://datapavan.org/fr/"/>
 <xhtml:link rel="alternate" hreflang="de" href="https://datapavan.org/de/"/>
@@ -210,6 +250,7 @@
 </url>
 <url>
 <loc>https://datapavan.org/fr/accessibility/</loc>
+<lastmod>2026-11-26</lastmod>
 <xhtml:link rel="alternate" hreflang="en" href="https://datapavan.org/accessibility/"/>
 <xhtml:link rel="alternate" hreflang="fr" href="https://datapavan.org/fr/accessibility/"/>
 <xhtml:link rel="alternate" hreflang="de" href="https://datapavan.org/de/accessibility/"/>
@@ -222,6 +263,7 @@
 </url>
 <url>
 <loc>https://datapavan.org/fr/bots/</loc>
+<lastmod>2026-11-23</lastmod>
 <xhtml:link rel="alternate" hreflang="en" href="https://datapavan.org/bots/"/>
 <xhtml:link rel="alternate" hreflang="fr" href="https://datapavan.org/fr/bots/"/>
 <xhtml:link rel="alternate" hreflang="de" href="https://datapavan.org/de/bots/"/>
@@ -234,6 +276,7 @@
 </url>
 <url>
 <loc>https://datapavan.org/fr/map/</loc>
+<lastmod>2026-11-26</lastmod>
 <xhtml:link rel="alternate" hreflang="en" href="https://datapavan.org/map/"/>
 <xhtml:link rel="alternate" hreflang="fr" href="https://datapavan.org/fr/map/"/>
 <xhtml:link rel="alternate" hreflang="de" href="https://datapavan.org/de/map/"/>
@@ -246,6 +289,7 @@
 </url>
 <url>
 <loc>https://datapavan.org/fr/privacy/</loc>
+<lastmod>2026-11-26</lastmod>
 <xhtml:link rel="alternate" hreflang="en" href="https://datapavan.org/privacy/"/>
 <xhtml:link rel="alternate" hreflang="fr" href="https://datapavan.org/fr/privacy/"/>
 <xhtml:link rel="alternate" hreflang="de" href="https://datapavan.org/de/privacy/"/>
@@ -258,7 +302,7 @@
 </url>
 <url>
 <loc>https://datapavan.org/de/</loc>
-<lastmod>2026-10-12</lastmod>
+<lastmod>2026-11-26</lastmod>
 <xhtml:link rel="alternate" hreflang="en" href="https://datapavan.org/"/>
 <xhtml:link rel="alternate" hreflang="fr" href="https://datapavan.org/fr/"/>
 <xhtml:link rel="alternate" hreflang="de" href="https://datapavan.org/de/"/>
@@ -271,7 +315,7 @@
 </url>
 <url>
 <loc>https://datapavan.org/de/news/</loc>
-<lastmod>2026-10-12</lastmod>
+<lastmod>2026-11-23</lastmod>
 <xhtml:link rel="alternate" hreflang="en" href="https://datapavan.org/news/"/>
 <xhtml:link rel="alternate" hreflang="fr" href="https://datapavan.org/fr/news/"/>
 <xhtml:link rel="alternate" hreflang="de" href="https://datapavan.org/de/news/"/>
@@ -284,6 +328,7 @@
 </url>
 <url>
 <loc>https://datapavan.org/de/accessibility/</loc>
+<lastmod>2026-11-26</lastmod>
 <xhtml:link rel="alternate" hreflang="en" href="https://datapavan.org/accessibility/"/>
 <xhtml:link rel="alternate" hreflang="fr" href="https://datapavan.org/fr/accessibility/"/>
 <xhtml:link rel="alternate" hreflang="de" href="https://datapavan.org/de/accessibility/"/>
@@ -296,6 +341,7 @@
 </url>
 <url>
 <loc>https://datapavan.org/de/privacy/</loc>
+<lastmod>2026-11-26</lastmod>
 <xhtml:link rel="alternate" hreflang="en" href="https://datapavan.org/privacy/"/>
 <xhtml:link rel="alternate" hreflang="fr" href="https://datapavan.org/fr/privacy/"/>
 <xhtml:link rel="alternate" hreflang="de" href="https://datapavan.org/de/privacy/"/>
@@ -308,6 +354,7 @@
 </url>
 <url>
 <loc>https://datapavan.org/de/map/</loc>
+<lastmod>2026-11-26</lastmod>
 <xhtml:link rel="alternate" hreflang="en" href="https://datapavan.org/map/"/>
 <xhtml:link rel="alternate" hreflang="fr" href="https://datapavan.org/fr/map/"/>
 <xhtml:link rel="alternate" hreflang="de" href="https://datapavan.org/de/map/"/>
@@ -320,6 +367,7 @@
 </url>
 <url>
 <loc>https://datapavan.org/de/bots/</loc>
+<lastmod>2026-11-23</lastmod>
 <xhtml:link rel="alternate" hreflang="en" href="https://datapavan.org/bots/"/>
 <xhtml:link rel="alternate" hreflang="fr" href="https://datapavan.org/fr/bots/"/>
 <xhtml:link rel="alternate" hreflang="de" href="https://datapavan.org/de/bots/"/>
@@ -332,7 +380,7 @@
 </url>
 <url>
 <loc>https://datapavan.org/es/</loc>
-<lastmod>2026-10-12</lastmod>
+<lastmod>2026-11-26</lastmod>
 <xhtml:link rel="alternate" hreflang="en" href="https://datapavan.org/"/>
 <xhtml:link rel="alternate" hreflang="fr" href="https://datapavan.org/fr/"/>
 <xhtml:link rel="alternate" hreflang="de" href="https://datapavan.org/de/"/>
@@ -345,7 +393,7 @@
 </url>
 <url>
 <loc>https://datapavan.org/es/news/</loc>
-<lastmod>2026-10-12</lastmod>
+<lastmod>2026-11-23</lastmod>
 <xhtml:link rel="alternate" hreflang="en" href="https://datapavan.org/news/"/>
 <xhtml:link rel="alternate" hreflang="fr" href="https://datapavan.org/fr/news/"/>
 <xhtml:link rel="alternate" hreflang="de" href="https://datapavan.org/de/news/"/>
@@ -358,6 +406,7 @@
 </url>
 <url>
 <loc>https://datapavan.org/es/accessibility/</loc>
+<lastmod>2026-11-26</lastmod>
 <xhtml:link rel="alternate" hreflang="en" href="https://datapavan.org/accessibility/"/>
 <xhtml:link rel="alternate" hreflang="fr" href="https://datapavan.org/fr/accessibility/"/>
 <xhtml:link rel="alternate" hreflang="de" href="https://datapavan.org/de/accessibility/"/>
@@ -370,6 +419,7 @@
 </url>
 <url>
 <loc>https://datapavan.org/es/map/</loc>
+<lastmod>2026-11-26</lastmod>
 <xhtml:link rel="alternate" hreflang="en" href="https://datapavan.org/map/"/>
 <xhtml:link rel="alternate" hreflang="fr" href="https://datapavan.org/fr/map/"/>
 <xhtml:link rel="alternate" hreflang="de" href="https://datapavan.org/de/map/"/>
@@ -382,6 +432,7 @@
 </url>
 <url>
 <loc>https://datapavan.org/es/privacy/</loc>
+<lastmod>2026-11-26</lastmod>
 <xhtml:link rel="alternate" hreflang="en" href="https://datapavan.org/privacy/"/>
 <xhtml:link rel="alternate" hreflang="fr" href="https://datapavan.org/fr/privacy/"/>
 <xhtml:link rel="alternate" hreflang="de" href="https://datapavan.org/de/privacy/"/>
@@ -394,6 +445,7 @@
 </url>
 <url>
 <loc>https://datapavan.org/es/bots/</loc>
+<lastmod>2026-11-23</lastmod>
 <xhtml:link rel="alternate" hreflang="en" href="https://datapavan.org/bots/"/>
 <xhtml:link rel="alternate" hreflang="fr" href="https://datapavan.org/fr/bots/"/>
 <xhtml:link rel="alternate" hreflang="de" href="https://datapavan.org/de/bots/"/>
@@ -406,7 +458,7 @@
 </url>
 <url>
 <loc>https://datapavan.org/ru/</loc>
-<lastmod>2026-10-12</lastmod>
+<lastmod>2026-11-26</lastmod>
 <xhtml:link rel="alternate" hreflang="en" href="https://datapavan.org/"/>
 <xhtml:link rel="alternate" hreflang="fr" href="https://datapavan.org/fr/"/>
 <xhtml:link rel="alternate" hreflang="de" href="https://datapavan.org/de/"/>
@@ -419,7 +471,7 @@
 </url>
 <url>
 <loc>https://datapavan.org/ru/news/</loc>
-<lastmod>2026-10-12</lastmod>
+<lastmod>2026-11-23</lastmod>
 <xhtml:link rel="alternate" hreflang="en" href="https://datapavan.org/news/"/>
 <xhtml:link rel="alternate" hreflang="fr" href="https://datapavan.org/fr/news/"/>
 <xhtml:link rel="alternate" hreflang="de" href="https://datapavan.org/de/news/"/>
@@ -432,6 +484,7 @@
 </url>
 <url>
 <loc>https://datapavan.org/ru/accessibility/</loc>
+<lastmod>2026-11-26</lastmod>
 <xhtml:link rel="alternate" hreflang="en" href="https://datapavan.org/accessibility/"/>
 <xhtml:link rel="alternate" hreflang="fr" href="https://datapavan.org/fr/accessibility/"/>
 <xhtml:link rel="alternate" hreflang="de" href="https://datapavan.org/de/accessibility/"/>
@@ -444,6 +497,7 @@
 </url>
 <url>
 <loc>https://datapavan.org/ru/map/</loc>
+<lastmod>2026-11-26</lastmod>
 <xhtml:link rel="alternate" hreflang="en" href="https://datapavan.org/map/"/>
 <xhtml:link rel="alternate" hreflang="fr" href="https://datapavan.org/fr/map/"/>
 <xhtml:link rel="alternate" hreflang="de" href="https://datapavan.org/de/map/"/>
@@ -456,6 +510,7 @@
 </url>
 <url>
 <loc>https://datapavan.org/ru/privacy/</loc>
+<lastmod>2026-11-26</lastmod>
 <xhtml:link rel="alternate" hreflang="en" href="https://datapavan.org/privacy/"/>
 <xhtml:link rel="alternate" hreflang="fr" href="https://datapavan.org/fr/privacy/"/>
 <xhtml:link rel="alternate" hreflang="de" href="https://datapavan.org/de/privacy/"/>
@@ -468,6 +523,7 @@
 </url>
 <url>
 <loc>https://datapavan.org/ru/bots/</loc>
+<lastmod>2026-11-23</lastmod>
 <xhtml:link rel="alternate" hreflang="en" href="https://datapavan.org/bots/"/>
 <xhtml:link rel="alternate" hreflang="fr" href="https://datapavan.org/fr/bots/"/>
 <xhtml:link rel="alternate" hreflang="de" href="https://datapavan.org/de/bots/"/>
@@ -480,7 +536,7 @@
 </url>
 <url>
 <loc>https://datapavan.org/zh/</loc>
-<lastmod>2026-10-12</lastmod>
+<lastmod>2026-11-26</lastmod>
 <xhtml:link rel="alternate" hreflang="en" href="https://datapavan.org/"/>
 <xhtml:link rel="alternate" hreflang="fr" href="https://datapavan.org/fr/"/>
 <xhtml:link rel="alternate" hreflang="de" href="https://datapavan.org/de/"/>
@@ -493,7 +549,7 @@
 </url>
 <url>
 <loc>https://datapavan.org/zh/news/</loc>
-<lastmod>2026-10-12</lastmod>
+<lastmod>2026-11-23</lastmod>
 <xhtml:link rel="alternate" hreflang="en" href="https://datapavan.org/news/"/>
 <xhtml:link rel="alternate" hreflang="fr" href="https://datapavan.org/fr/news/"/>
 <xhtml:link rel="alternate" hreflang="de" href="https://datapavan.org/de/news/"/>
@@ -506,6 +562,7 @@
 </url>
 <url>
 <loc>https://datapavan.org/zh/accessibility/</loc>
+<lastmod>2026-11-26</lastmod>
 <xhtml:link rel="alternate" hreflang="en" href="https://datapavan.org/accessibility/"/>
 <xhtml:link rel="alternate" hreflang="fr" href="https://datapavan.org/fr/accessibility/"/>
 <xhtml:link rel="alternate" hreflang="de" href="https://datapavan.org/de/accessibility/"/>
@@ -518,6 +575,7 @@
 </url>
 <url>
 <loc>https://datapavan.org/zh/bots/</loc>
+<lastmod>2026-11-23</lastmod>
 <xhtml:link rel="alternate" hreflang="en" href="https://datapavan.org/bots/"/>
 <xhtml:link rel="alternate" hreflang="fr" href="https://datapavan.org/fr/bots/"/>
 <xhtml:link rel="alternate" hreflang="de" href="https://datapavan.org/de/bots/"/>
@@ -530,6 +588,7 @@
 </url>
 <url>
 <loc>https://datapavan.org/zh/map/</loc>
+<lastmod>2026-11-26</lastmod>
 <xhtml:link rel="alternate" hreflang="en" href="https://datapavan.org/map/"/>
 <xhtml:link rel="alternate" hreflang="fr" href="https://datapavan.org/fr/map/"/>
 <xhtml:link rel="alternate" hreflang="de" href="https://datapavan.org/de/map/"/>
@@ -542,6 +601,7 @@
 </url>
 <url>
 <loc>https://datapavan.org/zh/privacy/</loc>
+<lastmod>2026-11-26</lastmod>
 <xhtml:link rel="alternate" hreflang="en" href="https://datapavan.org/privacy/"/>
 <xhtml:link rel="alternate" hreflang="fr" href="https://datapavan.org/fr/privacy/"/>
 <xhtml:link rel="alternate" hreflang="de" href="https://datapavan.org/de/privacy/"/>
@@ -554,7 +614,7 @@
 </url>
 <url>
 <loc>https://datapavan.org/ar/</loc>
-<lastmod>2026-10-12</lastmod>
+<lastmod>2026-11-26</lastmod>
 <xhtml:link rel="alternate" hreflang="en" href="https://datapavan.org/"/>
 <xhtml:link rel="alternate" hreflang="fr" href="https://datapavan.org/fr/"/>
 <xhtml:link rel="alternate" hreflang="de" href="https://datapavan.org/de/"/>
@@ -567,7 +627,7 @@
 </url>
 <url>
 <loc>https://datapavan.org/ar/news/</loc>
-<lastmod>2026-10-12</lastmod>
+<lastmod>2026-11-23</lastmod>
 <xhtml:link rel="alternate" hreflang="en" href="https://datapavan.org/news/"/>
 <xhtml:link rel="alternate" hreflang="fr" href="https://datapavan.org/fr/news/"/>
 <xhtml:link rel="alternate" hreflang="de" href="https://datapavan.org/de/news/"/>
@@ -580,6 +640,7 @@
 </url>
 <url>
 <loc>https://datapavan.org/ar/accessibility/</loc>
+<lastmod>2026-11-26</lastmod>
 <xhtml:link rel="alternate" hreflang="en" href="https://datapavan.org/accessibility/"/>
 <xhtml:link rel="alternate" hreflang="fr" href="https://datapavan.org/fr/accessibility/"/>
 <xhtml:link rel="alternate" hreflang="de" href="https://datapavan.org/de/accessibility/"/>
@@ -592,6 +653,7 @@
 </url>
 <url>
 <loc>https://datapavan.org/ar/map/</loc>
+<lastmod>2026-11-26</lastmod>
 <xhtml:link rel="alternate" hreflang="en" href="https://datapavan.org/map/"/>
 <xhtml:link rel="alternate" hreflang="fr" href="https://datapavan.org/fr/map/"/>
 <xhtml:link rel="alternate" hreflang="de" href="https://datapavan.org/de/map/"/>
@@ -604,6 +666,7 @@
 </url>
 <url>
 <loc>https://datapavan.org/ar/privacy/</loc>
+<lastmod>2026-11-26</lastmod>
 <xhtml:link rel="alternate" hreflang="en" href="https://datapavan.org/privacy/"/>
 <xhtml:link rel="alternate" hreflang="fr" href="https://datapavan.org/fr/privacy/"/>
 <xhtml:link rel="alternate" hreflang="de" href="https://datapavan.org/de/privacy/"/>
@@ -616,6 +679,7 @@
 </url>
 <url>
 <loc>https://datapavan.org/ar/bots/</loc>
+<lastmod>2026-11-23</lastmod>
 <xhtml:link rel="alternate" hreflang="en" href="https://datapavan.org/bots/"/>
 <xhtml:link rel="alternate" hreflang="fr" href="https://datapavan.org/fr/bots/"/>
 <xhtml:link rel="alternate" hreflang="de" href="https://datapavan.org/de/bots/"/>
@@ -628,7 +692,7 @@
 </url>
 <url>
 <loc>https://datapavan.org/fa/</loc>
-<lastmod>2026-10-12</lastmod>
+<lastmod>2026-11-26</lastmod>
 <xhtml:link rel="alternate" hreflang="en" href="https://datapavan.org/"/>
 <xhtml:link rel="alternate" hreflang="fr" href="https://datapavan.org/fr/"/>
 <xhtml:link rel="alternate" hreflang="de" href="https://datapavan.org/de/"/>
@@ -641,7 +705,7 @@
 </url>
 <url>
 <loc>https://datapavan.org/fa/news/</loc>
-<lastmod>2026-10-12</lastmod>
+<lastmod>2026-11-23</lastmod>
 <xhtml:link rel="alternate" hreflang="en" href="https://datapavan.org/news/"/>
 <xhtml:link rel="alternate" hreflang="fr" href="https://datapavan.org/fr/news/"/>
 <xhtml:link rel="alternate" hreflang="de" href="https://datapavan.org/de/news/"/>
@@ -654,6 +718,7 @@
 </url>
 <url>
 <loc>https://datapavan.org/fa/bots/</loc>
+<lastmod>2026-11-23</lastmod>
 <xhtml:link rel="alternate" hreflang="en" href="https://datapavan.org/bots/"/>
 <xhtml:link rel="alternate" hreflang="fr" href="https://datapavan.org/fr/bots/"/>
 <xhtml:link rel="alternate" hreflang="de" href="https://datapavan.org/de/bots/"/>
@@ -666,6 +731,7 @@
 </url>
 <url>
 <loc>https://datapavan.org/fa/accessibility/</loc>
+<lastmod>2026-11-26</lastmod>
 <xhtml:link rel="alternate" hreflang="en" href="https://datapavan.org/accessibility/"/>
 <xhtml:link rel="alternate" hreflang="fr" href="https://datapavan.org/fr/accessibility/"/>
 <xhtml:link rel="alternate" hreflang="de" href="https://datapavan.org/de/accessibility/"/>
@@ -678,6 +744,7 @@
 </url>
 <url>
 <loc>https://datapavan.org/fa/privacy/</loc>
+<lastmod>2026-11-26</lastmod>
 <xhtml:link rel="alternate" hreflang="en" href="https://datapavan.org/privacy/"/>
 <xhtml:link rel="alternate" hreflang="fr" href="https://datapavan.org/fr/privacy/"/>
 <xhtml:link rel="alternate" hreflang="de" href="https://datapavan.org/de/privacy/"/>
@@ -690,6 +757,7 @@
 </url>
 <url>
 <loc>https://datapavan.org/fa/map/</loc>
+<lastmod>2026-11-26</lastmod>
 <xhtml:link rel="alternate" hreflang="en" href="https://datapavan.org/map/"/>
 <xhtml:link rel="alternate" hreflang="fr" href="https://datapavan.org/fr/map/"/>
 <xhtml:link rel="alternate" hreflang="de" href="https://datapavan.org/de/map/"/>
