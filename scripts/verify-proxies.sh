@@ -50,6 +50,25 @@ UNROOT=""
 DNAT_SET=""
 DNAT_RULE=""
 
+# Clears Android's global proxy, and clears it again until Android itself holds none. The two writes in a row, ":0"
+# and then the setting's deletion, sometimes leave Android's own copy (global_http_proxy_host and _port) set, and "Now"
+# then rightly still shows the proxy Android reports: 3 of 40 rounds on an emulator held to one core, as on CI run
+# 45847704354. Cleared up to three times; whether it went, for the caller.
+global_proxy_gone() {
+    local host
+    host=$(adb shell settings get global global_http_proxy_host 2>/dev/null | tr -d '\r')
+    [ "$host" = null ] || [ -z "$host" ]
+}
+clear_global_proxy() {
+    local _
+    for _ in 1 2 3; do
+        adb shell settings put global http_proxy :0 >/dev/null 2>&1 || true
+        adb shell settings delete global http_proxy >/dev/null 2>&1 || true
+        within 5 global_proxy_gone && return 0
+    done
+    return 1
+}
+
 cleanup() {
     local status=$?
     if [ -n "$DNAT_SET" ]; then adb shell "iptables -w -t nat -D OUTPUT $DNAT_RULE" >/dev/null 2>&1 || true; fi
@@ -57,10 +76,7 @@ cleanup() {
         adb unroot >/dev/null 2>&1 || true
         timeout 60 adb wait-for-device >/dev/null 2>&1 || true
     fi
-    if [ -n "$PROXY_SET" ]; then
-        adb shell settings put global http_proxy :0 >/dev/null 2>&1 || true
-        adb shell settings delete global http_proxy >/dev/null 2>&1 || true
-    fi
+    if [ -n "$PROXY_SET" ]; then clear_global_proxy || true; fi
     adb shell am force-stop "$PKG" >/dev/null 2>&1 || true
     for role in "" .telegram .whatsapp .signal; do adb uninstall "$FIXTURE$role" >/dev/null 2>&1 || true; done
     if [ "$status" != 0 ]; then
@@ -199,8 +215,7 @@ proxied "$APP_UID" "$PROXYLAB_PORT_OPEN" "forward read sn inner\.proxylab\.test:
 # the network part's default network, never the Wi-Fi network's as the whole phone's (review B-rest 1).
 context_global() { grep -q "proxy-context global=${HOST//./\\.}:$PROXYLAB_PORT_OPEN " <<<"$(dump)"; }
 within 10 context_global || fail "\"Now\" does not hold the whole phone's proxy: $(dump | sed -n 's/^ *proxy-context //p')"
-adb shell settings put global http_proxy :0
-adb shell settings delete global http_proxy >/dev/null 2>&1 || true
+clear_global_proxy || fail "Android kept its global proxy after it was cleared three times"
 PROXY_SET=""
 context_none() { grep -q "proxy-context global=- network=- " <<<"$(dump)"; }
 within 10 context_none || fail "\"Now\" still holds a proxy setting once none is set: $(dump | sed -n 's/^ *proxy-context //p')"
@@ -339,8 +354,7 @@ fixture "$FIXTURE" setting 204
 setting_now() { [ "$(ten_minutes "$SETTING_HOP")" -gt "$setting_before" ]; }
 within 15 setting_now ||
     fail "with the switch off, \"Now\" did not show the first hop of the plain request to Android's setting within 15 s: $(proxies_now)"
-adb shell settings put global http_proxy :0
-adb shell settings delete global http_proxy >/dev/null 2>&1 || true
+clear_global_proxy || fail "Android kept its global proxy after it was cleared three times"
 PROXY_SET=""
 dump log-flush >/dev/null
 log=$(dump log-today | sed -n 's/^ *log-record //p')
