@@ -202,6 +202,24 @@ impl Default for Names {
     }
 }
 
+/// Keeps one entry of `earlier` for each name given again, its latest, and of those the latest
+/// [`NAMES_PER_ADDRESS`], in the order they came. A scan of the entries kept, not a set: there are at most
+/// `NAMES_PER_ADDRESS` + 1 (those an address kept, and the name given before the last), and a set took its keys and
+/// its table for every answer to an address already held (the cold paths' second pass, ADR 0053).
+fn latest_each(earlier: &mut Vec<(u64, Instant)>) {
+    earlier.reverse();
+    let mut kept = 0;
+    for i in 0..earlier.len() {
+        let hash = earlier[i].0;
+        if earlier[..kept].iter().all(|(seen, _)| *seen != hash) {
+            earlier.swap(kept, i);
+            kept += 1;
+        }
+    }
+    earlier.truncate(kept.min(NAMES_PER_ADDRESS));
+    earlier.reverse();
+}
+
 /// A host name as names compare: in lower case, without a trailing dot.
 fn compared(name: &str) -> String {
     name.trim_end_matches('.').to_ascii_lowercase()
@@ -247,12 +265,7 @@ impl Names {
                     }
                     let own = hasher.hash_one(compared(name));
                     earlier.retain(|(hash, _)| *hash != own);
-                    // One entry for a name given again: its latest.
-                    let mut seen = std::collections::HashSet::new();
-                    earlier.reverse();
-                    earlier.retain(|(hash, _)| seen.insert(*hash));
-                    earlier.truncate(NAMES_PER_ADDRESS);
-                    earlier.reverse();
+                    latest_each(&mut earlier);
                     given.earlier = earlier;
                 }
                 given
@@ -578,5 +591,57 @@ mod tests {
         names.insert(b, Some(10_123), "other.example", 600, (later, BOOT));
         assert!(names.gave(b, Some(10_123), "own.example", later));
         assert!(!names.gave(b, Some(10_456), "own.example", later));
+    }
+
+    /// The names given before an address's last keep one entry for each name given again, its latest, and of those
+    /// the latest `NAMES_PER_ADDRESS`, in the order they came: the scan that took the place of a set (the cold
+    /// paths' second pass) gives what the set gave, for every list tried of up to `NAMES_PER_ADDRESS` + 3 entries.
+    #[test]
+    fn the_names_given_before_keep_the_latest_of_each_in_their_order() {
+        // The set's way, as `Names::insert` had it.
+        let with_a_set = |mut earlier: Vec<(u64, Instant)>| {
+            let mut seen = std::collections::HashSet::new();
+            earlier.reverse();
+            earlier.retain(|(hash, _)| seen.insert(*hash));
+            earlier.truncate(NAMES_PER_ADDRESS);
+            earlier.reverse();
+            earlier
+        };
+        let now = Instant::now();
+        let at = |seconds: u64| now + Duration::from_secs(seconds);
+        let mut earlier = vec![
+            (1, at(1)),
+            (2, at(2)),
+            (1, at(3)),
+            (3, at(4)),
+            (2, at(5)),
+            (4, at(6)),
+        ];
+        let latest = vec![(1, at(3)), (3, at(4)), (2, at(5)), (4, at(6))];
+        assert_eq!(with_a_set(earlier.clone()), latest);
+        latest_each(&mut earlier);
+        assert_eq!(earlier, latest, "the latest of each, in their order");
+        // Past the bound, the latest are kept.
+        let mut earlier: Vec<(u64, Instant)> = (0..10).map(|n| (n, at(n))).collect();
+        latest_each(&mut earlier);
+        assert_eq!(earlier, (2..10).map(|n| (n, at(n))).collect::<Vec<_>>());
+        // Lists of up to NAMES_PER_ADDRESS + 3 entries among six names, many given again, as the set gave them.
+        let mut state = 0x9e37_79b9_7f4a_7c15_u64;
+        for length in 0..=NAMES_PER_ADDRESS + 3 {
+            for _ in 0..200 {
+                let mut earlier = Vec::with_capacity(length);
+                let mut when = now;
+                for _ in 0..length {
+                    state ^= state << 13;
+                    state ^= state >> 7;
+                    state ^= state << 17;
+                    when += Duration::from_secs(1);
+                    earlier.push((state % 6, when));
+                }
+                let expected = with_a_set(earlier.clone());
+                latest_each(&mut earlier);
+                assert_eq!(earlier, expected);
+            }
+        }
     }
 }
