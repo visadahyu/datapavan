@@ -472,6 +472,30 @@ impl HeldBack {
     pub(super) fn tie(&mut self, id: u64) {
         self.taken_back.tie(id);
     }
+
+    /// The chained tool's flow `id` was tied after its birth, at its hello (`Shared::tie_at_hello`): its records already
+    /// held back, and those in `pending`, gathered for the next batch, are stripped again as the tie says.
+    pub(super) fn tie_waiting(
+        &mut self,
+        id: u64,
+        keeps: &Keeps,
+        pending: &mut [crate::log::Record],
+    ) {
+        if self.taken_back.tied(id) {
+            return;
+        }
+        self.taken_back.tie(id);
+        let Self {
+            records,
+            taken_back,
+            ..
+        } = self;
+        for record in records.iter_mut().chain(pending.iter_mut()) {
+            if record_flow(record) == Some(id) {
+                strip_for_log(record, keeps, taken_back);
+            }
+        }
+    }
 }
 
 /// The flows a messenger's direct connection took the name of its proxy back from, or that it never named for

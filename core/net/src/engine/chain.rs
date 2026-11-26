@@ -74,6 +74,13 @@ impl Carried {
         port.to_be_bytes().into_iter().fold(hash, step)
     }
 
+    /// Whether a request of `key` was made within [`CARRIED`] before `now`.
+    fn holds(&self, key: u64, now: Duration) -> bool {
+        self.asked.iter().any(|&(asked, at)| {
+            asked == key && at.is_some_and(|at| now.saturating_sub(at) < CARRIED)
+        })
+    }
+
     /// Whether `flow` goes where the chain asked the tool to within [`CARRIED`] before `now`: by its address and port,
     /// or by the DNS name its address was given (its name by DNS, or the one beside a hello's) at the same port.
     fn ties(&self, flow: &super::Flow, now: Duration) -> bool {
@@ -263,6 +270,27 @@ impl Shared {
         if tied {
             lock(&self.held_back).tie(flow.id);
         }
+    }
+
+    /// The chained tool's flow `opened` sent a hello that names `name` (review-D-engine major 1): tied if the chain asked
+    /// the tool for that name at the flow's port within [`CARRIED`], as a DNS name its address had at its birth would
+    /// have tied it. The hello is the tool's to write, so under (c) it may only take from the user's choice, as the tool's
+    /// own resolver's answers already can: nothing live changes, and the records of the flow already cut and waiting,
+    /// held back or gathered for the next batch, are stripped as the tie says (audit-D m9). The table is let go before
+    /// `held_back` is taken, then `pending_log`, in `to_log`'s order. Out of line.
+    #[cold]
+    #[inline(never)]
+    pub(super) fn tie_at_hello(&self, opened: &super::Opened, name: &str) {
+        let now = self.clock.since_boot();
+        let key = Carried::key(None, name, opened.destination.port());
+        let tied = lock(&self.carried).holds(key, now);
+        if !tied {
+            return;
+        }
+        let mut back = lock(&self.held_back);
+        let mut pending = lock(&self.pending_log);
+        let keeps = self.keeps_first_hops();
+        back.tie_waiting(opened.id, &keeps, &mut pending);
     }
 
     /// What to ask the tool for: the name behind a stand-in address, or the address itself. `None` for
@@ -773,9 +801,9 @@ mod tests {
             assert_eq!(logged(&shared, &[1, 2]), vec![Some(false), Some(true)]);
         }
 
-        /// D-PLAN test 7, rewritten to (c), which has no hello path: a request by name ties the tool's flow whose
-        /// address Datapavan's names gave that name, at the same port, by its DNS name or the DNS name beside a hello's;
-        /// not one named by its hello alone, which the tool writes, nor one at another port.
+        /// D-PLAN test 7, rewritten to (c): at its birth, a request by name ties the tool's flow whose address
+        /// Datapavan's names gave that name, at the same port, by its DNS name or the DNS name beside a hello's; not one
+        /// named by its hello alone, which a hello the engine reads ties later (below), nor one at another port.
         #[test]
         fn carried_by_address_and_by_dns_name() {
             let (shared, clock) = chained(false);
@@ -820,6 +848,104 @@ mod tests {
                     Some(true),
                     Some(false)
                 ]
+            );
+        }
+
+        /// Review-D-engine major 1: the chained tool's flow whose hello names what the chain asked the tool for, by name
+        /// at the flow's port, is tied at the hello, and its records already cut and waiting are stripped under the tool's
+        /// choice; nothing live changes, and the hello names the flow as any does. A hello naming anything else, or the
+        /// name at another port, ties nothing; nor does another app's hello.
+        #[test]
+        fn a_hello_naming_a_chained_request_ties_its_flow_and_strips_what_waits() {
+            use super::super::super::{DnsUse, Opened};
+            let (shared, clock) = chained(false);
+            choose_tool(&shared, &[TOOL]);
+            let Some(asked) = Target::name("news.domestic.example", 443) else {
+                unreachable!("a name")
+            };
+            shared.carry(&asked);
+            clock.pass(500);
+            let at = |last: u8, port: u16| SocketAddr::from(([192, 0, 2, last], port));
+            let flows = [
+                (1, TOOL, at(81, 443), "News.Domestic.Example."),
+                (2, TOOL, at(82, 443), "elsewhere.example"),
+                (3, TOOL, at(83, 8443), "news.domestic.example"),
+                (4, DIRECT, at(84, 443), "news.domestic.example"),
+            ];
+            for &(id, uid, destination, _) in &flows {
+                assert!(born(&shared, to(id, uid, destination, None)));
+                assert!(!tied(&shared, id), "{id}: nothing ties it at its birth");
+            }
+            // A segment of each, cut now, waits for the next batch, kept whole under the choice.
+            for &(id, ..) in &flows {
+                let bytes = lock(&shared.live).get(&id).map(|l| Arc::clone(&l.bytes));
+                if let Some(bytes) = bytes {
+                    clock.set(T + 1_000 + id);
+                    bytes.up(&shared, 10, 50);
+                }
+            }
+            shared.flush();
+            let waiting = |id: u64| -> Vec<Flow> {
+                lock(&shared.pending_log)
+                    .iter()
+                    .filter_map(|r| match r {
+                        crate::log::Record::Segment { flow, .. } if flow.id == id => {
+                            Some(flow.clone())
+                        }
+                        _ => None,
+                    })
+                    .collect()
+            };
+            assert!(
+                flows.iter().all(|&(id, _, destination, _)| waiting(id)
+                    .iter()
+                    .any(|f| f.destination == destination)),
+                "kept whole before the hello"
+            );
+            for &(id, uid, destination, name) in &flows {
+                let opened = Opened {
+                    id,
+                    port: destination.port(),
+                    destination,
+                    sniffs: false,
+                    dns: DnsUse::None,
+                    uid: Some(uid),
+                    dns_held_until: Duration::ZERO,
+                };
+                let hello = crate::tls::Hello {
+                    name: name.into(),
+                    ech: false,
+                };
+                shared.hello(opened, &hello, NamedBy::Tls);
+            }
+            let tied: Vec<bool> = flows.iter().map(|&(id, ..)| tied(&shared, id)).collect();
+            assert_eq!(tied, vec![true, false, false, false]);
+            let stripped = waiting(1);
+            assert!(
+                !stripped.is_empty()
+                    && stripped
+                        .iter()
+                        .all(|f| f.destination.ip().is_unspecified() && f.name.is_none()),
+                "{stripped:?}"
+            );
+            for &(id, _, destination, _) in &flows[1..] {
+                assert!(
+                    waiting(id).iter().all(|f| f.destination == destination),
+                    "{id}"
+                );
+            }
+            let named = lock(&shared.live)
+                .get(&1)
+                .map(|l| (l.hidden, l.flow.destination, l.flow.name.clone()));
+            assert_eq!(
+                named,
+                Some((false, at(81, 443), Some("news.domestic.example".to_owned()))),
+                "nothing live changes"
+            );
+            taken(&shared);
+            assert_eq!(
+                logged(&shared, &[1, 2, 3, 4]),
+                vec![Some(false), Some(true), Some(true), Some(true)]
             );
         }
 

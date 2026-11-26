@@ -140,6 +140,14 @@ impl Shared {
     /// before keeps the name the flow had then, whoever cuts it.
     pub(super) fn hello(&self, opened: Opened, hello: &Hello, by: NamedBy) {
         self.log_now();
+        // R10's tie at the hello (review-D-engine major 1): a flow of the chained tool whose hello names what the chain
+        // asked the tool for. It only strips the flow's records under the tool's choice. The cheap test first.
+        if self
+            .chain()
+            .is_some_and(|chain| opened.uid == Some(chain.tool))
+        {
+            self.tie_at_hello(&opened, &hello.name);
+        }
         let id = opened.id;
         let own = written(&hello.name);
         let hidden = hello.ech && lock(&self.names).is_public(&own, opened.uid, Instant::now());
