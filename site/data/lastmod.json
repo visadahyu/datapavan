@@ -1,7 +1,7 @@
 {
  "/": {
   "date": "2026-11-26",
-  "sha256": "062b7442468cef8e3dc5c2af9e59bb0c0956b43b5d833a82c611d1f190c95d59"
+  "sha256": "d392dc4892b73515fafb036f8f450bc614f04a534bce5135447a2f2cc48a7687"
  },
  "/accessibility/": {
   "date": "2026-11-24",
@@ -85,7 +85,7 @@
  },
  "/fa/": {
   "date": "2026-11-26",
-  "sha256": "9600cbe30e336ea262a1197594b0ea3ae99ebb1762331a429089bf98db9f3853"
+  "sha256": "f21e53d101eb7aa449eecaf4d2fe1c55829439101fbb469e797284fc225daeab"
  },
  "/fa/accessibility/": {
   "date": "2026-11-26",

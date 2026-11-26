@@ -11,6 +11,9 @@
 {{- if eq site.Language.Lang "en" }}
 <div itemscope itemtype="https://schema.org/WebSite"><meta itemprop="name" content="Datapavan"><meta itemprop="url" content="{{ site.Home.Permalink }}">
 {{- range $lang, $text := site.Data.text }}{{ with $text.name_native }}<meta itemprop="alternateName" content="{{ . }}">{{ end }}{{ end }}</div>
+{{- /* The project itself, as search engines show a site's maker (the maintainer, 2026-11-26): its name, address, mark and
+repository, and no person, founder or postal address. */}}
+<div itemscope itemtype="https://schema.org/Organization"><meta itemprop="name" content="Datapavan"><meta itemprop="url" content="{{ site.Home.Permalink }}"><meta itemprop="logo" content="{{ "images/icon-512.png" | absURL }}"><meta itemprop="sameAs" content="{{ site.Params.repo }}"></div>
 {{- end }}
 <div class="w"><div class="hero" itemscope itemtype="https://schema.org/SoftwareApplication">
 <meta itemprop="name" content="Datapavan"><meta itemprop="operatingSystem" content="Android"><meta itemprop="applicationCategory" content="SecurityApplication">
