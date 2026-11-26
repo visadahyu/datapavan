@@ -861,11 +861,9 @@ pub extern "system" fn Java_org_visadahyu_datapavan_network_Engine_nativeChain<'
                     } else {
                         let mut uids = vec![0; apps.len(env)?];
                         apps.get_region(env, 0, &mut uids)?;
-                        Some(
-                            uids.into_iter()
-                                .filter_map(|u| u32::try_from(u).ok())
-                                .collect(),
-                        )
+                        let mut chosen = datapavan_net::set();
+                        chosen.extend(uids.into_iter().filter_map(|u| u32::try_from(u).ok()));
+                        Some(chosen)
                     };
                     Some(Chain {
                         proxy: SocketAddr::new(ip, port),
@@ -1014,12 +1012,16 @@ pub extern "system" fn Java_org_visadahyu_datapavan_network_Engine_nativeTunnelR
                 Ok(values)
             };
             let (uids, ids) = (read(&uids, env)?, read(&tunnels, env)?);
-            let routes = uids
-                .into_iter()
-                .zip(ids)
-                .filter_map(|(uid, id)| Some((u32::try_from(uid).ok()?, u32::try_from(id).ok()?)))
-                .filter(|(_, id)| *id != 0)
-                .collect();
+            // The engine's maker of maps, its keys out of line (the cold paths' second pass, ADR 0053).
+            let mut routes = datapavan_net::map();
+            routes.extend(
+                uids.into_iter()
+                    .zip(ids)
+                    .filter_map(|(uid, id)| {
+                        Some((u32::try_from(uid).ok()?, u32::try_from(id).ok()?))
+                    })
+                    .filter(|(_, id)| *id != 0),
+            );
             set_tunnels(|tunnels| {
                 tunnels.routes = routes;
                 tunnels.log_destinations = log_destinations;
@@ -1046,12 +1048,9 @@ pub extern "system" fn Java_org_visadahyu_datapavan_network_Engine_nativeKnownAp
             } else {
                 let mut values = vec![0; uids.len(env)?];
                 uids.get_region(env, 0, &mut values)?;
-                Some(Arc::new(
-                    values
-                        .into_iter()
-                        .filter_map(|uid| u32::try_from(uid).ok())
-                        .collect::<std::collections::HashSet<u32>>(),
-                ))
+                let mut known = datapavan_net::set();
+                known.extend(values.into_iter().filter_map(|uid| u32::try_from(uid).ok()));
+                Some(Arc::new(known))
             };
             set_tunnels(|tunnels| tunnels.known = known);
             Ok(())
