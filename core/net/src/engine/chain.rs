@@ -970,6 +970,31 @@ mod tests {
             );
         }
 
+        /// Review-D-engine minor 4: a request through the tool is noted where it is made, in `tool_target`: on the TCP
+        /// path by `connect_through`, even when the tool's proxy refuses it, so that the tool's direct flow there is tied.
+        #[test]
+        fn a_tcp_request_through_the_tool_is_noted_for_the_tie() -> std::io::Result<()> {
+            let (shared, _) = chained(false);
+            let shared = Arc::new(shared);
+            let closed = std::net::TcpListener::bind("127.0.0.1:0")?.local_addr()?;
+            let through = Chain {
+                proxy: closed,
+                ..chain(Some(&[CHAINED]))
+            };
+            let runtime = tokio::runtime::Builder::new_current_thread()
+                .enable_all()
+                .build()?;
+            assert!(
+                runtime
+                    .block_on(connect_through(&shared, &through, SITE))
+                    .is_err(),
+                "the tool's proxy is closed"
+            );
+            assert!(born(&shared, to(1, TOOL, SITE, None)));
+            assert!(tied(&shared, 1));
+            Ok(())
+        }
+
         /// D-PLAN test 8: a request ties the tool's flows for ten seconds on the boot clock, and no longer.
         #[test]
         fn a_carried_match_ends_after_ten_seconds() {

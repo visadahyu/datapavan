@@ -2293,6 +2293,40 @@ mod tests {
         assert!(has_server(clock.wall_ms()), "within its window");
     }
 
+    /// Review-D-engine minor 4: a tool chained anew that the network part had not handed as one is a tool known late
+    /// (`Engine::chain`): its place of a flow that ended before keeps its window from the chain, not dropped at once.
+    #[test]
+    fn a_tool_chained_late_keeps_its_ended_places_for_their_window() {
+        let (shared, clock, _) = telling_at(T);
+        let bytes = recorded(&shared, to_server(1, TOOL));
+        up_at(&shared, &clock, &bytes, 500, 10);
+        clock.set(T + 1_500);
+        shared.tell(&on_since(T, T + 1_000, T));
+        shared.finish(1);
+        clock.pass(MINUTE);
+        let engine = crate::engine::Engine {
+            shared: Arc::new(shared),
+            stop: tokio::sync::watch::channel(false).0,
+            network: tokio::sync::watch::channel(0).0,
+            swaps: tokio::sync::mpsc::unbounded_channel().0,
+            thread: None,
+        };
+        engine.chain(Some((*chain_of(UID, false)).clone()));
+        let full = |now| {
+            shown_places(&engine.shared, TOOL, now)
+                .first()
+                .is_some_and(|p| p.flow.destination == SERVER && p.shown_only)
+        };
+        assert!(full(clock.wall_ms()), "kept by the join at the chain");
+        clock.pass(10 * MINUTE - 1_000);
+        assert!(full(clock.wall_ms()));
+        clock.pass(1_000);
+        assert_eq!(
+            shown_places(&engine.shared, TOOL, clock.wall_ms()),
+            Vec::new()
+        );
+    }
+
     /// The audit's m7, R10's late tools: a tool's flow that ended before the set named its UID a tool, its place in
     /// "Now", keeps the place in full for ten minutes from the pass that the set runs, not dropped at once.
     #[test]

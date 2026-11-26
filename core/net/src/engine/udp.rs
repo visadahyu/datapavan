@@ -5355,6 +5355,39 @@ mod tests {
     use super::super::tests::shared;
     use super::*;
 
+    /// Review-D-engine minor 4: a UDP peer through the tool notes what it asks the tool for (`PeerWay::toward`, through
+    /// `Shared::tool_target`), so that the chained tool's direct flow there is tied (R10); one on the direct path notes
+    /// nothing.
+    #[test]
+    fn a_udp_peer_through_the_tool_is_noted_for_the_tie() {
+        use super::super::activity::tests::{T, flow, telling_at};
+        let (shared, _, _) = telling_at(T);
+        let chain = Arc::new(Chain {
+            proxy: SocketAddr::from(([127, 0, 0, 1], 10_808)),
+            credentials: None,
+            tool: 10_200,
+            apps: Some(std::collections::HashSet::from([10_300])),
+            udp: true,
+            log_destinations: false,
+        });
+        *lock(&shared.chain) = Some(Arc::clone(&chain));
+        let through = SocketAddr::from(([192, 0, 2, 80], 3478));
+        let direct = SocketAddr::from(([192, 0, 2, 81], 3478));
+        assert!(PeerWay::toward(&shared, &Exit::Tool(chain), through).is_some());
+        assert!(PeerWay::toward(&shared, &Exit::Direct, direct).is_some());
+        for (id, destination) in [(1, through), (2, direct)] {
+            let tool = Flow {
+                destination,
+                name: None,
+                named_by: NamedBy::Unknown,
+                ..flow(id, Some(10_200))
+            };
+            assert!(shared.record(tool).is_some());
+        }
+        let back = lock(&shared.held_back);
+        assert!(back.taken_back().tied(1) && !back.taken_back().tied(2));
+    }
+
     /// A standard query for the A record of `name`, in DNS's form, under the ID `id`.
     fn query(id: u16, name: &[u8]) -> Vec<u8> {
         let mut query = id.to_be_bytes().to_vec();

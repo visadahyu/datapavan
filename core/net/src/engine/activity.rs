@@ -2696,6 +2696,88 @@ pub(super) mod tests {
         Ok(())
     }
 
+    /// Review-D-engine minor 4: the tied flows cross a hand-over with the flows taken back, so that under the tool's
+    /// choice a tied flow's record that reaches the next engine stays stripped.
+    #[test]
+    fn the_tied_flows_cross_a_hand_over() -> std::io::Result<()> {
+        use super::super::{Addresses, Chain, Config, Engine, Limits, ProxySetting};
+        const TOOL: u32 = 10_200;
+        let (shared, clock, _) = telling_at(T);
+        let first = Engine {
+            shared: Arc::new(shared),
+            stop: tokio::sync::watch::channel(false).0,
+            network: tokio::sync::watch::channel(0).0,
+            swaps: tokio::sync::mpsc::unbounded_channel().0,
+            thread: None,
+        };
+        first.chain(Some(Chain {
+            proxy: SocketAddr::from(([127, 0, 0, 1], 10_808)),
+            credentials: None,
+            tool: TOOL,
+            apps: None,
+            udp: true,
+            log_destinations: false,
+        }));
+        first.proxies(ProxySetting {
+            tools: vec![TOOL],
+            logged_tools: vec![TOOL],
+            ..ProxySetting::default()
+        });
+        let site = SocketAddr::from(([192, 0, 2, 80], 443));
+        assert!(first.shared.tool_target(site).is_some());
+        let tied = Flow {
+            destination: site,
+            ..flow(1, Some(TOOL))
+        };
+        assert!(first.shared.record(tied.clone()).is_some());
+        let handover = first.hand_over();
+        let (engine_end, _app) = std::os::unix::net::UnixDatagram::pair()?;
+        engine_end.set_nonblocking(true)?;
+        let platform = Arc::new(Engined {
+            clock,
+            batches: std::sync::Mutex::default(),
+        });
+        let config = Config {
+            mtu: 1_500,
+            keep_flows: 0,
+            addresses: Addresses::COMMON,
+            limits: Limits::default(),
+        };
+        let mut next = Engine::start_with(
+            std::os::fd::OwnedFd::from(engine_end),
+            config,
+            platform,
+            None,
+            (Some(handover), None),
+        )?;
+        assert!(
+            lock(&next.shared.held_back).taken_back().tied(1),
+            "handed over"
+        );
+        let mut records = vec![Record::Segment {
+            flow: tied,
+            start: T,
+            end: T + 1_000,
+            bytes: [10, 0, 50, 0],
+            continues: true,
+            state: IN_USE,
+        }];
+        next.shared.to_log(&mut records);
+        let stripped: Vec<_> = lock(&next.shared.pending_log)
+            .iter()
+            .filter_map(|r| match r {
+                Record::Segment { flow, .. } if flow.id == 1 => Some(flow.destination),
+                Record::Segment { .. } | Record::Lookups { .. } => None,
+            })
+            .collect();
+        assert!(
+            !stripped.is_empty() && stripped.iter().all(|d| d.ip().is_unspecified()),
+            "{stripped:?}"
+        );
+        next.stop();
+        Ok(())
+    }
+
     /// D-PLAN test 15 (R10): a hand-over carries a circumvention tool's window to the next engine: the tools with the
     /// proxies' setting, the ends with the counts, and the mark of bytes no place shows. A place in full stays so until
     /// ten minutes after its end there; one already dropped is still said to be.
