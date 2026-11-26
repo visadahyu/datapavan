@@ -57,6 +57,12 @@ def main():
                 continue
             if not target.exists():
                 bad.append(f"{name}: broken link {link}")
+            # A page is linked by its clean address, its folder, as its canonical names it: a link to its index.html
+            # is a second address of it, which search engines then hold as a duplicate (Search Console, 2026-11-26).
+            elif link.split("#")[0].endswith("index.html"):
+                bad.append(f"{name}: link {link} names index.html; link the page's folder")
+            elif target.is_dir() and not (target / "index.html").exists():
+                bad.append(f"{name}: link {link} is a folder with no page")
     bad += search(pages)
     # An element of nothing but microdata still takes a place in the layout: as a child of a grid or a flex row, an
     # empty cell that pushes the rest out of place. Microdata goes inside an element that shows something.
@@ -315,7 +321,11 @@ def site_map(pages):
         listed, unmarked = set(), []
         for attributes in re.findall(r"<li><a ([^>]*)>", body):
             href = re.search(r'href="([^"]+)"', attributes)[1]
-            target = str((map_page.parent / href).resolve().relative_to(SITE.resolve()))
+            # A page is listed by its folder: the page is that folder's index.html.
+            resolved = (map_page.parent / href).resolve()
+            if resolved.is_dir():
+                resolved = resolved / "index.html"
+            target = str(resolved.relative_to(SITE.resolve()))
             listed.add(target)
             if language(target) != lang and not (re.search(r'(?<![\w-])lang="en"', attributes) and re.search(r'(?<![\w-])dir="ltr"', attributes)):
                 unmarked.append(target)

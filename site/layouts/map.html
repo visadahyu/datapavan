@@ -11,15 +11,15 @@ the other pages by title, then the guides' index and each guide. scripts/check-s
 {{- $translated := false }}{{ range .AllTranslations }}{{ if eq .Language.Lang $lang }}{{ $translated = true }}{{ end }}{{ end }}
 {{- if not $translated }}{{ $english = $english | append $p }}{{ end }}{{ end }}{{ end }}{{ end }}{{ end -}}
 <main id="main"><section><div class="w prose"><h1>{{ .Title }}</h1><ul class="map">
-<li><a href="{{ $toSite }}{{ strings.TrimPrefix "/" site.Home.RelPermalink }}index.html">Datapavan</a></li>
+<li><a href="{{ $toSite }}{{ strings.TrimPrefix "/" site.Home.RelPermalink }}">Datapavan</a></li>
 {{- range (where (where $pages "Kind" "!=" "home") "Section" "!=" "guides").ByTitle }}
-<li><a href="{{ $toSite }}{{ strings.TrimPrefix "/" .RelPermalink }}index.html"{{ if eq .RelPermalink $here.RelPermalink }} aria-current="page"{{ end }}>{{ .Title }}</a></li>
+<li><a href="{{ $toSite }}{{ strings.TrimPrefix "/" .RelPermalink }}"{{ if eq .RelPermalink $here.RelPermalink }} aria-current="page"{{ end }}>{{ .Title }}</a></li>
 {{- end }}
 {{- range slice (where $pages "Section" "guides") (where $english "Section" "guides") }}{{ $guides := . }}
 {{- range where $guides "Kind" "section" }}
-<li><a href="{{ $toSite }}{{ strings.TrimPrefix "/" .RelPermalink }}index.html"{{ if ne .Language.Lang $lang }} hreflang="en" lang="en" dir="ltr"{{ end }}>{{ .Title }}</a><ul>
+<li><a href="{{ $toSite }}{{ strings.TrimPrefix "/" .RelPermalink }}"{{ if ne .Language.Lang $lang }} hreflang="en" lang="en" dir="ltr"{{ end }}>{{ .Title }}</a><ul>
 {{- range (where $guides "Kind" "page").ByTitle }}
-<li><a href="{{ $toSite }}{{ strings.TrimPrefix "/" .RelPermalink }}index.html"{{ if ne .Language.Lang $lang }} hreflang="en" lang="en" dir="ltr"{{ end }}>{{ .Title }}</a></li>
+<li><a href="{{ $toSite }}{{ strings.TrimPrefix "/" .RelPermalink }}"{{ if ne .Language.Lang $lang }} hreflang="en" lang="en" dir="ltr"{{ end }}>{{ .Title }}</a></li>
 {{- end }}</ul></li>
 {{- end }}{{ end }}
 </ul></div></section></main>

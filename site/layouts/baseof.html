@@ -48,10 +48,10 @@ own title and description, its one address, its translations, and a link preview
 </head>
 <body>
 <a class="skip" href="#main">{{ $t.skip_to_content }}</a>
-<div class="w"><header class="top"><a class="brand" href="{{ $toLang }}index.html"><span>{{ partial "mark.html" . }}</span>{{ with $t.name_native }}<span>{{ . }}</span><span class="lat2 ltr">Datapavan</span>{{ else }}<span class="ltr">Datapavan</span>{{ end }}</a><nav>
-{{- $homeLink := cond $isHome "" (printf "%sindex.html" $toLang) -}}
+<div class="w"><header class="top"><a class="brand" href="{{ $toLang | default "./" }}"><span>{{ partial "mark.html" . }}</span>{{ with $t.name_native }}<span>{{ . }}</span><span class="lat2 ltr">Datapavan</span>{{ else }}<span class="ltr">Datapavan</span>{{ end }}</a><nav>
+{{- $homeLink := cond $isHome "" $toLang -}}
 {{- range $t.nav }}{{ $href := printf "%s%s" $homeLink (index . 0) }}<a href="{{ $href | safeURL }}">{{ index . 1 }}</a>{{ end -}}
-<a href="{{ $toLang }}news/index.html">{{ $t.news_title }}</a><a href="{{ site.Params.repo }}" class="ltr">GitHub</a></nav>
+<a href="{{ $toLang }}news/">{{ $t.news_title }}</a><a href="{{ site.Params.repo }}" class="ltr">GitHub</a></nav>
 <details class="lng">{{- /* Its name holds its visible text, the current language, for screen readers and voice control (WCAG 2.5.3). */ -}}
 <summary aria-label="{{ $t.language_label }}: {{ site.Language.Label }}">{{ site.Language.Label }}</summary><ul>
 {{- $here := . -}}
@@ -60,18 +60,18 @@ own title and description, its one address, its translations, and a link preview
 {{- $page := $here -}}
 {{- with $here.AllTranslations -}}{{- range . -}}{{- if eq .Language.Lang $lang -}}{{- $page = . -}}{{- end -}}{{- end -}}{{- end -}}
 {{- $target := cond (eq $page.Language.Lang $lang) (strings.TrimPrefix "/" $page.RelPermalink) (cond (eq $lang "en") "" (printf "%s/" $lang)) -}}
-{{- $link := printf "%s%sindex.html" $toSite $target -}}
+{{- $link := printf "%s%s" $toSite $target | default "./" -}}
 <li><a href="{{ $link | safeURL }}" hreflang="{{ $lang }}" lang="{{ $lang }}"{{ if eq $lang site.Language.Lang }} aria-current="true"{{ end }}>{{ .Language.Label }}</a></li>
 {{- end -}}
 </ul></details></header></div>
 {{ block "main" . }}{{ end }}
-<div class="w"><footer><div class="fl"><a href="{{ $toLang }}news/index.html">{{ $t.news_title }}</a>
-<a href="{{ $toLang }}bots/index.html">{{ $t.foot_bots }}</a>
+<div class="w"><footer><div class="fl"><a href="{{ $toLang }}news/">{{ $t.news_title }}</a>
+<a href="{{ $toLang }}bots/">{{ $t.foot_bots }}</a>
 {{- /* The guides are in English only; every page links them, so that each can be found more than one way (WCAG 2.4.5). */}}
-<a href="{{ $toSite }}guides/index.html"{{ if ne site.Language.Lang "en" }} hreflang="en"{{ end }}>{{ $t.foot_guides }}</a>
-<a href="{{ $toLang }}privacy/index.html">{{ $t.foot_privacy }}</a>
-<a href="{{ $toLang }}accessibility/index.html">{{ $t.foot_a11y }}</a>
-<a href="{{ $toLang }}map/index.html">{{ $t.foot_map }}</a>
+<a href="{{ $toSite }}guides/"{{ if ne site.Language.Lang "en" }} hreflang="en"{{ end }}>{{ $t.foot_guides }}</a>
+<a href="{{ $toLang }}privacy/">{{ $t.foot_privacy }}</a>
+<a href="{{ $toLang }}accessibility/">{{ $t.foot_a11y }}</a>
+<a href="{{ $toLang }}map/">{{ $t.foot_map }}</a>
 <a href="{{ site.Params.repo }}/security/advisories/new">{{ $t.foot_report }}</a>
 <a href="{{ site.Params.repo }}/blob/main/SECURITY.md">{{ $t.foot_security }}</a>
 <a href="{{ site.Params.repo }}">{{ $t.foot_source }}</a></div><p>{{ $t.foot_licence }}</p><p>{{ $t.foot_clean }}</p></footer></div>

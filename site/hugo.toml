@@ -12,8 +12,8 @@ enableRobotsTXT = true
 enableGitInfo = false
 timeZone = "UTC"
 
-# Links in content stay as written: the guides' list links each page as guides/<name>/index.html, relative, which the
-# site's rule needs (scripts/check-site.py), rather than the page's permalink.
+# Links in content stay as written: the guides' list links each page by its folder, relative, guides/<name>/, the clean
+# address its canonical names, which the site's rule asks (scripts/check-site.py), rather than the page's permalink.
 [markup.goldmark.renderHooks.link]
 useEmbedded = "never"
 

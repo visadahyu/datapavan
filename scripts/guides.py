@@ -459,7 +459,7 @@ def index_markdown(data):
     for page, heading in (("proxy", "guide_index_proxy"), ("wireguard", "guide_index_wireguard"), ("vpn", "guide_index_vpn"),
                           ("waiting", "guide_index_waiting")):
         out += [f"## {markdown_escape(w[heading])}", ""]
-        out += [f"- [{markdown_escape(tool_name(data, g))}]({g['guide']}/index.html)" for g in data.guides if g["page"] == page]
+        out += [f"- [{markdown_escape(tool_name(data, g))}]({g['guide']}/)" for g in data.guides if g["page"] == page]
         out.append("")
     return "\n".join(out).rstrip() + "\n"
 
