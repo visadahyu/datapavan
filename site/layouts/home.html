@@ -16,6 +16,15 @@
 <meta itemprop="name" content="Datapavan"><meta itemprop="operatingSystem" content="Android"><meta itemprop="applicationCategory" content="SecurityApplication">
 <meta itemprop="softwareVersion" content="{{ strings.TrimPrefix "v" site.Params.release_tag }}"><meta itemprop="license" content="https://www.apache.org/licenses/LICENSE-2.0">
 <meta itemprop="url" content="{{ site.Home.Permalink }}"><meta itemprop="sameAs" content="{{ site.Params.repo }}">
+{{- /* What the page shows of it: its icon, the screens below, what it checks (the section's headings), the phones it
+needs (the questions say so), that it costs nothing, and the languages it speaks, the site's eight. No rating or
+review, since there is none, and no publisher or organisation, which waits on the maintainer's decision (the site for
+search engines, fix 9). */}}
+<meta itemprop="image" content="{{ "images/icon-512.png" | absURL }}">
+{{- range $shots }}<meta itemprop="screenshot" content="{{ printf "images/%s-%s.webp" site.Language.Lang (index . 0) | absURL }}">{{ end }}
+{{- range $t.checks }}<meta itemprop="featureList" content="{{ index . 0 }}">{{ end }}
+<meta itemprop="softwareRequirements" content="{{ $t.app_requires }}"><meta itemprop="isAccessibleForFree" content="true">
+{{- range .Sites }}<meta itemprop="inLanguage" content="{{ .Language.Lang }}">{{ end }}
 {{- /* The offer sits inside the first column: a div of the hero's own would be a cell of its grid, an empty one that
 pushes the text and the label out of their places. */ -}}
 <div><div itemprop="offers" itemscope itemtype="https://schema.org/Offer"><meta itemprop="price" content="0"><meta itemprop="priceCurrency" content="USD"></div><p class="status">{{ $t.status }}</p><h1>{{ $t.h1 }}</h1><p class="lead">{{ $t.tagline }}</p>

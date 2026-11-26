@@ -73,7 +73,9 @@ this: the engines' own consoles report searches and clicks.
   plain text for AI assistants, written from the same data as the pages. No large engine has said it reads the file;
   it costs nothing to keep. Only the root one is kept, and it links the other languages.
 - **schema.org data** (`layouts/home.html`): the site's name, with the names in other scripts, and the app as a
-  SoftwareApplication, as microdata rather than JSON-LD, so that the site keeps no script tag at all.
+  SoftwareApplication, as microdata rather than JSON-LD, so that the site keeps no script tag at all: what the page
+  shows of it (icon, screenshots, the checks as its features, Android 10 or newer, free, its eight languages). Never a
+  rating or a review, which there is none of; no FAQPage; no publisher or organisation until the maintainer decides.
 - **`404.html`** (`layouts/404.html`): the page a missing address gets, with the 404 status, from the server's
   `handle_errors` (`server/site.sh` in the strategy repository). It is kept out of the indexes and links every
   language's main page; only the root one is kept, and since it is served at any depth, its links start at the root.

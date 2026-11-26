@@ -1,7 +1,7 @@
 {
  "/": {
   "date": "2026-11-26",
-  "sha256": "3146fa27e6fcd099db35c63a37e69c553a1b667e0f36c5022554cdd648909b33"
+  "sha256": "062b7442468cef8e3dc5c2af9e59bb0c0956b43b5d833a82c611d1f190c95d59"
  },
  "/accessibility/": {
   "date": "2026-11-24",
@@ -9,7 +9,7 @@
  },
  "/ar/": {
   "date": "2026-11-26",
-  "sha256": "22f72165d3ce55faa525a65c3ccb8de84a87416088f0bc3a7e6dc56d8403b0df"
+  "sha256": "bbb58de49eebf08af98079811f4a5805b8f2e2c1206731b5b770048486e7fc6a"
  },
  "/ar/accessibility/": {
   "date": "2026-11-26",
@@ -37,7 +37,7 @@
  },
  "/de/": {
   "date": "2026-11-26",
-  "sha256": "46f502213c47c76802bd33adae5a74b495c6ab38c0c96d38fa017dff29c07244"
+  "sha256": "b502d2866427e9cdde369a0ff2a64cc8bfffa3dac5211d34d3b0bc5f37323f53"
  },
  "/de/accessibility/": {
   "date": "2026-11-26",
@@ -61,7 +61,7 @@
  },
  "/es/": {
   "date": "2026-11-26",
-  "sha256": "fe96c43ed9c96aaeb4a7dc3a1d2342e164acd7fb0c9cf2d2d9b9169601009792"
+  "sha256": "ba6b58109f556494079085d413f7e72506ea6dd07b93dfb4af838cd3c6afc2b1"
  },
  "/es/accessibility/": {
   "date": "2026-11-26",
@@ -85,7 +85,7 @@
  },
  "/fa/": {
   "date": "2026-11-26",
-  "sha256": "e22c7c62e62c9cb85682a54aa1438940cbd1b698b276a8f22b17bc46913cc052"
+  "sha256": "8c14eb0b97b86914f4915bf42b2d79693f2546be3f1f22e4c536ca687f3b4d5b"
  },
  "/fa/accessibility/": {
   "date": "2026-11-26",
@@ -109,7 +109,7 @@
  },
  "/fr/": {
   "date": "2026-11-26",
-  "sha256": "ae6ff26925e032a0a52cb892b01935db05ff8ab381537a78fc583d790c9bb20d"
+  "sha256": "a1b955dabaf6aec3729f8900d563f9a30dfeb9573e8da97b9cf8690cff04ba1b"
  },
  "/fr/accessibility/": {
   "date": "2026-11-26",
@@ -345,7 +345,7 @@
  },
  "/ru/": {
   "date": "2026-11-26",
-  "sha256": "8f531b491c45b3230e9033b21f477c8aa16853c6e9d9dc7167fe16a3695d10ed"
+  "sha256": "88a64ac0c9d6054f8267d82b0efb625ab82ead3971b6ea0cf1a9c7631f54777f"
  },
  "/ru/accessibility/": {
   "date": "2026-11-26",
@@ -369,7 +369,7 @@
  },
  "/zh/": {
   "date": "2026-11-26",
-  "sha256": "b277d75791f39ae903bb99005277d35b24d16b2a52345a8d461d6109158a7f5c"
+  "sha256": "03789f298d7189f2c46ae10ac466bca5d17863e4e2575f10d5ee68e427e5834a"
  },
  "/zh/accessibility/": {
   "date": "2026-11-26",

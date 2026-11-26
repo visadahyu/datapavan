@@ -20,6 +20,7 @@
  "home_define": "Datapavan is a free, open-source privacy app for Android. Its licence is the Apache License 2.0.",
  "desc_home": "Datapavan is a free, open-source privacy app for Android. See what your apps can reach and how much they send, then limit it. Datapavan Basic has no internet access and needs no account or root.",
  "lead": "روی گوشی خودتان و از راه تنظیمات خود اندروید. بدون دسترسی به اینترنت، بدون حساب کاربری، بدون روت.",
+ "app_requires": "Android 10 or newer",
  "status": "Datapavan Basic ۰.۱.۲ منتشر شد.",
  "cta_get": "دانلود Datapavan Basic ۰.۱.۲",
  "cta_how": "چطور نسخه‌ام را بسنجم",
