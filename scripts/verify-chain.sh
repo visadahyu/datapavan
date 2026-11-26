@@ -306,7 +306,10 @@ guide_says "Recorded switch of the test tool" && fail "the test tool's guide quo
 guide_scrolls_to "are read from" || fail "the test tool's guide did not say its labels were read from the tool"
 guide_says "Recorded switch of the test tool" && fail "the test tool's guide quoted the recorded label further down"
 adb shell input keyevent KEYCODE_BACK
-within 10 screen_has "$GUIDE_LINK" || fail "Back from the guide did not return to the chain section"
+# Back in the chain section, which the guides' heading tells from the guide, the link can sit below the screen: the
+# lines under the switch grew with unit D's, and the section keeps its place. So both are scrolled to.
+within 10 scroll_to "How the tools on this phone run beside Datapavan:" || fail "Back from the guide did not return to the chain section"
+scroll_to "$GUIDE_LINK" || fail "the chain section no longer links the test tool's guide after Back"
 # The links are below the user name and password, which the next step reads scrolling down from the top.
 scroll_to_top
 echo "ok: the chain section links the installed tool's guide, which quotes the label read from the tool's own resources"
@@ -495,9 +498,25 @@ echo "ok: the live view keeps no destination of the picked app, marks the tool, 
 # it reached; and the tool's own row its place, the address the tool connected to, there only, for its window, never
 # the name only the tool resolved. The run's names and addresses are looked for in every text of the picked app's screen
 # too, so that a place read as something else still fails the check (review c1 of W5's third part, screens, M1).
+# The tool's row in "Now", read on until a place of it shows: network_now stops at the row's bytes, and a tool's card
+# (unit D's lines on its places and its choice) holds its places below the screen. Up to three more half screens, read
+# with what was read before, as network_now reads its second dump.
+tool_now() {
+    local read i dumps=("$1")
+    read=$(network_now "$PKG" "$TOOL" "$1")
+    for i in 1 2 3; do
+        grep -q '^place ' <<<"$read" && break
+        swipe_up
+        dump_screen || continue
+        adb shell cat "$DUMP" >"$1.$i" 2>/dev/null || continue
+        dumps+=("$1.$i")
+        read=$(python3 -I "$ROOT/scripts/now-screen.py" "${dumps[@]}" "$TOOL") || continue
+    done
+    printf '%s\n' "$read"
+}
 screens=$(mktemp -d)
 chained_screen=$(network_now "$PKG" "$WORKLOAD" "$screens/now.xml")
-tool_screen=$(network_now "$PKG" "$TOOL" "$screens/tool.xml")
+tool_screen=$(tool_now "$screens/tool.xml")
 rm -rf "$screens"
 grep -qx through-tool <<<"$chained_screen" || fail "\"Now\" does not show the picked app as sent through the tool: $(tr '\n' ';' <<<"$chained_screen" | cut -c1-800)"
 ! grep -q '^place ' <<<"$chained_screen" || fail "\"Now\" names a place of the picked app: $(grep '^place ' <<<"$chained_screen")"
@@ -699,7 +718,7 @@ own_shown_only() {
 within 10 own_shown_only || fail "the tool's own connection, not chained, is not shown there only, for its window: $(tool_places | tr '\n' ';')"
 grep -q " tool=0 through-tool=0 " <<<"$(activity_line "$TOOL_UID")" || fail "the live view marks the tool as chained: $(activity_line "$TOOL_UID")"
 screens=$(mktemp -d)
-tool_screen=$(network_now "$PKG" "$TOOL" "$screens/tool.xml")
+tool_screen=$(tool_now "$screens/tool.xml")
 rm -rf "$screens"
 adb shell input keyevent KEYCODE_BACK
 for line in tool-unchained tool-live-only "place $HOST"; do
