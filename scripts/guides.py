@@ -423,7 +423,13 @@ def fill(data, g, string, arguments, link):
 
 def page_markdown(data, g):
     title = data.words["guide_title_proxy" if g["page"] == "proxy" else "guide_title_other"].replace("%1$s", tool_name(data, g))
-    out = ["---", f"title: {quote_yaml(title)}", "---", ""]
+    out = ["---", f"title: {quote_yaml(title)}"]
+    # A page whose steps wait has nothing yet that a search could answer: it stays on the guides' index for readers,
+    # and the site keeps it out of the indexes (noindex, follow), the sitemap and llms.txt (the site for search
+    # engines, fix 4).
+    if g["page"] == "waiting":
+        out += ["params:", "  steps: false"]
+    out += ["---", ""]
     n = 0
     # The words in quotes are plain text in the steps, so that a screen reader does not say "link" at every step;
     # where each one is in the tool's code is listed once, at the end (the accessibility unit, WCAG 2.4.4).
@@ -514,6 +520,8 @@ def self_test():
     assert '- [Proxy only](https://github.com/2dust/v2rayNG/blob/' in page, page
     assert "[2.3.15](https://github.com/2dust/v2rayNG/tree/2.3.15)" in page
     assert "127.0.0.1, port 10808" in page
+    assert "steps: false" not in page, page
+    assert "params:\n  steps: false\n---" in page_markdown(good, good.guide("karing"))
     with tempfile.TemporaryDirectory() as out:
         write_site(good, out)
         assert len(list(Path(out).rglob("index.en.md"))) == len(good.guides)

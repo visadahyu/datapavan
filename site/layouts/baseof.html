@@ -28,6 +28,10 @@ it in their own opening. scripts/check-site.py refuses a description that anothe
 {{- if $is404 }}
 <meta name="robots" content="noindex">
 {{- else }}
+{{- /* A guide whose steps wait (scripts/guides.py): readers find it on the guides' index, search engines leave it out. */}}
+{{- if eq .Params.steps false }}
+<meta name="robots" content="noindex, follow">
+{{- end }}
 <meta name="description" content="{{ $desc }}">
 <link rel="canonical" href="{{ .Permalink }}">
 {{- range .AllTranslations }}

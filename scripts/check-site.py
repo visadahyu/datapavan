@@ -141,6 +141,9 @@ def search(pages):
     if len(keys) != 1 or keys[0].read_text(encoding="utf-8").strip() != keys[0].stem:
         bad.append("needs exactly one IndexNow key file, <key>.txt holding the key (site/static)")
     addresses, titles, descriptions = {}, {}, {}
+    # Pages kept out of the indexes (a guide whose steps wait, scripts/guides.py): out of the sitemap and llms.txt
+    # too, and still on the guides' index, where readers find them.
+    hidden = set()
     for page in pages:
         name = str(page.relative_to(SITE))
         html = page.read_text(encoding="utf-8")
@@ -158,6 +161,11 @@ def search(pages):
         if address != BASE + name.removesuffix("index.html"):
             bad.append(f"{name}: canonical {address} is not this page's address")
         addresses[address] = name
+        robots = re.findall(r'<meta name="robots" content="([^"]*)"', html)
+        if robots:
+            if robots != ["noindex, follow"]:
+                bad.append(f"{name}: robots {robots}: a page is either indexed or noindex, follow")
+            hidden.add(address)
         language = name.split("/")[0] if name.split("/")[0] in LANGS else "en"
         title = re.search(r"<title>([^<]*)</title>", html)
         if not title:
@@ -182,6 +190,13 @@ def search(pages):
         for address in re.findall(r"\]\((https://datapavan\.org/[^)]*)\)", llms.read_text(encoding="utf-8")):
             if address not in addresses:
                 bad.append(f"llms.txt links {address}, which is no page here")
+            elif address in hidden:
+                bad.append(f"llms.txt links {address}, which is kept out of the indexes")
+    guides = SITE / "guides/index.html"
+    linked = set(re.findall(r'href="([^"#]+)"', guides.read_text(encoding="utf-8"))) if guides.exists() else set()
+    for address in sorted(hidden):
+        if address.startswith(BASE + "guides/") and address.removeprefix(BASE + "guides/") not in linked:
+            bad.append(f"{addresses[address]} is kept out of the indexes, and the guides' index does not link it")
     sitemap = SITE / "sitemap.xml"
     if not sitemap.exists():
         return bad + ["sitemap.xml is missing"]
@@ -189,8 +204,10 @@ def search(pages):
     listed = [loc.text for loc in ET.parse(sitemap).getroot().iterfind("s:url/s:loc", ns)]
     for address in sorted(set(listed) - set(addresses)):
         bad.append(f"sitemap.xml lists {address}, which is no page here")
-    for address in sorted(set(addresses) - set(listed)):
+    for address in sorted(set(addresses) - set(listed) - hidden):
         bad.append(f"sitemap.xml leaves out {addresses[address]}")
+    for address in sorted(set(listed) & hidden):
+        bad.append(f"sitemap.xml lists {addresses[address]}, which is kept out of the indexes")
     if len(listed) != len(set(listed)):
         bad.append("sitemap.xml lists an address twice")
     return bad

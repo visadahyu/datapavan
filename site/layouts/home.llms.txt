@@ -12,9 +12,9 @@ Datapavan is a free, open-source privacy app for Android phones, under the Apach
 - [Main page]({{ site.Home.Permalink }}): what Datapavan checks, what it cannot see, what you can do, questions, and the download with its signing fingerprint
 {{- range site.Home.Sections }}{{ if eq .Section "guides" }}
 - [{{ .Title }}]({{ .Permalink }}): how each circumvention tool can run beside Datapavan, read from the tool's own code
-{{- range .Pages }}
+{{- range .Pages }}{{ if ne .Params.steps false }}
   - [{{ .Title }}]({{ .Permalink }})
-{{- end }}{{ else if eq .Section "news" }}
+{{- end }}{{ end }}{{ else if eq .Section "news" }}
 - [{{ .Title }}]({{ .Permalink }}): news about apps, phones and data, with where each was reported
 {{- end }}{{ end }}
 {{- range site.Home.RegularPages }}

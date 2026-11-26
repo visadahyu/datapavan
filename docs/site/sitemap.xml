@@ -27,9 +27,6 @@
 <xhtml:link rel="alternate" hreflang="x-default" href="https://datapavan.org/news/"/>
 </url>
 <url>
-<loc>https://datapavan.org/guides/warp/</loc>
-</url>
-<url>
 <loc>https://datapavan.org/accessibility/</loc>
 <xhtml:link rel="alternate" hreflang="en" href="https://datapavan.org/accessibility/"/>
 <xhtml:link rel="alternate" hreflang="fr" href="https://datapavan.org/fr/accessibility/"/>
@@ -40,9 +37,6 @@
 <xhtml:link rel="alternate" hreflang="ar" href="https://datapavan.org/ar/accessibility/"/>
 <xhtml:link rel="alternate" hreflang="fa" href="https://datapavan.org/fa/accessibility/"/>
 <xhtml:link rel="alternate" hreflang="x-default" href="https://datapavan.org/accessibility/"/>
-</url>
-<url>
-<loc>https://datapavan.org/guides/am-tunnel/</loc>
 </url>
 <url>
 <loc>https://datapavan.org/guides/amnezia-vpn/</loc>
@@ -57,9 +51,6 @@
 <loc>https://datapavan.org/guides/clash-meta/</loc>
 </url>
 <url>
-<loc>https://datapavan.org/guides/defyx/</loc>
-</url>
-<url>
 <loc>https://datapavan.org/guides/dnstt-xyz/</loc>
 </url>
 <url>
@@ -72,13 +63,7 @@
 <loc>https://datapavan.org/guides/geph/</loc>
 </url>
 <url>
-<loc>https://datapavan.org/guides/happ/</loc>
-</url>
-<url>
 <loc>https://datapavan.org/guides/hiddify/</loc>
-</url>
-<url>
-<loc>https://datapavan.org/guides/http-injector/</loc>
 </url>
 <url>
 <loc>https://datapavan.org/guides/husi/</loc>
@@ -87,13 +72,7 @@
 <loc>https://datapavan.org/guides/invizible/</loc>
 </url>
 <url>
-<loc>https://datapavan.org/guides/karing/</loc>
-</url>
-<url>
 <loc>https://datapavan.org/guides/lantern/</loc>
-</url>
-<url>
-<loc>https://datapavan.org/guides/mahsang/</loc>
 </url>
 <url>
 <loc>https://datapavan.org/guides/masterdnsvpn/</loc>
@@ -114,16 +93,7 @@
 <loc>https://datapavan.org/guides/nekobox/</loc>
 </url>
 <url>
-<loc>https://datapavan.org/guides/netmod/</loc>
-</url>
-<url>
-<loc>https://datapavan.org/guides/npv-tunnel/</loc>
-</url>
-<url>
 <loc>https://datapavan.org/guides/oblivion/</loc>
-</url>
-<url>
-<loc>https://datapavan.org/guides/openvpn-connect/</loc>
 </url>
 <url>
 <loc>https://datapavan.org/guides/openvpn-android/</loc>
@@ -148,9 +118,6 @@
 </url>
 <url>
 <loc>https://datapavan.org/guides/proton-vpn/</loc>
-</url>
-<url>
-<loc>https://datapavan.org/guides/psiphon-play/</loc>
 </url>
 <url>
 <loc>https://datapavan.org/guides/psiphon/</loc>
@@ -180,19 +147,10 @@
 <loc>https://datapavan.org/guides/slipnet/</loc>
 </url>
 <url>
-<loc>https://datapavan.org/guides/surfboard/</loc>
-</url>
-<url>
 <loc>https://datapavan.org/guides/tor-vpn/</loc>
 </url>
 <url>
-<loc>https://datapavan.org/guides/v2box/</loc>
-</url>
-<url>
 <loc>https://datapavan.org/guides/v2rayng/</loc>
-</url>
-<url>
-<loc>https://datapavan.org/guides/v2raytun/</loc>
 </url>
 <url>
 <loc>https://datapavan.org/guides/wg-tunnel/</loc>

@@ -1,9 +1,10 @@
 {{- /* One sitemap at the site's root with every page of every language, in place of Hugo's index of per-language
 sitemaps: English lives at the root, and a sitemap under /en/ may not list URLs outside /en/ (sitemaps.org,
-"Sitemap file location"). Each page names its translations and English as the default. */ -}}
+"Sitemap file location"). Each page names its translations and English as the default. A guide whose steps wait
+is left out, as its noindex asks (scripts/guides.py). */ -}}
 {{ printf "<?xml version=\"1.0\" encoding=\"utf-8\" standalone=\"yes\"?>" | safeHTML }}
 <urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9" xmlns:xhtml="http://www.w3.org/1999/xhtml">
-{{- range $site := . }}{{ range $site.Pages }}{{ if and .Permalink (not .Sitemap.Disable) }}
+{{- range $site := . }}{{ range $site.Pages }}{{ if and .Permalink (not .Sitemap.Disable) (ne .Params.steps false) }}
 <url>
 <loc>{{ .Permalink }}</loc>
 {{- if not .Lastmod.IsZero }}
