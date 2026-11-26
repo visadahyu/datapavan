@@ -70,8 +70,9 @@ chaining is, and must follow the same switch.
 3. **Skipped:** the chained circumvention tool's own flows, and the apps Advanced chains through it or sends through a
    WireGuard tunnel: what they carry is the tool's (ADR 0046, decision 3), and a tool whose upstream is plain SOCKS5
    or HTTP would otherwise show every chained destination under its row. A tool that is not chained is read as any
-   app is, and its proxy rows say that the proxy is a circumvention tool's (unit B's B6); its own connections follow
-   R10 (decision 8, the other units).
+   app is, and its proxy rows say that the proxy is a circumvention tool's (unit B's B6); where it can carry traffic
+   inside the VPN, its own connections follow R10 (decision 8, the other units), and a tool that runs only as a VPN is
+   an ordinary app there.
 4. **Android's proxy setting** is told apart from an app's own: the network part hands the engine the hosts and ports of
    the global proxy and of each network's own at each start and change, and a declared proxy at one of them says "This
    is the proxy in Android's settings, which other apps can use too." Corrected by measurements 7.1 and 7.2 (the
@@ -329,16 +330,18 @@ chaining is, and must follow the same switch.
        the engine counts from the chain itself from the first packet. A package name alone gives nothing.
      - *Live:* every flow of a tool shows in full for R2's window, the chained tool's included, whatever the switch
        and whatever the flow carries. The window, the table of ends, the sweep, the flood guard and the snapshot's
-       "shown here only" bit read one predicate (`shows_first_hop`), never the proxy's fields. After its window a
+       "shown here only" bit read the predicates beside `own_first_hop` in `proxied.rs`, never the proxy's fields. A
+       tool the user sends through a WireGuard tunnel, or chains as an app through another tool, is a tunnelled or
+       chained app first, hidden live while the switch is off. After its window a
        tool's plain place goes and its bytes stay; the snapshot's bit 2 of the app says so.
      - *The record:* a tool's flow keeps its address only with the switch on, or with the user's choice for that tool
        ("Log where TOOL connects for itself", kept in the same store as R3's, a kind of its own). The choice keeps
        the first hop of a tool's own proxy flow, never what it asked for.
      - *The tie:* the engine keeps for ten seconds what the chain asked the tool for, by address and by name, and
-       ties the chained tool's flows opened to those, at their birth, whatever the switch. A tie never hides anything
+       ties the chained tool's flows opened to those, at their birth and at their hello, whatever the switch. A tie never hides anything
        live; it only keeps a tied flow out of the log under the tool's choice. Since a tie can only take away from the
        user's choice, never below R1, it may read any name the engine gave the flow, the tool's own resolver's
-       included.
+       included, and the hello the tool wrote.
      - *Kept in full:* a tool's flow whose names match a tracker, record and place, with no window; a blocked flow's
        SDK (ADR 0053, decision 8).
      - *R6:* turning the switch or a tool's choice off, and a UID becoming a tool, run the pass that strips what is
@@ -544,23 +547,31 @@ chaining is, and must follow the same switch.
       app's first install time: an app removed while the tunnel was off stays in it until the network part runs again.
   - **The tool's own row** (decision 8, R10, unit D):
     - *What the tie misses.* The tool's direct connection for a chained app is tied only when it opens within ten
-      seconds of the request, to the address asked or to a name the engine gave its address at the same port. A name
-      the tool resolved privately (its own DoH, or through its server) for a connection with no readable hello, a
-      connection opened later, a chained app's UDP peer the tool opens again after its idle mapping ended, and the
-      tool's connections to the chained apps' resolver (ADR 0038), which the ring does not hold, are the tool's own:
-      shown in "Now" for their window and, under the tool's choice, logged with their addresses. The choice's words say
-      so. An unchained tool has no chain to tie to: all its flows are its own.
+      seconds of the request: to the address asked, to a name the engine gave its address, or with a TLS or QUIC hello
+      naming what was asked, each at the same port. A name the tool resolved privately (its own DoH, or through its
+      server) for a connection with no readable hello (plain HTTP, or ECH, whose outer name is not the one asked), a
+      connection to another port or opened later, a chained app's UDP peer the tool opens again after its idle mapping
+      ended, and the tool's connections to the chained apps' resolver (ADR 0038), which the ring does not hold, are the
+      tool's own: shown in "Now" for their window and, under the tool's choice, logged with their addresses. The
+      choice's words say so. An unchained tool has no chain to tie to: all its flows are its own. A tie made at the
+      hello strips the flow's records still held back or gathered for the next batch; a batch already handed on stays
+      as written. The hello is the tool's to write, so a tool can name a chained request as its own cover and keep its
+      own records out of the log under the choice: that only takes from the choice, never below R1.
     - *The bounds.* The ring of what the chain asked holds 256 requests of the last ten seconds, the oldest forgotten
-      first, and starts empty after a hand-over; the tied flows are a list of 4,096, the oldest forgotten first. Past
-      either, a flow the tool opened for a chained app is the tool's own under the choice. The ring holds 64-bit keys,
-      not names or addresses: two that meet only tie more.
+      first, and starts empty after a hand-over. The tied flows are those open, held for their states or waiting in
+      the next batch, each forgotten once its last record leaves; past 4,096 of them an ended one goes first, else the
+      oldest. Past either bound, a flow the tool opened for a chained app is the tool's own under the choice. The ring
+      holds 64-bit keys, not names or addresses: two that meet only tie more.
     - *A tied flow under the choice* shows in "Now" as the tool's own, with no window and no "shown here only" mark,
       while its record stays stripped: the tie is the log's, and the live view's rule does not read it.
-    - *A tool's own SOCKS or `CONNECT` upstream under the choice* keeps unit A's window and mark in "Now" while its
-      record keeps the first hop, since the request's naming stays unit C's (never a tool's choice).
-    - *Trackers win.* A tool's flow whose names the trackers' signatures match is kept in full, tied or not, read at
-      each decision: a record cut before a hello named a tracker may still be stripped, and before the signatures
-      arrive the rule does nothing.
+    - *A tool's own SOCKS or `CONNECT` upstream under the choice* shows in "Now" with no window, and its record keeps
+      the first hop, never what it asked for (the request's naming stays unit C's). One to Android's setting, or to a
+      proxy on the user's own network, is never covered by the tool's choice, as by unit C's: it keeps its window and
+      mark, and its record keeps only its kind.
+    - *Trackers win.* A tool's flow whose names the trackers' signatures match is kept in full, tied or not. The
+      signatures are read at the flow's birth and at its hello, and the answer kept for 512 hosts, the oldest read
+      again past that, all of them anew when new signatures arrive: a record cut before a hello named a tracker may
+      still be stripped, and before the signatures arrive the rule does nothing.
     - *Through a tool's open local proxy* (the plan's audit, M4): an app that sends through a tool's proxy port on the
       phone, which the tool's rules then send directly, keeps its destinations out of the history under the tool's row,
       shown in "Now" for their window. Datapavan cannot see the app's side of the loopback. The network screen's line
@@ -573,7 +584,11 @@ chaining is, and must follow the same switch.
     - *Late tools.* The tools reach the engine a second or two after a start. A tool known late has every place and
       held segment in its window for ten minutes from that moment, and its waiting records stripped; a batch already
       handed on before then stays as written. A tool that leaves the set and comes back gets ten minutes again.
-    - *129 places* (unit A's limit): a tool's 129th place pushes out its oldest before its window ends.
+    - *129 places* (unit A's limit): past 128 places of one app the oldest gives way. A tool's places tied to what
+      the chain asked are not guarded and go first, but its untied places share the 128: its own other places, and the
+      chained apps' destinations the tie misses, can push out its oldest before its window ends. A place first made
+      for a tied flow stays unguarded if the tool's own flow reaches it later. Tied places compete by age with other
+      apps' places in the 2,048 of all apps.
     - *A plain request held past its window,* of a tool's own `Forward` flow, settles as an empty place of its kind
       (unit A's risk 7, unchanged).
   - The false positives that need a maker's own network (a Telegram CDN data centre beside its ranges, WhatsApp's link
@@ -596,7 +611,9 @@ chaining is, and must follow the same switch.
   x86_64 and 45,944 under the gate; the packet path's machine code compared function by function with the size
   pass's tool, every relay's poll inline as before. Unit D, against unit C's tree with D's hand-over (2,060,176 bytes
   on x86_64): 2,068,288 bytes on x86_64, 1,842,672 on arm64-v8a and 1,368,832 on armeabi-v7a, 8,112 bytes more on
-  x86_64 and 28,864 under the gate; compared the same way, only the live view's count grew, by its tool mark.
+  x86_64 and 28,864 under the gate; after its review round, 2,073,752 bytes on x86_64, 1,847,944 on arm64-v8a and
+  1,372,304 on armeabi-v7a, 13,576 bytes more on x86_64 than before the unit and 23,400 under the gate. Compared the
+  same way, only the live view's count grew, by its tool mark and the tied places' arm.
 - **Frontier research, open:** Telegram's fake-TLS hello across versions, told from the device without a JA4 database;
   encapsulated handshakes seen from the device (Xue et al., USENIX Security 2024) for Signal and WhatsApp; and how
   people read "read from the connection" against "inferred", with real users.

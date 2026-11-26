@@ -249,25 +249,31 @@ proxy record's plan on 2026-11-24, and unit D's choices on 2026-11-25 («تای�
   run its tunnel while Datapavan is the VPN, so its flows then are its own API calls, ads and analytics: it stays an
   ordinary app.
 - **Live:** a tool's connections show in "Now" in full, with their address, name and organisation, while each is open
-  and for ten minutes after it ends, whatever the switch says. That covers the chained tool's own servers, and also
+  and for ten minutes after it ends, whatever the switch says. A tool the user sends through a WireGuard tunnel, or
+  chains as an app through another tool, is a tunnelled or chained app first, and its row follows that switch. Otherwise
+  this covers the chained tool's own servers, and also
   what it sends directly by its own rules for the apps chained through it, mostly domestic sites. After the ten
   minutes the place goes, its bytes stay in the tool's totals, and the row says that some of its connections are no
-  longer shown. Nothing an app or the tool sends hides a connection of the tool from "Now".
+  longer shown. Nothing an app or the tool sends hides a connection of the tool from "Now" while it is open or in its
+  window, but a flood of places: past 128 places of one app, the oldest gives way, the places of what the tool opened
+  for the chained apps before its own (ADR 0052, the accepted limits).
 - **The log** keeps their app, bytes, times and state. It keeps their addresses only while "Log where apps connect
   through your tool, WireGuard or a proxy" is on, or once the user chose to log where that tool connects for itself,
   one choice per tool, on its row.
 - **Under that choice,** the tool's connections that the engine ties to what the chain asked the tool for in the ten
   seconds before stay out of the log, so the choice records the tool's servers and not the chained apps' destinations.
-  A connection it cannot tie (a name the tool resolved privately and opened with no readable hello, or one opened
-  later than ten seconds) is logged as the tool's own, which the choice's words say.
+  The engine ties by the address asked, by a name it gave the address, or by the connection's TLS or QUIC hello,
+  each at the same port. A connection it cannot tie (a name the tool resolved privately and opened with no readable
+  hello, as plain HTTP or behind ECH, one to another port, or one opened later than ten seconds) is logged as the
+  tool's own, which the choice's words say.
 - **Always kept:** a tool connection whose names match a tracker is kept in full, live and in the log; a blocked
   one keeps its SDK.
 - **Unchanged:** the chained apps' own rows.
 
 **The cost, accepted** (the maintainer's caution of 2026-11-24):
 - **Who can see:** while a tool runs, and for ten minutes after each of its connections ends, anyone who opens "Now"
-  sees where it connects: Orbot's and Tor Browser's bridges, Snowflake's volunteers, who are other people's home
-  connections, and servers from configurations shared in channels.
+  sees where it connects: Orbot's and Tor Browser's bridges, Snowflake's proxies, which are home connections, and the
+  servers of the configurations the user added.
 - **What a searcher can do with it:** have a bridge or a server blocked for everyone who uses it, and learn what kind
   of tool the user runs.
 - **Under ADR 0047's profile:** the same holds within the screen-on session, behind Advanced's own lock.
