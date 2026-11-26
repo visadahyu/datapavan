@@ -68,12 +68,17 @@ internal data class ProxyChoices(
      * What a proxy row of [uid] can offer: through Android's setting ([setting]) or a [local] proxy, on a [tcp] flow;
      * and, where it offers nothing, whether that is because its proxy can carry other apps' connections (review C-rest
      * 2): Android's setting, a local proxy, a circumvention tool's or the PAC handler's, its SDK Runtime's too. Another
-     * user's row, one whose owner Android did not tell, or one of Android's own UIDs is left out for no such reason.
+     * user's row, one whose owner Android did not tell, or one of Android's own UIDs is left out for no such reason. A
+     * row of a circumvention tool whose own connections follow R10 is said in the tool's words, with the link to the
+     * tool's own choice while it can be chosen (unit D; review D-rest M1).
      */
     fun row(uid: Int?, setting: Boolean, local: Boolean?, tcp: Boolean = true): RowChoice {
         val app = uid?.let(ProxyChoice::appOf)
         val shared = setting || local == true || (app != null && (app in tools || app == pacHandler))
-        return RowChoice(ProxyChoice.offered(uid, tools, pacHandler, setting, local, user), chosen(uid), switchOn, tcp, shared)
+        return RowChoice(
+            ProxyChoice.offered(uid, tools, pacHandler, setting, local, user), chosen(uid), switchOn, tcp, shared,
+            tool = isTool(uid), toolLog = toolOffered(uid) && !toolChosen(uid) && !switchOn,
+        )
     }
 
     /** Whether the app of [uid] can be chosen at all, on its page: an application of this user, no tool, no PAC handler. */

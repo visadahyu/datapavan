@@ -223,19 +223,34 @@ class ProxyFactsTest {
         // choice's title is its switch as a question. None says who chose a server, nor that a tool's connections for the
         // apps sent through it are kept out of Now: every one shows there for its window.
         assertTrue(proxy.keys.toString(), proxy.size >= 75)
-        for (name in listOf("now_tool_live_only", "now_tool_left_out", "tool_log_switch_on", "chain_proxy_open_unlogged")) {
+        for (name in listOf("now_tool_live_only", "now_tool_left_out", "tool_log_switch_on", "chain_proxy_open_unlogged", "now_tool_proxy_past")) {
             assertTrue(name, name in naming)
         }
         assertEquals(proxy.getValue("tool_log") + "?", proxy.getValue("tool_log_title"))
-        for ((name, text) in proxy.filterKeys { "tool" in it }) {
-            for (words in listOf("your server", "chose a server", "chose the server", "chose its server", "not shown in now")) {
+        // Who runs or chose a server is never said or implied (ADR 0025, decision 4; review D-rest n1), in any string of
+        // the scope; "your" tool is only the chain's (review D-rest m6).
+        for ((name, text) in proxy) {
+            for (words in listOf(
+                "your server", "chose a server", "chose the server", "chose its server", "not shown in now", "volunteer",
+                "who run them", "shared in channels", "your circumvention tools",
+            )) {
                 assertTrue("$name: $words", !text.contains(words))
             }
         }
         assertTrue(proxy.getValue("now_tool_live_only").contains("for itself or for an app that uses it"))
         assertTrue(proxy.getValue("chain_tool_servers_shown").contains("anyone who opens now can see"))
-        assertTrue(proxy.getValue("tool_log_body").contains("snowflake"))
-        assertTrue(proxy.getValue("log_switch_note_proxies").contains("in full those to a known tracker"))
+        // The tracker exception wherever a tool's window or record is said (audit-D M3; review D-rest n6), and the tools'
+        // sentences of the switch's note in a note of their own (n9).
+        assertTrue(proxy.getValue("log_switch_note_tools").contains("in full the connections to a known tracker"))
+        for (name in listOf("chain_proxy_open_unlogged", "chain_tool_servers_shown", "now_tool_left_out")) {
+            assertTrue(name, proxy.getValue(name).contains("known tracker"))
+        }
+        assertTrue(!proxy.getValue("log_switch_note_proxies").contains("tool connects"))
+        // A tool's choice that waits is said so, not that it ends (review D-rest m3); the stop note has its subject (m8).
+        assertTrue(!proxy.getValue("tool_log_ends").contains("stops counting"))
+        assertTrue(proxy.getValue("tool_stopped").startsWith("where this tool connects for itself is not logged"))
+        // Unit C's confirmation names the tools it never covers by the class R10 counts (review D-rest m4).
+        assertTrue(proxy.getValue("proxy_app_log_never").contains("a circumvention tool that can run beside datapavan\\'s vpn"))
     }
 
     /**

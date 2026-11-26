@@ -484,7 +484,11 @@ class NowActivity : ComponentActivity() {
                     HistoryView(
                         named, log.retentionDays, log.lockNow(), secure, days, 0, null, reading = false, tool = tool,
                         // A tool the user chose keeps its own hosts in the log (unit D): blocking may name them.
-                        hideHosts = hidesHosts(named.packages, tool && !chosen.toolChosen(uid)), proxiesSeen = seen,
+                        hideHosts = hidesHosts(
+                            named.packages,
+                            org.visadahyu.datapavan.network.ui.toolHostsHidden(tool, chosen.toolChosen(uid), chosen.switchOn),
+                        ),
+                        proxiesSeen = seen,
                     ),
                     readBlocking(),
                     chosen,

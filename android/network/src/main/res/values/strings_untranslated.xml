@@ -20,8 +20,12 @@
     confirmation, the tool's card lines, the line under the switch in the chain section, what an open proxy of the
     tool lets other apps keep out of the log (audit-D M4), and the edits of log_switch_note_proxies and
     log_switch_note_chosen in place. now_tool_left_out replaces now_tool_servers_off, which left strings.xml and the
-    seven translations. A tool is one Datapavan counts by its signing key that can carry traffic inside its VPN, or the
-    chain's tool, never "your" tool unless it is the chain's. None says or implies who chose a server.
+    seven translations. A tool, in these strings, is one that can run beside Datapavan's VPN (a proxy mode, Tor Browser,
+    Briar), counted by its signing key, or the chain's tool; a string names that class where it means it, and says "your
+    tool" only of the chain's. Psiphon and the other tools that run only as a VPN are ordinary apps here. None says or
+    implies who runs or chose a server. The fix round of unit D's review: the tools' sentences of the switch's note in a
+    note of their own (log_switch_note_tools), the tracker exception where a line gives the window, the choice that
+    waits while a tool is not counted, and a tool's own proxy's row in the tool's words (now_tool_proxy_past).
 -->
 <resources xmlns:tools="http://schemas.android.com/tools" tools:ignore="MissingTranslation">
     <!-- In "Now", under a proxy whose address is shown while the switch is off: facts only. "While", not "because":
@@ -30,7 +34,8 @@
     <string name="now_proxy_live_only">This proxy\'s address is shown here while the connection is open and for ten minutes after it ends. It is not logged unless you choose below to log where this app connects through a proxy, or turn on \"Log where apps connect through your tool, WireGuard or a proxy\".</string>
     <!-- Unit C: as above, on a row no choice for one app covers because its proxy can carry other apps' connections:
          Android's proxy setting, a proxy on the local network, a circumvention tool's own connection, and Android's PAC
-         proxy. -->
+         proxy. Unit D: a tool that can run beside Datapavan's VPN, whose own choice covers its first hop, says
+         now_tool_live_only in its place (review D-rest M1). -->
     <string name="now_proxy_live_only_shared">This proxy\'s address is shown here while the connection is open and for ten minutes after it ends. It can carry other apps\' connections too, so it is logged only while \"Log where apps connect through your tool, WireGuard or a proxy\" is on.</string>
     <!-- Unit C: as above, on a row with no link to the choice for any other reason (review C-rest 2): another user's
          row, such as a dual app's, one whose owner Android did not tell, one of Android's own, a chosen app's connection
@@ -55,10 +60,13 @@
     <!-- As above, for the proxy set in Android's settings. -->
     <string name="now_proxy_setting_past">Through the %1$s in Android\'s settings, which other apps can use too. Its address is no longer shown: while \"Log where apps connect through your tool, WireGuard or a proxy\" is off, Datapavan shows a proxy\'s address only while the connection is open and for ten minutes after it ends.</string>
     <!-- Under the switch. It writes Now without quotes, as history_back does: every quoted string of these rows quotes
-         the switch's label. Unit D: a tool's connections, every one of them, are shown in Now for their window and kept
-         in the log with no address while it is off, but in full those whose names match a known tracker (audit-D M3);
-         and the choice for one tool is said, without "as if this were on", which it is not. -->
-    <string name="log_switch_note_proxies">Off unless you turn it on. It covers the apps you send through your circumvention tool or a WireGuard configuration, and the connections of your circumvention tools, such as to their servers. Datapavan still counts their connections. It also covers apps that connect through a proxy, such as a Telegram proxy. While it is off, Now shows where a proxy is, or where a tool connects, while the connection is open and for ten minutes after. The log then keeps that an app used a proxy, which kind, when, which known trackers it reached, and facts that name no address, such as whether a password was sent unencrypted. Of a tool\'s connections it keeps the time and the bytes, and in full those to a known tracker. If you choose to log an app on its row or its page, where it connects through a proxy is logged as if this were on. That leaves out a proxy that Datapavan sees is in Android\'s settings or on your local network. You can also choose to log where a tool connects for itself. A list of where they went can be used against you if someone searches your phone.</string>
+         the switch's label. Unit D's review (n9): the tools' sentences went to log_switch_note_tools, below it. -->
+    <string name="log_switch_note_proxies">Off unless you turn it on. It covers the apps you send through your circumvention tool or a WireGuard configuration. Datapavan still counts their connections. It also covers apps that connect through a proxy, such as a Telegram proxy. While it is off, Now shows the proxy\'s address while the connection is open and for ten minutes after, and the log keeps that the app used a proxy, which kind, when, which known trackers it reached, and facts that name no address, such as whether a password was sent unencrypted. If you choose to log an app on its row or its page, where it connects through a proxy is logged as if this were on. That leaves out a proxy that Datapavan sees is in Android\'s settings or on your local network. A list of where they went can be used against you if someone searches your phone.</string>
+    <!-- Unit D, after it: a circumvention tool's connections, every one of them, shown in Now for their window and kept in
+         the log with no address while it is off, but in full those whose names match a known tracker (audit-D M3); and
+         the choice for one tool, without "as if this were on", which it is not. "Such a tool": the class it names first,
+         never "your" tools (review D-rest m6). -->
+    <string name="log_switch_note_tools">It also covers the connections of a circumvention tool that can run beside Datapavan\'s VPN, such as to its servers or bridges. While it is off, Now shows where such a tool connects while each connection is open and for ten minutes after. The log then keeps the time and the bytes, and in full the connections to a known tracker. You can choose to log where one tool connects for itself instead, on its row or its page in Now.</string>
     <!-- Unit C, after it, while the user chose any app, on its row or its page: how many, the maintainer's count of
          2026-11-25. Unit D: the apps and the tools together, one count, as the maintainer's decision on unit C's list
          has it; "one by one", since a tool's choice is not "as if this were on".
@@ -113,7 +121,7 @@
          file's proxies, reached under the app's own UID, and the setting by name, which the engine may not tell from the
          app's own), and the apps sent through the tool or a configuration, whose proxies Datapavan does not read. A tool
          as Datapavan counts it, by its signing key or as the chain's, never "your" tool (audit-C 6; review C-rest 3). -->
-    <string name="proxy_app_log_never">It does not cover the proxy in Android\'s settings, a proxy on your local network, or Android\'s PAC proxy. But a proxy that a PAC file names, or one set in Android\'s settings by its name rather than its address, may be logged as this app\'s own. It does not cover an app that Datapavan counts as a circumvention tool. Nor does it cover the apps you send through your tool or a WireGuard configuration. Those are logged only while \"Log where apps connect through your tool, WireGuard or a proxy\" is on.</string>
+    <string name="proxy_app_log_never">It does not cover the proxy in Android\'s settings, a proxy on your local network, or Android\'s PAC proxy. But a proxy that a PAC file names, or one set in Android\'s settings by its name rather than its address, may be logged as this app\'s own. It does not cover a circumvention tool that can run beside Datapavan\'s VPN: such a tool has a choice of its own. Nor does it cover the apps you send through your tool or a WireGuard configuration. Those are logged only while \"Log where apps connect through your tool, WireGuard or a proxy\" is on.</string>
     <!-- What ends the choice without the user (audit-C 13), said before it is made. -->
     <string name="proxy_app_log_ends">Your choice ends by itself if this app is installed again, or if Android starts to count another app with it.</string>
     <!-- The confirmation's buttons; neither is chosen beforehand. -->
@@ -148,11 +156,11 @@
     <!-- On a tool's card, chained or not, while some of its bytes have no place in the window: places dropped once their
          window ended. It states the rule, so it stays true after the switch or the choice is turned on. It replaces
          now_tool_servers_off, of the rule of 2026-11-19, which hid the chained tool's servers. -->
-    <string name="now_tool_left_out">Some of its connections are not shown here. While \"Log where apps connect through your tool, WireGuard or a proxy\" is off, Now shows where a circumvention tool connects only while the connection is open and for ten minutes after it ends. That is so unless you chose to log where that tool connects for itself.</string>
+    <string name="now_tool_left_out">Now no longer shows some of its connections. While \"Log where apps connect through your tool, WireGuard or a proxy\" is off, Now shows where this tool connects only while the connection is open and for ten minutes after it ends. That is so unless you chose to log where it connects for itself, or it reached a known tracker.</string>
     <!-- On the card of a tool Datapavan counts by its signing key that is not the chain's (now_is_tool stays the chain's
          tool's). Android never sends an app's connection to another app on the phone into the VPN, so an app that uses the
          tool's proxy is not seen; what the tool then sends shows as the tool's (audit-D M4). -->
-    <string name="now_is_tool_unchained">A circumvention tool. Datapavan does not send apps through it. If an app on this phone uses its proxy, Datapavan cannot see that. It sees only where this tool connects, and shows that here as the tool\'s own.</string>
+    <string name="now_is_tool_unchained">A circumvention tool. Datapavan does not send apps through it. If another app on this phone uses it, Datapavan cannot see that. It sees only where this tool connects, and shows that here as the tool\'s own.</string>
     <!-- The user's choice for one tool (D7). On the tool's page, a switch: %1$s is the tool's name. "For itself", the
          maintainer's words of 2026-11-24: its servers, not where the apps sent through it go. One verb, "log". -->
     <string name="tool_log">Log where %1$s connects for itself</string>
@@ -161,27 +169,36 @@
     <!-- The confirmation's title, the switch's words as a question: %1$s is the tool's name. -->
     <string name="tool_log_title">Log where %1$s connects for itself?</string>
     <!-- Its body: what it logs from now on, what it does not, and the cost on a searched phone, for the user and for others
-         (D10; audit-D m11: Snowflake's volunteers are other people's home connections). "While you keep records":
-         Advanced keeps no log until a retention is chosen. -->
-    <string name="tool_log_body">From now on, the places %1$s connects to for itself, such as its servers, bridges or relays, are logged like any connection while you keep records. What it connects to for the apps you send through it is not logged by this choice. A list of a tool\'s servers and bridges can be used against you if someone searches your phone. It can be used against others too: the people who use them, and the volunteers who run them, as for Snowflake.</string>
+         (D10). Who runs a server is never said or implied (ADR 0025, decision 4; review D-rest n1). "While you keep
+         records": Advanced keeps no log until a retention is chosen. -->
+    <string name="tool_log_body">From now on, the places %1$s connects to for itself, such as its servers, bridges or relays, are logged like any connection while you keep records. What it connects to for the apps you send through it is not logged by this choice. A list of a tool\'s servers and bridges can be used against you if someone searches your phone, and against others who connect to them.</string>
     <!-- What the choice may log that is not the tool's own (D4's misses under option (c), and audit-D M4): a connection
          the tool makes for an app sent through it that Datapavan cannot tie to what it asked for, or for an app that uses
          the tool's proxy, which Datapavan never sees. %1$s is the tool's name. -->
     <string name="tool_log_unsure">Datapavan cannot always tell the connections %1$s makes for other apps from its own. Those it cannot tell are logged as its own.</string>
-    <!-- What ends the choice without the user, said before it is made: a reinstall, a package that joins its UID, or
-         Datapavan no longer counting it as a tool (its key, or the chain's tool changed). -->
-    <string name="tool_log_ends">Your choice ends by itself if this tool is installed again, or if Android starts to count another app with it. It also ends if Datapavan stops counting it as a circumvention tool.</string>
+    <!-- What ends the choice without the user, said before it is made: a reinstall, or a package that joins its UID.
+         While Datapavan does not count it as a tool (its key, or the chain's tool changed, or the chain is off), the
+         choice is kept and handed nothing (review D-rest m3), and the tool is an ordinary app, logged in full. -->
+    <string name="tool_log_ends">Your choice ends by itself if this tool is installed again, or if Android starts to count another app with it. While Datapavan does not count it as a circumvention tool, your choice waits, and the tool\'s connections are logged as any app\'s.</string>
     <!-- Under the tool's switch while the switch of every app is on. -->
     <string name="tool_log_switch_on">While \"Log where apps connect through your tool, WireGuard or a proxy\" is on, it logs where this tool connects anyway.</string>
     <!-- On the card of a tool the user chose, the switch off: it ends the choice at once, with no confirmation, since it
-         keeps less; proxy_app_stopped then says what stays. -->
+         keeps less; tool_stopped then says what stays. -->
     <string name="tool_stop_link">Stop logging where this tool connects for itself</string>
     <!-- In the chain section, under the switch and its note: who can see a tool's connections in Now, and that the
          chained tool's direct connections for the apps sent through it show there too (option (c); D10). "This switch":
          the line is under it. -->
-    <string name="chain_tool_servers_shown">Anyone who opens Now can see where your circumvention tools connect, such as their servers or bridges. That includes where your tool connects directly for the apps you send through it. While this switch is off, each place is shown while its connection is open and for ten minutes after it ends.</string>
+    <string name="chain_tool_servers_shown">Anyone who opens Now can see where the circumvention tools that run beside Datapavan\'s VPN connect, such as their servers or bridges. That includes where your tool connects directly for the apps you send through it. While this switch is off, each place is shown while its connection is open and for ten minutes after it ends, unless you chose to log that tool or it connected to a known tracker.</string>
     <!-- Under chain_proxy_open, for a tool whose own connections follow R10 (audit-D M4, as the maintainer decided on
          2026-11-25): an app that uses the open proxy, which the tool then sends directly, is counted as the tool. %1$s is
          the tool's name. Chained or not. -->
-    <string name="chain_proxy_open_unlogged">Datapavan cannot see which app uses this proxy. Where %1$s then connects for that app counts as the tool\'s own: while \"Log where apps connect through your tool, WireGuard or a proxy\" is off, it is not logged unless you chose to log where %1$s connects for itself.</string>
+    <string name="chain_proxy_open_unlogged">Datapavan cannot see which app uses this proxy. Where %1$s then connects for that app counts as the tool\'s own: while \"Log where apps connect through your tool, WireGuard or a proxy\" is off, it is not logged unless you chose to log where %1$s connects for itself, or it reaches a known tracker.</string>
+    <!-- After a tool's choice was ended, on its card in Now and its page (R6: what stays is said), with its subject: the
+         tool's own connections, not all of it (review D-rest m8). -->
+    <string name="tool_stopped">Where this tool connects for itself is not logged from now on. What was logged before stays for the days you chose to keep records, or until you delete the log.</string>
+    <!-- In Now, on a proxy row of a tool's own connection through a proxy (an unchained tool's SOCKS or HTTP upstream)
+         whose address is no longer shown: %1$s is the proxy's kind. The tool's choice covers it, so the words are the
+         tool's, not now_proxy_past_shared's (review D-rest M1). It states the rule, so it stays true after the switch or
+         the choice is turned on. -->
+    <string name="now_tool_proxy_past">Through the %1$s. Its address is no longer shown: while \"Log where apps connect through your tool, WireGuard or a proxy\" is off, Now shows where this tool connects only while the connection is open and for ten minutes after it ends, unless you chose to log where it connects for itself.</string>
 </resources>

@@ -65,25 +65,27 @@ class ToolRowTest {
 
     /**
      * A place with no proxy that the engine shows here only is a tool's own connection: its line names the tool and who
-     * can see it, links to the switch, and to the choice while the tool can be chosen. A first hop of an app's own proxy,
-     * a place not marked, and a tool's place with the switch on or the tool chosen say nothing of it.
+     * can see it, links to the switch, and to the choice while the tool can be chosen. A first hop of an app's own proxy
+     * and a place not marked say nothing of it. With the switch on or the tool chosen, the line is still drawn wherever
+     * the engine marks the place, since the mark decides it (the engine then marks none), but the link to choose goes
+     * (review D-rest n2).
      */
     @Test
     fun aToolsPlaceShownHereOnlySaysSoAndLinks() {
         val row = checkNotNull(toolPlaceRow(place("203.0.113.9"), orbot, "Orbot", choices))
         assertEquals(listOf(ProxyLine(R.string.now_tool_live_only, args = listOf("Orbot"))), row.lines)
         assertTrue(row.toSwitch)
-        assertEquals(Choice.LOG, row.toChoice)
+        assertEquals(Choice.LOG, row.toTool)
         assertNull(row.header)
         assertNull(toolPlaceRow(place("203.0.113.9", shownOnly = false), orbot, "Orbot", choices))
         assertNull(toolPlaceRow(place("203.0.113.9", LogRecord.Proxy(LogRecord.PROXY_SOCKS5)), orbot, "Orbot", choices))
         // Chosen already, or the switch on: no link to choose (the engine then marks no place so anyway).
-        assertNull(toolPlaceRow(place("203.0.113.9"), orbot, "Orbot", choices.copy(toolsChosen = setOf(orbot)))?.toChoice)
-        assertNull(toolPlaceRow(place("203.0.113.9"), orbot, "Orbot", choices.copy(switchOn = true))?.toChoice)
+        assertNull(toolPlaceRow(place("203.0.113.9"), orbot, "Orbot", choices.copy(toolsChosen = setOf(orbot)))?.toTool)
+        assertNull(toolPlaceRow(place("203.0.113.9"), orbot, "Orbot", choices.copy(switchOn = true))?.toTool)
         // Not offered: another user's tool, one not in the set, one of Android's own UIDs.
-        assertNull(toolPlaceRow(place("203.0.113.9"), 1_010_201, "Orbot", choices.copy(tools = setOf(1_010_201)))?.toChoice)
-        assertNull(toolPlaceRow(place("203.0.113.9"), other, "App", choices)?.toChoice)
-        assertNull(toolPlaceRow(place("203.0.113.9"), 1_000, "Android", choices.copy(tools = setOf(1_000)))?.toChoice)
+        assertNull(toolPlaceRow(place("203.0.113.9"), 1_010_201, "Orbot", choices.copy(tools = setOf(1_010_201)))?.toTool)
+        assertNull(toolPlaceRow(place("203.0.113.9"), other, "App", choices)?.toTool)
+        assertNull(toolPlaceRow(place("203.0.113.9"), 1_000, "Android", choices.copy(tools = setOf(1_000)))?.toTool)
     }
 
     /**
@@ -104,7 +106,7 @@ class ToolRowTest {
         assertNull(toolCardChoice(app(orbot), chosen.copy(switchOn = true)))
         assertNull(toolCardChoice(app(other), chosen.copy(toolsChosen = setOf(other))))
         val stopped = choices.copy(toolsStopped = setOf(orbot))
-        assertEquals(listOf(R.string.now_is_tool_unchained, R.string.proxy_app_stopped), toolCardLines(app(orbot), stopped))
+        assertEquals(listOf(R.string.now_is_tool_unchained, R.string.tool_stopped), toolCardLines(app(orbot), stopped))
         // Chosen again, the note goes.
         assertEquals(listOf(R.string.now_is_tool_unchained), toolCardLines(app(orbot), stopped.copy(toolsChosen = setOf(orbot))))
     }
@@ -125,5 +127,80 @@ class ToolRowTest {
         assertEquals(History.LeftOut.TOOL_SERVERS, History.leftOut(stripped, opensAsTool(app(orbot), choices)))
         assertEquals(History.LeftOut.DIRECT, History.leftOut(stripped, opensAsTool(app(other), choices)))
         assertEquals(R.string.history_left_out_off, leftOutWords(History.LeftOut.TOOL_SERVERS))
+    }
+
+    /**
+     * Review D-rest M1: a tool's own connection through a proxy (an unchained tool's SOCKS or HTTP upstream), which the
+     * tool's own choice covers, is said in the tool's words in "Now", within its window and past it, with the link to the
+     * tool's choice while it can be chosen; never that only the switch logs it. A tool that runs only as a VPN, an
+     * ordinary app for R10, keeps unit C's words. The history says only what was logged.
+     */
+    @Test
+    fun aToolsOwnProxyRowIsSaidInTheToolsWords() {
+        val socks = org.visadahyu.datapavan.network.activity.ProxyFacts.of(
+            LogRecord.Proxy(LogRecord.PROXY_SOCKS5, organisation = "Hetzner Online GmbH"), InetAddress.getByName("203.0.113.5"), 1080,
+            shownOnly = true,
+        )
+        fun texts(row: ProxyRow) = listOfNotNull(row.header?.text) + row.lines.map { it.text }
+        val shown = proxyRow(socks, past = false, "Orbot", choices.row(orbot, setting = false, local = false))
+        assertEquals(
+            listOf(R.string.proxy_declared, R.string.proxy_network, R.string.proxy_tool, R.string.now_proxy_asked_off, R.string.now_tool_live_only),
+            texts(shown),
+        )
+        assertEquals(ProxyLine(R.string.now_tool_live_only, args = listOf(org.visadahyu.datapavan.ui.isolate("Orbot"))), shown.lines.last())
+        assertEquals(Choice.LOG to null, shown.toTool to shown.toChoice)
+        assertTrue(shown.toSwitch)
+        // Chosen (the engine then marks it no more), or the switch on: no link to choose.
+        assertNull(proxyRow(socks, past = false, "Orbot", choices.copy(toolsChosen = setOf(orbot)).row(orbot, false, false)).toTool)
+        assertNull(proxyRow(socks, past = false, "Orbot", choices.copy(switchOn = true).row(orbot, false, false)).toTool)
+        // Past its window, in "Now": the tool's rule; in the history: what was logged.
+        val leftOut = org.visadahyu.datapavan.network.activity.ProxyFacts.of(
+            LogRecord.Proxy(LogRecord.PROXY_SOCKS5, leftOut = true), InetAddress.getByName("0.0.0.0"), 0,
+        )
+        val past = proxyRow(leftOut, past = false, "Orbot", choices.row(orbot, false, false))
+        assertEquals(R.string.now_tool_proxy_past, past.header?.text)
+        assertEquals(Choice.LOG, past.toTool)
+        val history = proxyRow(leftOut, past = true, "Orbot", choices.row(orbot, false, false))
+        assertEquals(R.string.history_proxy_hidden, history.header?.text)
+        assertNull(history.toTool)
+        // A VPN-only tool, a tool for B6's fact alone: unit C's choice and words.
+        val psiphon = 10_400
+        val vpnOnly = proxyRow(socks, past = false, "Psiphon", choices.row(psiphon, false, false))
+        assertTrue(texts(vpnOnly).toString(), R.string.now_tool_live_only !in texts(vpnOnly) && R.string.now_proxy_live_only in texts(vpnOnly))
+        assertEquals(Choice.LOG to null, vpnOnly.toChoice to vpnOnly.toTool)
+    }
+
+    /**
+     * Review D-rest m5 and m10: a tool's connections no longer shown link to the switch only while the switch is off and
+     * the tool is not chosen; its blocked rows hide their hosts by the same rule, in "Now" and on its page alike; an app
+     * sent through the tool or a tunnel keeps both whatever the choice.
+     */
+    @Test
+    fun theSwitchsLinkAndTheHostsFollowTheSwitchAndTheChoice() {
+        val hidden = app(orbot, serversHidden = true)
+        assertTrue(LogSwitch.hides(hidden))
+        assertFalse(LogSwitch.hides(hidden, switchOn = true))
+        assertFalse(LogSwitch.hides(hidden, toolChosen = true))
+        assertTrue(LogSwitch.hides(app(other, throughTool = true), switchOn = false, toolChosen = true))
+        assertTrue(toolHostsHidden(tool = true, toolChosen = false, switchOn = false))
+        assertFalse(toolHostsHidden(tool = true, toolChosen = true, switchOn = false))
+        assertFalse(toolHostsHidden(tool = true, toolChosen = false, switchOn = true))
+        assertFalse(toolHostsHidden(tool = false, toolChosen = false, switchOn = false))
+        assertTrue(LogSwitch.hidesHosts(app(orbot), tool = true, switchOn = false, toolChosen = false))
+        assertFalse(LogSwitch.hidesHosts(app(orbot), tool = true, switchOn = false, toolChosen = true))
+        assertTrue(LogSwitch.hidesHosts(app(other, throughTool = true), tool = false, switchOn = false, toolChosen = false))
+        assertFalse(LogSwitch.hidesHosts(app(other), tool = false, switchOn = false, toolChosen = false))
+    }
+
+    /**
+     * Review D-rest m10: the chain section's line of what an open proxy lets other apps keep out of the log is drawn for a
+     * tool that R10 counts, by its key when the screen searched, or as the chain's tool while the chain is on.
+     */
+    @Test
+    fun theOpenProxysLineIsForAToolR10Counts() {
+        val view = ChainView(null, on = false, allApps = true, apps = emptySet(), logDestinations = false, udp = false, user = null, password = null, choices = emptyList())
+        assertFalse(chainProxyCounted(view))
+        assertTrue(chainProxyCounted(view.copy(counted = true)))
+        assertTrue(chainProxyCounted(view.copy(on = true)))
     }
 }

@@ -75,11 +75,22 @@ internal object LogSwitch {
     fun seen(before: Boolean, running: Boolean, counters: () -> LongArray): Boolean = running && (before || proxiesSeen(counters()))
 
     /**
-     * Whether an app's row in "Now" leaves out where it went for the switch: through the tool, a tunnel, or a
-     * circumvention tool's own connections no longer shown (unit D, R10), chained or not: the engine sets
-     * [Snapshot.App.serversHidden] only on a tool's row.
+     * Whether an app's row in "Now" leaves out where it went for the switch, and so links to it: through the tool, a
+     * tunnel, or a circumvention tool's own connections no longer shown (unit D, R10), chained or not, which the engine
+     * marks with [Snapshot.App.serversHidden] on a tool's row alone. The mark stays as long as such bytes are in a window,
+     * so for a tool it counts only while the switch is off ([switchOn]) and the user did not choose to log where the tool
+     * connects for itself ([toolChosen]): then the switch would change nothing (review D-rest m5).
      */
-    fun hides(app: Snapshot.App): Boolean = app.throughTool || app.serversHidden || app.throughTunnel != 0L
+    fun hides(app: Snapshot.App, switchOn: Boolean = false, toolChosen: Boolean = false): Boolean =
+        app.throughTool || app.throughTunnel != 0L || (app.serversHidden && !switchOn && !toolChosen)
+
+    /**
+     * Whether blocking's lines of an app's row in "Now" name a blocked connection by its tracker or SDK, never its host
+     * (W8, part 3a): an app sent through the tool or a tunnel, and a circumvention tool ([tool]) while the switch is off
+     * and the tool is not chosen ([toolHostsHidden]), as its history does (review D-rest m5).
+     */
+    fun hidesHosts(app: Snapshot.App, tool: Boolean, switchOn: Boolean, toolChosen: Boolean): Boolean =
+        app.throughTool || app.throughTunnel != 0L || toolHostsHidden(tool, toolChosen, switchOn)
 
     /** The counters' places (`Counters::snapshot` in core/net): the proxy requests declared, and the proxies inferred. */
     const val DECLARED = 61
@@ -105,13 +116,14 @@ internal fun LogSwitchLink(onClick: () -> Unit) {
 }
 
 /**
- * The switch's note, then, while the user chose any app to log one by one (the proxy record's unit C), how many: the
- * note says such an app is logged in full all the same, and the count says how many there are (the maintainer's
- * decision of 2026-11-25; their list is W9's, behind Advanced's lock).
+ * The switch's note, the tools' own after it (unit D; review D-rest n9), then, while the user chose any app or tool to log
+ * one by one (the proxy record's units C and D), how many: the notes say such an app or tool is logged all the same, and
+ * the count says how many there are (the maintainer's decision of 2026-11-25; their list is W9's, behind Advanced's lock).
  */
 @Composable
 internal fun LogSwitchNote(chosen: Int) {
     Text(stringResource(R.string.log_switch_note_proxies), style = MaterialTheme.typography.bodyMedium)
+    Text(stringResource(R.string.log_switch_note_tools), style = MaterialTheme.typography.bodyMedium)
     if (chosen > 0) {
         Text(pluralStringResource(R.plurals.log_switch_note_chosen, chosen, chosen), style = MaterialTheme.typography.bodyMedium)
     }

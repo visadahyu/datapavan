@@ -107,8 +107,12 @@ class LogSwitchTest {
         assertFalse(LogSwitch.hides(app()))
         assertTrue(LogSwitch.hides(app(throughTool = true)))
         assertTrue(LogSwitch.hides(app(isTool = true, serversHidden = true)))
-        // Unit D: a tool that is not chained, whose own connections are no longer shown, links to the switch too.
+        // Unit D: a tool that is not chained, whose own connections are no longer shown, links to the switch too, while
+        // the switch is off and the tool is not chosen (review D-rest m5).
         assertTrue(LogSwitch.hides(app(serversHidden = true)))
+        assertFalse(LogSwitch.hides(app(serversHidden = true), switchOn = true, toolChosen = false))
+        assertFalse(LogSwitch.hides(app(serversHidden = true), switchOn = false, toolChosen = true))
+        assertTrue(LogSwitch.hides(app(throughTunnel = 3), switchOn = false, toolChosen = true))
         assertTrue(LogSwitch.hides(app(throughTunnel = 3)))
         assertFalse(LogSwitch.hides(app(isTool = true)))
     }

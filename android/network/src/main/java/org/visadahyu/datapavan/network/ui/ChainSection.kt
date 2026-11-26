@@ -176,7 +176,7 @@ private fun Answering(
     Text(stringResource(R.string.chain_found, tool, search.found.port), style = MaterialTheme.typography.bodyMedium)
     view.key?.let { KeyVerdict(it) }
     LabelledSwitch(stringResource(R.string.chain_switch, tool), view.on, actions.onOn)
-    ProxyDoor(search, tool, counted = view.counted || view.on)
+    ProxyDoor(search, tool, counted = chainProxyCounted(view))
     if (search.found.tool.udp == false) {
         Text(stringResource(R.string.chain_no_udp, tool), style = MaterialTheme.typography.bodyMedium)
     } else {
@@ -255,6 +255,14 @@ private fun Answering(
         Text(stringResource(R.string.chain_tool_servers_shown), style = MaterialTheme.typography.bodyMedium)
     }
 }
+
+/**
+ * Whether the tool found is one whose own connections follow R10, for what its open proxy lets other apps keep out of
+ * the log (the proxy record's unit D, audit-D M4), as a pure function the JVM tests hold (review D-rest m10): counted by
+ * its signing key or the debug builds' rule when the screen searched ([ChainView.counted]), or the chain's tool, the
+ * chain being on.
+ */
+internal fun chainProxyCounted(view: ChainView): Boolean = view.counted || view.on
 
 /**
  * What the tool's proxy lets other apps on the phone do (ADR 0041, decision 5), from the network part's greeting: one

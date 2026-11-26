@@ -477,12 +477,16 @@ private fun AppRow(
             if (app.throughTunnel != 0L) {
                 Text(stringResource(R.string.now_through_tunnel_off, tunnelName(view, app.throughTunnel)), style = MaterialTheme.typography.bodyMedium)
             }
-            if (LogSwitch.hides(app)) LogSwitchLink(onLogSwitch)
+            // A tool's connections no longer shown link to the switch only while it would change something (review D-rest m5).
+            val switchOn = view.choices.switchOn
+            val toolChosen = view.choices.toolChosen(app.uid)
+            if (LogSwitch.hides(app, switchOn, toolChosen)) LogSwitchLink(onLogSwitch)
             // Tracker blocking (W8, part 3a): what it blocked in this app, and the one-tap undo. With the switch above off,
             // a chained or tunnelled app's rows are never named by their hosts.
             val names = RowNames(view.blocking.facts, view.companies, view.trackers)
             val packages = named?.packages.orEmpty()
-            appBlocking(view.blocking, app.uid, packages, { names.name(it, LogSwitch.hides(app)) }, names::company, LogSwitch.hides(app))
+            val hideHosts = LogSwitch.hidesHosts(app, tool, switchOn, toolChosen)
+            appBlocking(view.blocking, app.uid, packages, { names.name(it, hideHosts) }, names::company, hideHosts)
                 ?.let { AppBlockingLines(context, it, packages, blockingActions) }
             Destinations(context, app, window, view, onLogSwitch, onChoice, onToolChoice)
         }
@@ -520,7 +524,7 @@ private fun Destinations(
             // A proxy's flow the engine left out for the switch: its kind, how the network part knows, and the facts
             // that name nothing (ADR 0052), with the link to the switch.
             val marks = marksOf(emptyList(), view.groups[app.uid], view.trackers, view.companies, place.proxy?.trackers.orEmpty())
-            HiddenProxy(proxyRow(proxy, past = false, toolName, choice), bytes, onLogSwitch, marks, choose)
+            HiddenProxy(proxyRow(proxy, past = false, toolName, choice), bytes, onLogSwitch, marks, choose) { onToolChoice(app.uid, it) }
             continue
         }
         val (name, dns) = NowRows.destination(place.name, place.dnsName, place.address.hostAddress.orEmpty())
@@ -595,6 +599,8 @@ internal fun Place(
     // Last, after the line of where the name came from, which the emulator checks read a place's name before.
     if (proxy?.toSwitch == true) LogSwitchLink(onLogSwitch)
     proxy?.toChoice?.let { choice -> ChoiceLink(choice) { onChoice(choice) } }
+    // A tool's own proxy row links to the tool's own choice (review D-rest M1).
+    proxy?.toTool?.let { choice -> ToolChoiceLink(choice) { onToolChoice(choice) } }
     tool?.let { ToolPlaceLines(it, onLogSwitch, onToolChoice) }
 }
 
@@ -623,6 +629,7 @@ internal fun HiddenProxy(
     onLogSwitch: () -> Unit,
     marks: List<TrackerMarks.Mark> = emptyList(),
     onChoice: (Choice) -> Unit = {},
+    onToolChoice: (Choice) -> Unit = {},
 ) {
     row.header?.let { Text(lineText(it), style = MaterialTheme.typography.bodyMedium) }
     ProxyLines(row.lines)
@@ -630,6 +637,7 @@ internal fun HiddenProxy(
     Text(bytes, style = MaterialTheme.typography.bodySmall)
     if (row.toSwitch) LogSwitchLink(onLogSwitch)
     row.toChoice?.let { choice -> ChoiceLink(choice) { onChoice(choice) } }
+    row.toTool?.let { choice -> ToolChoiceLink(choice) { onToolChoice(choice) } }
 }
 
 /**
@@ -684,7 +692,14 @@ internal data class ProxyLine(val text: Int, val kind: ProxyFacts.Kind? = null, 
  * that stands for the destination where the engine left the flow out for the switch, the [lines], whether the
  * row links to the switch ([toSwitch]), and the link to the user's choice for its app, if any ([toChoice]; unit C).
  */
-internal data class ProxyRow(val header: ProxyLine?, val lines: List<ProxyLine>, val toSwitch: Boolean, val toChoice: Choice? = null)
+internal data class ProxyRow(
+    val header: ProxyLine?,
+    val lines: List<ProxyLine>,
+    val toSwitch: Boolean,
+    val toChoice: Choice? = null,
+    /** The link to the user's choice for the row's tool (unit D, D7), where it is a tool's own connection. */
+    val toTool: Choice? = null,
+)
 
 /** A row's link to the user's choice for its app (the proxy record's unit C, R3): to log its proxy, or to stop. */
 internal enum class Choice { LOG, STOP }
@@ -703,6 +718,12 @@ internal data class RowChoice(
     val switchOn: Boolean = false,
     val tcp: Boolean = true,
     val shared: Boolean = false,
+    /**
+     * Whether the row's app is a circumvention tool whose own connections follow R10 ([tool]), whose own choice covers
+     * its proxy's first hop, and whether the row offers that choice ([toolLog]; unit D, review D-rest M1).
+     */
+    val tool: Boolean = false,
+    val toolLog: Boolean = false,
 ) {
     /** Whether the row offers to log its app's proxy: it could be covered, and neither the switch nor the choice keeps it. */
     val toLog: Boolean get() = offered && !chosen && !switchOn
@@ -733,6 +754,12 @@ internal data class RowChoice(
  * choice alone keeps says why it is shown in full, and links to stop; and a row read from the connection, kept with no
  * destination asked for, says that it asked for it before its proxy was logged (review A-rest, note 11). A plain
  * request is never said to be logged for the choice, which would call its server a proxy.
+ *
+ * A circumvention tool's own connection through a proxy (the proxy record's unit D; review D-rest M1), the tool one whose
+ * own connections follow R10 ([RowChoice.tool]) and named ([tool]), is said in the tool's words in "Now": within its
+ * window, that the tool connected there and when it is logged, as on its places with no proxy (`now_tool_live_only`);
+ * past it, the rule with the tool's choice (`now_tool_proxy_past`); either links to the tool's own choice while it can be
+ * chosen ([RowChoice.toolLog]). Android's setting keeps its own header past the window.
  */
 internal fun proxyRow(facts: ProxyFacts.Facts, past: Boolean, tool: String? = null, choice: RowChoice = RowChoice()): ProxyRow {
     val lines = mutableListOf<ProxyLine>()
@@ -742,6 +769,10 @@ internal fun proxyRow(facts: ProxyFacts.Facts, past: Boolean, tool: String? = nu
     val toLog = Choice.LOG.takeIf { choice.toLog }
     // Why a row the choice is not offered on is so: its proxy can carry other apps' connections, or nothing it can say.
     val shared = choice.shared || tool != null || facts.setting || facts.where == ProxyFacts.Where.LOCAL
+    // A tool whose own connections follow R10, named: its own choice covers this first hop (unit D).
+    val ownTool = tool?.takeIf { choice.tool && !past }
+    val toTool = Choice.LOG.takeIf { ownTool != null && choice.toolLog }
+    val toolLive = ownTool?.let { ProxyLine(R.string.now_tool_live_only, args = listOf(isolate(it))) }
     if (!facts.kept) {
         // A record the engine could not tell was a messenger's proxy (taken back, or never named for substitution) says
         // so in place of its proxy line, and so says nothing of how it was inferred: only the history has such records.
@@ -752,6 +783,8 @@ internal fun proxyRow(facts: ProxyFacts.Facts, past: Boolean, tool: String? = nu
                 facts.setting && past -> R.string.history_proxy_setting_hidden
                 facts.setting -> R.string.now_proxy_setting_past
                 past -> R.string.history_proxy_hidden
+                // Unit D: a tool's own, in the tool's words.
+                ownTool != null -> R.string.now_tool_proxy_past
                 // Unit C: a proxy no choice for one app covers says so; a chosen app's place left out while its proxy
                 // was not logged stays as it was, and says so (audit-C 1).
                 !choice.offered -> if (shared) R.string.now_proxy_past_shared else R.string.now_proxy_past_switch
@@ -769,7 +802,7 @@ internal fun proxyRow(facts: ProxyFacts.Facts, past: Boolean, tool: String? = nu
         }
         if (facts.password) lines += ProxyLine(R.string.proxy_password)
         if (!unsure) toolLine?.let { lines += it }
-        return ProxyRow(header, lines, toSwitch = true, toChoice = toLog)
+        return ProxyRow(header, lines, toSwitch = true, toChoice = toLog, toTool = toTool.takeIf { !facts.setting })
     }
     if (facts.kind == ProxyFacts.Kind.REQUEST) {
         if (facts.askedLeftOut) {
@@ -786,8 +819,11 @@ internal fun proxyRow(facts: ProxyFacts.Facts, past: Boolean, tool: String? = nu
         // own proxy's, and says so. The engine marks no other plain request so; were one marked, it is not called a proxy.
         // No choice for one app covers Android's setting (unit C).
         val shownOnly = facts.shownOnly && facts.setting && !past
-        if (shownOnly) lines += ProxyLine(R.string.now_proxy_live_only_shared)
-        return ProxyRow(null, lines, toSwitch = facts.askedLeftOut || shownOnly, toChoice = toLog.takeIf { facts.askedLeftOut })
+        if (shownOnly) lines += toolLive ?: ProxyLine(R.string.now_proxy_live_only_shared)
+        return ProxyRow(
+            null, lines, toSwitch = facts.askedLeftOut || shownOnly, toChoice = toLog.takeIf { facts.askedLeftOut },
+            toTool = toTool.takeIf { shownOnly },
+        )
     }
     lines += when {
         !facts.declared -> ProxyLine(R.string.proxy_inferred, facts.kind, listOf(isolateLtr(facts.at)))
@@ -813,14 +849,14 @@ internal fun proxyRow(facts: ProxyFacts.Facts, past: Boolean, tool: String? = nu
         if (facts.declared) lines += ProxyLine(R.string.now_proxy_asked_off)
         // "Choose below" only where the link is below: a chosen app's flow opened before the choice, or one the switch
         // was turned on after, has none.
-        lines += ProxyLine(
+        lines += toolLive ?: ProxyLine(
             when {
                 choice.toLog -> R.string.now_proxy_live_only
                 shared -> R.string.now_proxy_live_only_shared
                 else -> R.string.now_proxy_live_only_switch
             },
         )
-        return ProxyRow(null, lines, toSwitch = true, toChoice = toLog)
+        return ProxyRow(null, lines, toSwitch = true, toChoice = toLog, toTool = toTool)
     }
     // Kept with no destination asked for: it opened while its proxy was not logged (note 11). A SOCKS5 relay's datagram
     // asks for nothing of its own on its first read alone, so only a TCP connection's says so.

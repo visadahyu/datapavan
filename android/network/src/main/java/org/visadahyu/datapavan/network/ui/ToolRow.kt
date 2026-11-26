@@ -18,6 +18,8 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.Role
+import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.semantics.testTagsAsResourceId
 import androidx.compose.ui.unit.dp
 import org.visadahyu.datapavan.network.R
 import org.visadahyu.datapavan.network.activity.Snapshot
@@ -34,10 +36,11 @@ import org.visadahyu.datapavan.ui.isolateLtr
 /**
  * The lines a tool's card in "Now" says of the tool, as a pure function the JVM tests hold: the chain's tool
  * ([Snapshot.App.isTool]) is the user's circumvention tool, which carries the apps sent through it; another tool whose
- * own connections follow R10 ([ProxyChoices.isTool]) is a circumvention tool Datapavan sends no app through, whose proxy
- * other apps may use unseen (audit-D M4). Then, chained or not, while some of its bytes have no place in the window
- * ([Snapshot.App.serversHidden], which the engine sets only on a tool's row), that some of its connections are not shown
- * and the rule; and for a tool whose choice the user ended on this screen, what stays.
+ * own connections follow R10 ([ProxyChoices.isTool]) is a circumvention tool Datapavan sends no app through, which other
+ * apps may use unseen (audit-D M4). Then, chained or not, while some of its bytes have no place in any of the view's
+ * windows ([Snapshot.App.serversHidden], which the engine sets only on a tool's row), that "Now" no longer shows some of
+ * its connections, and the rule: said of the view, not of the window chosen, since the engine's bit is the view's
+ * (review D-rest n5). And for a tool whose choice the user ended on this screen, what stays of it (m8).
  */
 internal fun toolCardLines(app: Snapshot.App, choices: ProxyChoices): List<Int> {
     val lines = mutableListOf<Int>()
@@ -46,7 +49,7 @@ internal fun toolCardLines(app: Snapshot.App, choices: ProxyChoices): List<Int> 
         choices.isTool(app.uid) -> lines += R.string.now_is_tool_unchained
     }
     if (app.serversHidden) lines += R.string.now_tool_left_out
-    if (app.uid != null && app.uid in choices.toolsStopped && !choices.toolChosen(app.uid)) lines += R.string.proxy_app_stopped
+    if (app.uid != null && app.uid in choices.toolsStopped && !choices.toolChosen(app.uid)) lines += R.string.tool_stopped
     return lines
 }
 
@@ -56,6 +59,14 @@ internal fun toolCardLines(app: Snapshot.App, choices: ProxyChoices): List<Int> 
  * `TOOL_SERVERS`), as the chained tool's always did.
  */
 internal fun opensAsTool(app: Snapshot.App, choices: ProxyChoices): Boolean = app.isTool || choices.isTool(app.uid)
+
+/**
+ * Whether the rows of a [tool] name a blocked connection by its tracker or SDK, never by its host (W8, part 3a; ADR 0053
+ * decision 8 (b) as unit D answers it), as a pure function the JVM tests hold: while the switch is off ([switchOn]) and
+ * the user did not choose to log where the tool connects for itself ([toolChosen]), as the log keeps it. In "Now" and on
+ * the history page alike (review D-rest m5 and m10).
+ */
+internal fun toolHostsHidden(tool: Boolean, toolChosen: Boolean, switchOn: Boolean): Boolean = tool && !toolChosen && !switchOn
 
 /**
  * The link on a tool's card to its choice (D7), as a pure function the JVM tests hold: to stop it, on the card of a tool
@@ -75,7 +86,7 @@ internal fun toolCardChoice(app: Snapshot.App, choices: ProxyChoices): Choice? =
 internal fun toolPlaceRow(place: Snapshot.Destination, uid: Int?, name: String, choices: ProxyChoices): ProxyRow? {
     if (!place.shownOnly || place.proxy != null) return null
     val log = Choice.LOG.takeIf { choices.toolOffered(uid) && !choices.toolChosen(uid) && !choices.switchOn }
-    return ProxyRow(null, listOf(ProxyLine(R.string.now_tool_live_only, args = listOf(name))), toSwitch = true, toChoice = log)
+    return ProxyRow(null, listOf(ProxyLine(R.string.now_tool_live_only, args = listOf(name))), toSwitch = true, toTool = log)
 }
 
 /**
@@ -85,7 +96,7 @@ internal fun toolPlaceRow(place: Snapshot.Destination, uid: Int?, name: String, 
  */
 internal class ToolChoiceActions(val onLog: (Int, List<String>) -> Unit = { _, _ -> }, val onStop: (Int) -> Unit = {})
 
-/** A tool's place's or card's link to its choice ([toolPlaceRow], [toolCardChoice]). */
+/** A tool's place's, proxy row's or card's link to its choice ([toolPlaceRow], [proxyRow], [toolCardChoice]). */
 @Composable
 internal fun ToolChoiceLink(choice: Choice, onClick: () -> Unit) {
     TextButton(onClick = onClick, modifier = Modifier.testTag(if (choice == Choice.LOG) "tool-log-link" else "tool-stop-link")) {
@@ -101,7 +112,7 @@ internal fun ToolChoiceLink(choice: Choice, onClick: () -> Unit) {
 internal fun ToolPlaceLines(row: ProxyRow, onLogSwitch: () -> Unit, onChoice: (Choice) -> Unit) {
     ProxyLines(row.lines)
     if (row.toSwitch) LogSwitchLink(onLogSwitch)
-    row.toChoice?.let { choice -> ToolChoiceLink(choice) { onChoice(choice) } }
+    row.toTool?.let { choice -> ToolChoiceLink(choice) { onChoice(choice) } }
 }
 
 /**
@@ -125,14 +136,16 @@ internal fun ToolLogSwitch(name: String, chosen: Boolean, switchOn: Boolean, sto
             Switch(checked = chosen, onCheckedChange = null)
         }
         if (switchOn) Text(stringResource(R.string.tool_log_switch_on), style = MaterialTheme.typography.bodyMedium)
-        if (stopped && !chosen) Text(stringResource(R.string.proxy_app_stopped), style = MaterialTheme.typography.bodyMedium)
+        if (stopped && !chosen) Text(stringResource(R.string.tool_stopped), style = MaterialTheme.typography.bodyMedium)
     }
 }
 
 /**
  * The confirmation of the choice for the tool [name] (D7; D10): what it logs from now on and what it does not, the cost
  * on a searched phone, what Datapavan cannot tell apart, every package of a shared UID ([packages]), and what ends it.
- * Neither button is chosen beforehand, as the choice for one app's (AppProxyChoiceDialog), whose buttons it shares.
+ * Neither button is chosen beforehand, as the choice for one app's (AppProxyChoiceDialog), whose words they share. A
+ * dialog is a window of its own, so its buttons give their tags as resource ids themselves, for the chain shard (review
+ * D-rest m9), as the removal of a configuration does (Tunnels.kt).
  */
 @Composable
 internal fun ToolChoiceDialog(name: String, packages: List<String>, onYes: () -> Unit, onNo: () -> Unit) {
@@ -153,10 +166,14 @@ internal fun ToolChoiceDialog(name: String, packages: List<String>, onYes: () ->
             }
         },
         confirmButton = {
-            TextButton(onClick = onYes, modifier = Modifier.testTag("tool-log-yes")) { Text(stringResource(R.string.proxy_app_log_yes)) }
+            TextButton(onClick = onYes, modifier = Modifier.semantics { testTagsAsResourceId = true }.testTag("tool-log-yes")) {
+                Text(stringResource(R.string.proxy_app_log_yes))
+            }
         },
         dismissButton = {
-            TextButton(onClick = onNo, modifier = Modifier.testTag("tool-log-no")) { Text(stringResource(R.string.proxy_app_log_no)) }
+            TextButton(onClick = onNo, modifier = Modifier.semantics { testTagsAsResourceId = true }.testTag("tool-log-no")) {
+                Text(stringResource(R.string.proxy_app_log_no))
+            }
         },
     )
 }
