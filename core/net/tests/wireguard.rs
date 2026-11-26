@@ -1038,6 +1038,59 @@ async fn opening_a_udp_flow() -> Outcome {
     Ok(())
 }
 
+/// The engine's CPU time for one datagram on the down path (the cold paths' second pass, ADR 0053): a far end on this
+/// machine's address sends datagrams of each size to a direct app's mapping, and the mapping's task (`udp::mapped`)
+/// relays each to the app as from the far end, as a download over QUIC comes. The far end sends `BURST` at a time and
+/// the app reads them all before the next, so that neither the mapping's socket nor the tunnel drops one; the CPU of
+/// the engine's thread, from `schedstat`, is divided by the datagrams the app read. Each must reach the app: one lost
+/// fails the measure. `cargo test --release -- --ignored per_datagram_cost_of_the_down_path --nocapture`; built for
+/// Android too, and run on the emulator.
+#[tokio::test(flavor = "current_thread")]
+#[ignore = "a measurement, not a check: run it by name"]
+async fn per_datagram_cost_of_the_down_path() -> Outcome {
+    const DATAGRAMS: usize = 100_000;
+    const BURST: usize = 32;
+    let (_engine, tunnel) = engine(&TunnelSetting::default())?;
+    let far = UdpSocket::bind((local_address()?, 0)).await?;
+    let far_at = far.local_addr()?;
+    let app = tun4(42_300);
+    // The app's datagram opens the mapping, whose socket the far end then sends to.
+    tunnel
+        .send(&packet::udp(app, far_at, b"first").ok_or("datagram")?)
+        .await?;
+    let mut buffer = vec![0u8; 2_048];
+    let (_, mapping) = tokio::time::timeout(STEP, far.recv_from(&mut buffer)).await??;
+    for size in [1_280usize, 100] {
+        let payload = vec![7u8; size - 28];
+        // One first, read whole, so that the measure starts with nothing on its way.
+        far.send_to(&payload, mapping).await?;
+        let first = to_app(&tunnel).await?;
+        assert!(
+            checks_out(&first) && first.ends_with(&payload),
+            "the far end's datagram did not reach the app as sent"
+        );
+        let before = cpu_ns()?.0;
+        let started = std::time::Instant::now();
+        for _ in 0..DATAGRAMS / BURST {
+            for _ in 0..BURST {
+                far.send_to(&payload, mapping).await?;
+            }
+            for _ in 0..BURST {
+                let n = tokio::time::timeout(STEP, tunnel.recv(&mut buffer)).await??;
+                assert_eq!(n, size, "another packet reached the app");
+            }
+        }
+        let ns = cpu_ns()?.0 - before;
+        #[allow(clippy::cast_precision_loss)]
+        let per_datagram = ns as f64 / (DATAGRAMS / BURST * BURST) as f64;
+        println!(
+            "down {size} B: {per_datagram:.0} ns of the engine's CPU per datagram relayed to the app ({:.2} s wall)",
+            started.elapsed().as_secs_f64()
+        );
+    }
+    Ok(())
+}
+
 /// An app taken off its tunnel while its UDP flow is open: the flow ends, in the log too, on the engine's
 /// own thread, where alone the log's clock is read (the network shard on 2026-11-19: ended from the network part's
 /// thread, a debug build panicked), and the app's next datagram goes its new way, here directly to a local echo.
