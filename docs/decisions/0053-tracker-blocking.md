@@ -404,11 +404,15 @@ The words of the allow and the pause are checked with real users under ADR 0046'
   development machine, through curve25519-dalek's AVX2 backend (once per WireGuard handshake and once per ODoH query,
   for HPKE's key pair), a Diffie-Hellman 40 µs either way; ARM phones take the slower serial path, for which the crate
   gives the table about four times the speed (not measured here); it needs GotaTun to depend on `x25519-dalek` without
-  default features, a reviewed step (ADR 0035). For the engine's builder: hashbrown's maps instantiated per type (113 KB
-  on x86_64), the largest functions on the cold paths (`udp::open_udp`'s future, 42 KB, and `Engine::start_with`, 29
-  KB), and `std`'s backtrace symbolizer (67 KB), which only a nightly `build-std` drops. The cold paths' pass below
-  found that boxing those futures only moves their bytes, and took its room from the code instantiated once per type. No
-  free setting is left for x86_64: what remains is code and GotaTun's table. Not measured: arm64 and armv7 on a phone,
+  default features, a reviewed step (ADR 0035). For the engine's builder, after the cold paths' two passes below:
+  hashbrown's maps instantiated per type (113 KB on x86_64), on the packet path, where each change needs a speed
+  measure of its own; tokio's code for each relaying task's type (a kept connection's, an echo's, a tunnel's, about 2 KB
+  each on x86_64), which a boxed task type would share at one indirect call more per poll; and `std`'s backtrace
+  symbolizer (67 KB), which only a nightly `build-std` drops. Boxing the largest futures of the cold paths
+  (`udp::open_udp`'s, 42 KB, and `Engine::start_with`'s, 29 KB) only moves their bytes (the first pass). What the two
+  passes took is gone: of `std`'s `RandomState::new` inlined, 620 bytes are left on x86_64, all in tokio's and
+  GotaTun's own code and in `keys` itself, and the `jni` crate's entry code is one copy per return type. No free setting
+  is left for x86_64: what remains is code and GotaTun's table. Not measured: arm64 and armv7 on a phone,
   which this pass did not touch; nothing kept changes their code.
 - **The cold paths** (2026-11-25, the maintainer's route that day over a review of the gate: room for the proxy record's
   next units, from code that runs once per engine start, per flow opened or question to Android, with no change of
@@ -475,5 +479,71 @@ The words of the allow and the pause are checked with real users under ADR 0046'
   +4.6 µs), the measure's resolution there. The cost the change adds, a few hundred nanoseconds at most, is below both.
   Not measured: arm64 and armv7 on a phone, whose code changed only as above. **Next, if more room is needed:**
   hashbrown's code, 112 KB in 169 functions of its own and 109 KB inlined into others, one instantiation per key and
-  value type, on the packet path; the `jni` crate's code in each of the 39 JNI functions, about 11 KB together, which a
-  non-generic entry could share (not measured); the backtrace symbolizer and GotaTun's table, above.
+  value type, on the packet path; the backtrace symbolizer and GotaTun's table, above. The `jni` crate's code in each
+  JNI function and the maps this pass left went in the second pass, below.
+- **The cold paths, second pass** (2026-11-26, the same route: room for S2 of the proxy record, which plans for 20 KB
+  and stops with 8 KiB left). *Where the bytes were,* by the first pass's method: `std`'s `RandomState::new` still
+  inlined in 18 of the engine's functions, 4,525 bytes on x86_64 (a build with line tables), and the `jni` crate's entry
+  code copied into each of the 41 JNI functions. **Kept, one commit each** (stripped bytes of unstripped builds,
+  `ndkbuild.sh` then `llvm-strip --strip-unneeded`, on x86_64; on the three ABIs for the last two):
+  - the hasher keys out of line in the names' tables (`names::Fifo`), the count of ended flows by app (`Counts::end`),
+    the live view's two maps and a kept connection's questions: −768;
+  - the JNI bridge's three maps through the engine's own maker, `datapavan_net::map` and `set`, now public: −384;
+  - `Names::insert`'s set of the names an address was given again replaced by a scan of the entries kept, at most nine,
+    with the same result in the same order (a unit test compares the two on 2,400 lists): −144;
+  - a measure of the down path, `per_datagram_cost_of_the_down_path` (`core/net/tests/wireguard.rs`): a far end sends a
+    direct app's mapping 100,000 datagrams of each size, 32 at a time, and the measure reads the engine thread's CPU per
+    datagram relayed to the app, which nothing measured;
+  - a mapping's sources, fingerprints and known addresses, the ordered sets and the sweep's set, which the first pass
+    left derived so that the relay task `udp::mapped` kept its poll (its M2), now with that M2's condition met, the
+    measure above before and after: −3,264, and item 1 in all −4,560 / −3,984 / −2,112 on x86_64 / arm64-v8a /
+    armeabi-v7a; what is left of `RandomState::new` inlined is 620 bytes in five functions, tokio's, GotaTun's and
+    `keys` itself;
+  - a check of the JNI error path, which no check reached (`jni-errors`, a debug command the network shard runs): for
+    each return type an input can make fail, a call with a null throws a `RuntimeException` whose message starts
+    "Rust error:", and the next call works; Int, ByteArray and LongArray have no input that fails, the default value
+    returned with the exception is dropped by Java and cannot be read, and the panic path, caught in debug builds alone,
+    has no input that reaches it;
+  - one entry per return type for every JNI function (`entry`, seven types, the body a closure behind one indirect
+    call), with the same error policy: −4,352 on x86_64 and −1,344 on armeabi-v7a, and **+512 on arm64-v8a**, where
+    `.text` shrinks by 1,600 bytes but the 38 closures and six entries made functions of their own bring their unwind
+    entries and their index's (`.eh_frame` +1,816, `.eh_frame_hdr` +328), which no shape avoids; kept by the plan's rule
+    per ABI (an item is dropped if it grows x86_64 or armeabi-v7a, or arm64-v8a by more than 1 KiB).
+
+  **The library, from Gradle's own build and AGP's strip: 2,064,648 bytes on x86_64, 1,844,664 on arm64-v8a and
+  1,368,784 on armeabi-v7a; x86_64 has 32,504 bytes left** (23,400 before: 9,104 more), arm64 3,280 bytes smaller and
+  armv7 3,520. *The machine code of the packet path,* compared function by function against `d9b44fb7` on unstripped
+  x86_64 and arm64-v8a builds with the size pass's tool, its list refreshed: six names were gone since the first pass,
+  each inlined into a function the list holds (`Loop::udp` into `Loop::forward`, `read_mapped` into `mapped_receive`,
+  `Tun::recv` and `try_recv` into `run`'s loop, `tcp::relay` into the accept task's poll, `send_to_app` on the packet
+  path into the polls of `mapped`, `own_relayed` and `echo::carry`), and five functions that run per answer or per new
+  source were added (`Scope::beside_or`, `label_taken` and `into_peer`, `Sources::add`, `Names::insert`'s merge). Of 105
+  on x86_64 and 107 on arm64, all are the same but eight on each: `udp::mapped`'s poll, where LLVM now inlines
+  `Core::poll` (2,451 instructions on x86_64) into `raw::poll` (69 before, 2,217 after; 70 and 2,071 on arm64), the same
+  body but for the calls to `keys` where its maps are made, register choices and spills; `kept::run`'s poll only in the
+  branch that makes its map (the inlined keys become one call, and their thread-local set-up goes); `Shared::learn`, the
+  three `Scope` functions and `Sources::add`, where the inlined keys become a call and elsewhere the registers, spills
+  and the order of blocks change, and on x86_64 a few comparisons take a spilled operand from memory instead of a
+  register or the other way; and `Names::insert`'s merge, by its scan. Every relay's other poll, `Loop::forward`,
+  `handle`, `send`, `toward_peer`, `relayed_receive`, `mapped_receive`, `try_send_to`, `tunnels::forward`, `Tun::send`
+  and `Counts::count` are the same. Across the whole library, besides those: the 41 JNI functions, now a call to their
+  entry; item 1's other functions (`Engine::activity`, `Counts::end`, the `Default`s of `Sources` and `Names`, a
+  hashbrown insert into a set of `u64`); on x86_64 `route_of_app` (556 → 554 instructions), a `get_region`, two
+  formatting shims, `decode_error_kind` and `thread_local_destructor`; on arm64 a `get_region`, `std`'s set-up of the
+  keys' thread-local, which now takes `hashmap_random_keys` inline (84 → 219 instructions, once per thread), and eight
+  functions only by a page offset or the linker's relaxation of a page load; the rest by addresses alone. *The speed,*
+  since those differences reach beyond the branch that makes a map, before (`d9b44fb7` with the measure above), before
+  the mapping's sources and after, in turn, the engine thread's CPU (medians, before and after): on the development
+  machine, pinned to four threads, eight rounds at a load of 19 to 35 from another project, a datagram on the down path
+  4.33 and 4.34 µs at 1,280 bytes and 4.21 and 4.15 at 100, sent directly 5.35 and 5.28 and 5.25 and 5.20, through
+  WireGuard 6.63 and 6.83 and 6.28 and 6.30 (10 ms ticks), opening a UDP flow directly 41.25 and 42.15 µs, a lookup
+  34.65 and 33.95, through WireGuard 18.9 and 19.0; on the Android 15 emulator, built for Android, twenty rounds, the
+  down path 2.82 and 2.85 µs and 2.60 and 2.65, sent directly 4.05 and 4.00 and 3.90 and 3.88, through WireGuard 4.58
+  and 4.65 and 3.55 and 3.50, opening directly 34.05 and 34.3 µs, a lookup 49.15 and 50.45, through WireGuard 18.45 and
+  18.2. Each median after sits within the before runs' spread, a rank test's |z| under 1.6 each; the mapping's sources
+  alone, against the build before them, |z| under 0.7 on the down path. The engine's own release measures, 24 rounds
+  each in turn: a count 13.4 ns both, a mark 178 and 176 ns, the live view 1.02 ms both, an answer among 4,000 peers 175
+  and 176.5 ns, 16,384 stand-ins bound to one address added in 4.97 and 4.92 ms and removed in 2.37 and 2.40, beside one
+  label added in 18.2 and 18.4 ms and removed in 5.56 and 5.62; and, in a measure written for this pass and not kept,
+  learning a DNS answer for an address already held 665 and 464 ns in every app's table, by the scan, and 314 and 305 in
+  apps' own. Not measured: arm64 and armv7 on a phone.

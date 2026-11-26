@@ -613,7 +613,12 @@ chaining is, and must follow the same switch.
   on x86_64): 2,068,288 bytes on x86_64, 1,842,672 on arm64-v8a and 1,368,832 on armeabi-v7a, 8,112 bytes more on
   x86_64 and 28,864 under the gate; after its review round, 2,073,752 bytes on x86_64, 1,847,944 on arm64-v8a and
   1,372,304 on armeabi-v7a, 13,576 bytes more on x86_64 than before the unit and 23,400 under the gate. Compared the
-  same way, only the live view's count grew, by its tool mark and the tied places' arm.
+  same way, only the live view's count grew, by its tool mark and the tied places' arm. The cold paths' second pass
+  (ADR 0053), against `d9b44fb7`, whose engine is that tree's: 2,064,648 bytes on x86_64, 1,844,664 on arm64-v8a and
+  1,368,784 on armeabi-v7a, 9,104, 3,280 and 3,520 bytes less, x86_64 32,504 bytes under the gate. In its steps' builds
+  (`ndkbuild.sh`, stripped) its last step, one JNI entry per return type, grew arm64-v8a's library by 512 bytes, the
+  unwind entries of the functions it adds, within that pass's limit of 1 KiB for arm64; x86_64 shrank at each step and
+  armeabi-v7a with each of the pass's two items.
 - **Frontier research, open:** Telegram's fake-TLS hello across versions, told from the device without a JA4 database;
   encapsulated handshakes seen from the device (Xue et al., USENIX Security 2024) for Signal and WhatsApp; and how
   people read "read from the connection" against "inferred", with real users.
