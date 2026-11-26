@@ -1,7 +1,7 @@
 # Privacy policy
 
 - **Effective:** 2026-11-07
-- **Updated:** 2026-11-25, with Datapavan Advanced's lines for 0.2.0, which is not yet released
+- **Updated:** 2026-11-26, with Datapavan Advanced's lines for 0.2.0, which is not yet released
 - **Responsible:** the Datapavan maintainer (mehdashti), until the Visadahyu Foundation is established
 
 **Datapavan collects no data about you.**
@@ -37,7 +37,15 @@ your unlocked phone can see it, as they can see the rest of the app.
   its notification, or neither. Each record is encrypted under a key for its day that Android's keystore protects;
   on a phone with a screen lock, earlier days can be read only while it is unlocked. Days past your choice are
   deleted with their keys, and one tap deletes everything. For apps you send through your circumvention tool, the
-  log keeps no destination unless you turn that on. When an app uses a proxy of its own, the record keeps by
+  log keeps no destination unless you turn that on. For the connections of a circumvention tool, such as to its
+  servers or bridges, it keeps the time, the bytes and the app, and where the tool connected only while "Log where apps
+  connect through your tool, WireGuard or a proxy" is on, or for a tool you chose to log. Then where the tool connects
+  for itself is logged from then on, until you turn that off, but not where it connects for the apps you send through
+  it, as far as Datapavan can tell. What it cannot tell apart is logged as the tool's own, such as what an app that
+  uses the tool's proxy on the phone sends through it, which Datapavan cannot see. A connection of a tool whose names
+  match a known tracker is kept in full. A tool counts here if Datapavan knows it by its signing key and it can run
+  beside Datapavan's VPN (in its proxy mode, or Tor Browser and Briar, which carry Tor inside), and so does the tool
+  you send apps through. When an app uses a proxy of its own, the record keeps by
   default that the app used a proxy, which kind, when, the facts that name no address (such as whether a password
   was sent unencrypted, whether it is the proxy in Android's settings, whether it is on your local network, and
   whether Datapavan could not tell it was a messenger's proxy), and which known trackers its
@@ -62,7 +70,10 @@ your unlocked phone can see it, as they can see the rest of the app.
 - **Each app's recent traffic, for the "Now" view,** in memory only. It is gone when the firewall stops. Where an
   app's own proxy is (its address, name and network, and for a messenger's proxy the name its connection sent) is
   shown there, in memory only, while the connection is open and for ten minutes after it ends, whatever "Log where
-  apps connect through your tool, WireGuard or a proxy" says. Where the app asked the proxy to go is shown only
+  apps connect through your tool, WireGuard or a proxy" says. So is where a circumvention tool connects, for itself or
+  for the apps that use it, the apps you send through it among them: its servers, its bridges, and the places it
+  reaches directly for those apps. Anyone who opens "Now" in that time can see them. Where the app asked the proxy to
+  go is shown only
   while that switch is on, or for an app you chose to log that way. "Now" also shows the proxy set in Android's own settings, while one is set. To tell Telegram's, WhatsApp's and Signal's own connections from their proxies', it
   also notes in memory, until the firewall stops (and across the tunnel's own restarts, which hand it on): when
   each of them last connected to its maker's network, which counts for ten minutes; the names Telegram and
@@ -81,9 +92,10 @@ your unlocked phone can see it, as they can see the rest of the app.
   tracking and an app's own sign-in, which one an app uses, it reads the tracker scan's results already kept on
   the phone. With the setting for phones that may be searched (planned), these settings stay behind Datapavan's
   own lock and go with a wipe, and nothing of blocking is recorded.
-- **The apps whose proxies you chose to log, if you choose any:** each app's package name and when it was first
-  installed, never anything of its connections, so that an app installed again, or another app that Android comes to
-  count with it, is not logged on your earlier choice. With the setting for phones that may be searched (planned),
+- **The apps whose proxies you chose to log, and the circumvention tools whose own connections you chose to log, if
+  you choose any:** each one's package name and when it was first installed, never anything of its connections, so
+  that an app installed again, or another app that Android comes to count with it, is not logged on your earlier
+  choice. A tool's choice also ends when Datapavan no longer counts it as a tool. With the setting for phones that may be searched (planned),
   they are kept in memory only, until the screen turns off, and go with a wipe.
 - **The WireGuard configurations you add,** at most eight: each one's text, which holds its private key and its
   server, and the name you gave it, encrypted under a key that Android's keystore keeps (in the phone's separate

@@ -208,7 +208,7 @@ footer p{margin:.2rem 0;color:var(--mute);font-size:.95rem}
 <details class="lng"><summary aria-label="Language: English">English</summary><ul><li><a href="../privacy/index.html" hreflang="en" lang="en" aria-current="true">English</a></li><li><a href="../fr/privacy/index.html" hreflang="fr" lang="fr">Français</a></li><li><a href="../de/privacy/index.html" hreflang="de" lang="de">Deutsch</a></li><li><a href="../es/privacy/index.html" hreflang="es" lang="es">Español</a></li><li><a href="../ru/privacy/index.html" hreflang="ru" lang="ru">Русский</a></li><li><a href="../zh/privacy/index.html" hreflang="zh" lang="zh">简体中文</a></li><li><a href="../ar/privacy/index.html" hreflang="ar" lang="ar">العربية</a></li><li><a href="../fa/privacy/index.html" hreflang="fa" lang="fa">فارسی</a></li></ul></details></header></div>
 <main id="main"><section><div class="w prose"><h1>Privacy policy</h1><ul>
 <li><strong>Effective:</strong> 2026-11-07</li>
-<li><strong>Updated:</strong> 2026-11-25, with Datapavan Advanced&rsquo;s lines for 0.2.0, which is not yet released</li>
+<li><strong>Updated:</strong> 2026-11-26, with Datapavan Advanced&rsquo;s lines for 0.2.0, which is not yet released</li>
 <li><strong>Responsible:</strong> the Datapavan maintainer (mehdashti), until the Visadahyu Foundation is established</li>
 </ul>
 <p><strong>Datapavan collects no data about you.</strong></p>
@@ -242,7 +242,15 @@ Datapavan learned the name), the bytes each way, the time, and whether you were 
 its notification, or neither. Each record is encrypted under a key for its day that Android&rsquo;s keystore protects;
 on a phone with a screen lock, earlier days can be read only while it is unlocked. Days past your choice are
 deleted with their keys, and one tap deletes everything. For apps you send through your circumvention tool, the
-log keeps no destination unless you turn that on. When an app uses a proxy of its own, the record keeps by
+log keeps no destination unless you turn that on. For the connections of a circumvention tool, such as to its
+servers or bridges, it keeps the time, the bytes and the app, and where the tool connected only while &ldquo;Log where apps
+connect through your tool, WireGuard or a proxy&rdquo; is on, or for a tool you chose to log. Then where the tool connects
+for itself is logged from then on, until you turn that off, but not where it connects for the apps you send through
+it, as far as Datapavan can tell. What it cannot tell apart is logged as the tool&rsquo;s own, such as what an app that
+uses the tool&rsquo;s proxy on the phone sends through it, which Datapavan cannot see. A connection of a tool whose names
+match a known tracker is kept in full. A tool counts here if Datapavan knows it by its signing key and it can run
+beside Datapavan&rsquo;s VPN (in its proxy mode, or Tor Browser and Briar, which carry Tor inside), and so does the tool
+you send apps through. When an app uses a proxy of its own, the record keeps by
 default that the app used a proxy, which kind, when, the facts that name no address (such as whether a password
 was sent unencrypted, whether it is the proxy in Android&rsquo;s settings, whether it is on your local network, and
 whether Datapavan could not tell it was a messenger&rsquo;s proxy), and which known trackers its
@@ -266,7 +274,10 @@ is kept whatever the switch for your tool says.</li>
 <li><strong>Each app&rsquo;s recent traffic, for the &ldquo;Now&rdquo; view,</strong> in memory only. It is gone when the firewall stops. Where an
 app&rsquo;s own proxy is (its address, name and network, and for a messenger&rsquo;s proxy the name its connection sent) is
 shown there, in memory only, while the connection is open and for ten minutes after it ends, whatever &ldquo;Log where
-apps connect through your tool, WireGuard or a proxy&rdquo; says. Where the app asked the proxy to go is shown only
+apps connect through your tool, WireGuard or a proxy&rdquo; says. So is where a circumvention tool connects, for itself or
+for the apps that use it, the apps you send through it among them: its servers, its bridges, and the places it
+reaches directly for those apps. Anyone who opens &ldquo;Now&rdquo; in that time can see them. Where the app asked the proxy to
+go is shown only
 while that switch is on, or for an app you chose to log that way. &ldquo;Now&rdquo; also shows the proxy set in Android&rsquo;s own settings, while one is set. To tell Telegram&rsquo;s, WhatsApp&rsquo;s and Signal&rsquo;s own connections from their proxies&rsquo;, it
 also notes in memory, until the firewall stops (and across the tunnel&rsquo;s own restarts, which hand it on): when
 each of them last connected to its maker&rsquo;s network, which counts for ten minutes; the names Telegram and
@@ -285,9 +296,10 @@ package name and the tracker&rsquo;s host, with when each allowance ends. To tel
 tracking and an app&rsquo;s own sign-in, which one an app uses, it reads the tracker scan&rsquo;s results already kept on
 the phone. With the setting for phones that may be searched (planned), these settings stay behind Datapavan&rsquo;s
 own lock and go with a wipe, and nothing of blocking is recorded.</li>
-<li><strong>The apps whose proxies you chose to log, if you choose any:</strong> each app&rsquo;s package name and when it was first
-installed, never anything of its connections, so that an app installed again, or another app that Android comes to
-count with it, is not logged on your earlier choice. With the setting for phones that may be searched (planned),
+<li><strong>The apps whose proxies you chose to log, and the circumvention tools whose own connections you chose to log, if
+you choose any:</strong> each one&rsquo;s package name and when it was first installed, never anything of its connections, so
+that an app installed again, or another app that Android comes to count with it, is not logged on your earlier
+choice. A tool&rsquo;s choice also ends when Datapavan no longer counts it as a tool. With the setting for phones that may be searched (planned),
 they are kept in memory only, until the screen turns off, and go with a wipe.</li>
 <li><strong>The WireGuard configurations you add,</strong> at most eight: each one&rsquo;s text, which holds its private key and its
 server, and the name you gave it, encrypted under a key that Android&rsquo;s keystore keeps (in the phone&rsquo;s separate
