@@ -477,7 +477,6 @@
     <!-- "Now": an app sent through the user's tool, the tool's own servers, and an app sent through a WireGuard
          configuration (%1$s: its name), with the switch above off. -->
     <string name="now_through_tool_off">از فیلترشکن شما عبور داده شد. اینکه به کجا وصل شد نشان داده نمی‌شود، چون «ثبت مقصد برنامه‌هایی که از فیلترشکن شما، WireGuard یا یک پروکسی می‌گذرند» خاموش است.</string>
-    <string name="now_tool_servers_off">اینکه به کجا وصل می‌شود نشان داده نمی‌شود، چون «ثبت مقصد برنامه‌هایی که از فیلترشکن شما، WireGuard یا یک پروکسی می‌گذرند» خاموش است.</string>
     <string name="now_through_tunnel_off">از راه %1$s فرستاده شد. اینکه به کجا وصل شد نشان داده نمی‌شود، چون «ثبت مقصد برنامه‌هایی که از فیلترشکن شما، WireGuard یا یک پروکسی می‌گذرند» خاموش است.</string>
     <!-- The same in an app's history, of a connection logged while the switch was off. history_left_out_off: the
          tool's own servers, or a record written before Datapavan logged each connection's route. -->

@@ -182,6 +182,7 @@ internal fun NowScreen(
     blockingActions: BlockingActions = BlockingActions(),
     onPause: () -> Unit = {},
     proxyActions: ProxyChoiceActions = ProxyChoiceActions(),
+    toolActions: ToolChoiceActions = ToolChoiceActions(),
 ) {
     // Kept here, above the history, so that coming back from it, or a rotation, finds the list where it was
     // (review c1 of W5's third part, screens, M2).
@@ -198,6 +199,16 @@ internal fun NowScreen(
             }
         }
     }
+    // The tool whose choice "Log where TOOL connects for itself" asks for its confirmation (unit D, D7), by its own UID.
+    var askingTool by rememberSaveable { mutableStateOf<Int?>(null) }
+    val onToolChoice = { uid: Int?, choice: Choice ->
+        if (uid != null) {
+            when (choice) {
+                Choice.LOG -> askingTool = uid
+                Choice.STOP -> toolActions.onStop(uid)
+            }
+        }
+    }
     // Stable names for the emulator scripts (scripts/talkback-walk.sh, scripts/screenshots.sh --now), as the audit's
     // screens give them.
     Surface(modifier = Modifier.fillMaxSize().semantics { testTagsAsResourceId = true }, color = MaterialTheme.colorScheme.background) {
@@ -205,10 +216,10 @@ internal fun NowScreen(
             BackHandler(onBack = onCloseHistory)
             HistoryScreen(
                 history, view.groups[history.app.uid], view.trackers, view.companies, onDay, onCloseHistory, view.tunnelNames, onLogSwitch,
-                view.blocking, blockingActions, view.proxies, view.choices, onChoice,
+                view.blocking, blockingActions, view.proxies, view.choices, onChoice, onToolChoice,
             )
         } else {
-            NowList(view, listState, onWindow, onSort, onAll, onHistory, onAllowAccess, onLogSwitch, blockingActions, onPause, onChoice)
+            NowList(view, listState, onWindow, onSort, onAll, onHistory, onAllowAccess, onLogSwitch, blockingActions, onPause, onChoice, onToolChoice)
         }
     }
     asking?.let { app ->
@@ -222,6 +233,18 @@ internal fun NowScreen(
                 proxyActions.onLog(app, named?.packages.orEmpty())
             },
             onNo = { asking = null },
+        )
+    }
+    askingTool?.let { tool ->
+        val named = view.names[tool] ?: history?.app?.takeIf { it.uid == tool }
+        ToolChoiceDialog(
+            name = label(named, tool),
+            packages = named?.packages.orEmpty(),
+            onYes = {
+                askingTool = null
+                toolActions.onLog(tool, named?.packages.orEmpty())
+            },
+            onNo = { askingTool = null },
         )
     }
 }
@@ -239,6 +262,7 @@ private fun NowList(
     blockingActions: BlockingActions,
     onPause: () -> Unit,
     onChoice: (Int?, Choice) -> Unit,
+    onToolChoice: (Int?, Choice) -> Unit,
 ) {
     val context = LocalContext.current
     val window = view.window
@@ -293,7 +317,7 @@ private fun NowList(
         }
         items(keys, key = { it ?: Int.MIN_VALUE }) { uid ->
             val app = byUid[uid]
-            if (app != null) AppRow(context, app, window, view, onHistory, onLogSwitch, blockingActions, onChoice)
+            if (app != null) AppRow(context, app, window, view, onHistory, onLogSwitch, blockingActions, onChoice, onToolChoice)
         }
         item { CannotSee() }
     }
@@ -390,13 +414,16 @@ private fun AppRow(
     onLogSwitch: () -> Unit,
     blockingActions: BlockingActions,
     onChoice: (Int?, Choice) -> Unit,
+    onToolChoice: (Int?, Choice) -> Unit,
 ) {
     val named = view.names[app.uid]
     val historyLabel = stringResource(R.string.now_history)
+    // A tool's history reads its records left out as the tool's own (unit D): the chain's tool, or one of R10's.
+    val tool = opensAsTool(app, view.choices)
     Card(
         modifier = Modifier
             .fillMaxWidth()
-            .clickable(role = Role.Button, onClickLabel = historyLabel) { onHistory(app.uid, app.isTool) }
+            .clickable(role = Role.Button, onClickLabel = historyLabel) { onHistory(app.uid, tool) }
             .testTag("now-app"),
     ) {
         Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
@@ -415,11 +442,9 @@ private fun AppRow(
             // The user's choice for this app's proxy (unit C): ended here, or without the user in this run.
             val choiceApp = app.uid?.let(org.visadahyu.datapavan.network.proxy.ProxyChoice::appOf)
             AppChoiceLines(appChoiceLines(app.uid, view.names[choiceApp]?.packages ?: named?.packages.orEmpty(), view.choices))
-            if (app.isTool) {
-                Text(stringResource(R.string.now_is_tool), style = MaterialTheme.typography.bodyMedium)
-                // Its servers show only while the switch "Log where apps connect ..." is on (decision 3, 2026-11-19).
-                if (app.serversHidden) Text(stringResource(R.string.now_tool_servers_off), style = MaterialTheme.typography.bodyMedium)
-            }
+            // A circumvention tool's own row (unit D, R10): the chain's or another, and its connections no longer shown.
+            for (line in toolCardLines(app, view.choices)) Text(stringResource(line), style = MaterialTheme.typography.bodyMedium)
+            toolCardChoice(app, view.choices)?.let { choice -> ToolChoiceLink(choice) { onToolChoice(app.uid, choice) } }
             for ((column, text) in listOf(
                 AppState.BACKGROUND to R.string.now_bytes_background,
                 AppState.NOTIFICATION to R.string.now_bytes_notification,
@@ -459,19 +484,28 @@ private fun AppRow(
             val packages = named?.packages.orEmpty()
             appBlocking(view.blocking, app.uid, packages, { names.name(it, LogSwitch.hides(app)) }, names::company, LogSwitch.hides(app))
                 ?.let { AppBlockingLines(context, it, packages, blockingActions) }
-            Destinations(context, app, window, view, onLogSwitch, onChoice)
+            Destinations(context, app, window, view, onLogSwitch, onChoice, onToolChoice)
         }
     }
 }
 
 /** An app's destinations with bytes in the window, most bytes first, the first few and then all on request. */
 @Composable
-private fun Destinations(context: Context, app: Snapshot.App, window: Int, view: NowView, onLogSwitch: () -> Unit, onChoice: (Int?, Choice) -> Unit) {
+private fun Destinations(
+    context: Context,
+    app: Snapshot.App,
+    window: Int,
+    view: NowView,
+    onLogSwitch: () -> Unit,
+    onChoice: (Int?, Choice) -> Unit,
+    onToolChoice: (Int?, Choice) -> Unit,
+) {
     val places = app.destinations
         .filter { it.bytes[window * 2] + it.bytes[window * 2 + 1] > 0 }
         .sortedByDescending { it.bytes[window * 2] + it.bytes[window * 2 + 1] }
     var all by rememberSaveable(app.uid) { mutableStateOf(false) }
     val shown = if (all) places else places.take(FIRST_PLACES)
+    val appName = label(view.names[app.uid], app.uid)
     for (place in shown) {
         HorizontalDivider(Modifier.padding(vertical = 4.dp))
         val bytes = stringResource(R.string.now_destination_bytes, size(context, place.bytes[window * 2]), size(context, place.bytes[window * 2 + 1]))
@@ -506,6 +540,9 @@ private fun Destinations(context: Context, app: Snapshot.App, window: Int, view:
             proxy = proxy?.let { proxyRow(it, past = false, toolName, choice) },
             onLogSwitch = onLogSwitch,
             onChoice = choose,
+            // A tool's own connection shown here only (unit D, R10).
+            tool = toolPlaceRow(place, app.uid, appName, view.choices),
+            onToolChoice = { onToolChoice(app.uid, it) },
         )
     }
     if (!all && places.size > FIRST_PLACES) {
@@ -531,6 +568,9 @@ internal fun Place(
     onLogSwitch: () -> Unit = {},
     /** The row's link to the user's choice for its app (unit C), if [proxy] has one. */
     onChoice: (Choice) -> Unit = {},
+    /** What the row says as a tool's own connection shown here only (unit D, [toolPlaceRow]), if it is one, and its link. */
+    tool: ProxyRow? = null,
+    onToolChoice: (Choice) -> Unit = {},
 ) {
     Text(isolateLtr(name), style = MaterialTheme.typography.bodyLarge)
     through?.let { Text(stringResource(R.string.now_destination_tunnel, it), style = MaterialTheme.typography.bodySmall) }
@@ -555,6 +595,7 @@ internal fun Place(
     // Last, after the line of where the name came from, which the emulator checks read a place's name before.
     if (proxy?.toSwitch == true) LogSwitchLink(onLogSwitch)
     proxy?.toChoice?.let { choice -> ChoiceLink(choice) { onChoice(choice) } }
+    tool?.let { ToolPlaceLines(it, onLogSwitch, onToolChoice) }
 }
 
 /** A destination's tracker marks, one line each. */

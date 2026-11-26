@@ -513,10 +513,9 @@
     <!-- A button under a row of "Now" or the history that the switch above leaves out: it opens the Network screen at the
          switch. -->
     <string name="log_switch_open">Go to the switch</string>
-    <!-- "Now": an app sent through the user's tool, the tool's own servers, and an app sent through a WireGuard
-         configuration (%1$s: its name), with the switch above off. -->
+    <!-- "Now": an app sent through the user's tool, and an app sent through a WireGuard configuration (%1$s: its
+         name), with the switch above off. -->
     <string name="now_through_tool_off">Sent through your circumvention tool. Where it connected is not shown, because \"Log where apps connect through your tool, WireGuard or a proxy\" is off.</string>
-    <string name="now_tool_servers_off">Where it connects is not shown, because \"Log where apps connect through your tool, WireGuard or a proxy\" is off.</string>
     <string name="now_through_tunnel_off">Sent through %1$s. Where it connected is not shown, because \"Log where apps connect through your tool, WireGuard or a proxy\" is off.</string>
     <!-- The same in an app's history, of a connection logged while the switch was off. history_left_out_off: the
          tool's own servers, or a record written before Datapavan logged each connection's route. -->

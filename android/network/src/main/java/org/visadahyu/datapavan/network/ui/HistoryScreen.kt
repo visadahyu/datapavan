@@ -53,7 +53,10 @@ internal data class HistoryView(
     val reading: Boolean,
     /** The day could not be opened: a locked phone, or a failure. */
     val closed: Boolean = false,
-    /** Whether the app is the user's circumvention tool, whose servers the log keeps only with the switch on. */
+    /**
+     * Whether the app is a circumvention tool whose own connections the log keeps with no address unless the switch is on
+     * or the user chose to log where it connects for itself (unit D, R10): the chain's tool, or another of R10's.
+     */
     val tool: Boolean = false,
     /**
      * Whether "Log where apps connect ..." leaves this app's destinations out (the tool, a chained app or a tunnelled one,
@@ -79,7 +82,9 @@ internal data class HistoryView(
  * says at the top what it blocked in the app, with the app's undo and each tracker's ([blocking], [blockingActions]),
  * and under each segment whether it was blocked, or why a host it reached is not. The user's choice for the app, "Log
  * where APP connects through a proxy" (the proxy record's unit C, C8), is a switch at the top where it can cover the app
- * ([appSwitchShown]), and a link on each record it could cover ([choices], [onChoice]).
+ * ([appSwitchShown]), and a link on each record it could cover ([choices], [onChoice]); the user's choice for a
+ * circumvention tool, "Log where TOOL connects for itself" (unit D, D7), a switch at the top for any tool it can cover
+ * ([ProxyChoices.toolOffered], [onToolChoice]).
  */
 @Composable
 internal fun HistoryScreen(
@@ -99,6 +104,8 @@ internal fun HistoryScreen(
     /** The user's choice for one app (unit C), and its taps, by the app's UID. */
     choices: ProxyChoices = ProxyChoices(),
     onChoice: (Int?, Choice) -> Unit = { _, _ -> },
+    /** The taps on the user's choice for one tool (unit D), by the tool's UID. */
+    onToolChoice: (Int?, Choice) -> Unit = { _, _ -> },
 ) {
     val context = LocalContext.current
     val names = RowNames(blocking.facts, companies, trackers)
@@ -140,6 +147,18 @@ internal fun HistoryScreen(
                     )
                 } else {
                     AppChoiceLines(choiceLines)
+                }
+                // The user's choice for this tool (unit D, D7): drawn for any tool it can cover.
+                if (choices.toolOffered(view.app.uid)) {
+                    val chosen = choices.toolChosen(view.app.uid)
+                    ToolLogSwitch(
+                        name = label(view.app, view.app.uid),
+                        chosen = chosen,
+                        switchOn = choices.switchOn,
+                        stopped = view.app.uid in choices.toolsStopped,
+                        onAsk = { onToolChoice(view.app.uid, Choice.LOG) },
+                        onStop = { onToolChoice(view.app.uid, Choice.STOP) },
+                    )
                 }
                 LockFacts(view)
                 val day = view.days.getOrNull(view.index)

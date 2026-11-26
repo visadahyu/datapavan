@@ -128,6 +128,16 @@ class NowActivity : ComponentActivity() {
         onStop = { changeChoice(it, stop = true) },
     )
 
+    /** The tools whose choice the user ended on this screen, by UID, for the note of what stays (unit D). Main thread. */
+    @Volatile
+    private var toolsStopped: Set<Int> = emptySet()
+
+    /** The choice for one tool's taps (unit D, D7): a yes of the confirmation, or a stop, for the tool's UID. */
+    private val toolActions = org.visadahyu.datapavan.network.ui.ToolChoiceActions(
+        onLog = { tool, named -> changeToolChoice(tool, stop = false, named) },
+        onStop = { changeToolChoice(it, stop = true) },
+    )
+
     /** Bumped when the rows are to sort anew, so that the view reads the order again. */
     private val sorts = mutableIntStateOf(0)
 
@@ -206,6 +216,7 @@ class NowActivity : ComponentActivity() {
                     onLogSwitch = { startActivity(MainActivity.logSwitchIntent(this)) },
                     blockingActions = blockingActions,
                     proxyActions = proxyActions,
+                    toolActions = toolActions,
                 )
             }
         }
@@ -290,8 +301,9 @@ class NowActivity : ComponentActivity() {
     /**
      * The user's choice for one app as it stands, off the main thread (unit C): the app UIDs the hand-over gives the
      * engine now, by the same rule ([LoggedApps.chosen]), why any ended in this run, the switch of every app, and the
-     * circumvention tools and Android's PAC handler, as the service published them or, while it published none, as this
-     * screen reads them itself, once.
+     * circumvention tools whose own connections follow R10 and Android's PAC handler, as the service published them or,
+     * while it published none, as this screen reads them itself, once. With it, the user's choice for one tool (unit D):
+     * the tools' UIDs the hand-over gives now ([LoggedApps.toolsChosen]).
      */
     private fun readChoices(): ProxyChoices {
         val published = org.visadahyu.datapavan.network.proxy.ProxyContext.state.value
@@ -300,16 +312,40 @@ class NowActivity : ComponentActivity() {
         }
         val pacHandler = published.pacHandler ?: org.visadahyu.datapavan.network.proxy.PacHandler.uid(packageManager)
         val store = LoggedApps.of(this)
+        val packages = LoggedApps.packages(packageManager)
         return ProxyChoices(
             switchOn = org.visadahyu.datapavan.network.chain.ChainSettings.of(this).logDestinations,
-            chosen = store.chosen(LoggedApps.packages(packageManager), tools, pacHandler),
+            chosen = store.chosen(packages, tools, pacHandler),
             ended = store.ended(),
             stopped = stopped,
             tools = tools,
             pacHandler = pacHandler,
             user = android.os.Process.myUid() / ProxyChoice.PER_USER_RANGE,
             sdkRuntime = sdkRuntime,
+            toolsChosen = store.toolsChosen(packages, tools),
+            toolsStopped = toolsStopped,
         )
+    }
+
+    /**
+     * A choice for the tool [tool] turned on, once its confirmation said yes having named the packages [named], or off
+     * ([stop]), as [changeChoice] does for an app, with the tool's kind (unit D, D7): written off the main thread, which
+     * has the running service hand it to the engine at once, and the view read again.
+     */
+    private fun changeToolChoice(tool: Int, stop: Boolean, named: List<String> = emptyList()) {
+        toolsStopped = if (stop) toolsStopped + tool else toolsStopped - tool
+        lifecycleScope.launch {
+            choices.value = withContext(worker) {
+                val store = LoggedApps.of(this@NowActivity)
+                val packages = LoggedApps.packages(packageManager)
+                if (stop) {
+                    store.stop(packages.packagesOf(tool), LoggedApps.Kind.TOOL)
+                } else {
+                    store.choose(LoggedApps.entriesNamed(packages, tool, named), LoggedApps.Kind.TOOL)
+                }
+                readChoices()
+            }
+        }
     }
 
     /**
@@ -428,7 +464,8 @@ class NowActivity : ComponentActivity() {
     }
 
     /**
-     * Opens the history of the app [uid] at the day [index], [tool] whether it is the user's tool: its name,
+     * Opens the history of the app [uid] at the day [index], [tool] whether it is a circumvention tool whose own
+     * connections follow R10, the chain's or another (unit D): its name,
      * the log's retention and lock, and the phone's screen lock, all read off the main thread (review c1,
      * screens, nit 11: the Keystore was asked on it).
      */
@@ -441,13 +478,15 @@ class NowActivity : ComponentActivity() {
                 val secure = getSystemService(KeyguardManager::class.java)?.isDeviceSecure == true
                 // A proxy of the app in "Now" draws its switch for the choice (unit C; audit-C 25).
                 val seen = snapshot.value?.apps.orEmpty().any { it.uid == uid && it.destinations.any { place -> place.proxy != null } }
+                val chosen = readChoices()
                 Triple(
                     HistoryView(
                         named, log.retentionDays, log.lockNow(), secure, days, 0, null, reading = false, tool = tool,
-                        hideHosts = hidesHosts(named.packages, tool), proxiesSeen = seen,
+                        // A tool the user chose keeps its own hosts in the log (unit D): blocking may name them.
+                        hideHosts = hidesHosts(named.packages, tool && !chosen.toolChosen(uid)), proxiesSeen = seen,
                     ),
                     readBlocking(),
-                    readChoices(),
+                    chosen,
                 )
             }.let { (view, blocked, chosen) ->
                 blocking.value = blocked

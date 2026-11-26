@@ -312,20 +312,22 @@ class MainActivity : ComponentActivity() {
     }
 
     /**
-     * How many apps the user chose to log one by one (the proxy record's unit C), for the switch's note, read off the main
-     * thread by the rule the hand-over uses: a choice made in "Now" while this screen was away shows when it comes back.
-     * The tools as the service published them or, while it published none, as this screen reads them, as "Now" does, so
-     * that the count and the rows agree while the tunnel is off (review C-rest 14).
+     * How many apps and tools the user chose to log one by one (the proxy record's units C and D), for the switch's note,
+     * one count, read off the main thread by the rule the hand-over uses: a choice made in "Now" while this screen was
+     * away shows when it comes back. The tools as the service published them or, while it published none, as this screen
+     * reads them, as "Now" does, so that the count and the rows agree while the tunnel is off (review C-rest 14).
      */
     private fun countChosen() {
         worker.execute {
             val published = org.visadahyu.datapavan.network.proxy.ProxyContext.state.value
             val store = org.visadahyu.datapavan.network.proxy.LoggedApps.of(this)
+            val packages = org.visadahyu.datapavan.network.proxy.LoggedApps.packages(packageManager)
+            val tools = published.carriers.keys.ifEmpty { org.visadahyu.datapavan.network.chain.Tools.read(this).carriers.keys }
             val count = store.chosen(
-                org.visadahyu.datapavan.network.proxy.LoggedApps.packages(packageManager),
-                published.carriers.keys.ifEmpty { org.visadahyu.datapavan.network.chain.Tools.read(this).carriers.keys },
+                packages,
+                tools,
                 published.pacHandler ?: org.visadahyu.datapavan.network.proxy.PacHandler.uid(packageManager),
-            ).size
+            ).size + store.toolsChosen(packages, tools).size
             runOnUiThread { if (count != logSwitch.value.chosen) logSwitch.value = logSwitch.value.copy(chosen = count) }
         }
     }
@@ -375,6 +377,10 @@ class MainActivity : ComponentActivity() {
             // A tool that takes a password gets the network part's; one that cannot is not offered one.
             val password = found?.takeIf { it.tool.auth != "none" }?.let { settings.password() }
             val key = found?.let { ToolKeys.verdict(this, it.tool.packageName) }
+            // Whether the tool found is one whose own connections follow R10 (unit D), for what its open proxy lets other
+            // apps keep out of the log (audit-D M4): as the service published the tools, or as this screen reads them.
+            val counted = found != null && found.uid in org.visadahyu.datapavan.network.proxy.ProxyContext.state.value.carriers.keys
+                .ifEmpty { Tools.read(this).carriers.keys }
             // The tool the chain went through last names the switch that turns the chain off while
             // that tool does not answer, or is no longer installed.
             val table = Tools.table(this)
@@ -387,6 +393,7 @@ class MainActivity : ComponentActivity() {
                 chain.value = chain.value.copy(
                     search = search,
                     key = key,
+                    counted = counted,
                     user = password?.let { ChainSettings.userFor(found.tool.packageName) },
                     password = password,
                     chainedName = chainedName,

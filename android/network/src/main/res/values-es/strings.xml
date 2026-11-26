@@ -490,7 +490,6 @@
     <!-- "Now": an app sent through the user's tool, the tool's own servers, and an app sent through a WireGuard
          configuration (%1$s: its name), with the switch above off. -->
     <string name="now_through_tool_off">Se envió a través de tu herramienta para eludir bloqueos. No se muestra adónde se conectó, porque «Registrar adónde se conectan las apps a través de tu herramienta, WireGuard o un proxy» está desactivado.</string>
-    <string name="now_tool_servers_off">No se muestra adónde se conecta, porque «Registrar adónde se conectan las apps a través de tu herramienta, WireGuard o un proxy» está desactivado.</string>
     <string name="now_through_tunnel_off">Se envió a través de %1$s. No se muestra adónde se conectó, porque «Registrar adónde se conectan las apps a través de tu herramienta, WireGuard o un proxy» está desactivado.</string>
     <!-- The same in an app's history, of a connection logged while the switch was off. history_left_out_off: the
          tool's own servers, or a record written before Datapavan logged each connection's route. -->

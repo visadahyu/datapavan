@@ -62,6 +62,11 @@ internal data class ChainView(
     val chainedName: String? = null,
     /** A guide per tool of the table installed here (W8, part 3b), in the guides' order. */
     val guides: List<GuideLink> = emptyList(),
+    /**
+     * Whether the tool found is one whose own connections follow R10 (the proxy record's unit D): by its signing key, or
+     * the chain's tool. The chain on counts it too.
+     */
+    val counted: Boolean = false,
 )
 
 /** What the user can change in the chain. */
@@ -171,7 +176,7 @@ private fun Answering(
     Text(stringResource(R.string.chain_found, tool, search.found.port), style = MaterialTheme.typography.bodyMedium)
     view.key?.let { KeyVerdict(it) }
     LabelledSwitch(stringResource(R.string.chain_switch, tool), view.on, actions.onOn)
-    ProxyDoor(search, tool)
+    ProxyDoor(search, tool, counted = view.counted || view.on)
     if (search.found.tool.udp == false) {
         Text(stringResource(R.string.chain_no_udp, tool), style = MaterialTheme.typography.bodyMedium)
     } else {
@@ -242,26 +247,31 @@ private fun Answering(
         Text(stringResource(R.string.chain_password_value, view.password), style = MaterialTheme.typography.bodyLarge)
         OutlinedButton(onClick = actions.onCopyPassword) { Text(stringResource(R.string.chain_copy)) }
     }
-    // The one switch (LogSwitch), here while the tool answers.
+    // The one switch (LogSwitch), here while the tool answers, and who can see the tools' connections in "Now" (unit D,
+    // D10).
     Column(Modifier.bringingIntoView(logSwitch), verticalArrangement = Arrangement.spacedBy(8.dp)) {
         LabelledSwitch(stringResource(R.string.log_switch), view.logDestinations, actions.onLogDestinations)
         LogSwitchNote(chosen)
+        Text(stringResource(R.string.chain_tool_servers_shown), style = MaterialTheme.typography.bodyMedium)
     }
 }
 
 /**
  * What the tool's proxy lets other apps on the phone do (ADR 0041, decision 5), from the network part's greeting: one
  * that asks no password can be used by any of them, which is said plainly, with whether the tool can take one;
- * one that asks a password keeps them out, though any app can still find it. The network part chains either way.
+ * one that asks a password keeps them out, though any app can still find it. The network part chains either way. For a
+ * tool whose own connections follow R10 ([counted], chained or not: the proxy record's unit D, audit-D M4), an open
+ * proxy also lets such an app keep where it connects out of the log, as the tool's own.
  */
 @Composable
-private fun ProxyDoor(search: ToolSearch.Answering, tool: String) {
+private fun ProxyDoor(search: ToolSearch.Answering, tool: String, counted: Boolean) {
     val body = MaterialTheme.typography.bodyMedium
     if (search.found.needsPassword) {
         Text(stringResource(R.string.chain_proxy_closed, tool), style = body)
         return
     }
     Text(stringResource(R.string.chain_proxy_open, tool), style = body, color = MaterialTheme.colorScheme.error)
+    if (counted) Text(stringResource(R.string.chain_proxy_open_unlogged, tool), style = body)
     if (search.found.tool.auth == "none") Text(stringResource(R.string.chain_proxy_no_password, tool), style = body)
 }
 

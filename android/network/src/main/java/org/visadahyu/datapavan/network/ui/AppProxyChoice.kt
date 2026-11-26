@@ -29,9 +29,12 @@ import org.visadahyu.datapavan.ui.isolateLtr
  * unit C, R3), read by "Now" off the main thread with each snapshot: whether the switch of every app is on
  * ([switchOn]); the app UIDs the hand-over gives the engine now ([chosen], `LoggedApps.chosen`, so that a row agrees
  * with the engine on an app installed again meanwhile); why each package's choice ended in this run ([ended]); the apps
- * whose choice the user ended on this screen ([stopped]), for the note of what stays; the circumvention tools and
- * Android's PAC handler by UID ([tools], [pacHandler]), as the service read them or, while the tunnel is off, the screen
- * itself; this user's number ([user]); and whether the SDK Runtime is on ([sdkRuntime]).
+ * whose choice the user ended on this screen ([stopped]), for the note of what stays; the circumvention tools whose own
+ * connections follow R10, the chain's among them, and Android's PAC handler by UID ([tools], [pacHandler]), as the
+ * service read them or, while the tunnel is off, the screen itself; this user's number ([user]); and whether the SDK
+ * Runtime is on ([sdkRuntime]). With them, the user's choice for one tool, "Log where TOOL connects for itself" (unit D,
+ * D7): the tools' UIDs the hand-over gives the engine now ([toolsChosen], `LoggedApps.toolsChosen`) and those whose
+ * choice the user ended on this screen ([toolsStopped]).
  */
 internal data class ProxyChoices(
     val switchOn: Boolean = false,
@@ -42,7 +45,22 @@ internal data class ProxyChoices(
     val pacHandler: Int? = null,
     val user: Int = 0,
     val sdkRuntime: Boolean = false,
+    val toolsChosen: Set<Int> = emptySet(),
+    val toolsStopped: Set<Int> = emptySet(),
 ) {
+    /** Whether [uid] is a circumvention tool's whose own connections follow R10 (unit D): by its UID alone. */
+    fun isTool(uid: Int?): Boolean = uid != null && uid in tools
+
+    /**
+     * Whether a screen offers the choice for the tool of [uid] (D7): a tool's, an application's of this user, as the
+     * choice for one app is offered (audit-C 22). Never a chained app's row, nor the PAC handler's.
+     */
+    fun toolOffered(uid: Int?): Boolean =
+        uid != null && isTool(uid) && ProxyChoice.application(uid) && uid / ProxyChoice.PER_USER_RANGE == user
+
+    /** Whether the tool of [uid] is chosen, as the hand-over gives it now. */
+    fun toolChosen(uid: Int?): Boolean = uid != null && uid in toolsChosen
+
     /** Whether the app of [uid] is chosen; an SDK Runtime UID's, its app's. */
     fun chosen(uid: Int?): Boolean = uid != null && ProxyChoice.appOf(uid) in chosen
 

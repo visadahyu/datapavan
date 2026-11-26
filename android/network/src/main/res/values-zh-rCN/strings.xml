@@ -465,7 +465,6 @@
     <!-- "Now": an app sent through the user's tool, the tool's own servers, and an app sent through a WireGuard
          configuration (%1$s: its name), with the switch above off. -->
     <string name="now_through_tool_off">通过您用来绕过网络限制的工具发送。由于“记录应用通过您的工具、WireGuard 或代理连接到哪里”已关闭，未显示它连接到了哪里。</string>
-    <string name="now_tool_servers_off">由于“记录应用通过您的工具、WireGuard 或代理连接到哪里”已关闭，未显示它连接到哪里。</string>
     <string name="now_through_tunnel_off">经由 %1$s 发送。由于“记录应用通过您的工具、WireGuard 或代理连接到哪里”已关闭，未显示它连接到了哪里。</string>
     <!-- The same in an app's history, of a connection logged while the switch was off. history_left_out_off: the
          tool's own servers, or a record written before Datapavan logged each connection's route. -->

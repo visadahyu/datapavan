@@ -163,7 +163,9 @@ class ProxyFactsTest {
     fun theProxyStringsUseNoWordThatJudges() {
         val strings = listOf("strings_untranslated.xml", "strings.xml").map { File("src/main/res/values/$it") }.filter { it.isFile }
             .joinToString("") { it.readText() }
-        val names = "proxy_[a-z_]+|(?:now|history)_proxy_[a-z_]+|cannot_see_proxy|now_named_proxy|log_switch[a-z_]*|(?:now|history)_(?!network_off)[a-z_]+_off"
+        // Unit D: a circumvention tool's own row, its choice, and the chain section's lines of them.
+        val names = "proxy_[a-z_]+|(?:now|history)_proxy_[a-z_]+|cannot_see_proxy|now_named_proxy|log_switch[a-z_]*|(?:now|history)_(?!network_off)[a-z_]+_off|" +
+            "now_tool_[a-z_]+|now_is_tool[a-z_]*|tool_[a-z_]+|chain_tool_[a-z_]+|chain_proxy_open[a-z_]*"
         val proxy = Regex("""<string name="($names)">([^<]*)</string>""")
             .findAll(strings).associate { it.groupValues[1] to it.groupValues[2].lowercase() }
         assertTrue(proxy.keys.toString(), proxy.size >= 40)
@@ -217,6 +219,23 @@ class ProxyFactsTest {
         assertTrue(proxy.getValue("proxy_app_log_never").contains("a proxy that a pac file names"))
         assertEquals(proxy.getValue("proxy_app_log") + "?", proxy.getValue("proxy_app_log_title"))
         assertTrue(proxy.getValue("proxy_app_log_body").contains("if you set this app\\'s proxy yourself, leave this off."))
+        // Unit D (option (c) of 2026-11-25): the tool's strings are in scope, those that name the switch quote it, and the
+        // choice's title is its switch as a question. None says who chose a server, nor that a tool's connections for the
+        // apps sent through it are kept out of Now: every one shows there for its window.
+        assertTrue(proxy.keys.toString(), proxy.size >= 75)
+        for (name in listOf("now_tool_live_only", "now_tool_left_out", "tool_log_switch_on", "chain_proxy_open_unlogged")) {
+            assertTrue(name, name in naming)
+        }
+        assertEquals(proxy.getValue("tool_log") + "?", proxy.getValue("tool_log_title"))
+        for ((name, text) in proxy.filterKeys { "tool" in it }) {
+            for (words in listOf("your server", "chose a server", "chose the server", "chose its server", "not shown in now")) {
+                assertTrue("$name: $words", !text.contains(words))
+            }
+        }
+        assertTrue(proxy.getValue("now_tool_live_only").contains("for itself or for an app that uses it"))
+        assertTrue(proxy.getValue("chain_tool_servers_shown").contains("anyone who opens now can see"))
+        assertTrue(proxy.getValue("tool_log_body").contains("snowflake"))
+        assertTrue(proxy.getValue("log_switch_note_proxies").contains("in full those to a known tracker"))
     }
 
     /**

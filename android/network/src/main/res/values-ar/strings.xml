@@ -529,7 +529,6 @@
     <!-- "Now": an app sent through the user's tool, the tool's own servers, and an app sent through a WireGuard
          configuration (%1$s: its name), with the switch above off. -->
     <string name="now_through_tool_off">مُرِّر عبر أداتك لتجاوز الحجب. لا تُعرض الجهة التي اتصل بها، لأن خيار «تسجيل الجهات التي تتصل بها التطبيقات عبر أداتك أو WireGuard أو خادم وكيل» متوقف.</string>
-    <string name="now_tool_servers_off">لا تُعرض الجهة التي يتصل بها، لأن خيار «تسجيل الجهات التي تتصل بها التطبيقات عبر أداتك أو WireGuard أو خادم وكيل» متوقف.</string>
     <string name="now_through_tunnel_off">مُرِّر عبر %1$s. لا تُعرض الجهة التي اتصل بها، لأن خيار «تسجيل الجهات التي تتصل بها التطبيقات عبر أداتك أو WireGuard أو خادم وكيل» متوقف.</string>
     <!-- The same in an app's history, of a connection logged while the switch was off. history_left_out_off: the
          tool's own servers, or a record written before Datapavan logged each connection's route. -->
