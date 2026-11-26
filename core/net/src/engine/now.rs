@@ -24,7 +24,9 @@
 
 use super::activity::{Mark, Of};
 use super::logbook::without_destination;
-use super::proxied::{holds_destination, own_first_hop};
+use super::proxied::{
+    Keeps, holds_destination, own_first_hop, own_proxy, strips, tool_own, windowed,
+};
 use super::{Flow, NamedBy, Network, Shared, lock};
 use crate::snapshot::{AppNow, COLUMNS, OFF, PlaceNow, Snapshot, WINDOWS as VIEW_WINDOWS, Ways};
 use crate::states::Placed;
@@ -67,12 +69,22 @@ struct End {
     at: Duration,
 }
 
-/// Whether an end of the app `uid` whose window still runs at `boot` is the place `flow`'s. Saturating: an end
-/// near the clock's largest value must not overflow, which aborts a release build.
-fn shown_after(ended: &[End], uid: Option<u32>, flow: &Flow, boot: Duration) -> bool {
-    ended.iter().any(|end| {
-        end.uid == uid && end.at.saturating_add(SHOWN) > boot && same_place(&end.flow, flow)
-    })
+/// Whether an end of the app `uid` whose window still runs at `boot` is the place `flow`'s, or the app is a tool
+/// known late within its window from then (`joined`, audit-D m7). Saturating: an end near the clock's largest value
+/// must not overflow, which aborts a release build.
+fn shown_after(
+    (ended, joined): (&[End], &[(u32, Duration)]),
+    uid: Option<u32>,
+    flow: &Flow,
+    boot: Duration,
+) -> bool {
+    let running = |at: Duration| at.saturating_add(SHOWN) > boot;
+    ended
+        .iter()
+        .any(|end| end.uid == uid && running(end.at) && same_place(&end.flow, flow))
+        || joined
+            .iter()
+            .any(|&(tool, at)| Some(tool) == uid && running(at))
 }
 
 /// Bytes up and down by column: no state, in use, with its notification, in the background.
@@ -117,7 +129,7 @@ pub(super) enum Seen<'a> {
     Hidden,
     /// A flow not through the tool whose destination stays out: through a `WireGuard` tunnel (W7) with
     /// "Log where these apps connect" off, with its number, or one that went directly before a chain left
-    /// its destination out.
+    /// its destination out, or a circumvention tool's own segment held past its window (R10).
     HiddenDirect(Option<u32>),
     Lookups,
 }
@@ -161,6 +173,18 @@ struct Place {
     last: u64,
     /// The last second a flow to it that went through the user's tool counted, if one did.
     routed: Option<u64>,
+    /// Whether it was made as a circumvention tool's own first hop (R10, `proxied::tool_own`), from the tools read at
+    /// the top of the count: guarded against floods as an own proxy's first hop is (audit-D m3).
+    tool: bool,
+}
+
+impl Place {
+    /// Whether a flood of other places must not push it out (R8): an own proxy's first hop, or a tool's own while it
+    /// has no own proxy of its own and its address.
+    fn guarded(&self) -> bool {
+        own_first_hop(&self.flow)
+            || (self.tool && !own_proxy(&self.flow) && !self.flow.destination.ip().is_unspecified())
+    }
 }
 
 /// Whether two flows reach one destination as the live view shows it: by name, where the name came
@@ -192,6 +216,9 @@ struct App {
     /// The last second it sent or received.
     last: u64,
     places: Vec<Place>,
+    /// For a circumvention tool (R10): the last second of its bytes with no place, as a place of its own dropped
+    /// after its window, or a flow of its hidden, so that "Now" says some of its connections are not shown.
+    left_out: Option<u64>,
 }
 
 /// One minute of an app: its bytes by state, and those in no state by why, only where it holds some.
@@ -291,10 +318,17 @@ pub(super) struct Counts {
     /// When the engine began counting, in milliseconds since 1970 (0 before it is told): the window while the
     /// screen was off begins no earlier, so that it never claims hours the network part did not see (finding 6).
     began: u64,
-    /// The ends of apps' own proxies' connections, for their first hops' window ([`SHOWN`]): one for each place, the
-    /// latest, at most [`PLACES_PER_APP`] of one app's and [`PLACES`] in all. Cleared with the rest, and handed to
-    /// the next engine with the rest.
+    /// The ends of apps' own proxies' connections, and of circumvention tools' own (R10), for their first hops'
+    /// window ([`SHOWN`]): one for each place, the latest, at most [`PLACES_PER_APP`] of one app's and [`PLACES`] in
+    /// all. Cleared with the rest, and handed to the next engine with the rest.
     ended: Vec<End>,
+    /// The circumvention tools the set named late (R10's late tools), each with when, in time since the phone started:
+    /// within [`SHOWN`] from then, each of their places and segments held is within its window, as if it had ended
+    /// then (audit-D m7). One for each tool, at most the tools handed; gone past the window.
+    joined: Vec<(u32, Duration)>,
+    /// Who is a tool and whose first hops are kept, as read at the top of each settling and view (`Shared::settle`,
+    /// `Shared::hold`, `Shared::now_view`): a new place is marked a tool's by it (audit-D m3). None by default.
+    pub(super) keeps: Keeps,
 }
 
 impl Default for Counts {
@@ -309,6 +343,8 @@ impl Default for Counts {
             off_floor: 0,
             began: 0,
             ended: Vec::new(),
+            joined: Vec::new(),
+            keeps: Keeps::default(),
         }
     }
 }
@@ -373,6 +409,7 @@ impl Counts {
             cleared: now.div_ceil(1000),
             off_floor: off_floor.max(self.off_floor),
             began: now,
+            keeps: std::mem::take(&mut self.keeps),
             ..Self::default()
         };
     }
@@ -500,19 +537,20 @@ impl Counts {
 
     /// Whether an end of the app `uid` whose window still runs at `boot` is the place `flow`'s.
     pub(super) fn shown_after_end(&self, uid: Option<u32>, flow: &Flow, boot: Duration) -> bool {
-        shown_after(&self.ended, uid, flow, boot)
+        shown_after((&self.ended, &self.joined), uid, flow, boot)
     }
 
-    /// Strips the first hops whose window ended at `boot`, in time since the phone started (R2): of each app whose
-    /// first hops `keeps` does not keep, every place that shows an own proxy's first hop, that no end whose window
-    /// still runs matches, and that `open` says no live flow of its app matches. Each is left out as the log leaves
-    /// it, merged into the app's place of the same kind and facts, if it has one, and its address's organisation
-    /// leaves the view's memory (as `hide` does for chained apps). A stripped place is never full again. Then the
-    /// ends past their window go. The ends are read first, as they are fewer than the live flows.
+    /// Strips the first hops whose window ended at `boot`, in time since the phone started (R2): every place that
+    /// shows a first hop `keeps` does not keep ([`strips`]), that no end whose window still runs matches, and that
+    /// `open` says no live flow of its app matches. An own proxy's is left out as the log leaves it, merged into the
+    /// app's place of the same kind and facts, if it has one; a circumvention tool's own is dropped, its bytes kept in
+    /// its app's totals and marked as left out (R10, D5). Either way its address's organisation leaves the view's memory
+    /// (as `hide` does for chained apps), and a place stripped or dropped is never full again. Then the ends past their
+    /// window go. The ends are read first, as they are fewer than the live flows, and the tracker rule last.
     pub(super) fn expire_first_hops(
         &mut self,
         boot: Duration,
-        keeps: &super::proxied::Keeps,
+        keeps: &Keeps,
         open: &dyn Fn(Option<u32>, &Flow) -> bool,
     ) {
         let Self {
@@ -520,21 +558,30 @@ impl Counts {
             places,
             organisations,
             ended,
+            joined,
             ..
         } = self;
         for (&uid, app) in apps.iter_mut() {
             let mut at = 0;
             while at < app.places.len() {
+                // A UID that is a tool no longer is guarded no longer.
+                app.places[at].tool &= keeps.tool(uid);
                 let flow = &app.places[at].flow;
-                if !own_first_hop(flow)
-                    || keeps.proxy(uid, flow.proxy.as_deref())
-                    || shown_after(ended, uid, flow, boot)
+                if !windowed(flow, keeps)
+                    || shown_after((ended, joined), uid, flow, boot)
                     || open(uid, flow)
+                    || !strips(flow, keeps)
                 {
                     at += 1;
                     continue;
                 }
                 organisations.remove(&flow.destination.ip());
+                if !own_proxy(flow) {
+                    let gone = app.places.swap_remove(at);
+                    *places -= 1;
+                    app.left_out = app.left_out.max(Some(gone.last));
+                    continue;
+                }
                 let stripped = without_destination(flow);
                 if rename(&mut app.places, at, &stripped) {
                     *places -= 1;
@@ -544,6 +591,24 @@ impl Counts {
             }
         }
         ended.retain(|end| end.at.saturating_add(SHOWN) > boot);
+        joined.retain(|(_, at)| at.saturating_add(SHOWN) > boot);
+    }
+
+    /// The UIDs `joined` became circumvention tools at `boot` (`Shared::tools_joined`, audit-D m7): their places, and
+    /// their segments held, stay in full for [`SHOWN`] from then, as if each had ended then; and their places are marked
+    /// a tool's, for the guard, as `keeps` reads them.
+    pub(super) fn tools_joined(&mut self, joined: &[u32], boot: Duration, keeps: &Keeps) {
+        for &uid in joined {
+            match self.joined.iter_mut().find(|(u, _)| *u == uid) {
+                Some(at) => at.1 = boot,
+                None => self.joined.push((uid, boot)),
+            }
+            if let Some(app) = self.apps.get_mut(&Some(uid)) {
+                for place in &mut app.places {
+                    place.tool |= tool_own(&place.flow, keeps);
+                }
+            }
+        }
     }
 
     /// Sets every place of the apps `of` names that holds where an app asked its proxy to go back to its first hop,
@@ -644,7 +709,12 @@ impl Counts {
                 app.through_tunnel = app.through_tunnel.max(Some((second, t)));
                 return;
             }
-            Seen::HiddenDirect(None) | Seen::Lookups => return,
+            // Bytes with no place: a tool's that "Now" says are not all shown (R10), read for tools only.
+            Seen::HiddenDirect(None) => {
+                app.left_out = app.left_out.max(Some(second));
+                return;
+            }
+            Seen::Lookups => return,
         };
         let known = app
             .places
@@ -654,6 +724,7 @@ impl Counts {
             at
         } else {
             {
+                let tool = tool_own(flow, &self.keeps);
                 if app.places.len() >= PLACES_PER_APP {
                     if let Some(oldest) = oldest_place(&app.places) {
                         app.places.swap_remove(oldest);
@@ -671,6 +742,7 @@ impl Counts {
                     session: Ways::default(),
                     last: second,
                     routed: None,
+                    tool,
                 });
                 self.places += 1;
                 app.places.len() - 1
@@ -715,7 +787,7 @@ impl Counts {
             .filter_map(|(uid, app)| {
                 oldest_place(&app.places).map(|at| {
                     let place = &app.places[at];
-                    ((own_first_hop(&place.flow), place.last), *uid, at)
+                    ((place.guarded(), place.last), *uid, at)
                 })
             })
             .min();
@@ -750,14 +822,15 @@ impl Counts {
     }
 }
 
-/// Where the destination that gives way first is in `places`: of those that show no own proxy's first hop, the one
-/// with bytes the longest ago, and a first hop only when every place is one (R8). So no flood of other
-/// destinations pushes an app's own proxy out of "Now" before its window ends.
+/// Where the destination that gives way first is in `places`: of those that show no own proxy's first hop, nor a
+/// circumvention tool's own ([`Place::guarded`]), the one with bytes the longest ago, and a first hop only when every
+/// place is one (R8). So no flood of other destinations pushes an app's own proxy, or a tool's server, out of "Now"
+/// before its window ends.
 fn oldest_place(places: &[Place]) -> Option<usize> {
     places
         .iter()
         .enumerate()
-        .min_by_key(|(_, place)| (own_first_hop(&place.flow), place.last))
+        .min_by_key(|(_, place)| (place.guarded(), place.last))
         .map(|(at, _)| at)
 }
 
@@ -785,6 +858,7 @@ fn merge(into: &mut Place, from: Place) {
     add(&mut into.session, from.session);
     into.last = into.last.max(from.last);
     into.routed = into.routed.max(from.routed);
+    into.tool |= from.tool;
 }
 
 impl Shared {
@@ -793,16 +867,12 @@ impl Shared {
     pub(super) fn now_view(&self, now: u64) -> Snapshot {
         let boot = self.clock.since_boot();
         let tool = self.chain().map(|chain| chain.tool);
-        // The tool whose own servers the view leaves out: "Log where these apps connect" is off.
-        let hidden_tool = self
-            .chain()
-            .filter(|chain| !chain.log_destinations)
-            .map(|chain| chain.tool);
         let (view, head, mut found, keeps) = {
             let mut live = lock(&self.live);
             let mut activity = lock(&self.activity);
             activity.counts.forget_old(now);
-            // A first hop whose window ended is not drawn (R2). The switch is read under `live`, as naming reads it.
+            // A first hop whose window ended is not drawn (R2). The switch is read under `live`, as naming reads it,
+            // and with it who is a tool (R10).
             let keeps = self.keeps_first_hops();
             self.sweep(&mut live, &mut activity, boot, &keeps);
             let counts = &activity.counts;
@@ -820,10 +890,11 @@ impl Shared {
             for live in live.values() {
                 let marks = lock(&live.bytes.marks);
                 let seen = Seen::live(&live.flow, live.hidden, live.direct);
-                view.waiting(live.flow.uid, &marks, live.bytes.now(), seen);
+                view.waiting(live.flow.uid, &marks, (live.bytes.now(), seen), &keeps);
             }
             for piece in &activity.held {
-                view.waiting(piece.uid, &piece.marks, piece.last, Seen::of(&piece.of));
+                let seen = Seen::of(&piece.of);
+                view.waiting(piece.uid, &piece.marks, (piece.last, seen), &keeps);
             }
             let head = (
                 activity.known(),
@@ -882,7 +953,8 @@ impl Shared {
                     tool: uid.is_some() && uid == tool,
                     through_tool: app.through_tool,
                     through_tunnel: app.through_tunnel,
-                    servers_hidden: uid.is_some() && uid == hidden_tool,
+                    // A tool with bytes in a window that no place shows (R10, the proxy record's unit D).
+                    servers_hidden: app.servers_hidden && keeps.tool(uid),
                     bytes: app.bytes,
                     places,
                 }
@@ -974,8 +1046,10 @@ struct AppView {
     through_tool: bool,
     /// The tunnel it went through with its destinations left out, in a window (W7).
     through_tunnel: Option<u32>,
+    /// Whether some of its bytes in a window have no place, as a circumvention tool's left out (R10).
+    servers_hidden: bool,
     places: Vec<(Flow, [Ways; 3])>,
-    /// How many of them show an own proxy's first hop: they have a cap of their own (audit-A 9).
+    /// How many of them show an own proxy's first hop, or a tool's own: they have a cap of their own (audit-A 9).
     first_hops: usize,
 }
 
@@ -1015,6 +1089,9 @@ impl View {
                 .through_tunnel
                 .filter(|(second, _)| self.windows(*second).iter().any(|&w| w))
                 .map(|(_, t)| t),
+            servers_hidden: app
+                .left_out
+                .is_some_and(|second| self.windows(second).iter().any(|&w| w)),
             ..AppView::default()
         };
         for (minute, counts) in &app.minutes {
@@ -1042,13 +1119,14 @@ impl View {
             }
             add(&mut bytes[2], place.session);
             if bytes != [Ways::default(); 3] {
-                view.first_hops += usize::from(own_first_hop(&place.flow));
+                view.first_hops += usize::from(place.guarded());
                 view.places.push((place.flow.clone(), bytes));
             }
         }
         if view.bytes != [[Ways::default(); COLUMNS]; VIEW_WINDOWS]
             || view.through_tool
             || view.through_tunnel.is_some()
+            || view.servers_hidden
         {
             self.apps.insert(uid, view);
         }
@@ -1062,8 +1140,14 @@ impl View {
     }
 
     /// The seconds not placed yet of one flow or segment, in its marks, `now` its counts after the
-    /// last.
-    fn waiting(&mut self, uid: Option<u32>, marks: &VecDeque<Mark>, now: [u64; 4], seen: Seen<'_>) {
+    /// last, `keeps` saying who is a tool, whose own places count with the first hops (R10).
+    fn waiting(
+        &mut self,
+        uid: Option<u32>,
+        marks: &VecDeque<Mark>,
+        (now, seen): ([u64; 4], Seen<'_>),
+        keeps: &Keeps,
+    ) {
         if matches!(seen, Seen::Lookups) {
             return;
         }
@@ -1095,16 +1179,21 @@ impl View {
                     app.through_tunnel = Some(t);
                     continue;
                 }
-                Seen::HiddenDirect(None) | Seen::Lookups => continue,
+                Seen::HiddenDirect(None) => {
+                    app.servers_hidden = true;
+                    continue;
+                }
+                Seen::Lookups => continue,
             };
             // The flow's destination, found once for all its marks (review b1, engine, nit 3). Own proxies' first
-            // hops, and other places, each have [`PLACES_PER_APP`]: a flood of either never pushes out the other.
+            // hops and tools' own, and other places, each have [`PLACES_PER_APP`]: a flood of either never pushes out
+            // the other.
             let at = *place.get_or_insert_with(|| {
                 app.places
                     .iter()
                     .position(|(f, _)| same_place(f, flow))
                     .or_else(|| {
-                        let first_hop = own_first_hop(flow);
+                        let first_hop = own_first_hop(flow) || tool_own(flow, keeps);
                         let held = if first_hop {
                             app.first_hops
                         } else {
@@ -1353,62 +1442,795 @@ mod tests {
         };
         assert!(chained.through_tool && chained.places.is_empty());
         assert_eq!(chained.bytes[0][1], [50, 0]);
-        // The tool's own servers stay out too while the switch is off (decision 3, 2026-11-19); its bytes
-        // stay, marked as the tool's, not as through it.
-        let tool = app_of(&snapshot, Some(10_200)).map(|a| {
+        // The tool's own server is shown, in full, as the tool's (R10, the proxy record's unit D); its bytes are the
+        // tool's, not through it.
+        let tool = app_of(&snapshot, Some(TOOL)).map(|a| {
             let sent: u64 = a.bytes[0][..5].iter().map(|w| w[0]).sum();
-            (a.tool, a.through_tool, a.places.len(), sent)
+            let shown: Vec<_> = a
+                .places
+                .iter()
+                .map(|p| (p.flow.destination, p.shown_only))
+                .collect();
+            (a.tool, a.through_tool, shown, sent)
         });
-        assert_eq!(tool, Some((true, false, 0, 60)));
-        assert_eq!(lock(&shared.activity).counts.places, 3);
+        assert_eq!(
+            tool,
+            Some((
+                true,
+                false,
+                vec![(SocketAddr::from(([198, 51, 100, 9], 443)), true)],
+                60
+            ))
+        );
+        assert_eq!(lock(&shared.activity).counts.places, 4);
     }
 
-    /// The tool's own destinations, its servers, show and are logged only while "Log where these apps
-    /// connect" is on; turned off, they leave "Now" at once (ADR 0046, decision 3's tool row, decided
-    /// 2026-11-19).
-    #[test]
-    fn the_tools_own_destinations_follow_the_switch() {
-        let (shared, clock, _) = telling_at(T);
-        *lock(&shared.chain) = Some(chain_of(UID, true));
-        let Some(on) = shared.record(flow(1, Some(10_200))) else {
-            unreachable!("an open flow is live")
+    /// The chained tool's UID, as [`chain_of`] names it.
+    const TOOL: u32 = 10_200;
+
+    /// A server of a tool's own: 192.0.2.44:443, named `server.tool.example` by DNS.
+    const SERVER: SocketAddr = SocketAddr::new(
+        std::net::IpAddr::V4(std::net::Ipv4Addr::new(192, 0, 2, 44)),
+        443,
+    );
+
+    /// The flow `id` of `uid` to [`SERVER`].
+    fn to_server(id: u64, uid: u32) -> Flow {
+        Flow {
+            destination: SERVER,
+            name: Some("server.tool.example".into()),
+            ..flow(id, Some(uid))
+        }
+    }
+
+    /// Hands the engine `tools` as the circumvention tools, the rest of the setting as it is (R10).
+    fn tools_of(shared: &Shared, tools: &[u32]) {
+        let mut setting = lock(&shared.proxies).setting().clone();
+        setting.tools = tools.to_vec();
+        shared.apply_proxies(setting);
+    }
+
+    /// "Log where apps connect through your tool, `WireGuard` or a proxy", as the tunnels' table holds it.
+    fn switch(shared: &Shared, on: bool) {
+        shared.tunnels.set(&crate::engine::TunnelSetting {
+            log_destinations: on,
+            ..crate::engine::TunnelSetting::default()
+        });
+        shared.hide_chained();
+    }
+
+    /// The app `uid` in the view at `now`, which sweeps first.
+    fn app_now(shared: &Shared, uid: u32, now: u64) -> Option<AppNow> {
+        shared
+            .now_view(now)
+            .apps
+            .into_iter()
+            .find(|app| app.uid == Some(uid))
+    }
+
+    /// The records of the flow `id` gathered for the next batch, taken.
+    fn records_of(shared: &Shared, id: u64) -> Vec<Flow> {
+        taken(shared)
+            .into_iter()
+            .filter_map(|record| match record {
+                crate::log::Record::Segment { flow, .. } if flow.id == id => Some(flow),
+                _ => None,
+            })
+            .collect()
+    }
+
+    /// Whether `flow` keeps no address, port or name, as `logbook::without_destination` leaves it.
+    fn no_destination(flow: &Flow) -> bool {
+        flow.destination.ip().is_unspecified()
+            && flow.destination.port() == 0
+            && flow.name.is_none()
+            && flow.dns_name.is_none()
+    }
+
+    /// R10's rule for a tool's own flow, `tool` a tool as the engine knows it (tests 1 and 2 of D-PLAN, section 4).
+    /// With the switch off: "Now" shows the flow's place in full, marked shown here only, while it is open and for ten
+    /// minutes after it ends, on the boot clock; then the place goes, the tool's row says some of its connections are
+    /// not shown, and its bytes stay in its totals; the log gets no address or name of it. With the switch on: the
+    /// place stays with no window, unmarked, and the records keep the address and name.
+    fn a_tools_own_flow_follows_the_rule(
+        shared: &Shared,
+        clock: &super::super::clock::ManualClock,
+        tool: u32,
+    ) {
+        let bytes = recorded(shared, to_server(1, tool));
+        up_at(shared, clock, &bytes, 500, 10);
+        clock.set(T + 1_500);
+        shared.tell(&on_since(T, T + 1_000, T));
+        let shown = |shared: &Shared, now| {
+            app_now(shared, tool, now).map(|a| {
+                let places: Vec<_> = a
+                    .places
+                    .iter()
+                    .map(|p| (p.flow.destination, p.flow.name.clone(), p.shown_only))
+                    .collect();
+                let sent: u64 = a.bytes[1].iter().map(|w| w[0]).sum();
+                (places, a.servers_hidden, sent)
+            })
         };
-        up_at(&shared, &clock, &on, 500, 10);
-        shared.tell(&told(T, T + 1_000, &[]));
-        let places = |shared: &Shared, at| {
-            app_of(&shared.now_view(at), Some(10_200))
-                .map(|a| (a.tool, a.through_tool, a.servers_hidden, a.places.len()))
-        };
+        let full = vec![(SERVER, Some("server.tool.example".to_owned()), true)];
         assert_eq!(
-            places(&shared, T + 1_000),
-            Some((true, false, false, 1)),
-            "logged while on"
+            shown(shared, T + 1_500),
+            Some((full.clone(), false, 10)),
+            "open"
+        );
+        shared.finish(1);
+        let window = u64::try_from(SHOWN.as_millis()).unwrap_or(u64::MAX);
+        clock.pass(window - 1_000);
+        assert_eq!(
+            shown(shared, clock.wall_ms()),
+            Some((full, false, 10)),
+            "9 min 59 s after its end"
+        );
+        clock.pass(1_000);
+        assert_eq!(
+            shown(shared, clock.wall_ms()),
+            Some((Vec::new(), true, 10)),
+            "its window ended: dropped, its bytes kept, and said"
+        );
+        assert!(counted_places(shared, tool).is_empty(), "not renamed");
+        shared.flush();
+        let records = records_of(shared, 1);
+        assert!(
+            !records.is_empty() && records.iter().all(no_destination),
+            "{records:?}"
+        );
+        assert!(records.iter().all(|f| f.uid == Some(tool)), "its app stays");
+        // The switch on: no window, and the records keep the address.
+        switch(shared, true);
+        let bytes = recorded(shared, to_server(2, tool));
+        let now = clock.wall_ms() - T;
+        up_at(shared, clock, &bytes, now + 500, 10);
+        clock.set(T + now + 1_500);
+        shared.tell(&on_since(T + now, T + now + 1_000, T));
+        shared.finish(2);
+        clock.pass(2 * window);
+        let places = app_now(shared, tool, clock.wall_ms()).map(|a| a.places);
+        assert!(
+            places.as_ref().is_some_and(|p| p.len() == 1
+                && p[0].flow.destination == SERVER
+                && !p[0].shown_only),
+            "{places:?}"
+        );
+        shared.flush();
+        let records = records_of(shared, 2);
+        assert!(
+            !records.is_empty() && records.iter().all(|f| f.destination == SERVER),
+            "{records:?}"
+        );
+    }
+
+    /// D-PLAN test 1: the chained tool's own servers are shown in "Now" for their window and not logged while the
+    /// switch is off (R10, the proxy record's unit D, replacing the rule of 2026-11-19 that hid them).
+    #[test]
+    fn a_chained_tools_own_servers_are_shown_for_their_window_and_not_logged() {
+        let (shared, clock, _) = telling_at(T);
+        *lock(&shared.chain) = Some(chain_of(UID, false));
+        a_tools_own_flow_follows_the_rule(&shared, &clock, TOOL);
+        let snapshot = shared.now_view(clock.wall_ms());
+        assert!(
+            app_of(&snapshot, Some(TOOL)).is_some_and(|a| a.tool),
+            "the chain's tool"
+        );
+    }
+
+    /// D-PLAN test 2: a tool that is not chained, known by the set the network part hands, follows the same rule.
+    #[test]
+    fn an_unchained_tools_own_servers_follow_the_same_rule() {
+        let (shared, clock, _) = telling_at(T);
+        tools_of(&shared, &[TOOL]);
+        a_tools_own_flow_follows_the_rule(&shared, &clock, TOOL);
+        let snapshot = shared.now_view(clock.wall_ms());
+        assert!(
+            app_of(&snapshot, Some(TOOL)).is_some_and(|a| !a.tool),
+            "not the chain's tool"
+        );
+    }
+
+    /// D-PLAN test 3, and the audit's M3 narrowing: an app the set does not name, such as a tool of a VPN mode only
+    /// that the network part leaves out, is an ordinary app: its place has no window and no mark, and its records keep
+    /// the address.
+    #[test]
+    fn an_app_that_is_no_tool_is_logged_in_full() {
+        let (shared, clock, _) = telling_at(T);
+        tools_of(&shared, &[TOOL]);
+        let bytes = recorded(&shared, to_server(1, UID));
+        up_at(&shared, &clock, &bytes, 500, 10);
+        clock.set(T + 1_500);
+        shared.tell(&on_since(T, T + 1_000, T));
+        shared.finish(1);
+        clock.pass(20 * MINUTE);
+        let app = app_now(&shared, UID, clock.wall_ms());
+        assert!(
+            app.as_ref().is_some_and(|a| a.places.len() == 1
+                && a.places[0].flow.destination == SERVER
+                && !a.places[0].shown_only
+                && !a.servers_hidden),
+            "{app:?}"
+        );
+        shared.flush();
+        let records = records_of(&shared, 1);
+        assert!(
+            !records.is_empty() && records.iter().all(|f| f.destination == SERVER),
+            "{records:?}"
+        );
+    }
+
+    /// D-PLAN test 4: a tool's flow open for an hour with no bytes keeps its place in full all that time, and for ten
+    /// minutes after it ends.
+    #[test]
+    fn a_quiet_open_tool_flow_stays_full_past_ten_minutes() {
+        let (shared, clock, _) = telling_at(T);
+        tools_of(&shared, &[TOOL]);
+        let bytes = recorded(&shared, to_server(1, TOOL));
+        up_at(&shared, &clock, &bytes, 500, 10);
+        clock.set(T + 1_500);
+        shared.tell(&on_since(T, T + 1_000, T));
+        let full = |shared: &Shared| {
+            shown_places(shared, TOOL, clock.wall_ms())
+                .first()
+                .is_some_and(|p| p.flow.destination == SERVER)
+        };
+        clock.pass(60 * MINUTE);
+        assert!(full(&shared), "open and quiet an hour");
+        shared.finish(1);
+        clock.pass(10 * MINUTE - 1_000);
+        assert!(full(&shared), "9 min 59 s after its end");
+        clock.pass(1_000);
+        assert_eq!(shown_places(&shared, TOOL, clock.wall_ms()), Vec::new());
+    }
+
+    /// D-PLAN test 5: the window counts the time the phone slept, as the boot clock does: with the wall clock where it
+    /// was, eleven minutes on the boot clock alone end it.
+    #[test]
+    fn the_window_counts_a_sleep() {
+        let (shared, clock, _) = telling_at(T);
+        tools_of(&shared, &[TOOL]);
+        let bytes = recorded(&shared, to_server(1, TOOL));
+        up_at(&shared, &clock, &bytes, 500, 10);
+        clock.set(T + 1_500);
+        shared.tell(&on_since(T, T + 1_000, T));
+        shared.finish(1);
+        assert_eq!(shown_places(&shared, TOOL, T + 1_500).len(), 1);
+        clock.pass(11 * MINUTE);
+        clock.set(T + 1_500);
+        assert!(
+            shown_places(&shared, TOOL, T + 1_500).is_empty(),
+            "slept past its window"
+        );
+        assert!(app_now(&shared, TOOL, T + 1_500).is_some_and(|a| a.servers_hidden));
+    }
+
+    /// The audit's m18: a tool's segment held for its states past its window is left out, hidden, so that its bytes
+    /// count as not shown rather than in a place of no address under the tool's row.
+    #[test]
+    fn a_tools_held_segment_past_its_window_is_no_empty_place() {
+        let (shared, clock, _) = telling_at(T);
+        tools_of(&shared, &[TOOL]);
+        let bytes = recorded(&shared, to_server(1, TOOL));
+        up_at(&shared, &clock, &bytes, 500, 10);
+        shared.finish(1);
+        assert!(
+            shown_places(&shared, TOOL, T + 1_000)
+                .first()
+                .is_some_and(|p| p.flow.destination == SERVER && p.shown_only),
+            "not told yet, in full"
+        );
+        clock.pass(11 * MINUTE);
+        let app = app_now(&shared, TOOL, clock.wall_ms());
+        assert!(
+            app.as_ref()
+                .is_some_and(|a| a.places.is_empty() && a.servers_hidden),
+            "{app:?}"
+        );
+        shared.tell(&on_since(T, clock.wall_ms(), T));
+        let app = app_now(&shared, TOOL, clock.wall_ms());
+        assert!(
+            app.as_ref()
+                .is_some_and(|a| a.places.is_empty() && a.servers_hidden),
+            "placed: {app:?}"
+        );
+        shared.flush();
+        let records = records_of(&shared, 1);
+        assert!(
+            !records.is_empty() && records.iter().all(no_destination),
+            "{records:?}"
+        );
+    }
+
+    /// D-PLAN test 13: a UID that leaves the set is an ordinary app again: its next records keep their address, and
+    /// its places have no window.
+    #[test]
+    fn a_tool_that_leaves_the_set_is_an_ordinary_app_again() {
+        let (shared, clock, _) = telling_at(T);
+        tools_of(&shared, &[TOOL]);
+        let bytes = recorded(&shared, to_server(1, TOOL));
+        up_at(&shared, &clock, &bytes, 500, 10);
+        shared.finish(1);
+        clock.set(T + 1_500);
+        shared.flush();
+        assert!(records_of(&shared, 1).iter().all(no_destination));
+        tools_of(&shared, &[]);
+        let bytes = recorded(&shared, to_server(2, TOOL));
+        up_at(&shared, &clock, &bytes, 2_000, 10);
+        clock.set(T + 2_500);
+        shared.tell(&on_since(T, T + 2_200, T));
+        shared.finish(2);
+        clock.pass(20 * MINUTE);
+        let places = shown_places(&shared, TOOL, clock.wall_ms());
+        assert!(
+            places.len() == 1 && places[0].flow.destination == SERVER && !places[0].shown_only,
+            "{places:?}"
+        );
+        shared.flush();
+        let records = records_of(&shared, 2);
+        assert!(
+            !records.is_empty() && records.iter().all(|f| f.destination == SERVER),
+            "{records:?}"
+        );
+    }
+
+    /// D-PLAN test 14 (D6): clearing the live view, as the profile does at each screen-off, forgets a tool's places
+    /// shown in full, its ends and its mark of bytes not shown; an open flow's next bytes show its server again, as
+    /// this screen-on session's.
+    #[test]
+    fn clear_activity_forgets_the_tools_places_ends_and_marks() {
+        let (shared, clock, _) = telling_at(T);
+        tools_of(&shared, &[TOOL]);
+        let gone = recorded(&shared, to_server(1, TOOL));
+        let ended = recorded(
+            &shared,
+            Flow {
+                destination: SocketAddr::from(([192, 0, 2, 45], 443)),
+                name: Some("ended.tool.example".into()),
+                ..flow(2, Some(TOOL))
+            },
+        );
+        let open = recorded(
+            &shared,
+            Flow {
+                destination: SocketAddr::from(([192, 0, 2, 46], 443)),
+                name: Some("open.tool.example".into()),
+                ..flow(3, Some(TOOL))
+            },
+        );
+        for bytes in [&gone, &ended, &open] {
+            up_at(&shared, &clock, bytes, 500, 10);
+        }
+        clock.set(T + 1_500);
+        shared.tell(&on_since(T, T + 1_000, T));
+        shared.finish(1);
+        clock.pass(11 * MINUTE);
+        shared.finish(2);
+        let app = app_now(&shared, TOOL, clock.wall_ms());
+        assert!(
+            app.as_ref()
+                .is_some_and(|a| a.places.len() == 2 && a.servers_hidden),
+            "{app:?}"
+        );
+        assert!(!lock(&shared.activity).counts.ended.is_empty());
+        lock(&shared.activity).counts.clear(clock.wall_ms());
+        {
+            let activity = lock(&shared.activity);
+            assert!(activity.counts.ended.is_empty(), "no end");
+            assert!(activity.counts.places_of(Some(TOOL)).is_empty(), "no place");
+            assert!(!activity.counts.apps.contains_key(&Some(TOOL)), "no mark");
+        }
+        assert!(app_now(&shared, TOOL, clock.wall_ms()).is_none());
+        let now = clock.wall_ms() - T;
+        up_at(&shared, &clock, &open, now + 1_000, 20);
+        let places = shown_places(&shared, TOOL, T + now + 1_500);
+        assert!(
+            places.len() == 1
+                && places[0].flow.name.as_deref() == Some("open.tool.example")
+                && places[0].shown_only,
+            "{places:?}"
+        );
+        assert!(app_now(&shared, TOOL, T + now + 1_500).is_some_and(|a| !a.servers_hidden));
+    }
+
+    /// D-PLAN test 16: a chained app's rows are as they were, around every change R10 brings: its flows hidden, marked
+    /// through the tool with no place, switch off; shown with the switch on; whatever the tools.
+    #[test]
+    fn chained_apps_rows_are_unchanged() {
+        let (shared, clock, _) = telling_at(T);
+        *lock(&shared.chain) = Some(chain_of(UID, false));
+        tools_of(&shared, &[TOOL, UID + 1]);
+        let bytes = open(&shared, 1);
+        up_at(&shared, &clock, &bytes, 500, 10);
+        clock.set(T + 1_500);
+        shared.tell(&told(T, T + 1_000, &[]));
+        let view = |shared: &Shared, now| {
+            app_now(shared, UID, now).map(|a| (a.places.len(), a.through_tool, a.servers_hidden))
+        };
+        assert_eq!(view(&shared, T + 1_500), Some((0, true, false)));
+        tools_of(&shared, &[TOOL]);
+        assert_eq!(
+            view(&shared, T + 1_500),
+            Some((0, true, false)),
+            "a tool left"
+        );
+        shared.flush();
+        assert!(records_of(&shared, 1).iter().all(no_destination));
+        *lock(&shared.chain) = Some(chain_of(UID, true));
+        switch(&shared, true);
+        let bytes = open(&shared, 2);
+        up_at(&shared, &clock, &bytes, 2_000, 10);
+        clock.set(T + 2_500);
+        shared.tell(&told(T + 1_000, T + 2_200, &[]));
+        let app = app_now(&shared, UID, T + 2_500);
+        assert!(
+            app.as_ref()
+                .is_some_and(|a| a.places.len() == 1 && !a.places[0].shown_only),
+            "{app:?}"
         );
         *lock(&shared.chain) = Some(chain_of(UID, false));
-        shared.hide_chained();
+        switch(&shared, false);
         assert_eq!(
-            places(&shared, T + 1_000),
-            Some((true, false, true, 0)),
-            "gone at once, and said to be"
+            view(&shared, T + 2_500).map(|v| (v.0, v.1)),
+            Some((0, true)),
+            "off again"
         );
-        let Some(off) = shared.record(flow(2, Some(10_200))) else {
-            unreachable!("an open flow is live")
+    }
+
+    /// D-PLAN test 17: a tool sent through a `WireGuard` tunnel is a tunnelled app first: with the switch off its flows
+    /// are hidden, marked through that tunnel, and nothing of their destination is shown or logged.
+    #[test]
+    fn a_tool_through_a_wireguard_tunnel_is_a_tunnelled_app() {
+        use super::super::{Configured, TunnelSetting};
+        let (shared, clock, _) = telling_at(T);
+        let text = "[Interface]\nPrivateKey = yAnz5TF+lXXJte14tji3zlMNq+hd2rYUIgJBgB3fBmk=\nAddress = 10.77.0.2/32\n\
+                    DNS = 10.77.0.1\n[Peer]\nPublicKey = xTIBA5rboUvnH4htodjb6e697QjLERt1NAB4mZqp8Dg=\n\
+                    AllowedIPs = 0.0.0.0/0\nEndpoint = 192.0.2.1:51820\n";
+        let Ok(config) = crate::wireguard::Config::parse(text.as_bytes()) else {
+            unreachable!("refused")
         };
-        up_at(&shared, &clock, &off, 1_500, 20);
-        shared.tell(&told(T + 1_000, T + 2_000, &[]));
-        assert_eq!(places(&shared, T + 2_000), Some((true, false, true, 0)));
-        clock.set(T + 3_000);
+        shared.tunnels.set(&TunnelSetting {
+            tunnels: vec![Configured {
+                id: 3,
+                config: Arc::new(config),
+                local_network: false,
+            }],
+            routes: std::collections::HashMap::from([(TOOL, 3)]),
+            log_destinations: false,
+            default: None,
+            known: None,
+        });
+        tools_of(&shared, &[TOOL]);
+        let Some(bytes) = shared.record_tunnelled(to_server(1, TOOL), 3) else {
+            unreachable!("not live")
+        };
+        up_at(&shared, &clock, &bytes, 500, 10);
+        clock.set(T + 1_500);
+        shared.tell(&told(T, T + 1_000, &[]));
+        let app = app_now(&shared, TOOL, T + 1_500);
+        assert!(
+            app.as_ref()
+                .is_some_and(|a| a.places.is_empty() && a.through_tunnel == Some(3)),
+            "{app:?}"
+        );
+        shared.finish(1);
         shared.flush();
-        for record in taken(&shared) {
-            if let crate::log::Record::Segment { flow, start, .. } = record
-                && start >= T + 1_000
-            {
-                assert!(
-                    flow.destination.ip().is_unspecified() && flow.name.is_none(),
-                    "{flow:?}"
+        let records = records_of(&shared, 1);
+        assert!(
+            !records.is_empty() && records.iter().all(no_destination),
+            "{records:?}"
+        );
+    }
+
+    /// D-PLAN test 18: a tool's flow that blocking refused keeps its SDK in the record, whatever the switch, and loses
+    /// its host while the switch is off (ADR 0053 decision 8 (b)); a host the trackers' signatures name is the audit's
+    /// M3, below.
+    #[test]
+    fn a_tools_blocked_flow_keeps_its_sdk_and_loses_its_host() {
+        let (shared, clock, _) = telling_at(T);
+        tools_of(&shared, &[TOOL]);
+        let blocked = Flow {
+            outcome: crate::engine::Outcome::Blocked,
+            blocked: Some(Box::new(crate::engine::BlockedBy {
+                sdk: "com.example:ads".into(),
+            })),
+            ..to_server(1, TOOL)
+        };
+        assert!(shared.record(blocked).is_none(), "not live");
+        clock.set(T + 1_000);
+        shared.flush();
+        let records = records_of(&shared, 1);
+        assert!(
+            !records.is_empty()
+                && records.iter().all(|f| no_destination(f)
+                    && f.blocked
+                        .as_ref()
+                        .is_some_and(|b| b.sdk == "com.example:ads")),
+            "{records:?}"
+        );
+    }
+
+    /// D-PLAN test 19: the snapshot marks a tool's place shown here only (bit 1 of the destination's flags), and, once
+    /// its window ended, the tool's row as having bytes no place shows (bit 2 of the app's).
+    #[test]
+    fn the_snapshots_bit_2_marks_a_tool_with_bytes_not_placed() {
+        let (shared, clock, _) = telling_at(T);
+        tools_of(&shared, &[TOOL]);
+        let bytes = recorded(&shared, to_server(1, TOOL));
+        up_at(&shared, &clock, &bytes, 500, 10);
+        clock.set(T + 1_500);
+        shared.tell(&on_since(T, T + 1_000, T));
+        let snapshot = shared.now_view(T + 1_500);
+        let app = app_of(&snapshot, Some(TOOL));
+        assert!(
+            app.is_some_and(|a| !a.tool && !a.servers_hidden && a.places[0].shown_only),
+            "{app:?}"
+        );
+        let encoded = crate::snapshot::encode(&snapshot);
+        let flags = 1 + 8 + 1 + 8 + 1 + 3 * 8 + 4 + 4 + 1;
+        assert_eq!(&encoded[flags - 5..flags - 1], &TOOL.to_le_bytes());
+        assert_eq!(encoded[flags], 0, "the app's flags");
+        let place = flags + 1 + 80 * 8 + 2 + 4;
+        assert_eq!(encoded[place], 0b10, "the place's flags: shown here only");
+        shared.finish(1);
+        clock.pass(11 * MINUTE);
+        let snapshot = shared.now_view(clock.wall_ms());
+        assert!(
+            app_of(&snapshot, Some(TOOL)).is_some_and(|a| a.servers_hidden && a.places.is_empty())
+        );
+        assert_eq!(crate::snapshot::encode(&snapshot)[flags], 0b100);
+    }
+
+    /// D-PLAN test 20 (R8): a flood of all apps' 2,048 other places does not push a tool's own place out of "Now"
+    /// before its window ends: an ordinary place gives way instead. A tool's own 129th place pushes out its oldest, as an
+    /// app's 129th own proxy does (A's stated limit, the audit's m17).
+    #[test]
+    fn a_flood_does_not_push_a_tools_shown_place_out() {
+        let (shared, _, _) = telling_at(T);
+        tools_of(&shared, &[TOOL]);
+        let server = to_server(0, TOOL);
+        let kept = |counts: &Counts| {
+            counts.apps[&Some(TOOL)]
+                .places
+                .iter()
+                .any(|p| p.flow.destination == SERVER)
+        };
+        // The tool's own other places: every one is guarded, so the oldest goes (m17).
+        let mut counts = Counts {
+            keeps: shared.keeps_first_hops(),
+            ..Counts::default()
+        };
+        counts.count(
+            Some(TOOL),
+            1_000,
+            [1, 0, 0, 0],
+            BACKGROUND,
+            Seen::Flow(&server),
+        );
+        for i in 1..PLACES_PER_APP as u64 {
+            let own = Flow {
+                name: Some(format!("{i}.example")),
+                ..flow(i, Some(TOOL))
+            };
+            counts.count(
+                Some(TOOL),
+                1_000 + i,
+                [1, 0, 0, 0],
+                BACKGROUND,
+                Seen::Flow(&own),
+            );
+        }
+        assert!(kept(&counts), "128 places, its server among them");
+        let own = Flow {
+            name: Some("129.example".into()),
+            ..flow(129, Some(TOOL))
+        };
+        counts.count(
+            Some(TOOL),
+            2_000,
+            [1, 0, 0, 0],
+            BACKGROUND,
+            Seen::Flow(&own),
+        );
+        assert!(!kept(&counts), "the 129th: m17's stated limit");
+        // All apps' flood: 17 apps of 128 places each.
+        let mut counts = Counts {
+            keeps: shared.keeps_first_hops(),
+            ..Counts::default()
+        };
+        counts.count(
+            Some(TOOL),
+            1_000,
+            [1, 0, 0, 0],
+            BACKGROUND,
+            Seen::Flow(&server),
+        );
+        let mut second = 2_000;
+        for uid in 0..17u32 {
+            for i in 0..PLACES_PER_APP as u64 {
+                let place = Flow {
+                    name: Some(format!("{i}.app{uid}.example")),
+                    ..flow(i, Some(uid))
+                };
+                counts.count(
+                    Some(uid),
+                    second,
+                    [1, 0, 0, 0],
+                    BACKGROUND,
+                    Seen::Flow(&place),
                 );
+                second += 1;
             }
         }
+        assert_eq!(counts.places, PLACES);
+        assert!(kept(&counts), "all apps' flood");
+        // Without the tools read, as old tests count, the place gives way as any.
+        let mut counts = Counts::default();
+        counts.count(
+            Some(TOOL),
+            1_000,
+            [1, 0, 0, 0],
+            BACKGROUND,
+            Seen::Flow(&server),
+        );
+        for i in 1..=PLACES_PER_APP as u64 {
+            let own = Flow {
+                name: Some(format!("{i}.example")),
+                ..flow(i, Some(TOOL))
+            };
+            counts.count(
+                Some(TOOL),
+                1_000 + i,
+                [1, 0, 0, 0],
+                BACKGROUND,
+                Seen::Flow(&own),
+            );
+        }
+        assert!(!kept(&counts));
+    }
+
+    /// D-PLAN test 12, with the audit's m15: a tool known late, as the set comes a second or two after a start, has its
+    /// waiting records stripped: those gathered for the next batch, by the pass the set runs (`Engine::proxies`), and a
+    /// segment held for its states then, as it reaches the log.
+    #[test]
+    fn a_tool_known_late_has_its_waiting_records_stripped() {
+        let (shared, clock, _) = telling_at(T);
+        let pending = recorded(&shared, to_server(1, TOOL));
+        up_at(&shared, &clock, &pending, 500, 10);
+        clock.set(T + 1_000);
+        shared.flush();
+        let gathered = |shared: &Shared| -> Vec<Flow> {
+            lock(&shared.pending_log)
+                .iter()
+                .filter_map(|record| match record {
+                    crate::log::Record::Segment { flow, .. } if flow.id == 1 => Some(flow.clone()),
+                    _ => None,
+                })
+                .collect()
+        };
+        assert!(
+            gathered(&shared).iter().any(|f| f.destination == SERVER),
+            "gathered with its address, an ordinary app's"
+        );
+        let held = recorded(
+            &shared,
+            Flow {
+                destination: SocketAddr::from(([192, 0, 2, 45], 443)),
+                name: Some("held.tool.example".into()),
+                ..flow(2, Some(TOOL))
+            },
+        );
+        up_at(&shared, &clock, &held, 1_500, 10);
+        shared.finish(2);
+        assert!(
+            lock(&shared.activity).held.iter().any(|piece| matches!(
+                &piece.of,
+                super::super::activity::Of::Flow { flow, .. } if flow.id == 2
+            )),
+            "a segment waits for its states"
+        );
+        tools_of(&shared, &[TOOL]);
+        let stripped = gathered(&shared);
+        assert!(
+            !stripped.is_empty() && stripped.iter().all(no_destination),
+            "{stripped:?}"
+        );
+        clock.set(T + 3_000);
+        shared.tell(&on_since(T, T + 3_000, T));
+        let records = records_of(&shared, 2);
+        assert!(
+            !records.is_empty() && records.iter().all(no_destination),
+            "{records:?}"
+        );
+    }
+
+    /// The audit's M3: a tool's flow whose names match a tracker's signature is kept whole, its place with no window and
+    /// its records with its name, so that its mark is not lost; a tool's other flow, at the same time, follows R10.
+    #[test]
+    fn a_tools_flow_to_a_tracker_is_kept_in_full() {
+        let (shared, clock, _) = telling_at(T);
+        let mut setting = lock(&shared.proxies).setting().clone();
+        setting.trackers = crate::trackers::NetworkSignatures::parse(
+            "49\tTracker Co\t\thttps://tracker.example/\t\ttracker\\.example\n",
+        )
+        .ok()
+        .map(Arc::new);
+        setting.tools = vec![TOOL];
+        shared.apply_proxies(setting);
+        let ads = Flow {
+            destination: SocketAddr::from(([192, 0, 2, 47], 443)),
+            name: Some("ads.tracker.example".into()),
+            ..flow(1, Some(TOOL))
+        };
+        let tracker = recorded(&shared, ads.clone());
+        let server = recorded(&shared, to_server(2, TOOL));
+        up_at(&shared, &clock, &tracker, 500, 10);
+        up_at(&shared, &clock, &server, 600, 10);
+        clock.set(T + 1_500);
+        shared.tell(&on_since(T, T + 1_000, T));
+        let places = |now| {
+            let mut places: Vec<_> = shown_places(&shared, TOOL, now)
+                .into_iter()
+                .map(|p| (p.flow.destination, p.shown_only))
+                .collect();
+            places.sort();
+            places
+        };
+        assert_eq!(
+            places(T + 1_500),
+            vec![(SERVER, true), (ads.destination, false)]
+        );
+        shared.finish(1);
+        shared.finish(2);
+        clock.pass(11 * MINUTE);
+        assert_eq!(
+            places(clock.wall_ms()),
+            vec![(ads.destination, false)],
+            "no window"
+        );
+        shared.flush();
+        let records = taken(&shared);
+        let of = |id: u64| -> Vec<&Flow> {
+            records
+                .iter()
+                .filter_map(|record| match record {
+                    crate::log::Record::Segment { flow, .. } if flow.id == id => Some(flow),
+                    _ => None,
+                })
+                .collect()
+        };
+        assert!(
+            !of(1).is_empty()
+                && of(1)
+                    .iter()
+                    .all(|f| f.name.as_deref() == Some("ads.tracker.example")),
+            "{records:?}"
+        );
+        assert!(!of(2).is_empty() && of(2).iter().all(|f| no_destination(f)));
+    }
+
+    /// The audit's m7, R10's late tools: a tool's flow that ended before the set named its UID a tool, its place in
+    /// "Now", keeps the place in full for ten minutes from the pass that the set runs, not dropped at once.
+    #[test]
+    fn a_tool_known_late_keeps_its_ended_places_for_their_window() {
+        let (shared, clock, _) = telling_at(T);
+        let bytes = recorded(&shared, to_server(1, TOOL));
+        up_at(&shared, &clock, &bytes, 500, 10);
+        clock.set(T + 1_500);
+        shared.tell(&on_since(T, T + 1_000, T));
+        shared.finish(1);
+        clock.pass(MINUTE);
+        tools_of(&shared, &[TOOL]);
+        let full = |now| {
+            shown_places(&shared, TOOL, now)
+                .first()
+                .is_some_and(|p| p.flow.destination == SERVER && p.shown_only)
+        };
+        assert!(full(clock.wall_ms()), "kept by an end noted at the pass");
+        clock.pass(10 * MINUTE - 1_000);
+        assert!(full(clock.wall_ms()));
+        clock.pass(1_000);
+        assert_eq!(shown_places(&shared, TOOL, clock.wall_ms()), Vec::new());
     }
 
     /// A chain that sends `uid` through the tool, its destinations logged or not.

@@ -588,11 +588,27 @@ impl Shared {
     }
 
     /// A flow that showed an app's own proxy's first hop ended at `boot`: noted with its first hop, which is how
-    /// "Now" places it once the switch is off, so that its place stays in full for its window (R2).
+    /// "Now" places it once the switch is off, so that its place stays in full for its window (R2). A circumvention
+    /// tool's own flow too (R10), whose first hop is the flow itself, apart: most flows are neither.
     fn ended(&self, flow: &Flow, boot: Duration) {
         if super::proxied::own_first_hop(flow) {
             let first_hop = self.first_hop(flow);
             lock(&self.activity).counts.end(flow.uid, first_hop, boot);
+        } else if !super::proxied::own_proxy(flow) {
+            self.tool_ended(flow, boot);
+        }
+    }
+
+    /// [`Shared::ended`] for a flow that went through no own proxy: noted if it is a tool's own flow with its address
+    /// (`proxied::shows_first_hop`), as the tools and the switch read now. Out of line, off the common end's code.
+    #[cold]
+    #[inline(never)]
+    fn tool_ended(&self, flow: &Flow, boot: Duration) {
+        let keeps = self.keeps_first_hops();
+        if super::proxied::shows_first_hop(flow, &keeps) {
+            lock(&self.activity)
+                .counts
+                .end(flow.uid, flow.clone(), boot);
         }
     }
 
@@ -811,6 +827,19 @@ impl Shared {
             self.sweep(&mut live, &mut activity, boot, &keeps);
         }
         self.prune_inferred(boot);
+    }
+
+    /// The UIDs `joined` are circumvention tools from now on, known late (R10's late tools, audit-D m7): their places,
+    /// and their segments held for their states, stay in full for their window from now, so that the pass that follows
+    /// ([`Shared::leave_out_first_hops`]) does not drop them at once; and their places are guarded against floods.
+    #[cold]
+    #[inline(never)]
+    pub(super) fn tools_joined(&self, joined: &[u32]) {
+        let keeps = self.keeps_first_hops();
+        let boot = self.clock.since_boot();
+        lock(&self.activity)
+            .counts
+            .tools_joined(joined, boot, &keeps);
     }
 
     /// Sets every flow that `keeps` does not keep and that holds where it asked its proxy to go back to its first hop

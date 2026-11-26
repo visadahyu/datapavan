@@ -44,7 +44,7 @@
 
 use super::logbook::{Live, without_destination};
 use super::now::{Counts, Seen, same_place};
-use super::proxied::{own_proxy, strips};
+use super::proxied::{own_proxy, strips, tool_own, windowed};
 use super::{Flow, Shared, lock};
 use crate::log::Record;
 use crate::states::{Interval, Known, Placed, Screen, State, Told, Unknown};
@@ -753,10 +753,12 @@ impl Activity {
         (true, settled)
     }
 
-    /// Strips the first hops of apps' own proxies whose window ended at `boot`, in time since the phone started
-    /// (R2), of the apps `keeps` does not keep: in "Now"'s places, unless a flow still `live` matches the place, and
-    /// in the segments held for their states, unless their flow is still live. Only the live flows through a proxy
-    /// are matched, gathered once rather than for each place (audit-A 19).
+    /// Strips the first hops of apps' own proxies, and circumvention tools' own flows (R10), whose window ended at
+    /// `boot`, in time since the phone started (R2), that `keeps` does not keep: in "Now"'s places, unless a flow still
+    /// `live` matches the place, and in the segments held for their states, unless their flow is still live. A tool's
+    /// segment is hidden too, so that its bytes count as left out, not in a place of no address (audit-D m18). Only the
+    /// live flows through a proxy, and the tools' own, are matched, gathered once rather than for each place (audit-A
+    /// 19).
     pub(super) fn expire_first_hops(
         &mut self,
         boot: Duration,
@@ -766,7 +768,7 @@ impl Activity {
         let proxied: Vec<&Flow> = live
             .values()
             .map(|l| &l.flow)
-            .filter(|flow| own_proxy(flow))
+            .filter(|flow| own_proxy(flow) || tool_own(flow, keeps))
             .collect();
         let open = |uid: Option<u32>, place: &Flow| {
             proxied
@@ -775,11 +777,13 @@ impl Activity {
         };
         self.counts.expire_first_hops(boot, keeps, &open);
         for piece in &mut self.held {
-            if let Of::Flow { flow, .. } = &mut piece.of
-                && strips(flow, keeps)
+            if let Of::Flow { flow, hidden, .. } = &mut piece.of
+                && windowed(flow, keeps)
                 && !live.contains_key(&flow.id)
                 && !self.counts.shown_after_end(piece.uid, flow, boot)
+                && strips(flow, keeps)
             {
+                *hidden |= !own_proxy(flow);
                 *flow = without_destination(flow);
             }
         }
@@ -974,6 +978,8 @@ impl Shared {
             let mut live = lock(&self.live);
             let mut lookups = lock(&self.lookups);
             let mut activity = lock(&self.activity);
+            // Who is a tool, for the places made now (R10, audit-D m3): leaves, read under `live` as naming reads them.
+            activity.counts.keeps = self.keeps_first_hops();
             let mut oldest: Option<u64> = None;
             // The segments held first: they are older than the live flows' parts, so that the log gets a
             // flow's records in time order (review b1 of W5's second part, engine, nit 1).
@@ -1063,6 +1069,7 @@ impl Shared {
         let written;
         {
             let mut activity = lock(&self.activity);
+            activity.counts.keeps = self.keeps_first_hops();
             for mut piece in pieces {
                 let uid = piece.uid;
                 let (done, marks) = activity.settle_piece(&mut piece, None, &mut records);
@@ -2681,6 +2688,99 @@ pub(super) mod tests {
             .id;
         assert_eq!(id, last + 1, "one number names one flow for the whole run");
         third.stop();
+        Ok(())
+    }
+
+    /// D-PLAN test 15 (R10): a hand-over carries a circumvention tool's window to the next engine: the tools with the
+    /// proxies' setting, the ends with the counts, and the mark of bytes no place shows. A place in full stays so until
+    /// ten minutes after its end there; one already dropped is still said to be.
+    #[test]
+    fn a_handover_carries_the_tools_window() -> std::io::Result<()> {
+        use super::super::clock::Clock;
+        use super::super::{Addresses, Config, Engine, Handover, Limits, ProxySetting};
+        const TOOL: u32 = 10_200;
+        let clock = ManualClock::at(T);
+        let start = |handover: Option<Handover>| -> std::io::Result<(Engine, std::os::unix::net::UnixDatagram)> {
+            let (engine_end, app) = std::os::unix::net::UnixDatagram::pair()?;
+            engine_end.set_nonblocking(true)?;
+            let platform = Arc::new(Engined {
+                clock: clock.clone(),
+                batches: std::sync::Mutex::default(),
+            });
+            let config = Config {
+                mtu: 1_500,
+                keep_flows: 0,
+                addresses: Addresses::COMMON,
+                limits: Limits::default(),
+            };
+            let engine = Engine::start_with(
+                std::os::fd::OwnedFd::from(engine_end),
+                config,
+                platform,
+                None,
+                (handover, None),
+            )?;
+            Ok((engine, app))
+        };
+        let server = |id, last: u8| Flow {
+            destination: SocketAddr::from(([192, 0, 2, last], 443)),
+            name: Some(format!("server-{last}.tool.example")),
+            ..flow(id, Some(TOOL))
+        };
+        let (engine, _app) = start(None)?;
+        engine.proxies(ProxySetting {
+            tools: vec![TOOL],
+            ..ProxySetting::default()
+        });
+        {
+            let mut activity = lock(&engine.shared.activity);
+            activity.counts.keeps = engine.shared.keeps_first_hops();
+            for (id, last) in [(1, 44), (2, 45)] {
+                activity.counts.count(
+                    Some(TOOL),
+                    T / 1000,
+                    [10, 0, 0, 0],
+                    IN_USE,
+                    Seen::Flow(&server(id, last)),
+                );
+            }
+            // The first ended eleven minutes before, the second one minute.
+            activity
+                .counts
+                .end(Some(TOOL), server(1, 44), clock.since_boot());
+        }
+        clock.pass(10 * 60_000);
+        lock(&engine.shared.activity)
+            .counts
+            .end(Some(TOOL), server(2, 45), clock.since_boot());
+        clock.pass(60_000);
+        let shown = |engine: &Engine| {
+            engine
+                .shared
+                .now_view(clock.wall_ms())
+                .apps
+                .into_iter()
+                .find(|a| a.uid == Some(TOOL))
+                .map(|a| {
+                    let places: Vec<_> = a.places.iter().map(|p| p.flow.destination).collect();
+                    (places, a.servers_hidden)
+                })
+        };
+        let second = SocketAddr::from(([192, 0, 2, 45], 443));
+        assert_eq!(shown(&engine), Some((vec![second], true)));
+        let handover = engine.hand_over();
+        let (next, _app) = start(Some(handover))?;
+        assert!(
+            next.shared.keeps_first_hops().tool(Some(TOOL)),
+            "still a tool"
+        );
+        assert_eq!(
+            shown(&next),
+            Some((vec![second], true)),
+            "the window and the mark go on in the next engine"
+        );
+        clock.pass(9 * 60_000);
+        assert_eq!(shown(&next), Some((Vec::new(), true)), "and end there");
         Ok(())
     }
 

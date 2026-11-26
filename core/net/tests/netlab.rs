@@ -5216,3 +5216,55 @@ fn the_choice_for_one_app_crosses_a_hand_over() -> Outcome {
         },
     )
 }
+
+/// The proxy record's unit D (R10), through the whole engine on Linux's TCP stack, with no chain: the lab's app, named a
+/// circumvention tool by the set the network part hands, connects to a server of its own. The flows a debug engine keeps
+/// hold the server's address; the log's records hold none with "Log where these apps connect" off, and hold it with the
+/// switch on.
+#[test]
+#[ignore = "needs an unprivileged network namespace; scripts/check.sh rust runs it"]
+fn a_tools_own_connections_are_logged_by_the_switch_alone() -> Outcome {
+    lab(
+        "a_tools_own_connections_are_logged_by_the_switch_alone",
+        &Limits {
+            close_linger: Duration::from_millis(50),
+            ..Limits::default()
+        },
+        |engine| async move {
+            engine.proxies(datapavan_net::ProxySetting {
+                tools: vec![APP],
+                ..datapavan_net::ProxySetting::default()
+            });
+            let server = echo_server().await?;
+            // The switch off: kept in full for debug builds, and no address in the log.
+            let before = LOGGED.lock().map_err(|e| e.to_string())?.len();
+            let mut app = app_connect(server).await?;
+            assert_eq!(exchange(&mut app, b"its own").await?, b"its own");
+            let flow = flow_to(&engine, server, |f| f.uid == Some(APP)).await?;
+            assert_eq!(flow.destination, server, "the kept flow holds its address");
+            drop(app);
+            let since = logged_since(&engine, before).await?;
+            assert!(!since.is_empty(), "the tool's records were written");
+            assert!(
+                !holds(&since, &SERVER.octets()),
+                "no address with the switch off"
+            );
+
+            // The switch on: the address is logged.
+            engine.tunnels(&datapavan_net::TunnelSetting {
+                log_destinations: true,
+                ..datapavan_net::TunnelSetting::default()
+            });
+            let before = LOGGED.lock().map_err(|e| e.to_string())?.len();
+            let mut app = app_connect(server).await?;
+            assert_eq!(exchange(&mut app, b"logged").await?, b"logged");
+            drop(app);
+            let since = logged_since(&engine, before).await?;
+            assert!(
+                holds(&since, &SERVER.octets()),
+                "the address with the switch on"
+            );
+            Ok(())
+        },
+    )
+}

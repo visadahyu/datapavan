@@ -124,15 +124,16 @@ impl Shared {
         }
     }
 
-    /// Whether the log leaves out where a flow of `uid` to `destination` went: a chained app's flow, and the
-    /// tool's own, whose destinations are the user's servers (ADR 0046, decision 3, as decided on
-    /// 2026-11-19), unless the user asked for chained destinations. The flow is still counted, with its app
-    /// and bytes.
+    /// Whether the log leaves out where a flow of `uid` to `destination` went, at once and in the live view too: a
+    /// chained app's flow, unless the user asked for chained destinations. The flow is still counted, with its app
+    /// and bytes. The tool's own flows are not hidden: "Now" shows them for their window, and the log keeps them
+    /// stripped unless the switch or the tool's own choice says otherwise (R10, the proxy record's unit D,
+    /// `proxied::strip_for_log`).
     pub(super) fn hides(&self, uid: Option<u32>, destination: SocketAddr) -> bool {
         match self.route(uid, destination) {
-            Route::Tool(chain) => !chain.log_destinations || self.hides_tool(uid),
+            Route::Tool(chain) => !chain.log_destinations,
             // A tunnelled app's, as a chained app's, and the switch is the same (ADR 0035, routes).
-            Route::Tunnel(_) => !self.tunnels.logs_destinations() || self.hides_tool(uid),
+            Route::Tunnel(_) => !self.tunnels.logs_destinations(),
             // A flow that went directly is hidden as its app is: a tunnelled app's local network, which
             // "Local network directly" sends past its tunnel, as the live view hides that app's places
             // (W7's fix round, the engine reviewer's nit 13).
@@ -140,22 +141,14 @@ impl Shared {
         }
     }
 
-    /// Whether the app `uid` goes through the tool with its destinations left out, or is the tool itself
-    /// with them left out: what the live view keeps of it is its bytes, with no destination (ADR 0046,
-    /// decision 6, item 5, and decision 3's tool row).
+    /// Whether the app `uid` goes through the tool, or a tunnel, with its destinations left out: what the live view
+    /// keeps of it is its bytes, with no destination (ADR 0046, decision 6, item 5).
     pub(super) fn hides_app(&self, uid: Option<u32>) -> bool {
         match self.app_route(uid) {
-            Route::Tool(chain) => !chain.log_destinations || self.hides_tool(uid),
-            Route::Tunnel(_) => !self.tunnels.logs_destinations() || self.hides_tool(uid),
-            Route::Direct | Route::Refused => self.hides_tool(uid),
+            Route::Tool(chain) => !chain.log_destinations,
+            Route::Tunnel(_) => !self.tunnels.logs_destinations(),
+            Route::Direct | Route::Refused => false,
         }
-    }
-
-    /// Whether `uid` is the user's tool and "Log where these apps connect" is off: its own flows, to its
-    /// servers, then keep no destination, in the log and the live view alike.
-    fn hides_tool(&self, uid: Option<u32>) -> bool {
-        self.chain()
-            .is_some_and(|chain| uid == Some(chain.tool) && !chain.log_destinations)
     }
 
     /// What to ask the tool for: the name behind a stand-in address, or the address itself. `None` for

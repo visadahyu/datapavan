@@ -1261,7 +1261,7 @@ impl Engine {
         shared.resolver.set(dns);
         // In place before the thread reads its first packet: a messenger's first flow is read as one, and
         // substitution goes on from the engine before.
-        shared.set_proxies(proxies);
+        let _ = shared.swap_proxies(proxies);
         lock(&shared.proxies).carry_direct(direct);
         // In place before the thread reads its first packet: no blocked name gets an answer from the new engine.
         shared.set_blocking(blocking);
@@ -1447,7 +1447,15 @@ impl Engine {
     /// of the network part's DNS address reaches the apps with a time to live of 0 (ADR 0038).
     pub fn chain(&self, chain: Option<Chain>) {
         let on = chain.is_some() || self.shared.tunnels.any();
-        *lock(&self.shared.chain) = chain.map(Arc::new);
+        let tool = chain.as_ref().map(|chain| chain.tool);
+        let before = std::mem::replace(&mut *lock(&self.shared.chain), chain.map(Arc::new));
+        // A tool chained anew that the network part had not handed as one is a tool from now on (R10's late tools).
+        if let Some(tool) = tool
+            && before.as_ref().is_none_or(|before| before.tool != tool)
+            && !self.shared.handed_tool(tool)
+        {
+            self.shared.tools_joined(&[tool]);
+        }
         // After the chain itself: a mapping that reads the new count reads the new chain too.
         self.shared.chains.fetch_add(1, Ordering::Release);
         self.shared.uncached_answers.store(on, Ordering::Relaxed);

@@ -95,9 +95,10 @@ pub struct AppNow {
     pub through_tool: bool,
     /// The `WireGuard` tunnel it went through with its destinations left out, in a window (W7).
     pub through_tunnel: Option<u32>,
-    /// Whether it is the user's tool with its own servers left out, as they are while "Log where these apps
-    /// connect" is off (ADR 0046, decision 3, as decided on 2026-11-19), so that the view says why it shows
-    /// none rather than guess it from an empty list.
+    /// Whether it is a circumvention tool, chained or not, with bytes in a window that no place shows: its own
+    /// connections' places dropped once their window ended, as they are while "Log where these apps connect" is off
+    /// (R10, the proxy record's unit D; ADR 0046, decision 3), so that the view says some of its connections are not
+    /// shown rather than guess it from its list.
     pub servers_hidden: bool,
     /// Its bytes up and down, by window ([`WINDOWS`]), then by column ([`COLUMNS`]).
     pub bytes: [[Ways; COLUMNS]; WINDOWS],
@@ -304,6 +305,16 @@ mod tests {
         let mut shown = snapshot;
         shown.apps[0].places[0].shown_only = true;
         let out = encode(&shown);
+        assert_eq!(out[flags], 0b11);
+        assert_eq!(out.len(), expected.len());
+        // R10 (the proxy record's unit D): bit 2 of the app's flags on a tool that is not chained, with bytes no place
+        // shows, beside its place shown here only; the layout is the same.
+        let mut tool = shown;
+        tool.apps[0].through_tool = false;
+        tool.apps[0].servers_hidden = true;
+        let out = encode(&tool);
+        let app_flags = 1 + 8 + 1 + 8 + 1 + 3 * 8 + 4 + 4 + 1;
+        assert_eq!(out[app_flags], 0b100);
         assert_eq!(out[flags], 0b11);
         assert_eq!(out.len(), expected.len());
     }
