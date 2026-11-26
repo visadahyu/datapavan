@@ -30,8 +30,24 @@ use datapavan_net::{
 use jni::errors::{Error, ThrowRuntimeExAndDefault};
 use jni::objects::{JByteArray, JClass, JIntArray, JLongArray, JObject, JString};
 use jni::sys::{jboolean, jint, jlong};
-use jni::{EnvUnowned, JValue, JavaVM, jni_sig, jni_str};
+use jni::{Env, EnvUnowned, JValue, JavaVM, jni_sig, jni_str};
 use zeroize::Zeroize;
+
+/// The one entry of every JNI function that returns a `T` (the cold paths' second pass, ADR 0053): the jni crate's
+/// `with_env`, which attaches the thread's environment and catches a panic where one unwinds (debug builds; a release
+/// build aborts), and the error policy `ThrowRuntimeExAndDefault`, which throws an `Err` to Java as a
+/// `RuntimeException` whose message starts "Rust error:" and returns `T::default()`, as each function did itself.
+/// Generic over the return type alone, so that this code is made once per type, not once per function (41 of them,
+/// seven types): each function's body is a closure behind one indirect call.
+#[inline(never)]
+fn entry<'caller, T: Default + 'caller>(
+    mut unowned_env: EnvUnowned<'caller>,
+    body: &mut dyn FnMut(&mut Env<'caller>) -> Result<T, Error>,
+) -> T {
+    unowned_env
+        .with_env(|env| body(env))
+        .resolve::<ThrowRuntimeExAndDefault>()
+}
 
 /// The running engine, if any.
 ///
@@ -635,7 +651,7 @@ fn set_non_blocking(fd: &OwnedFd) {
 // unique in this library.
 #[unsafe(no_mangle)]
 pub extern "system" fn Java_org_visadahyu_datapavan_network_Engine_nativeStart<'caller>(
-    mut unowned_env: EnvUnowned<'caller>,
+    unowned_env: EnvUnowned<'caller>,
     _class: JClass<'caller>,
     service: JObject<'caller>,
     fd: jint,
@@ -646,48 +662,46 @@ pub extern "system" fn Java_org_visadahyu_datapavan_network_Engine_nativeStart<'
     table_length: jlong,
     spare_addresses: jboolean,
 ) -> jboolean {
-    unowned_env
-        .with_env(|env| -> Result<jboolean, Error> {
-            // Taken out first: the lock is not held while the engine's thread is joined.
-            let previous = engine().take();
-            let handover = previous.map(Engine::hand_over);
-            if fd < 0 {
-                return Ok(false);
-            }
-            // SAFETY: Kotlin passes the result of `ParcelFileDescriptor.detachFd()`, which hands the only
-            // owning reference to the descriptor to native code; nothing else closes it.
-            let fd = unsafe { OwnedFd::from_raw_fd(fd) };
-            set_non_blocking(&fd);
-            let platform: Arc<dyn Platform> = Arc::new(Service {
-                vm: env.get_java_vm()?,
-                service: env.new_global_ref(&service)?,
-            });
-            let config = Config {
-                limits: Limits::for_this_process(),
-                mtu: u16::try_from(mtu).unwrap_or(1500),
-                keep_flows: usize::try_from(keep_flows).unwrap_or(0),
-                // The common addresses, unless the network beneath uses them itself (ADR 0041).
-                addresses: if spare_addresses {
-                    Addresses::SPARE
-                } else {
-                    Addresses::COMMON
-                },
-            };
-            let organisations = (table_fd >= 0).then(|| {
-                // SAFETY: as for `fd`: Kotlin hands over a duplicate it detached, owned by nothing else.
-                let file = File::from(unsafe { OwnedFd::from_raw_fd(table_fd) });
-                let part = FilePart::new(
-                    file,
-                    u64::try_from(table_start).unwrap_or(0),
-                    u64::try_from(table_length).unwrap_or(0),
-                );
-                Organisations::open(Box::new(part)).ok()
-            });
-            Ok(start_next(handover, |carried| {
-                Engine::start_with(fd, config, platform, organisations.flatten(), carried)
-            }))
-        })
-        .resolve::<ThrowRuntimeExAndDefault>()
+    entry(unowned_env, &mut |env| -> Result<jboolean, Error> {
+        // Taken out first: the lock is not held while the engine's thread is joined.
+        let previous = engine().take();
+        let handover = previous.map(Engine::hand_over);
+        if fd < 0 {
+            return Ok(false);
+        }
+        // SAFETY: Kotlin passes the result of `ParcelFileDescriptor.detachFd()`, which hands the only
+        // owning reference to the descriptor to native code; nothing else closes it.
+        let fd = unsafe { OwnedFd::from_raw_fd(fd) };
+        set_non_blocking(&fd);
+        let platform: Arc<dyn Platform> = Arc::new(Service {
+            vm: env.get_java_vm()?,
+            service: env.new_global_ref(&service)?,
+        });
+        let config = Config {
+            limits: Limits::for_this_process(),
+            mtu: u16::try_from(mtu).unwrap_or(1500),
+            keep_flows: usize::try_from(keep_flows).unwrap_or(0),
+            // The common addresses, unless the network beneath uses them itself (ADR 0041).
+            addresses: if spare_addresses {
+                Addresses::SPARE
+            } else {
+                Addresses::COMMON
+            },
+        };
+        let organisations = (table_fd >= 0).then(|| {
+            // SAFETY: as for `fd`: Kotlin hands over a duplicate it detached, owned by nothing else.
+            let file = File::from(unsafe { OwnedFd::from_raw_fd(table_fd) });
+            let part = FilePart::new(
+                file,
+                u64::try_from(table_start).unwrap_or(0),
+                u64::try_from(table_length).unwrap_or(0),
+            );
+            Organisations::open(Box::new(part)).ok()
+        });
+        Ok(start_next(handover, |carried| {
+            Engine::start_with(fd, config, platform, organisations.flatten(), carried)
+        }))
+    })
 }
 
 /// `Engine.nativeSwapTunnel(fd)`: takes ownership of the descriptor `fd` of the tunnel set up again with
@@ -702,37 +716,33 @@ pub extern "system" fn Java_org_visadahyu_datapavan_network_Engine_nativeStart<'
 // Boolean`, unique in this library.
 #[unsafe(no_mangle)]
 pub extern "system" fn Java_org_visadahyu_datapavan_network_Engine_nativeSwapTunnel<'caller>(
-    mut unowned_env: EnvUnowned<'caller>,
+    unowned_env: EnvUnowned<'caller>,
     _class: JClass<'caller>,
     fd: jint,
 ) -> jboolean {
-    unowned_env
-        .with_env(|_env| -> Result<jboolean, Error> {
-            if fd < 0 {
-                return Ok(false);
-            }
-            // SAFETY: Kotlin passes the result of `ParcelFileDescriptor.detachFd()` on a duplicate it
-            // made for the call, which hands the only owning reference to native code; nothing else
-            // closes it.
-            let fd = unsafe { OwnedFd::from_raw_fd(fd) };
-            Ok(swap_tunnel(fd))
-        })
-        .resolve::<ThrowRuntimeExAndDefault>()
+    entry(unowned_env, &mut |_env| -> Result<jboolean, Error> {
+        if fd < 0 {
+            return Ok(false);
+        }
+        // SAFETY: Kotlin passes the result of `ParcelFileDescriptor.detachFd()` on a duplicate it
+        // made for the call, which hands the only owning reference to native code; nothing else
+        // closes it.
+        let fd = unsafe { OwnedFd::from_raw_fd(fd) };
+        Ok(swap_tunnel(fd))
+    })
 }
 
 /// `Engine.nativeStop()`: stops the engine and closes the tunnel's descriptor.
 // SAFETY: exported under the JNI name of the Kotlin method `external fun nativeStop()`.
 #[unsafe(no_mangle)]
 pub extern "system" fn Java_org_visadahyu_datapavan_network_Engine_nativeStop<'caller>(
-    mut unowned_env: EnvUnowned<'caller>,
+    unowned_env: EnvUnowned<'caller>,
     _class: JClass<'caller>,
 ) {
-    unowned_env
-        .with_env(|_env| -> Result<(), Error> {
-            stop_running();
-            Ok(())
-        })
-        .resolve::<ThrowRuntimeExAndDefault>();
+    entry(unowned_env, &mut |_env| -> Result<(), Error> {
+        stop_running();
+        Ok(())
+    });
 }
 
 /// `Engine.nativeNetworkChanged(dns, moved)`: the network beneath the tunnel or its DNS server
@@ -742,20 +752,18 @@ pub extern "system" fn Java_org_visadahyu_datapavan_network_Engine_nativeStop<'c
 // `external fun nativeNetworkChanged(dns: String, moved: Boolean)`.
 #[unsafe(no_mangle)]
 pub extern "system" fn Java_org_visadahyu_datapavan_network_Engine_nativeNetworkChanged<'caller>(
-    mut unowned_env: EnvUnowned<'caller>,
+    unowned_env: EnvUnowned<'caller>,
     _class: JClass<'caller>,
     dns: JString<'caller>,
     moved: jboolean,
 ) {
-    unowned_env
-        .with_env(|env| -> Result<(), Error> {
-            let dns: Option<IpAddr> = dns.try_to_string(env).ok().and_then(|s| s.parse().ok());
-            if let Some(running) = engine().as_ref() {
-                running.network_changed(dns, moved);
-            }
-            Ok(())
-        })
-        .resolve::<ThrowRuntimeExAndDefault>();
+    entry(unowned_env, &mut |env| -> Result<(), Error> {
+        let dns: Option<IpAddr> = dns.try_to_string(env).ok().and_then(|s| s.parse().ok());
+        if let Some(running) = engine().as_ref() {
+            running.network_changed(dns, moved);
+        }
+        Ok(())
+    });
 }
 
 /// `Engine.nativeRouteMtu(fd)`: the MTU the kernel keeps for the route of the connected socket `fd`
@@ -765,23 +773,21 @@ pub extern "system" fn Java_org_visadahyu_datapavan_network_Engine_nativeNetwork
 // SAFETY: exported under the JNI name of the Kotlin method `external fun nativeRouteMtu(fd: Int): Int`.
 #[unsafe(no_mangle)]
 pub extern "system" fn Java_org_visadahyu_datapavan_network_Engine_nativeRouteMtu<'caller>(
-    mut unowned_env: EnvUnowned<'caller>,
+    unowned_env: EnvUnowned<'caller>,
     _class: JClass<'caller>,
     fd: jint,
 ) -> jint {
-    unowned_env
-        .with_env(|_env| -> Result<jint, Error> {
-            if fd < 0 {
-                return Ok(-1);
-            }
-            // SAFETY: Kotlin holds `fd` open for the whole call and closes it only after this returns;
-            // the borrow ends with the call, and nothing here closes or keeps it.
-            let socket = unsafe { BorrowedFd::borrow_raw(fd) };
-            Ok(datapavan_net::engine::route_mtu(&socket)
-                .and_then(|mtu| jint::try_from(mtu).ok())
-                .unwrap_or(-1))
-        })
-        .resolve::<ThrowRuntimeExAndDefault>()
+    entry(unowned_env, &mut |_env| -> Result<jint, Error> {
+        if fd < 0 {
+            return Ok(-1);
+        }
+        // SAFETY: Kotlin holds `fd` open for the whole call and closes it only after this returns;
+        // the borrow ends with the call, and nothing here closes or keeps it.
+        let socket = unsafe { BorrowedFd::borrow_raw(fd) };
+        Ok(datapavan_net::engine::route_mtu(&socket)
+            .and_then(|mtu| jint::try_from(mtu).ok())
+            .unwrap_or(-1))
+    })
 }
 
 /// `Engine.nativeOrganisations()`: the release month of the organisation table the running engine
@@ -789,35 +795,31 @@ pub extern "system" fn Java_org_visadahyu_datapavan_network_Engine_nativeRouteMt
 // SAFETY: exported under the JNI name of the Kotlin method `external fun nativeOrganisations(): String`.
 #[unsafe(no_mangle)]
 pub extern "system" fn Java_org_visadahyu_datapavan_network_Engine_nativeOrganisations<'caller>(
-    mut unowned_env: EnvUnowned<'caller>,
+    unowned_env: EnvUnowned<'caller>,
     _class: JClass<'caller>,
 ) -> JString<'caller> {
-    unowned_env
-        .with_env(|env| -> Result<_, Error> {
-            let month = engine()
-                .as_ref()
-                .and_then(Engine::organisations)
-                .unwrap_or_default();
-            JString::from_str(env, month)
-        })
-        .resolve::<ThrowRuntimeExAndDefault>()
+    entry(unowned_env, &mut |env| -> Result<_, Error> {
+        let month = engine()
+            .as_ref()
+            .and_then(Engine::organisations)
+            .unwrap_or_default();
+        JString::from_str(env, month)
+    })
 }
 
 /// `Engine.nativeFlushLog()`: hands the connection log every waiting record now (debug builds' test).
 // SAFETY: exported under the JNI name of the Kotlin method `external fun nativeFlushLog()`.
 #[unsafe(no_mangle)]
 pub extern "system" fn Java_org_visadahyu_datapavan_network_Engine_nativeFlushLog<'caller>(
-    mut unowned_env: EnvUnowned<'caller>,
+    unowned_env: EnvUnowned<'caller>,
     _class: JClass<'caller>,
 ) {
-    unowned_env
-        .with_env(|_env| -> Result<_, Error> {
-            if let Some(engine) = engine().as_ref() {
-                engine.flush_log();
-            }
-            Ok(())
-        })
-        .resolve::<ThrowRuntimeExAndDefault>();
+    entry(unowned_env, &mut |_env| -> Result<_, Error> {
+        if let Some(engine) = engine().as_ref() {
+            engine.flush_log();
+        }
+        Ok(())
+    });
 }
 
 /// `Engine.nativeChain(proxy, port, user, password, toolUid, apps, udp, logDestinations)`: turns chaining
@@ -831,7 +833,7 @@ pub extern "system" fn Java_org_visadahyu_datapavan_network_Engine_nativeFlushLo
 #[unsafe(no_mangle)]
 #[allow(clippy::too_many_arguments)]
 pub extern "system" fn Java_org_visadahyu_datapavan_network_Engine_nativeChain<'caller>(
-    mut unowned_env: EnvUnowned<'caller>,
+    unowned_env: EnvUnowned<'caller>,
     _class: JClass<'caller>,
     proxy: JString<'caller>,
     port: jint,
@@ -842,43 +844,40 @@ pub extern "system" fn Java_org_visadahyu_datapavan_network_Engine_nativeChain<'
     udp: jboolean,
     log_destinations: jboolean,
 ) -> jboolean {
-    unowned_env
-        .with_env(|env| -> Result<jboolean, Error> {
-            let address: Option<IpAddr> =
-                proxy.try_to_string(env).ok().and_then(|s| s.parse().ok());
-            let chain = match (address, u16::try_from(port), u32::try_from(tool_uid)) {
-                (Some(ip), Ok(port), Ok(tool)) => {
-                    // A null array is no credentials; convert_byte_array refuses it.
-                    let credentials = match (
-                        env.convert_byte_array(&user).ok(),
-                        env.convert_byte_array(&password).ok(),
-                    ) {
-                        (Some(user), Some(password)) => Credentials::new(&user, &password),
-                        _ => None,
-                    };
-                    let apps = if apps.as_raw().is_null() {
-                        None
-                    } else {
-                        let mut uids = vec![0; apps.len(env)?];
-                        apps.get_region(env, 0, &mut uids)?;
-                        let mut chosen = datapavan_net::set();
-                        chosen.extend(uids.into_iter().filter_map(|u| u32::try_from(u).ok()));
-                        Some(chosen)
-                    };
-                    Some(Chain {
-                        proxy: SocketAddr::new(ip, port),
-                        credentials,
-                        tool,
-                        apps,
-                        udp,
-                        log_destinations,
-                    })
-                }
-                _ => None,
-            };
-            Ok(set_chain(chain))
-        })
-        .resolve::<ThrowRuntimeExAndDefault>()
+    entry(unowned_env, &mut |env| -> Result<jboolean, Error> {
+        let address: Option<IpAddr> = proxy.try_to_string(env).ok().and_then(|s| s.parse().ok());
+        let chain = match (address, u16::try_from(port), u32::try_from(tool_uid)) {
+            (Some(ip), Ok(port), Ok(tool)) => {
+                // A null array is no credentials; convert_byte_array refuses it.
+                let credentials = match (
+                    env.convert_byte_array(&user).ok(),
+                    env.convert_byte_array(&password).ok(),
+                ) {
+                    (Some(user), Some(password)) => Credentials::new(&user, &password),
+                    _ => None,
+                };
+                let apps = if apps.as_raw().is_null() {
+                    None
+                } else {
+                    let mut uids = vec![0; apps.len(env)?];
+                    apps.get_region(env, 0, &mut uids)?;
+                    let mut chosen = datapavan_net::set();
+                    chosen.extend(uids.into_iter().filter_map(|u| u32::try_from(u).ok()));
+                    Some(chosen)
+                };
+                Some(Chain {
+                    proxy: SocketAddr::new(ip, port),
+                    credentials,
+                    tool,
+                    apps,
+                    udp,
+                    log_destinations,
+                })
+            }
+            _ => None,
+        };
+        Ok(set_chain(chain))
+    })
 }
 
 /// `Engine.nativeTunnelSet(id, text, localNetwork)`: adds the `WireGuard` configuration `text`, in `wg-quick`'s
@@ -890,38 +889,36 @@ pub extern "system" fn Java_org_visadahyu_datapavan_network_Engine_nativeChain<'
 // ByteArray, localNetwork: Boolean): String`.
 #[unsafe(no_mangle)]
 pub extern "system" fn Java_org_visadahyu_datapavan_network_Engine_nativeTunnelSet<'caller>(
-    mut unowned_env: EnvUnowned<'caller>,
+    unowned_env: EnvUnowned<'caller>,
     _class: JClass<'caller>,
     id: jint,
     text: JByteArray<'caller>,
     local_network: jboolean,
 ) -> JString<'caller> {
-    unowned_env
-        .with_env(|env| -> Result<_, Error> {
-            let mut bytes = env.convert_byte_array(&text)?;
-            let parsed = WgConfig::parse(&bytes);
-            bytes.zeroize();
-            let answer = match (u32::try_from(id).ok().filter(|&id| id != 0), parsed) {
-                (None, _) => "bad-id".to_owned(),
-                (Some(_), Err(refusal)) => refusal.to_string(),
-                (Some(id), Ok(config)) => {
-                    let configured = Configured {
-                        id,
-                        config: Arc::new(config),
-                        local_network,
-                    };
-                    let mut answer = String::new();
-                    set_tunnels(|tunnels| {
-                        if !place_tunnel(tunnels, configured) {
-                            "too-many".clone_into(&mut answer);
-                        }
-                    });
-                    answer
-                }
-            };
-            JString::from_str(env, answer)
-        })
-        .resolve::<ThrowRuntimeExAndDefault>()
+    entry(unowned_env, &mut |env| -> Result<_, Error> {
+        let mut bytes = env.convert_byte_array(&text)?;
+        let parsed = WgConfig::parse(&bytes);
+        bytes.zeroize();
+        let answer = match (u32::try_from(id).ok().filter(|&id| id != 0), parsed) {
+            (None, _) => "bad-id".to_owned(),
+            (Some(_), Err(refusal)) => refusal.to_string(),
+            (Some(id), Ok(config)) => {
+                let configured = Configured {
+                    id,
+                    config: Arc::new(config),
+                    local_network,
+                };
+                let mut answer = String::new();
+                set_tunnels(|tunnels| {
+                    if !place_tunnel(tunnels, configured) {
+                        "too-many".clone_into(&mut answer);
+                    }
+                });
+                answer
+            }
+        };
+        JString::from_str(env, answer)
+    })
 }
 
 /// `Engine.nativeTunnelParse(text)`: reads the `WireGuard` configuration `text` without setting it, for the
@@ -932,18 +929,16 @@ pub extern "system" fn Java_org_visadahyu_datapavan_network_Engine_nativeTunnelS
 // String`.
 #[unsafe(no_mangle)]
 pub extern "system" fn Java_org_visadahyu_datapavan_network_Engine_nativeTunnelParse<'caller>(
-    mut unowned_env: EnvUnowned<'caller>,
+    unowned_env: EnvUnowned<'caller>,
     _class: JClass<'caller>,
     text: JByteArray<'caller>,
 ) -> JString<'caller> {
-    unowned_env
-        .with_env(|env| -> Result<_, Error> {
-            let mut bytes = env.convert_byte_array(&text)?;
-            let answer = parse_answer(&bytes);
-            bytes.zeroize();
-            JString::from_str(env, answer)
-        })
-        .resolve::<ThrowRuntimeExAndDefault>()
+    entry(unowned_env, &mut |env| -> Result<_, Error> {
+        let mut bytes = env.convert_byte_array(&text)?;
+        let answer = parse_answer(&bytes);
+        bytes.zeroize();
+        JString::from_str(env, answer)
+    })
 }
 
 /// `Engine.nativeTunnelOrder(ids)`: puts the tunnels `ids` first, in that order, the first the default tunnel
@@ -952,22 +947,20 @@ pub extern "system" fn Java_org_visadahyu_datapavan_network_Engine_nativeTunnelP
 // SAFETY: exported under the JNI name of the Kotlin method `external fun nativeTunnelOrder(ids: IntArray)`.
 #[unsafe(no_mangle)]
 pub extern "system" fn Java_org_visadahyu_datapavan_network_Engine_nativeTunnelOrder<'caller>(
-    mut unowned_env: EnvUnowned<'caller>,
+    unowned_env: EnvUnowned<'caller>,
     _class: JClass<'caller>,
     ids: JIntArray<'caller>,
 ) {
-    unowned_env
-        .with_env(|env| -> Result<_, Error> {
-            let mut values = vec![0; ids.len(env)?];
-            ids.get_region(env, 0, &mut values)?;
-            let ids: Vec<u32> = values
-                .into_iter()
-                .filter_map(|id| u32::try_from(id).ok())
-                .collect();
-            set_tunnels(|tunnels| order_tunnels(tunnels, &ids));
-            Ok(())
-        })
-        .resolve::<ThrowRuntimeExAndDefault>();
+    entry(unowned_env, &mut |env| -> Result<_, Error> {
+        let mut values = vec![0; ids.len(env)?];
+        ids.get_region(env, 0, &mut values)?;
+        let ids: Vec<u32> = values
+            .into_iter()
+            .filter_map(|id| u32::try_from(id).ok())
+            .collect();
+        set_tunnels(|tunnels| order_tunnels(tunnels, &ids));
+        Ok(())
+    });
 }
 
 /// `Engine.nativeTunnelRemove(id)`: removes the configuration of the tunnel `id` (W7). The apps routed to it
@@ -975,20 +968,18 @@ pub extern "system" fn Java_org_visadahyu_datapavan_network_Engine_nativeTunnelO
 // SAFETY: exported under the JNI name of the Kotlin method `external fun nativeTunnelRemove(id: Int)`.
 #[unsafe(no_mangle)]
 pub extern "system" fn Java_org_visadahyu_datapavan_network_Engine_nativeTunnelRemove<'caller>(
-    mut unowned_env: EnvUnowned<'caller>,
+    unowned_env: EnvUnowned<'caller>,
     _class: JClass<'caller>,
     id: jint,
 ) {
-    unowned_env
-        .with_env(|_env| -> Result<_, Error> {
-            if let Ok(id) = u32::try_from(id) {
-                // The routes to it stay: its apps wait, never going directly, until the network part routes them
-                // elsewhere or sets its configuration again (fix round, both reviews' first finding).
-                set_tunnels(|tunnels| tunnels.tunnels.retain(|t| t.id != id));
-            }
-            Ok(())
-        })
-        .resolve::<ThrowRuntimeExAndDefault>();
+    entry(unowned_env, &mut |_env| -> Result<_, Error> {
+        if let Ok(id) = u32::try_from(id) {
+            // The routes to it stay: its apps wait, never going directly, until the network part routes them
+            // elsewhere or sets its configuration again (fix round, both reviews' first finding).
+            set_tunnels(|tunnels| tunnels.tunnels.retain(|t| t.id != id));
+        }
+        Ok(())
+    });
 }
 
 /// `Engine.nativeTunnelRoutes(uids, tunnels, logDestinations)`: the apps sent through a tunnel, each UID in
@@ -998,37 +989,33 @@ pub extern "system" fn Java_org_visadahyu_datapavan_network_Engine_nativeTunnelR
 // tunnels: IntArray, logDestinations: Boolean)`.
 #[unsafe(no_mangle)]
 pub extern "system" fn Java_org_visadahyu_datapavan_network_Engine_nativeTunnelRoutes<'caller>(
-    mut unowned_env: EnvUnowned<'caller>,
+    unowned_env: EnvUnowned<'caller>,
     _class: JClass<'caller>,
     uids: JIntArray<'caller>,
     tunnels: JIntArray<'caller>,
     log_destinations: jboolean,
 ) {
-    unowned_env
-        .with_env(|env| -> Result<_, Error> {
-            let read = |array: &JIntArray<'_>, env: &mut jni::Env<'_>| -> Result<Vec<i32>, Error> {
-                let mut values = vec![0; array.len(env)?];
-                array.get_region(env, 0, &mut values)?;
-                Ok(values)
-            };
-            let (uids, ids) = (read(&uids, env)?, read(&tunnels, env)?);
-            // The engine's maker of maps, its keys out of line (the cold paths' second pass, ADR 0053).
-            let mut routes = datapavan_net::map();
-            routes.extend(
-                uids.into_iter()
-                    .zip(ids)
-                    .filter_map(|(uid, id)| {
-                        Some((u32::try_from(uid).ok()?, u32::try_from(id).ok()?))
-                    })
-                    .filter(|(_, id)| *id != 0),
-            );
-            set_tunnels(|tunnels| {
-                tunnels.routes = routes;
-                tunnels.log_destinations = log_destinations;
-            });
-            Ok(())
-        })
-        .resolve::<ThrowRuntimeExAndDefault>();
+    entry(unowned_env, &mut |env| -> Result<_, Error> {
+        let read = |array: &JIntArray<'_>, env: &mut jni::Env<'_>| -> Result<Vec<i32>, Error> {
+            let mut values = vec![0; array.len(env)?];
+            array.get_region(env, 0, &mut values)?;
+            Ok(values)
+        };
+        let (uids, ids) = (read(&uids, env)?, read(&tunnels, env)?);
+        // The engine's maker of maps, its keys out of line (the cold paths' second pass, ADR 0053).
+        let mut routes = datapavan_net::map();
+        routes.extend(
+            uids.into_iter()
+                .zip(ids)
+                .filter_map(|(uid, id)| Some((u32::try_from(uid).ok()?, u32::try_from(id).ok()?)))
+                .filter(|(_, id)| *id != 0),
+        );
+        set_tunnels(|tunnels| {
+            tunnels.routes = routes;
+            tunnels.log_destinations = log_destinations;
+        });
+        Ok(())
+    });
 }
 
 /// `Engine.nativeKnownApps(uids)`: every installed app's UID, while the network part routes any app, or null when it
@@ -1037,25 +1024,23 @@ pub extern "system" fn Java_org_visadahyu_datapavan_network_Engine_nativeTunnelR
 // SAFETY: exported under the JNI name of the Kotlin method `external fun nativeKnownApps(uids: IntArray?)`.
 #[unsafe(no_mangle)]
 pub extern "system" fn Java_org_visadahyu_datapavan_network_Engine_nativeKnownApps<'caller>(
-    mut unowned_env: EnvUnowned<'caller>,
+    unowned_env: EnvUnowned<'caller>,
     _class: JClass<'caller>,
     uids: JIntArray<'caller>,
 ) {
-    unowned_env
-        .with_env(|env| -> Result<_, Error> {
-            let known = if uids.as_raw().is_null() {
-                None
-            } else {
-                let mut values = vec![0; uids.len(env)?];
-                uids.get_region(env, 0, &mut values)?;
-                let mut known = datapavan_net::set();
-                known.extend(values.into_iter().filter_map(|uid| u32::try_from(uid).ok()));
-                Some(Arc::new(known))
-            };
-            set_tunnels(|tunnels| tunnels.known = known);
-            Ok(())
-        })
-        .resolve::<ThrowRuntimeExAndDefault>();
+    entry(unowned_env, &mut |env| -> Result<_, Error> {
+        let known = if uids.as_raw().is_null() {
+            None
+        } else {
+            let mut values = vec![0; uids.len(env)?];
+            uids.get_region(env, 0, &mut values)?;
+            let mut known = datapavan_net::set();
+            known.extend(values.into_iter().filter_map(|uid| u32::try_from(uid).ok()));
+            Some(Arc::new(known))
+        };
+        set_tunnels(|tunnels| tunnels.known = known);
+        Ok(())
+    });
 }
 
 /// `Engine.nativeAppAnswers()`: the engine's answers for the apps the network part did not name, one per line as
@@ -1063,16 +1048,14 @@ pub extern "system" fn Java_org_visadahyu_datapavan_network_Engine_nativeKnownAp
 // SAFETY: exported under the JNI name of the Kotlin method `external fun nativeAppAnswers(): String`.
 #[unsafe(no_mangle)]
 pub extern "system" fn Java_org_visadahyu_datapavan_network_Engine_nativeAppAnswers<'caller>(
-    mut unowned_env: EnvUnowned<'caller>,
+    unowned_env: EnvUnowned<'caller>,
     _class: JClass<'caller>,
 ) -> JString<'caller> {
-    unowned_env
-        .with_env(|env| -> Result<_, Error> {
-            let answers = engine().as_ref().map_or_else(Vec::new, Engine::app_answers);
-            let lines: Vec<String> = answers.iter().map(answer_line).collect();
-            JString::from_str(env, lines.join("\n"))
-        })
-        .resolve::<ThrowRuntimeExAndDefault>()
+    entry(unowned_env, &mut |env| -> Result<_, Error> {
+        let answers = engine().as_ref().map_or_else(Vec::new, Engine::app_answers);
+        let lines: Vec<String> = answers.iter().map(answer_line).collect();
+        JString::from_str(env, lines.join("\n"))
+    })
 }
 
 /// `Engine.nativeTunnelStates()`: each tunnel's state, one per line as [`state_line`] writes it, in the order
@@ -1080,18 +1063,16 @@ pub extern "system" fn Java_org_visadahyu_datapavan_network_Engine_nativeAppAnsw
 // SAFETY: exported under the JNI name of the Kotlin method `external fun nativeTunnelStates(): String`.
 #[unsafe(no_mangle)]
 pub extern "system" fn Java_org_visadahyu_datapavan_network_Engine_nativeTunnelStates<'caller>(
-    mut unowned_env: EnvUnowned<'caller>,
+    unowned_env: EnvUnowned<'caller>,
     _class: JClass<'caller>,
 ) -> JString<'caller> {
-    unowned_env
-        .with_env(|env| -> Result<_, Error> {
-            let states = engine()
-                .as_ref()
-                .map_or_else(Vec::new, Engine::tunnel_states);
-            let lines: Vec<String> = states.iter().map(state_line).collect();
-            JString::from_str(env, lines.join("\n"))
-        })
-        .resolve::<ThrowRuntimeExAndDefault>()
+    entry(unowned_env, &mut |env| -> Result<_, Error> {
+        let states = engine()
+            .as_ref()
+            .map_or_else(Vec::new, Engine::tunnel_states);
+        let lines: Vec<String> = states.iter().map(state_line).collect();
+        JString::from_str(env, lines.join("\n"))
+    })
 }
 
 /// A reply as the network part's Kotlin side gives it: `outcome` 200 or 0 with the answer's bytes, another HTTP status,
@@ -1113,26 +1094,24 @@ fn reply(outcome: i32, body: Option<Vec<u8>>) -> Reply {
 // body: ByteArray?): Boolean`.
 #[unsafe(no_mangle)]
 pub extern "system" fn Java_org_visadahyu_datapavan_network_Engine_nativeExchanged<'caller>(
-    mut unowned_env: EnvUnowned<'caller>,
+    unowned_env: EnvUnowned<'caller>,
     _class: JClass<'caller>,
     ticket: jlong,
     outcome: jint,
     body: JByteArray<'caller>,
 ) -> jboolean {
-    unowned_env
-        .with_env(|env| -> Result<jboolean, Error> {
-            let body = if body.as_raw().is_null() {
-                None
-            } else {
-                Some(env.convert_byte_array(&body)?)
-            };
-            let waiting = exchanges().clone();
-            let Ok(ticket) = u64::try_from(ticket) else {
-                return Ok(false);
-            };
-            Ok(waiting.is_some_and(|w| w.complete(ticket, reply(outcome, body))))
-        })
-        .resolve::<ThrowRuntimeExAndDefault>()
+    entry(unowned_env, &mut |env| -> Result<jboolean, Error> {
+        let body = if body.as_raw().is_null() {
+            None
+        } else {
+            Some(env.convert_byte_array(&body)?)
+        };
+        let waiting = exchanges().clone();
+        let Ok(ticket) = u64::try_from(ticket) else {
+            return Ok(false);
+        };
+        Ok(waiting.is_some_and(|w| w.complete(ticket, reply(outcome, body))))
+    })
 }
 
 /// `Engine.nativeDns(relays, targets, pairs, presets, setting)`: the encrypted resolver for direct apps' names
@@ -1143,7 +1122,7 @@ pub extern "system" fn Java_org_visadahyu_datapavan_network_Engine_nativeExchang
 // pairs: String, presets: String, setting: String): IntArray`.
 #[unsafe(no_mangle)]
 pub extern "system" fn Java_org_visadahyu_datapavan_network_Engine_nativeDns<'caller>(
-    mut unowned_env: EnvUnowned<'caller>,
+    unowned_env: EnvUnowned<'caller>,
     _class: JClass<'caller>,
     relays: JString<'caller>,
     targets: JString<'caller>,
@@ -1151,26 +1130,24 @@ pub extern "system" fn Java_org_visadahyu_datapavan_network_Engine_nativeDns<'ca
     presets: JString<'caller>,
     choice: JString<'caller>,
 ) -> JIntArray<'caller> {
-    unowned_env
-        .with_env(|env| -> Result<_, Error> {
-            let catalogue = Catalogue::parse(
-                &relays.try_to_string(env)?,
-                &targets.try_to_string(env)?,
-                &pairs.try_to_string(env)?,
-                &presets.try_to_string(env)?,
-            );
-            let config = DnsConfig::read(catalogue, &choice.try_to_string(env)?);
-            let int = |n: usize| jint::try_from(n).unwrap_or(jint::MAX);
-            let counts = [
-                int(config.catalogue.relays.len()),
-                int(config.catalogue.targets.len()),
-                int(config.pairs.len()),
-                int(config.catalogue.presets.len()),
-            ];
-            set_dns(Some(Arc::new(config)));
-            int_array(env, &counts)
-        })
-        .resolve::<ThrowRuntimeExAndDefault>()
+    entry(unowned_env, &mut |env| -> Result<_, Error> {
+        let catalogue = Catalogue::parse(
+            &relays.try_to_string(env)?,
+            &targets.try_to_string(env)?,
+            &pairs.try_to_string(env)?,
+            &presets.try_to_string(env)?,
+        );
+        let config = DnsConfig::read(catalogue, &choice.try_to_string(env)?);
+        let int = |n: usize| jint::try_from(n).unwrap_or(jint::MAX);
+        let counts = [
+            int(config.catalogue.relays.len()),
+            int(config.catalogue.targets.len()),
+            int(config.pairs.len()),
+            int(config.catalogue.presets.len()),
+        ];
+        set_dns(Some(Arc::new(config)));
+        int_array(env, &counts)
+    })
 }
 
 /// `Engine.nativeDnsNetwork(validated, domains)`: what Android says of the network beneath, kept for the engines
@@ -1180,21 +1157,19 @@ pub extern "system" fn Java_org_visadahyu_datapavan_network_Engine_nativeDns<'ca
 // domains: String)`.
 #[unsafe(no_mangle)]
 pub extern "system" fn Java_org_visadahyu_datapavan_network_Engine_nativeDnsNetwork<'caller>(
-    mut unowned_env: EnvUnowned<'caller>,
+    unowned_env: EnvUnowned<'caller>,
     _class: JClass<'caller>,
     validated: jboolean,
     domains: JString<'caller>,
 ) {
-    unowned_env
-        .with_env(|env| -> Result<(), Error> {
-            let domains = domains.try_to_string(env)?;
-            *dns_network() = Some((validated, domains.clone()));
-            if let Some(running) = engine().as_ref() {
-                running.dns_network(validated, &domains);
-            }
-            Ok(())
-        })
-        .resolve::<ThrowRuntimeExAndDefault>();
+    entry(unowned_env, &mut |env| -> Result<(), Error> {
+        let domains = domains.try_to_string(env)?;
+        *dns_network() = Some((validated, domains.clone()));
+        if let Some(running) = engine().as_ref() {
+            running.dns_network(validated, &domains);
+        }
+        Ok(())
+    });
 }
 
 /// `Engine.nativeDnsStatus()`: the encrypted resolver's state ([`Engine::dns_status`]); `way off` when no engine
@@ -1202,17 +1177,15 @@ pub extern "system" fn Java_org_visadahyu_datapavan_network_Engine_nativeDnsNetw
 // SAFETY: exported under the JNI name of the Kotlin method `external fun nativeDnsStatus(): String`.
 #[unsafe(no_mangle)]
 pub extern "system" fn Java_org_visadahyu_datapavan_network_Engine_nativeDnsStatus<'caller>(
-    mut unowned_env: EnvUnowned<'caller>,
+    unowned_env: EnvUnowned<'caller>,
     _class: JClass<'caller>,
 ) -> JString<'caller> {
-    unowned_env
-        .with_env(|env| -> Result<_, Error> {
-            let status = engine()
-                .as_ref()
-                .map_or_else(|| "way off\n".to_owned(), Engine::dns_status);
-            JString::from_str(env, status)
-        })
-        .resolve::<ThrowRuntimeExAndDefault>()
+    entry(unowned_env, &mut |env| -> Result<_, Error> {
+        let status = engine()
+            .as_ref()
+            .map_or_else(|| "way off\n".to_owned(), Engine::dns_status);
+        JString::from_str(env, status)
+    })
 }
 
 /// `Engine.nativeDnsTimesClear()`: forgets the durations the running engine's resolver kept
@@ -1220,17 +1193,15 @@ pub extern "system" fn Java_org_visadahyu_datapavan_network_Engine_nativeDnsStat
 // SAFETY: exported under the JNI name of the Kotlin method `external fun nativeDnsTimesClear()`.
 #[unsafe(no_mangle)]
 pub extern "system" fn Java_org_visadahyu_datapavan_network_Engine_nativeDnsTimesClear<'caller>(
-    mut unowned_env: EnvUnowned<'caller>,
+    unowned_env: EnvUnowned<'caller>,
     _class: JClass<'caller>,
 ) {
-    unowned_env
-        .with_env(|_env| -> Result<_, Error> {
-            if let Some(running) = engine().as_ref() {
-                running.dns_times_clear();
-            }
-            Ok(())
-        })
-        .resolve::<ThrowRuntimeExAndDefault>();
+    entry(unowned_env, &mut |_env| -> Result<_, Error> {
+        if let Some(running) = engine().as_ref() {
+            running.dns_times_clear();
+        }
+        Ok(())
+    });
 }
 
 /// `Engine.nativeDnsWaysChanged()`: a way through the resolver's proxy opened where there was none
@@ -1238,17 +1209,15 @@ pub extern "system" fn Java_org_visadahyu_datapavan_network_Engine_nativeDnsTime
 // SAFETY: exported under the JNI name of the Kotlin method `external fun nativeDnsWaysChanged()`.
 #[unsafe(no_mangle)]
 pub extern "system" fn Java_org_visadahyu_datapavan_network_Engine_nativeDnsWaysChanged<'caller>(
-    mut unowned_env: EnvUnowned<'caller>,
+    unowned_env: EnvUnowned<'caller>,
     _class: JClass<'caller>,
 ) {
-    unowned_env
-        .with_env(|_env| -> Result<_, Error> {
-            if let Some(running) = engine().as_ref() {
-                running.dns_ways_changed();
-            }
-            Ok(())
-        })
-        .resolve::<ThrowRuntimeExAndDefault>();
+    entry(unowned_env, &mut |_env| -> Result<_, Error> {
+        if let Some(running) = engine().as_ref() {
+            running.dns_ways_changed();
+        }
+        Ok(())
+    });
 }
 
 /// The ways of the datasets for the network screen ([`catalogue_lines`]).
@@ -1256,24 +1225,22 @@ pub extern "system" fn Java_org_visadahyu_datapavan_network_Engine_nativeDnsWays
 // targets: String, pairs: String, presets: String): String`.
 #[unsafe(no_mangle)]
 pub extern "system" fn Java_org_visadahyu_datapavan_network_Engine_nativeDnsCatalogue<'caller>(
-    mut unowned_env: EnvUnowned<'caller>,
+    unowned_env: EnvUnowned<'caller>,
     _class: JClass<'caller>,
     relays: JString<'caller>,
     targets: JString<'caller>,
     pairs: JString<'caller>,
     presets: JString<'caller>,
 ) -> JString<'caller> {
-    unowned_env
-        .with_env(|env| -> Result<_, Error> {
-            let catalogue = Catalogue::parse(
-                &relays.try_to_string(env)?,
-                &targets.try_to_string(env)?,
-                &pairs.try_to_string(env)?,
-                &presets.try_to_string(env)?,
-            );
-            JString::from_str(env, catalogue_lines(&catalogue))
-        })
-        .resolve::<ThrowRuntimeExAndDefault>()
+    entry(unowned_env, &mut |env| -> Result<_, Error> {
+        let catalogue = Catalogue::parse(
+            &relays.try_to_string(env)?,
+            &targets.try_to_string(env)?,
+            &pairs.try_to_string(env)?,
+            &presets.try_to_string(env)?,
+        );
+        JString::from_str(env, catalogue_lines(&catalogue))
+    })
 }
 
 /// The ways of `catalogue` that the engine read, as the network screen reads them, one per line, fields by tabs: `relay
@@ -1318,16 +1285,14 @@ fn catalogue_lines(catalogue: &Catalogue) -> String {
 // SAFETY: exported under the JNI name of the Kotlin method `external fun nativeUncacheAnswers(on: Boolean)`.
 #[unsafe(no_mangle)]
 pub extern "system" fn Java_org_visadahyu_datapavan_network_Engine_nativeUncacheAnswers<'caller>(
-    mut unowned_env: EnvUnowned<'caller>,
+    unowned_env: EnvUnowned<'caller>,
     _class: JClass<'caller>,
     on: jboolean,
 ) {
-    unowned_env
-        .with_env(|_env| -> Result<_, Error> {
-            set_uncached(on);
-            Ok(())
-        })
-        .resolve::<ThrowRuntimeExAndDefault>();
+    entry(unowned_env, &mut |_env| -> Result<_, Error> {
+        set_uncached(on);
+        Ok(())
+    });
 }
 
 /// `Engine.nativeCounters()`: the running engine's counters, all `datapavan_net::engine::COUNTERS` of
@@ -1335,22 +1300,20 @@ pub extern "system" fn Java_org_visadahyu_datapavan_network_Engine_nativeUncache
 // SAFETY: exported under the JNI name of the Kotlin method `external fun nativeCounters(): LongArray`.
 #[unsafe(no_mangle)]
 pub extern "system" fn Java_org_visadahyu_datapavan_network_Engine_nativeCounters<'caller>(
-    mut unowned_env: EnvUnowned<'caller>,
+    unowned_env: EnvUnowned<'caller>,
     _class: JClass<'caller>,
 ) -> JLongArray<'caller> {
-    unowned_env
-        .with_env(|env| -> Result<_, Error> {
-            let values: Vec<i64> = engine().as_ref().map_or_else(Vec::new, |e| {
-                e.counters()
-                    .iter()
-                    .map(|&v| i64::try_from(v).unwrap_or(i64::MAX))
-                    .collect()
-            });
-            let array = JLongArray::new(env, values.len())?;
-            array.set_region(env, 0, &values)?;
-            Ok(array)
-        })
-        .resolve::<ThrowRuntimeExAndDefault>()
+    entry(unowned_env, &mut |env| -> Result<_, Error> {
+        let values: Vec<i64> = engine().as_ref().map_or_else(Vec::new, |e| {
+            e.counters()
+                .iter()
+                .map(|&v| i64::try_from(v).unwrap_or(i64::MAX))
+                .collect()
+        });
+        let array = JLongArray::new(env, values.len())?;
+        array.set_region(env, 0, &values)?;
+        Ok(array)
+    })
 }
 
 /// `Engine.nativeStates(message)`: a reading of the apps' states (`datapavan_net::states`, ADR 0046,
@@ -1360,18 +1323,16 @@ pub extern "system" fn Java_org_visadahyu_datapavan_network_Engine_nativeCounter
 // ByteArray): Boolean`.
 #[unsafe(no_mangle)]
 pub extern "system" fn Java_org_visadahyu_datapavan_network_Engine_nativeStates<'caller>(
-    mut unowned_env: EnvUnowned<'caller>,
+    unowned_env: EnvUnowned<'caller>,
     _class: JClass<'caller>,
     message: JByteArray<'caller>,
 ) -> jboolean {
-    unowned_env
-        .with_env(|env| -> Result<jboolean, Error> {
-            let message = env.convert_byte_array(&message)?;
-            Ok(engine()
-                .as_ref()
-                .is_some_and(|running| running.states(&message)))
-        })
-        .resolve::<ThrowRuntimeExAndDefault>()
+    entry(unowned_env, &mut |env| -> Result<jboolean, Error> {
+        let message = env.convert_byte_array(&message)?;
+        Ok(engine()
+            .as_ref()
+            .is_some_and(|running| running.states(&message)))
+    })
 }
 
 /// `Engine.nativeActivity()`: what the live view "Now" draws (`datapavan_net::snapshot`), from the
@@ -1379,15 +1340,13 @@ pub extern "system" fn Java_org_visadahyu_datapavan_network_Engine_nativeStates<
 // SAFETY: exported under the JNI name of the Kotlin method `external fun nativeActivity(): ByteArray`.
 #[unsafe(no_mangle)]
 pub extern "system" fn Java_org_visadahyu_datapavan_network_Engine_nativeActivity<'caller>(
-    mut unowned_env: EnvUnowned<'caller>,
+    unowned_env: EnvUnowned<'caller>,
     _class: JClass<'caller>,
 ) -> JByteArray<'caller> {
-    unowned_env
-        .with_env(|env| -> Result<_, Error> {
-            let snapshot = engine().as_ref().map_or_else(Vec::new, Engine::activity);
-            env.byte_array_from_slice(&snapshot)
-        })
-        .resolve::<ThrowRuntimeExAndDefault>()
+    entry(unowned_env, &mut |env| -> Result<_, Error> {
+        let snapshot = engine().as_ref().map_or_else(Vec::new, Engine::activity);
+        env.byte_array_from_slice(&snapshot)
+    })
 }
 
 /// The network signatures of the trackers table the network part's Kotlin side last handed over, read from the data
@@ -1401,18 +1360,16 @@ static TRACKERS: Mutex<Option<Arc<NetworkSignatures>>> = Mutex::new(None);
 // keys: String): IntArray`.
 #[unsafe(no_mangle)]
 pub extern "system" fn Java_org_visadahyu_datapavan_network_Engine_nativeReadDataPack<'caller>(
-    mut unowned_env: EnvUnowned<'caller>,
+    unowned_env: EnvUnowned<'caller>,
     _class: JClass<'caller>,
     pack: JByteArray<'caller>,
     keys: JString<'caller>,
 ) -> JIntArray<'caller> {
-    unowned_env
-        .with_env(|env| -> Result<_, Error> {
-            let bytes = env.convert_byte_array(&pack)?;
-            let keys = keys.try_to_string(env)?;
-            int_array(env, &datapack::read_signed(&bytes, &keys))
-        })
-        .resolve::<ThrowRuntimeExAndDefault>()
+    entry(unowned_env, &mut |env| -> Result<_, Error> {
+        let bytes = env.convert_byte_array(&pack)?;
+        let keys = keys.try_to_string(env)?;
+        int_array(env, &datapack::read_signed(&bytes, &keys))
+    })
 }
 
 /// `Engine.nativeReadDataPayload(payload)`: reads the header of the APK's own data payload
@@ -1423,16 +1380,14 @@ pub extern "system" fn Java_org_visadahyu_datapavan_network_Engine_nativeReadDat
 pub extern "system" fn Java_org_visadahyu_datapavan_network_Engine_nativeReadDataPayload<
     'caller,
 >(
-    mut unowned_env: EnvUnowned<'caller>,
+    unowned_env: EnvUnowned<'caller>,
     _class: JClass<'caller>,
     payload: JByteArray<'caller>,
 ) -> JIntArray<'caller> {
-    unowned_env
-        .with_env(|env| -> Result<_, Error> {
-            let bytes = env.convert_byte_array(&payload)?;
-            int_array(env, &datapack::read_payload(&bytes))
-        })
-        .resolve::<ThrowRuntimeExAndDefault>()
+    entry(unowned_env, &mut |env| -> Result<_, Error> {
+        let bytes = env.convert_byte_array(&payload)?;
+        int_array(env, &datapack::read_payload(&bytes))
+    })
 }
 
 /// `Engine.nativeTrackers(table)`: reads the network signatures of `trackers.tsv` and keeps them for
@@ -1443,30 +1398,28 @@ pub extern "system" fn Java_org_visadahyu_datapavan_network_Engine_nativeReadDat
 // IntArray`.
 #[unsafe(no_mangle)]
 pub extern "system" fn Java_org_visadahyu_datapavan_network_Engine_nativeTrackers<'caller>(
-    mut unowned_env: EnvUnowned<'caller>,
+    unowned_env: EnvUnowned<'caller>,
     _class: JClass<'caller>,
     table: JByteArray<'caller>,
 ) -> JIntArray<'caller> {
-    unowned_env
-        .with_env(|env| -> Result<_, Error> {
-            let bytes = env.convert_byte_array(&table)?;
-            let read = std::str::from_utf8(&bytes)
-                .ok()
-                .and_then(|text| NetworkSignatures::parse(text).ok());
-            let counts = read.as_ref().map_or_else(Vec::new, |read| {
-                let int = |n: usize| jint::try_from(n).unwrap_or(jint::MAX);
-                vec![
-                    int(read.trackers().len()),
-                    int(read.alternatives()),
-                    int(read.refused().len()),
-                ]
-            });
-            *TRACKERS.lock().unwrap_or_else(PoisonError::into_inner) = read.map(Arc::new);
-            // The engines' proxied flows mark their trackers by the same table (ADR 0052).
-            set_proxies(|_| {});
-            int_array(env, &counts)
-        })
-        .resolve::<ThrowRuntimeExAndDefault>()
+    entry(unowned_env, &mut |env| -> Result<_, Error> {
+        let bytes = env.convert_byte_array(&table)?;
+        let read = std::str::from_utf8(&bytes)
+            .ok()
+            .and_then(|text| NetworkSignatures::parse(text).ok());
+        let counts = read.as_ref().map_or_else(Vec::new, |read| {
+            let int = |n: usize| jint::try_from(n).unwrap_or(jint::MAX);
+            vec![
+                int(read.trackers().len()),
+                int(read.alternatives()),
+                int(read.refused().len()),
+            ]
+        });
+        *TRACKERS.lock().unwrap_or_else(PoisonError::into_inner) = read.map(Arc::new);
+        // The engines' proxied flows mark their trackers by the same table (ADR 0052).
+        set_proxies(|_| {});
+        int_array(env, &counts)
+    })
 }
 
 /// `Engine.nativeBlockingTable(table)`: reads tracker blocking's graded table, `blocking/hosts.tsv` of the data pack
@@ -1477,32 +1430,30 @@ pub extern "system" fn Java_org_visadahyu_datapavan_network_Engine_nativeTracker
 // IntArray`.
 #[unsafe(no_mangle)]
 pub extern "system" fn Java_org_visadahyu_datapavan_network_Engine_nativeBlockingTable<'caller>(
-    mut unowned_env: EnvUnowned<'caller>,
+    unowned_env: EnvUnowned<'caller>,
     _class: JClass<'caller>,
     table: JByteArray<'caller>,
 ) -> JIntArray<'caller> {
-    unowned_env
-        .with_env(|env| -> Result<_, Error> {
-            let bytes = env.convert_byte_array(&table)?;
-            let read = std::str::from_utf8(&bytes)
-                .ok()
-                .and_then(|text| Table::parse(text).ok());
-            let counts = read.as_ref().map_or_else(Vec::new, |read| {
-                let int = |n: usize| jint::try_from(n).unwrap_or(jint::MAX);
-                let of = |grade: Grade| read.entries().iter().filter(|e| e.grade == grade).count();
-                vec![
-                    int(read.entries().len()),
-                    int(of(Grade::Block)),
-                    int(of(Grade::Keep)),
-                    int(of(Grade::Code)),
-                ]
-            });
-            *BLOCKING_TABLE
-                .lock()
-                .unwrap_or_else(PoisonError::into_inner) = read.map(Arc::new);
-            int_array(env, &counts)
-        })
-        .resolve::<ThrowRuntimeExAndDefault>()
+    entry(unowned_env, &mut |env| -> Result<_, Error> {
+        let bytes = env.convert_byte_array(&table)?;
+        let read = std::str::from_utf8(&bytes)
+            .ok()
+            .and_then(|text| Table::parse(text).ok());
+        let counts = read.as_ref().map_or_else(Vec::new, |read| {
+            let int = |n: usize| jint::try_from(n).unwrap_or(jint::MAX);
+            let of = |grade: Grade| read.entries().iter().filter(|e| e.grade == grade).count();
+            vec![
+                int(read.entries().len()),
+                int(of(Grade::Block)),
+                int(of(Grade::Keep)),
+                int(of(Grade::Code)),
+            ]
+        });
+        *BLOCKING_TABLE
+            .lock()
+            .unwrap_or_else(PoisonError::into_inner) = read.map(Arc::new);
+        int_array(env, &counts)
+    })
 }
 
 /// `Engine.nativeBlocking(setting)`: sets tracker blocking, whole, as [`blocking_setting`] reads `setting`, on the
@@ -1511,23 +1462,20 @@ pub extern "system" fn Java_org_visadahyu_datapavan_network_Engine_nativeBlockin
 // SAFETY: exported under the JNI name of the Kotlin method `external fun nativeBlocking(setting: String)`.
 #[unsafe(no_mangle)]
 pub extern "system" fn Java_org_visadahyu_datapavan_network_Engine_nativeBlocking<'caller>(
-    mut unowned_env: EnvUnowned<'caller>,
+    unowned_env: EnvUnowned<'caller>,
     _class: JClass<'caller>,
     setting: JString<'caller>,
 ) {
-    unowned_env
-        .with_env(|env| -> Result<_, Error> {
-            let text = setting.try_to_string(env)?;
-            let table = BLOCKING_TABLE
-                .lock()
-                .unwrap_or_else(PoisonError::into_inner)
-                .clone();
-            let boot =
-                datapavan_net::engine::Clock::since_boot(&datapavan_net::engine::SystemClock);
-            set_blocking(blocking_setting(&text, table.as_ref(), boot));
-            Ok(())
-        })
-        .resolve::<ThrowRuntimeExAndDefault>();
+    entry(unowned_env, &mut |env| -> Result<_, Error> {
+        let text = setting.try_to_string(env)?;
+        let table = BLOCKING_TABLE
+            .lock()
+            .unwrap_or_else(PoisonError::into_inner)
+            .clone();
+        let boot = datapavan_net::engine::Clock::since_boot(&datapavan_net::engine::SystemClock);
+        set_blocking(blocking_setting(&text, table.as_ref(), boot));
+        Ok(())
+    });
 }
 
 /// `Engine.nativeBlocked()`: what tracker blocking counted in memory in the engine that runs, one line per app and
@@ -1536,24 +1484,22 @@ pub extern "system" fn Java_org_visadahyu_datapavan_network_Engine_nativeBlockin
 // SAFETY: exported under the JNI name of the Kotlin method `external fun nativeBlocked(): String`.
 #[unsafe(no_mangle)]
 pub extern "system" fn Java_org_visadahyu_datapavan_network_Engine_nativeBlocked<'caller>(
-    mut unowned_env: EnvUnowned<'caller>,
+    unowned_env: EnvUnowned<'caller>,
     _class: JClass<'caller>,
 ) -> JString<'caller> {
-    unowned_env
-        .with_env(|env| -> Result<_, Error> {
-            let tallies = engine().as_ref().map_or_else(Vec::new, Engine::blocked);
-            let lines: Vec<String> = tallies
-                .iter()
-                .map(|(uid, host, t)| {
-                    format!(
-                        "{uid}\t{host}\t{}\t{}\t{}",
-                        t.lookups, t.connections, t.since_ms
-                    )
-                })
-                .collect();
-            JString::from_str(env, lines.join("\n"))
-        })
-        .resolve::<ThrowRuntimeExAndDefault>()
+    entry(unowned_env, &mut |env| -> Result<_, Error> {
+        let tallies = engine().as_ref().map_or_else(Vec::new, Engine::blocked);
+        let lines: Vec<String> = tallies
+            .iter()
+            .map(|(uid, host, t)| {
+                format!(
+                    "{uid}\t{host}\t{}\t{}\t{}",
+                    t.lookups, t.connections, t.since_ms
+                )
+            })
+            .collect();
+        JString::from_str(env, lines.join("\n"))
+    })
 }
 
 /// `Engine.nativeTrackersOf(hosts)`: for each line `host\tport` (a name, or an address as text), each
@@ -1564,41 +1510,39 @@ pub extern "system" fn Java_org_visadahyu_datapavan_network_Engine_nativeBlocked
 // String`.
 #[unsafe(no_mangle)]
 pub extern "system" fn Java_org_visadahyu_datapavan_network_Engine_nativeTrackersOf<'caller>(
-    mut unowned_env: EnvUnowned<'caller>,
+    unowned_env: EnvUnowned<'caller>,
     _class: JClass<'caller>,
     hosts: JString<'caller>,
 ) -> JString<'caller> {
-    unowned_env
-        .with_env(|env| -> Result<_, Error> {
-            let hosts = hosts.try_to_string(env)?;
-            let table = TRACKERS
-                .lock()
-                .unwrap_or_else(PoisonError::into_inner)
-                .clone();
-            let lines: Vec<String> = hosts
-                .lines()
-                .map(|line| {
-                    let (host, port) = line.split_once('\t').unwrap_or((line, ""));
-                    let port = port.parse().unwrap_or(0);
-                    table.as_ref().map_or_else(String::new, |table| {
-                        let found: Vec<String> = table
-                            .matches(host, port)
-                            .into_iter()
-                            .filter_map(|(i, alternative)| {
-                                let tracker = table.trackers().get(i)?;
-                                Some(format!(
-                                    "{}\u{1f}{}\u{1f}{}\u{1f}{alternative}",
-                                    tracker.id, tracker.name, tracker.website
-                                ))
-                            })
-                            .collect();
-                        found.join("\t")
-                    })
+    entry(unowned_env, &mut |env| -> Result<_, Error> {
+        let hosts = hosts.try_to_string(env)?;
+        let table = TRACKERS
+            .lock()
+            .unwrap_or_else(PoisonError::into_inner)
+            .clone();
+        let lines: Vec<String> = hosts
+            .lines()
+            .map(|line| {
+                let (host, port) = line.split_once('\t').unwrap_or((line, ""));
+                let port = port.parse().unwrap_or(0);
+                table.as_ref().map_or_else(String::new, |table| {
+                    let found: Vec<String> = table
+                        .matches(host, port)
+                        .into_iter()
+                        .filter_map(|(i, alternative)| {
+                            let tracker = table.trackers().get(i)?;
+                            Some(format!(
+                                "{}\u{1f}{}\u{1f}{}\u{1f}{alternative}",
+                                tracker.id, tracker.name, tracker.website
+                            ))
+                        })
+                        .collect();
+                    found.join("\t")
                 })
-                .collect();
-            JString::from_str(env, lines.join("\n"))
-        })
-        .resolve::<ThrowRuntimeExAndDefault>()
+            })
+            .collect();
+        JString::from_str(env, lines.join("\n"))
+    })
 }
 
 fn int_array<'local>(
@@ -1615,17 +1559,15 @@ fn int_array<'local>(
 // SAFETY: exported under the JNI name of the Kotlin method `external fun nativeClearActivity()`.
 #[unsafe(no_mangle)]
 pub extern "system" fn Java_org_visadahyu_datapavan_network_Engine_nativeClearActivity<'caller>(
-    mut unowned_env: EnvUnowned<'caller>,
+    unowned_env: EnvUnowned<'caller>,
     _class: JClass<'caller>,
 ) {
-    unowned_env
-        .with_env(|_env| -> Result<_, Error> {
-            if let Some(running) = engine().as_ref() {
-                running.clear_activity();
-            }
-            Ok(())
-        })
-        .resolve::<ThrowRuntimeExAndDefault>();
+    entry(unowned_env, &mut |_env| -> Result<_, Error> {
+        if let Some(running) = engine().as_ref() {
+            running.clear_activity();
+        }
+        Ok(())
+    });
 }
 
 /// How many of `flows` went each way, by app: `uid route count` lines, the route `direct`, `tool` or
@@ -1655,15 +1597,13 @@ fn flow_routes(flows: &[Flow]) -> String {
 // SAFETY: exported under the JNI name of the Kotlin method `external fun nativeFlowRoutes(): String`.
 #[unsafe(no_mangle)]
 pub extern "system" fn Java_org_visadahyu_datapavan_network_Engine_nativeFlowRoutes<'caller>(
-    mut unowned_env: EnvUnowned<'caller>,
+    unowned_env: EnvUnowned<'caller>,
     _class: JClass<'caller>,
 ) -> JString<'caller> {
-    unowned_env
-        .with_env(|env| -> Result<_, Error> {
-            let flows = engine().as_ref().map_or_else(Vec::new, Engine::flows);
-            JString::from_str(env, flow_routes(&flows))
-        })
-        .resolve::<ThrowRuntimeExAndDefault>()
+    entry(unowned_env, &mut |env| -> Result<_, Error> {
+        let flows = engine().as_ref().map_or_else(Vec::new, Engine::flows);
+        JString::from_str(env, flow_routes(&flows))
+    })
 }
 
 /// `Engine.nativeProxies(families, uids, android, strictDns, onLink, transport, logged, tools, pacHandler,
@@ -1681,7 +1621,7 @@ pub extern "system" fn Java_org_visadahyu_datapavan_network_Engine_nativeFlowRou
 #[unsafe(no_mangle)]
 #[allow(clippy::too_many_arguments)]
 pub extern "system" fn Java_org_visadahyu_datapavan_network_Engine_nativeProxies<'caller>(
-    mut unowned_env: EnvUnowned<'caller>,
+    unowned_env: EnvUnowned<'caller>,
     _class: JClass<'caller>,
     families: JIntArray<'caller>,
     uids: JIntArray<'caller>,
@@ -1694,31 +1634,29 @@ pub extern "system" fn Java_org_visadahyu_datapavan_network_Engine_nativeProxies
     pac_handler: jint,
     logged_tools: JIntArray<'caller>,
 ) {
-    unowned_env
-        .with_env(|env| -> Result<_, Error> {
-            let read = |array: &JIntArray<'_>, env: &mut jni::Env<'_>| -> Result<Vec<i32>, Error> {
-                let mut values = vec![0; array.len(env)?];
-                array.get_region(env, 0, &mut values)?;
-                Ok(values)
-            };
-            let (families, uids) = (read(&families, env)?, read(&uids, env)?);
-            let (logged, tools) = (read(&logged, env)?, read(&tools, env)?);
-            let logged_tools = read(&logged_tools, env)?;
-            let android = android.try_to_string(env)?;
-            let on_link = on_link.try_to_string(env)?;
-            let read = ProxySetting {
-                strict_dns,
-                on_link: on_link_of(&on_link, transport),
-                logged: uids_of(&logged, 512, true),
-                tools: uids_of(&tools, 256, false),
-                pac_handler: u32::try_from(pac_handler).ok(),
-                logged_tools: uids_of(&logged_tools, 64, true),
-                ..proxy_setting(&families, &uids, &android)
-            };
-            set_proxies(|proxies| *proxies = read);
-            Ok(())
-        })
-        .resolve::<ThrowRuntimeExAndDefault>();
+    entry(unowned_env, &mut |env| -> Result<_, Error> {
+        let read = |array: &JIntArray<'_>, env: &mut jni::Env<'_>| -> Result<Vec<i32>, Error> {
+            let mut values = vec![0; array.len(env)?];
+            array.get_region(env, 0, &mut values)?;
+            Ok(values)
+        };
+        let (families, uids) = (read(&families, env)?, read(&uids, env)?);
+        let (logged, tools) = (read(&logged, env)?, read(&tools, env)?);
+        let logged_tools = read(&logged_tools, env)?;
+        let android = android.try_to_string(env)?;
+        let on_link = on_link.try_to_string(env)?;
+        let read = ProxySetting {
+            strict_dns,
+            on_link: on_link_of(&on_link, transport),
+            logged: uids_of(&logged, 512, true),
+            tools: uids_of(&tools, 256, false),
+            pac_handler: u32::try_from(pac_handler).ok(),
+            logged_tools: uids_of(&logged_tools, 64, true),
+            ..proxy_setting(&families, &uids, &android)
+        };
+        set_proxies(|proxies| *proxies = read);
+        Ok(())
+    });
 }
 
 /// The setting of `nativeProxies`: codes and UIDs that do not fit, and lines that do not parse, are left out.
@@ -1794,19 +1732,17 @@ fn on_link_of(lines: &str, transport: jint) -> datapavan_net::local::OnLink {
 pub extern "system" fn Java_org_visadahyu_datapavan_network_Engine_nativeMessengerClients<
     'caller,
 >(
-    mut unowned_env: EnvUnowned<'caller>,
+    unowned_env: EnvUnowned<'caller>,
     _class: JClass<'caller>,
 ) -> JString<'caller> {
-    unowned_env
-        .with_env(|env| -> Result<_, Error> {
-            let table = Messengers::bundled();
-            let lines: Vec<String> = table
-                .clients()
-                .map(|(family, package)| format!("{} {package}", family.code()))
-                .collect();
-            JString::from_str(env, lines.join("\n"))
-        })
-        .resolve::<ThrowRuntimeExAndDefault>()
+    entry(unowned_env, &mut |env| -> Result<_, Error> {
+        let table = Messengers::bundled();
+        let lines: Vec<String> = table
+            .clients()
+            .map(|(family, package)| format!("{} {package}", family.code()))
+            .collect();
+        JString::from_str(env, lines.join("\n"))
+    })
 }
 
 /// `Engine.nativeProxyOnLink()`: the network beneath's on-link prefixes and transport the engines were last handed,
@@ -1815,30 +1751,28 @@ pub extern "system" fn Java_org_visadahyu_datapavan_network_Engine_nativeMesseng
 // SAFETY: exported under the JNI name of the Kotlin method `external fun nativeProxyOnLink(): String`.
 #[unsafe(no_mangle)]
 pub extern "system" fn Java_org_visadahyu_datapavan_network_Engine_nativeProxyOnLink<'caller>(
-    mut unowned_env: EnvUnowned<'caller>,
+    unowned_env: EnvUnowned<'caller>,
     _class: JClass<'caller>,
 ) -> JString<'caller> {
-    unowned_env
-        .with_env(|env| -> Result<_, Error> {
-            let line = setting().as_ref().map_or_else(String::new, |kept| {
-                let on_link = &kept.proxies.on_link;
-                let transport = match on_link.transport() {
-                    datapavan_net::local::Transport::Unknown => "unknown",
-                    datapavan_net::local::Transport::Wifi => "wifi",
-                    datapavan_net::local::Transport::Ethernet => "ethernet",
-                    datapavan_net::local::Transport::Cellular => "cellular",
-                    datapavan_net::local::Transport::Other => "other",
-                };
-                let prefixes: Vec<String> = on_link
-                    .prefixes()
-                    .iter()
-                    .map(|(address, length)| format!("{address}/{length}"))
-                    .collect();
-                format!("{transport} {}", prefixes.join(" "))
-            });
-            JString::from_str(env, line.trim_end())
-        })
-        .resolve::<ThrowRuntimeExAndDefault>()
+    entry(unowned_env, &mut |env| -> Result<_, Error> {
+        let line = setting().as_ref().map_or_else(String::new, |kept| {
+            let on_link = &kept.proxies.on_link;
+            let transport = match on_link.transport() {
+                datapavan_net::local::Transport::Unknown => "unknown",
+                datapavan_net::local::Transport::Wifi => "wifi",
+                datapavan_net::local::Transport::Ethernet => "ethernet",
+                datapavan_net::local::Transport::Cellular => "cellular",
+                datapavan_net::local::Transport::Other => "other",
+            };
+            let prefixes: Vec<String> = on_link
+                .prefixes()
+                .iter()
+                .map(|(address, length)| format!("{address}/{length}"))
+                .collect();
+            format!("{transport} {}", prefixes.join(" "))
+        });
+        JString::from_str(env, line.trim_end())
+    })
 }
 
 /// `Engine.nativeFlowProxies()`: the kept flows that went through a proxy, one per line as [`proxy_line`]
@@ -1846,16 +1780,14 @@ pub extern "system" fn Java_org_visadahyu_datapavan_network_Engine_nativeProxyOn
 // SAFETY: exported under the JNI name of the Kotlin method `external fun nativeFlowProxies(): String`.
 #[unsafe(no_mangle)]
 pub extern "system" fn Java_org_visadahyu_datapavan_network_Engine_nativeFlowProxies<'caller>(
-    mut unowned_env: EnvUnowned<'caller>,
+    unowned_env: EnvUnowned<'caller>,
     _class: JClass<'caller>,
 ) -> JString<'caller> {
-    unowned_env
-        .with_env(|env| -> Result<_, Error> {
-            let flows = engine().as_ref().map_or_else(Vec::new, Engine::flows);
-            let lines: Vec<String> = flows.iter().filter_map(proxy_line).collect();
-            JString::from_str(env, lines.join("\n"))
-        })
-        .resolve::<ThrowRuntimeExAndDefault>()
+    entry(unowned_env, &mut |env| -> Result<_, Error> {
+        let flows = engine().as_ref().map_or_else(Vec::new, Engine::flows);
+        let lines: Vec<String> = flows.iter().filter_map(proxy_line).collect();
+        JString::from_str(env, lines.join("\n"))
+    })
 }
 
 /// A kept flow through a proxy, as `protocol app destination uid kind how flags asked proxy-name cover name`:
@@ -1922,16 +1854,14 @@ fn proxy_line(f: &Flow) -> Option<String> {
 // SAFETY: exported under the JNI name of the Kotlin method `external fun nativeFlows(): String`.
 #[unsafe(no_mangle)]
 pub extern "system" fn Java_org_visadahyu_datapavan_network_Engine_nativeFlows<'caller>(
-    mut unowned_env: EnvUnowned<'caller>,
+    unowned_env: EnvUnowned<'caller>,
     _class: JClass<'caller>,
 ) -> JString<'caller> {
-    unowned_env
-        .with_env(|env| -> Result<_, Error> {
-            let flows = engine().as_ref().map_or_else(Vec::new, Engine::flows);
-            let lines: Vec<String> = flows.iter().map(flow_line).collect();
-            JString::from_str(env, lines.join("\n"))
-        })
-        .resolve::<ThrowRuntimeExAndDefault>()
+    entry(unowned_env, &mut |env| -> Result<_, Error> {
+        let flows = engine().as_ref().map_or_else(Vec::new, Engine::flows);
+        let lines: Vec<String> = flows.iter().map(flow_line).collect();
+        JString::from_str(env, lines.join("\n"))
+    })
 }
 
 /// A flow kept, as `protocol app destination uid outcome named-by ech dns network dns-name name` (`-` for
