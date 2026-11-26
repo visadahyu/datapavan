@@ -1726,6 +1726,8 @@ class NetworkVpnService : VpnService() {
             debugProxies(args.orEmpty().toList(), writer)
             debugActivity(args.orEmpty().toList(), writer)
             debugLog(log, args.orEmpty().toList(), writer)
+            // The JNI bridge's error path, a line per return type (the cold paths' second pass, ADR 0053; JniErrors).
+            if ("jni-errors" in args.orEmpty()) JniErrors.check().forEach(writer::println)
         }
     }
 

@@ -533,6 +533,14 @@ adb shell am start -W -n "$PKG/$NETWORK_SCREEN" --ez start true >/dev/null
 for _ in $(seq 1 20); do vpn_up && break; sleep 1; done
 vpn_up || fail "the network part's tunnel did not come up (on a phone, allow the VPN request on its screen first)"
 echo "ok: the tunnel is up for every app"
+# The JNI bridge's error path (the cold paths' second pass, ADR 0053), which no other check reaches: for each return type
+# an input can make fail, a call with a null throws a RuntimeException whose message starts "Rust error:", and the next
+# call works (JniErrors, in the network part's debug build).
+jni_errors=$(adb shell dumpsys activity service "$PKG/org.visadahyu.datapavan.network.NetworkVpnService" jni-errors </dev/null |
+    tr -d '\r' | sed -n 's/^ *jni-error //p')
+[ "$jni_errors" = $'unit ok\nboolean ok\nstring ok\nint-array ok' ] ||
+    fail "the JNI bridge's error path: $(paste -sd';' <<<"${jni_errors:-no line}")"
+echo "ok: a JNI call that fails throws Rust's error to Kotlin, and the next call works (unit, boolean, string, int-array)"
 # The tunnel's addresses are the common ones (ADR 0041): the emulator's network, 10.0.2.0/24, does not
 # use them.
 case "$(addresses_line)" in
