@@ -237,12 +237,42 @@ behind the screen lock and Advanced's own lock, as the log's records do (ADR 003
 connect" (`chain_log_destinations`). Without it, their rows say only that they went through the user's tool, with
 their bytes and state. What the screen shows, a search of an unlocked phone shows too.
 
-**The tool's own row** (settled by the maintainer on 2026-11-19) follows the same switch: the tool's server
-addresses show, in "Now" and in the history alike, only while "Log where these apps connect" is on. Without it
-the row still shows the tool's bytes and that it carries the chained apps' traffic, and says that where it
-connects is not shown and why. The servers are where every chained app's traffic goes, so they tell as much
-as the chained apps' destinations would; one switch covers both. The engine keeps them out of the log too while
-the switch is off.
+**The tool's own row** (the proxy record's R10, built in its unit D; it replaces the rule of 2026-11-19, under which
+the switch left the tool's servers out of "Now" too). The maintainer's principle of 2026-11-22, which ADR 0052
+decision 8 quotes («چیزی نباید به هیچ دلیلی از زیر چتر نظارتی داتاپاوان در بره حتی با این استدلال که ممکنه گوشی کاربر
+بازرسی بشه», "nothing should, for any reason, slip out from under Datapavan's monitoring umbrella, even on the argument
+that the user's phone might be searched"), moved the servers into the live view. The maintainer approved R10 with the
+proxy record's plan on 2026-11-24, and unit D's choices on 2026-11-25 («تایید شد», "approved", both days).
+- **Which tools:** those that can carry traffic inside Datapavan's VPN, each known by its signing key as
+  [ADR 0052](0052-apps-built-in-proxies.md) decision 8 tells tools (unit B's B6): a row of the data pack with a proxy mode, Tor
+  Browser, its alpha and Briar, and the tool the user chose on the chain screen. A tool that runs only as a VPN cannot
+  run its tunnel while Datapavan is the VPN, so its flows then are its own API calls, ads and analytics: it stays an
+  ordinary app.
+- **Live:** a tool's connections show in "Now" in full, with their address, name and organisation, while each is open
+  and for ten minutes after it ends, whatever the switch says. That covers the chained tool's own servers, and also
+  what it sends directly by its own rules for the apps chained through it, mostly domestic sites. After the ten
+  minutes the place goes, its bytes stay in the tool's totals, and the row says that some of its connections are no
+  longer shown. Nothing an app or the tool sends hides a connection of the tool from "Now".
+- **The log** keeps their app, bytes, times and state. It keeps their addresses only while "Log where apps connect
+  through your tool, WireGuard or a proxy" is on, or once the user chose to log where that tool connects for itself,
+  one choice per tool, on its row.
+- **Under that choice,** the tool's connections that the engine ties to what the chain asked the tool for in the ten
+  seconds before stay out of the log, so the choice records the tool's servers and not the chained apps' destinations.
+  A connection it cannot tie (a name the tool resolved privately and opened with no readable hello, or one opened
+  later than ten seconds) is logged as the tool's own, which the choice's words say.
+- **Always kept:** a tool connection whose names match a tracker is kept in full, live and in the log; a blocked
+  one keeps its SDK.
+- **Unchanged:** the chained apps' own rows.
+
+**The cost, accepted** (the maintainer's caution of 2026-11-24):
+- **Who can see:** while a tool runs, and for ten minutes after each of its connections ends, anyone who opens "Now"
+  sees where it connects: Orbot's and Tor Browser's bridges, Snowflake's volunteers, who are other people's home
+  connections, and servers from configurations shared in channels.
+- **What a searcher can do with it:** have a bridge or a server blocked for everyone who uses it, and learn what kind
+  of tool the user runs.
+- **Under ADR 0047's profile:** the same holds within the screen-on session, behind Advanced's own lock.
+- **What is not logged:** nothing of it, unless the user turns on the switch or the tool's choice.
+- **Before unit D:** a chained tool's servers were hidden live, and an unchained tool's were logged in full.
 
 **A profile for people whose phones may be searched.** [ADR 0047](0047-profile-for-phones-that-may-be-searched.md)
 defines this inspection profile, which the user chooses with one switch, "Keep nothing on this phone": off for
@@ -455,7 +485,11 @@ decryption (Lumen) or the operating system (stage 3), and both are out of scope 
   they are final. More lab work: the threshold run.
 - **Accepted limits:** the summary can be read by any app with notification access, which is why it carries no
   names; flags need history, either a week of the log or the minimal baseline, so users who keep nothing get no
-  flags; traffic sent on an app's behalf shows under the sender.
+  flags; traffic sent on an app's behalf shows under the sender. While a circumvention tool runs, its servers and
+  bridges are in "Now" for anyone who opens it then (decision 3, the tool's own row): a searcher can have them
+  blocked, and learns what kind of tool the user runs. An app that sends through a tool's open local proxy, which the
+  tool's rules then send directly, keeps its destinations out of the history under the tool's row, live in "Now"
+  for their window; Datapavan cannot see the app's side of the phone's loopback.
 
 ## Sources
 

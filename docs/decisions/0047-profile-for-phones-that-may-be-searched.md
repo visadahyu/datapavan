@@ -94,7 +94,8 @@ asks the question and keeps its own switch; each says that the other edition has
 | Item | Ordinary users (unchanged) | With the profile |
 |---|---|---|
 | The connection log (Advanced) | Retention chosen at W9: none, 1, 7 or 30 days (ADR 0040) | Retention none: nothing is written (ADR 0037, decision 3) |
-| Chained flows' destinations (Advanced) | Not recorded unless the user turns that on | Never recorded, and never shown: Advanced's screens show a chained flow's app and bytes, and "through your tool". Proxy-like behaviour is still counted in memory (VPN.md) |
+| Chained flows' destinations (Advanced) | Not recorded unless the user turns that on | Never recorded, and never shown under the chained app's row: Advanced's screens show a chained flow's app and bytes, and "through your tool". What the tool sends directly by its own rules for a chained app shows under the tool's row within the screen-on session (the row below). Proxy-like behaviour is still counted in memory (VPN.md) |
+| The circumvention tools' own connections (Advanced, ADR 0046 decision 3, the tool's own row) | Shown in "Now" in full while each is open and for ten minutes after it ends, whatever the switch. Logged with their addresses only with "Log where apps connect through your tool, WireGuard or a proxy", or for a tool the user chose to log one by one; otherwise the history keeps their app, bytes, times and state | Nothing is recorded. Shown within the screen-on session only, behind Advanced's lock. The screen-off clear takes the tools' places, the table of their connections' ends and their marks (ADR 0052, decision 8, R10; W9 wires it) |
 | This run's flows in memory (Advanced) | Shown until the network part stops | Cleared also when the screen turns off, so a phone handed over after it was locked shows nothing earlier |
 | The tool, its host and port (Advanced) | Kept, to start faster | Not kept: Advanced finds the tool again at each start, as it already can (RESTRICTED-REGIONS.md). An uninstalled tool leaves no trace in Advanced |
 | The chosen apps, the UDP choice and the proxy password (Advanced) | Kept | Kept, since the chain cannot work without them. Behind Advanced's lock, and wiped by a wipe. "All apps through the tool" keeps no list |
@@ -106,7 +107,7 @@ asks the question and keeps its own switch; each says that the other edition has
 | ADR 0046's Quick Settings tile | Its state and summary | On and off only, no count. Opening the "Now" view from it asks for the phone's unlock first (`unlockAndRun`) |
 | ADR 0046's "Now" view | As ADR 0046 decides | Shows only this screen-on session, behind Advanced's lock |
 | Apps' own proxies (Advanced, ADR 0052) | Where the proxy is (its address, name and network, and a messenger's cover name) is shown in "Now" while the connection is open and for ten minutes after it ends. It is logged, with where the app asked it to go, only with "Log where apps connect through your tool, WireGuard or a proxy", or for an app the user chose to log one by one (the row below). The history keeps the kind and the facts that name nothing | Nothing is recorded. The proxy's address, name and network are shown within the screen-on session only, behind Advanced's lock. The screen-off clear takes it with the table of the connections' ends, the proxy counters and the substitution's memory (ADR 0052, decision 8, R9; W9 wires it) |
-| The apps whose own proxies the user chose to log (Advanced, ADR 0052, decision 8, R3) | Kept, by package and first install time, behind Advanced's lock once W9 brings it, and wiped by a wipe (`LoggedApps.wipe`) | In memory only (`LoggedApps.setProfile`), cleared when the screen turns off (`LoggedApps.clearSession`) and by a wipe. Since nothing is recorded, a choice only changes what "Now" shows, a chosen app's destinations included, within the screen-on session. Turning the profile off writes nothing of them |
+| The apps whose own proxies the user chose to log (Advanced, ADR 0052, decision 8, R3), and the tools whose own connections the user chose to log (R10) | Kept, by package and first install time, behind Advanced's lock once W9 brings it, and wiped by a wipe (`LoggedApps.wipe`) | In memory only (`LoggedApps.setProfile`), cleared when the screen turns off (`LoggedApps.clearSession`) and by a wipe. Since nothing is recorded, a choice only changes what "Now" shows, a chosen app's destinations included, and a chosen tool's servers with no window, within the screen-on session. Turning the profile off writes nothing of them |
 | ADR 0046's opt-in flag notice | Kept, if the user opted in | Never kept |
 | ADR 0046's optional baseline for each app: one number per app, the most it sent in the background in a day | Kept, if the user turned it on | Never kept, so flags that need it are not raised |
 | Advanced's own lock (ADR 0040) | Offered, off | On, with a code of its own, so that a forced unlock of the phone does not open it; it locks as soon as Advanced leaves the screen or the screen turns off |
@@ -176,7 +177,11 @@ while they are open, the segments that wait for their apps' states until a sweep
 of the states after their ten minutes, at most a minute later with the screen off, and after a sleep at the first
 reading once the phone wakes, and the records a messenger's proxy holds back that were made while the switch was on,
 until they go on to the log's next batch. An open flow's bytes after the clear show its first hop again, as this screen-on
-session's. W9 calls it at
+session's. The same holds for a circumvention tool's own connections (ADR 0046, decision 3, the tool's own row): the
+clear takes their places, their ends and the mark that some were no longer shown, but not the open ones. Orbot's or
+Tor Browser's connection to its guard stays open for hours, so its address shows again at each screen-on, from its
+bytes after the clear. The engine's ten seconds of what the chain asked the tool for are never shown and are not
+cleared: a clear would only make the next such connection read as the tool's own. W9 calls it at
 each screen-off **and at each screen-on**, before the view can open (review c1 of W5's third part, engine,
 finding 7): a clear at the screen-off alone leaves the window while the screen was off,
 which opens after it and fills while the phone lies locked, to show its line at the next screen-on, and this
@@ -230,6 +235,10 @@ The question's screen, the switch's screen and the website say, in plain words:
   is what the phone already shows: which apps are installed. The apps keep no history of what the user did or
   what other apps did.
 - **The switch itself shows.** Settings shows that "Keep nothing on this phone" is on.
+- **Where your circumvention tool connects shows in "Now".** While it runs, and for ten minutes after each of its
+  connections ends, its servers, bridges and relays, and the sites it reaches directly for the apps you send through
+  it, are in "Now" within this screen-on session, behind Advanced's own code. Someone who gets that code sees them,
+  and can have a bridge or a server blocked for everyone who uses it.
 - **Some things are lost.** The plan's undo and its check that a change came back work only until the screen
   turns off; each audit scans every app again; a wipe means choosing the chained apps again.
 - **To leave no trace of the apps at all,** uninstall them before the search and install them again afterwards

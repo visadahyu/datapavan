@@ -209,7 +209,10 @@ will carry only the pause.
 that blocked it).
 
 (b) **Chained apps**: their rows follow "Log where apps connect through your tool, WireGuard or a proxy": while it is
-off, the row's SDK, which names a tracker and its company, is kept, and the host is not.
+off, the row's SDK, which names a tracker and its company, is kept, and the host is not. A circumvention tool's own
+rows follow R10 (ADR 0046, decision 3, the tool's own row; the proxy record's unit D, answering its brief's
+question 13): the SDK always; the host with the switch, with the user's choice for that tool, or where the trackers'
+signatures name it, since a tool's connection to a tracker is kept in full.
 
 (c) **The profile** (ADR 0047): allowances are kept behind Advanced's lock and wiped by a wipe, as the apps left out
 of the tunnel are (a new row of ADR 0047's table). Nothing of blocking is recorded under it: its counts are in memory
