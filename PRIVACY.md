@@ -41,11 +41,14 @@ your unlocked phone can see it, as they can see the rest of the app.
   servers or bridges, it keeps the time, the bytes and the app, and where the tool connected only while "Log where apps
   connect through your tool, WireGuard or a proxy" is on, or for a tool you chose to log. Then where the tool connects
   for itself is logged from then on, until you turn that off, but not where it connects for the apps you send through
-  it, as far as Datapavan can tell. What it cannot tell apart is logged as the tool's own, such as what an app that
-  uses the tool's proxy on the phone sends through it, which Datapavan cannot see. A connection of a tool whose names
-  match a known tracker is kept in full. A tool counts here if Datapavan knows it by its signing key and it can run
-  beside Datapavan's VPN (in its proxy mode, or Tor Browser and Briar, which carry Tor inside), and so does the tool
-  you send apps through. When an app uses a proxy of its own, the record keeps by
+  it, as far as Datapavan can tell: a connection to an address Datapavan asked the tool for, or to a name Datapavan's
+  lookups or the connection itself gave for what it asked, in the ten seconds after it asked. What it cannot tell apart
+  is logged as the tool's own: a connection that names nothing Datapavan can read, one opened later than that, and what
+  an app that uses the tool's proxy on the phone sends through it, which Datapavan cannot see. A connection of a tool
+  whose names match a known tracker is kept in full. A tool counts here if Datapavan knows it by its signing key and it
+  can run beside Datapavan's VPN (in its proxy mode, or Tor Browser and Briar, which carry Tor inside), and so does the
+  tool you send apps through. While Datapavan does not count a tool you chose as one, your choice waits, and its
+  connections are kept as any app's. When an app uses a proxy of its own, the record keeps by
   default that the app used a proxy, which kind, when, the facts that name no address (such as whether a password
   was sent unencrypted, whether it is the proxy in Android's settings, whether it is on your local network, and
   whether Datapavan could not tell it was a messenger's proxy), and which known trackers its
@@ -55,7 +58,7 @@ your unlocked phone can see it, as they can see the rest of the app.
   and, for a messenger's proxy, the name its connection sent in place of its destination. If you choose to log where
   one app connects through a proxy, its proxy's address and where it asked to go are logged like any connection from
   then on, until you turn that off, but not for the proxy in Android's settings, a proxy on your local network,
-  Android's PAC proxy or an app Datapavan counts as a circumvention tool. A proxy that a PAC file names, or the one in
+  Android's PAC proxy or a circumvention tool that counts as one here. A proxy that a PAC file names, or the one in
   Android's settings when it is given by name, may be taken for the app's own and logged. What was logged before stays
   for the days you chose. It never keeps a proxy's password, which Datapavan reads past and
   does not store, and says only that one was sent unencrypted. The records of a connection taken for a messenger's
@@ -95,7 +98,7 @@ your unlocked phone can see it, as they can see the rest of the app.
 - **The apps whose proxies you chose to log, and the circumvention tools whose own connections you chose to log, if
   you choose any:** each one's package name and when it was first installed, never anything of its connections, so
   that an app installed again, or another app that Android comes to count with it, is not logged on your earlier
-  choice. A tool's choice also ends when Datapavan no longer counts it as a tool. With the setting for phones that may be searched (planned),
+  choice. A tool's choice is kept while Datapavan does not count it as a tool, and acts again once it does. With the setting for phones that may be searched (planned),
   they are kept in memory only, until the screen turns off, and go with a wipe.
 - **The WireGuard configurations you add,** at most eight: each one's text, which holds its private key and its
   server, and the name you gave it, encrypted under a key that Android's keystore keeps (in the phone's separate
