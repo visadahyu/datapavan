@@ -604,6 +604,9 @@ impl Shared {
     /// "Now" places it once the switch is off, so that its place stays in full for its window (R2). A circumvention
     /// tool's own flow too (R10), whose first hop is the flow itself, apart: most flows are neither.
     fn ended(&self, flow: &Flow, boot: Duration, tied: bool) {
+        if tied {
+            lock(&self.held_back).tied_ended(flow.id);
+        }
         if super::proxied::own_first_hop(flow) {
             let first_hop = self.first_hop(flow);
             lock(&self.activity)
@@ -722,8 +725,15 @@ impl Shared {
     }
 
     /// The records waiting, as one batch, if there are any.
+    /// The tied flows whose last record goes now are forgotten (`proxied::TakenBack`), `held_back` taken before
+    /// `pending_log`, in `to_log`'s order.
     pub(super) fn take_log(&self) -> Option<Vec<u8>> {
-        let records = std::mem::take(&mut *lock(&self.pending_log));
+        let records = {
+            let mut back = lock(&self.held_back);
+            let records = std::mem::take(&mut *lock(&self.pending_log));
+            back.logged(&records);
+            records
+        };
         (!records.is_empty()).then(|| log::batch(&records))
     }
 

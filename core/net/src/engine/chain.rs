@@ -1147,6 +1147,58 @@ mod tests {
             }
             let tied = held.taken_back();
             assert!(!tied.tied(0) && tied.tied(1) && tied.tied(4_096));
+            // Past the bound an ended flow goes first: the open one stays.
+            let mut held = super::super::super::proxied::HeldBack::default();
+            held.tie(0);
+            for id in 1..=4_097 {
+                held.tie(id);
+                held.tied_ended(id);
+            }
+            let tied = held.taken_back();
+            assert!(
+                tied.tied(0) && !tied.tied(1) && !tied.tied(2) && tied.tied(3) && tied.tied(4_097)
+            );
+        }
+
+        /// Review-D-engine minor 1: a long-lived tied flow keeps its tie while thousands of others are tied and end, as
+        /// each of theirs is forgotten once its last record leaves for the log; under the tool's choice its next record
+        /// stays stripped.
+        #[test]
+        fn a_long_lived_tied_flow_keeps_its_tie_past_thousands_of_others() {
+            let (shared, clock) = chained(false);
+            choose_tool(&shared, &[TOOL]);
+            shared.carry(&Target::Address(SITE));
+            clock.pass(100);
+            assert!(born(&shared, to(1, TOOL, SITE, None)));
+            let mut id = 10;
+            for round in 0..9u16 {
+                for n in 0..512u16 {
+                    let site = SocketAddr::from(([192, 0, 2, 90], 1_000 + n));
+                    shared.carry(&Target::Address(site));
+                    assert!(born(&shared, to(id, TOOL, site, None)));
+                    shared.finish(id);
+                    id += 1;
+                }
+                clock.pass(u64::from(round) + 1);
+                shared.flush();
+                let _ = shared.take_log();
+            }
+            assert!(id > 4_096 + 10);
+            assert!(tied(&shared, 1), "still tied");
+            assert!(
+                lock(&shared.held_back).taken_back().tied_count() < 64,
+                "the others forgotten as they were logged"
+            );
+            // Past the bound with none logged yet, those that ended give way first.
+            for n in 0..4_100u16 {
+                let site = SocketAddr::from(([192, 0, 2, 91], 1_000 + n % 512));
+                shared.carry(&Target::Address(site));
+                assert!(born(&shared, to(id, TOOL, site, None)));
+                shared.finish(id);
+                id += 1;
+            }
+            assert!(tied(&shared, 1), "still tied past the bound");
+            assert_eq!(logged(&shared, &[1]), vec![Some(false)]);
         }
     }
 }

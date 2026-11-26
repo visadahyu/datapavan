@@ -473,6 +473,34 @@ impl HeldBack {
         self.taken_back.tie(id);
     }
 
+    /// The tied flow `id` ended ([`TakenBack`]).
+    pub(super) fn tied_ended(&mut self, id: u64) {
+        self.taken_back.tied_ended(id);
+    }
+
+    /// `records` leave the engine for the log: each tied flow whose last record is among them is forgotten, as nothing
+    /// of it can be stripped any more.
+    pub(super) fn logged(&mut self, records: &[crate::log::Record]) {
+        if self.taken_back.tied.is_empty() {
+            return;
+        }
+        for record in records {
+            if let crate::log::Record::Segment {
+                flow,
+                continues: false,
+                ..
+            } = record
+                && let Some(at) = self
+                    .taken_back
+                    .tied
+                    .iter()
+                    .rposition(|&(tied, _)| tied == flow.id)
+            {
+                self.taken_back.tied.remove(at);
+            }
+        }
+    }
+
     /// The chained tool's flow `id` was tied after its birth, at its hello (`Shared::tie_at_hello`): its records already
     /// held back, and those in `pending`, gathered for the next batch, are stripped again as the tie says.
     pub(super) fn tie_waiting(
@@ -506,14 +534,17 @@ impl HeldBack {
 /// that the inference was taken back needs a flag of the log's next version (unit B). Bounded by [`TAKEN_BACK`],
 /// the oldest forgotten first.
 ///
-/// Beside them, the flows of the chained tool tied at their birth to what the chain asked the tool for (R10, the proxy
-/// record's unit D, option (c); `chain::Carried`): what the tool opened directly for a chained app. "Now" shows them as
-/// the tool's own; the tool's own choice, which covers the tool's own connections only, keeps their records out of the
-/// log. Bounded by [`TIED`], the oldest forgotten first, and handed over with the rest.
+/// Beside them, the flows of the chained tool tied at their birth or their hello to what the chain asked the tool for
+/// (R10, the proxy record's unit D, option (c); `chain::Carried`): what the tool opened directly for a chained app.
+/// "Now" shows them as the tool's own; the tool's own choice, which covers the tool's own connections only, keeps their
+/// records out of the log. Each with whether its flow ended. A flow is forgotten once its last record leaves the engine
+/// for the log (`Shared::take_log`), so that the list holds the flows still open, held for their states, or waiting
+/// in the next batch (review-D-engine minor 1). Past [`TIED`] of those, the oldest that ended goes first, else the
+/// oldest. Handed over with the rest.
 pub(super) struct TakenBack {
     proxies: HashMap<u64, Proxied>,
     order: std::collections::VecDeque<u64>,
-    tied: std::collections::VecDeque<u64>,
+    tied: std::collections::VecDeque<(u64, bool)>,
 }
 
 impl Default for TakenBack {
@@ -526,23 +557,38 @@ impl Default for TakenBack {
     }
 }
 
-/// The most flows of the chained tool remembered as tied ([`TakenBack`]); past it the oldest is forgotten, and a record
-/// of it that comes later is kept by the tool's own choice as the tool's own (ADR 0052's limits, audit-D m5).
+/// The most flows of the chained tool remembered as tied, open, held or waiting at once ([`TakenBack`]); past it one is
+/// forgotten, an ended one first, and a record of it that comes later is kept by the tool's own choice as the tool's
+/// own (ADR 0052's limits, audit-D m5).
 const TIED: usize = 4096;
 
 impl TakenBack {
-    /// The chained tool's flow `id` was tied to what the chain asked the tool for, at its birth, once. A list read from
-    /// the back, as the newest are asked of most: it is read only for a tool's records under its own choice.
+    /// The chained tool's flow `id` was tied to what the chain asked the tool for, once. A list read from the back, as
+    /// the newest are asked of most: it is read only for a tool's records under its own choice.
     fn tie(&mut self, id: u64) {
-        self.tied.push_back(id);
+        self.tied.push_back((id, false));
         if self.tied.len() > TIED {
-            self.tied.pop_front();
+            let ended = self.tied.iter().position(|&(_, ended)| ended).unwrap_or(0);
+            self.tied.remove(ended);
         }
     }
 
     /// Whether the flow `id` was tied to what the chain asked the tool for.
     pub(super) fn tied(&self, id: u64) -> bool {
-        self.tied.iter().rev().any(|&tied| tied == id)
+        self.tied.iter().rev().any(|&(tied, _)| tied == id)
+    }
+
+    /// How many flows are remembered as tied.
+    #[cfg(test)]
+    pub(super) fn tied_count(&self) -> usize {
+        self.tied.len()
+    }
+
+    /// The tied flow `id` ended: it gives way first past the bound, its last records still to come.
+    fn tied_ended(&mut self, id: u64) {
+        if let Some(tied) = self.tied.iter_mut().rev().find(|(tied, _)| *tied == id) {
+            tied.1 = true;
+        }
     }
 
     fn insert(&mut self, id: u64, proxy: Proxied) {
