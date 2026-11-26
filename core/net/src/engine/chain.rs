@@ -678,6 +678,40 @@ mod tests {
             lock(&shared.held_back).taken_back().tied(id)
         }
 
+        /// The user's choice to log the tool `TOOL`'s own connections, the switch off (R10), with the tools `tools`.
+        fn choose_tool(shared: &Shared, tools: &[u32]) {
+            let mut setting = lock(&shared.proxies).setting().clone();
+            setting.tools = tools.to_vec();
+            setting.logged_tools = vec![TOOL];
+            shared.apply_proxies(setting);
+        }
+
+        /// The flows `ids` ended, and the records of each gathered for the next batch: whether each keeps its
+        /// destination.
+        fn logged(shared: &Shared, ids: &[u64]) -> Vec<Option<bool>> {
+            for &id in ids {
+                shared.finish(id);
+            }
+            shared.flush();
+            let records = taken(shared);
+            ids.iter()
+                .map(|&id| {
+                    let of: Vec<_> = records
+                        .iter()
+                        .filter_map(|r| match r {
+                            crate::log::Record::Segment { flow, .. } if flow.id == id => Some(flow),
+                            _ => None,
+                        })
+                        .collect();
+                    let kept = of.iter().all(|f| !f.destination.ip().is_unspecified());
+                    let stripped = of
+                        .iter()
+                        .all(|f| f.destination.ip().is_unspecified() && f.name.is_none());
+                    (!of.is_empty() && (kept || stripped)).then_some(kept)
+                })
+                .collect()
+        }
+
         /// The live flow `id`: whether it is hidden, and its destination.
         fn live(shared: &Shared, id: u64) -> Option<(bool, SocketAddr)> {
             lock(&shared.live)
@@ -727,6 +761,16 @@ mod tests {
                     "the switch {log}: {records:?}"
                 );
             }
+            // The tool's own choice, the switch off: the tied flow stays out of the record, the tool's own is kept.
+            let (shared, clock) = chained(false);
+            choose_tool(&shared, &[TOOL]);
+            shared.carry(&Target::Address(SITE));
+            clock.pass(500);
+            let own = SocketAddr::from(([203, 0, 113, 9], 443));
+            assert!(born(&shared, to(1, TOOL, SITE, None)));
+            assert!(born(&shared, to(2, TOOL, own, None)));
+            assert_eq!(live(&shared, 1), Some((false, SITE)), "never hidden");
+            assert_eq!(logged(&shared, &[1, 2]), vec![Some(false), Some(true)]);
         }
 
         /// D-PLAN test 7, rewritten to (c), which has no hello path: a request by name ties the tool's flow whose
@@ -765,6 +809,18 @@ mod tests {
             assert!(born(&shared, to(5, TOOL, mapped, None)));
             let tied: Vec<bool> = (1..=5).map(|id| tied(&shared, id)).collect();
             assert_eq!(tied, vec![true, true, false, false, true]);
+            // Under the tool's own choice: the tied flows stay out of the record, the others are kept as the tool's own.
+            choose_tool(&shared, &[TOOL]);
+            assert_eq!(
+                logged(&shared, &[1, 2, 3, 4, 5]),
+                vec![
+                    Some(false),
+                    Some(false),
+                    Some(true),
+                    Some(true),
+                    Some(false)
+                ]
+            );
         }
 
         /// D-PLAN test 8: a request ties the tool's flows for ten seconds on the boot clock, and no longer.
@@ -849,6 +905,54 @@ mod tests {
                 (1..=3).all(|id| !tied(&shared, id)),
                 "an unchained tool's, another app's, none without a chain"
             );
+            // Under the choice of `TOOL`, and of `DIRECT` too: none is tied, so each is kept, the tools' as their own.
+            let mut setting = lock(&shared.proxies).setting().clone();
+            setting.logged_tools = vec![TOOL, DIRECT];
+            shared.apply_proxies(setting);
+            assert_eq!(logged(&shared, &[1, 2, 3]), vec![Some(true); 3]);
+        }
+
+        /// The audit's M2: a flow tied while the switch was on stays tied once it is turned off, so that under the
+        /// tool's own choice its next records keep no destination, while "Now" still shows it, with no window.
+        #[test]
+        fn a_flow_tied_with_the_switch_on_stays_out_of_the_record_after_it() {
+            let (shared, clock) = chained(true);
+            shared.carry(&Target::Address(SITE));
+            clock.pass(500);
+            assert!(born(&shared, to(1, TOOL, SITE, None)));
+            assert!(tied(&shared, 1), "tied whatever the switch");
+            let bytes = lock(&shared.live).get(&1).map(|l| Arc::clone(&l.bytes));
+            if let Some(bytes) = &bytes {
+                clock.set(T + 1_000);
+                bytes.up(&shared, 10, 50);
+            }
+            shared.flush();
+            assert!(
+                taken(&shared).iter().any(|r| matches!(
+                    r,
+                    crate::log::Record::Segment { flow, .. } if flow.id == 1 && flow.destination == SITE
+                )),
+                "logged in full while the switch is on"
+            );
+            switch(&shared, false);
+            choose_tool(&shared, &[TOOL]);
+            if let Some(bytes) = &bytes {
+                clock.set(T + 2_000);
+                bytes.up(&shared, 10, 50);
+            }
+            let snapshot = shared.now_view(T + 2_500);
+            let places: Vec<_> = snapshot
+                .apps
+                .iter()
+                .filter(|a| a.uid == Some(TOOL))
+                .flat_map(|a| a.places.iter().map(|p| (p.flow.destination, p.shown_only)))
+                .collect();
+            assert_eq!(
+                places,
+                vec![(SITE, false)],
+                "shown, with no window under the choice"
+            );
+            assert_eq!(logged(&shared, &[1]), vec![Some(false)], "the next batch");
         }
 
         /// The audit's m4: the table of what the chain asked goes when the chain goes off or its tool changes, not at

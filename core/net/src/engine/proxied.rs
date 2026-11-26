@@ -159,24 +159,30 @@ const MAX_LOGGED: usize = 512;
 /// The most circumvention tools the engine counts (R10, unit D): as many as `nativeProxies` hands.
 const MAX_TOOLS: usize = 256;
 
+/// The most tools whose own connections the user can choose to log (R10, unit D): as many as `nativeProxies` hands.
+const MAX_LOGGED_TOOLS: usize = 64;
+
 /// R3, the proxy record's unit C: the application UIDs whose own proxies the user chose to log, sorted, never a tool's
 /// nor Android's PAC handler's, at most [`MAX_LOGGED`]. A sorted slice and a binary search: it holds a few apps, and it
 /// adds no map's code. The engine keeps it behind a leaf lock of its own (`Shared::kept_apps`), never under `proxies`,
 /// whose holder `infer` takes `held_back` under it while the log's readers of this set hold `held_back`.
 ///
 /// R10, the proxy record's unit D: beside it, the circumvention tools as the network part tells them by signing key,
-/// sorted, at most [`MAX_TOOLS`]; and the trackers' signatures, for the rule that keeps a tool's flow to a tracker whole
-/// (audit-D M3). The chain's tool is a tool too, read with the chain when [`Keeps`] is built (audit-D m2).
+/// sorted, at most [`MAX_TOOLS`]; of them, the ones whose own connections the user chose to log, sorted, application
+/// UIDs only, at most [`MAX_LOGGED_TOOLS`]; and the trackers' signatures, for the rule that keeps a tool's flow to a
+/// tracker whole (audit-D M3). The chain's tool is a tool too, read with the chain when [`Keeps`] is built (audit-D
+/// m2); the network part hands it among the tools, and so among those chosen when it is.
 #[derive(Debug, Default, PartialEq, Eq)]
 pub(super) struct LoggedApps {
     apps: Box<[u32]>,
     tools: Box<[u32]>,
+    tools_kept: Box<[u32]>,
     trackers: Option<Arc<NetworkSignatures>>,
 }
 
 impl LoggedApps {
-    /// The set the network part handed in `setting`: its application UIDs, but a tool's and the PAC handler's; and the
-    /// tools as handed.
+    /// The set the network part handed in `setting`: its application UIDs, but a tool's and the PAC handler's; the tools
+    /// as handed; and the tools chosen that are tools.
     fn of(setting: &ProxySetting) -> Self {
         let mut apps: Vec<u32> = setting
             .logged
@@ -195,9 +201,19 @@ impl LoggedApps {
         tools.sort_unstable();
         tools.dedup();
         tools.truncate(MAX_TOOLS);
+        let mut tools_kept: Vec<u32> = setting
+            .logged_tools
+            .iter()
+            .copied()
+            .filter(|&uid| application(uid) && tools.binary_search(&uid).is_ok())
+            .collect();
+        tools_kept.sort_unstable();
+        tools_kept.dedup();
+        tools_kept.truncate(MAX_LOGGED_TOOLS);
         Self {
             apps: apps.into_boxed_slice(),
             tools: tools.into_boxed_slice(),
+            tools_kept: tools_kept.into_boxed_slice(),
             trackers: setting.trackers.clone(),
         }
     }
@@ -225,11 +241,16 @@ impl LoggedApps {
             && uid.is_some_and(|uid| self.apps.binary_search(&app_of(uid)).is_ok())
     }
 
-    /// Whether an app of this set is not in `after`: its choice was turned off, and what it kept goes (R6).
+    /// Whether an app or a tool this set chose is not chosen in `after`: its choice was turned off, and what it kept goes
+    /// (R6).
     fn lost(&self, after: &Self) -> bool {
         self.apps
             .iter()
             .any(|uid| after.apps.binary_search(uid).is_err())
+            || self
+                .tools_kept
+                .iter()
+                .any(|uid| after.tools_kept.binary_search(uid).is_err())
     }
 }
 
@@ -281,10 +302,11 @@ impl Keeps {
         uid.is_some_and(|uid| self.chain_tool == Some(uid) || self.apps.is_tool(uid))
     }
 
-    /// Whether the tool `uid`'s own connections keep their first hop with no window: the switch. Read for a tool's
-    /// flows only.
-    pub(super) fn tool_kept(&self, _uid: Option<u32>) -> bool {
-        self.all
+    /// Whether the tool `uid`'s own connections keep their first hop with no window: the switch, or the user's choice
+    /// for that tool (R10). Read for a tool's flows only, and never where a flow is named by where it asked its proxy to
+    /// go, which [`Keeps::proxy`] alone decides (audit-D m1).
+    pub(super) fn tool_kept(&self, uid: Option<u32>) -> bool {
+        self.all || uid.is_some_and(|uid| self.apps.tools_kept.binary_search(&uid).is_ok())
     }
 
     /// Whether a name `flow` carries, its address among them, matches a tracker's signature (audit-D M3): a tool's flow
@@ -486,9 +508,7 @@ impl TakenBack {
         }
     }
 
-    /// Whether the flow `id` was tied to what the chain asked the tool for: read by the tool's own choice, which comes
-    /// next (the proxy record's unit D, commit 4); by tests until then.
-    #[cfg(test)]
+    /// Whether the flow `id` was tied to what the chain asked the tool for.
     pub(super) fn tied(&self, id: u64) -> bool {
         self.tied.iter().rev().any(|&tied| tied == id)
     }
@@ -663,7 +683,7 @@ pub(super) fn strip_for_log(
     // was turned on, keeps the left-out shape and must still say that the engine could not tell (review B-engine 1).
     mark_unsure(flow, taken_back);
     // A circumvention tool's own flow (R10, unit D), before the own proxies' rule below.
-    if keeps.tool(flow.uid) && strip_tool(flow, keeps) {
+    if keeps.tool(flow.uid) && strip_tool(flow, keeps, taken_back) {
         return;
     }
     // A flow taken back has no proxy of its own: its would-be proxy's facts decide (unit C).
@@ -697,19 +717,31 @@ pub(super) fn strip_for_log(
 }
 
 /// What the log may keep of a record of a circumvention tool's own flow, `flow` (R10, the proxy record's unit D), and
-/// whether that decided it: a plain flow, a plain request not to Android's setting among them (audit-D m6), keeps its
-/// address and names only with the switch on, or if its names match a tracker and it asked nothing itself (audit-D
-/// M3). Otherwise it is left out (`logbook::without_destination`), as the chained tool's records always were: the app,
-/// the bytes, the times, the state, the route, and a blocked flow's SDK. An own proxy's flow, an unchained tool's
-/// SOCKS or `CONNECT` upstream, follows the own proxies' rule.
+/// whether that decided it:
+/// - a plain flow, a plain request not to Android's setting among them (audit-D m6), keeps its address and names with
+///   the switch on; with the user's choice for the tool, if it asked nothing itself and is not tied to what the chain
+///   asked the tool for ([`TakenBack::tied`]), which the tool opened directly for a chained app and the choice never
+///   covers; and if its names match a tracker and it asked nothing (audit-D M3). Otherwise it is left out
+///   (`logbook::without_destination`), as the chained tool's records always were: the app, the bytes, the times, the
+///   state, the route, and a blocked flow's SDK.
+/// - an own proxy's flow, an unchained tool's SOCKS or `CONNECT` upstream, keeps its first hop under the user's choice
+///   for the tool with the switch off, as named with no `asked`; one that holds where it asked to go, written while the
+///   switch was on, is left out whole. With the switch on, or neither, the own proxies' rule decides.
 #[cold]
 #[inline(never)]
-fn strip_tool(flow: &mut Flow, keeps: &Keeps) -> bool {
-    if own_proxy(flow) {
-        return false;
-    }
+fn strip_tool(flow: &mut Flow, keeps: &Keeps, taken_back: &TakenBack) -> bool {
     let asked = flow.proxy.as_ref().is_some_and(|p| p.asked.is_some());
-    if !keeps.all && (asked || !keeps.tracker(flow)) {
+    if own_proxy(flow) {
+        if keeps.all || !keeps.tool_kept(flow.uid) {
+            return false;
+        }
+        if asked {
+            *flow = super::logbook::without_destination(flow);
+        }
+        return true;
+    }
+    let chosen = keeps.tool_kept(flow.uid) && !taken_back.tied(flow.id);
+    if !keeps.all && (asked || !(chosen || keeps.tracker(flow))) {
         *flow = super::logbook::without_destination(flow);
     }
     true
@@ -5326,6 +5358,140 @@ mod tests {
         let reads: Vec<&[u8]> = reads.iter().map(Vec::as_slice).collect();
         relay_replied(shared, socks, &bytes, &reads, SOCKS5_REPLY);
         socks
+    }
+
+    /// The tools `tools` and, of them, `chosen` whose own connections the user chose to log (R10, unit D), the rest of
+    /// the setting as it is.
+    fn choose_tools(shared: &Shared, tools: &[u32], chosen: &[u32]) {
+        let mut setting = lock(&shared.proxies).setting().clone();
+        setting.tools = tools.to_vec();
+        setting.logged_tools = chosen.to_vec();
+        shared.apply_proxies(setting);
+    }
+
+    /// The records of the flow `id` gathered for the next batch, as they are.
+    fn pending_of(shared: &Shared, id: u64) -> Vec<Flow> {
+        lock(&shared.pending_log)
+            .iter()
+            .filter_map(|r| match r {
+                Record::Segment { flow, .. } if flow.id == id => Some(flow.clone()),
+                _ => None,
+            })
+            .collect()
+    }
+
+    /// D-PLAN test 11, with the audit's m1 (R10, unit D): the switch off, an unchained tool chosen. Its plain flow's
+    /// record keeps its address, and "Now" shows it with no window; its own SOCKS5 upstream keeps its first hop, never
+    /// where it asked to go, at naming, in the sweep and in the record; a record with `asked`, written while the switch
+    /// was on, is stripped whole. Turning the choice off strips the next batch, and puts the places back in their
+    /// window.
+    #[test]
+    #[allow(clippy::too_many_lines)]
+    fn the_tools_own_choice_logs_its_servers_never_a_destination() {
+        let (shared, clock) = engine_at(false);
+        let shared = &shared;
+        learn(shared, "203.0.113.5", "proxy.example.net");
+        choose_tools(shared, &[UID], &[UID]);
+        let server = at([192, 0, 2, 44], 443);
+        let (plain, bytes) = open(shared, UID, server);
+        bytes.up(shared, 10, 50);
+        let socks = socks5_of(shared, UID, [203, 0, 113, 5]);
+        let named = live(shared, socks.id);
+        assert!(
+            named.proxy.as_ref().is_some_and(|p| p.asked.is_none())
+                && named.name.as_deref() == Some("proxy.example.net"),
+            "named by its first hop: {named:?}"
+        );
+        assert!(lock(&shared.live).get(&socks.id).is_some_and(|l| l.unkept));
+        let now = {
+            use super::super::clock::Clock;
+            clock.wall_ms()
+        };
+        let shown: Vec<_> = shared
+            .now_view(now)
+            .apps
+            .into_iter()
+            .filter(|a| a.uid == Some(UID))
+            .flat_map(|a| {
+                a.places
+                    .into_iter()
+                    .map(|p| (p.flow.destination, p.shown_only))
+            })
+            .collect();
+        assert!(shown.contains(&(server, false)), "no window: {shown:?}");
+        for id in [plain.id, socks.id] {
+            shared.finish(id);
+        }
+        shared.flush();
+        let records = taken(shared);
+        let kept = of_flow(&records, plain.id);
+        assert!(
+            !kept.is_empty() && kept.iter().all(|f| f.destination == server),
+            "{kept:?}"
+        );
+        let first_hop = of_flow(&records, socks.id);
+        assert!(
+            !first_hop.is_empty()
+                && first_hop
+                    .iter()
+                    .all(|f| f.destination == at([203, 0, 113, 5], 1080)
+                        && f.proxy
+                            .as_ref()
+                            .is_some_and(|p| p.asked.is_none() && !p.left_out)),
+            "{first_hop:?}"
+        );
+        // Made while the switch was on: named by where it asked, and a record of that waits; the switch turned off
+        // strips the record whole, and the sweep sets the live flow back to its first hop.
+        switch(shared, true);
+        let asked = socks5_of(shared, UID, [203, 0, 113, 5]);
+        assert_eq!(live(shared, asked.id).name.as_deref(), Some("example.com"));
+        cut_and_tell(shared, &clock);
+        assert!(
+            pending_of(shared, asked.id)
+                .iter()
+                .any(|f| f.proxy.as_ref().is_some_and(|p| p.asked.is_some())),
+            "a record with where it asked waits"
+        );
+        switch(shared, false);
+        let stripped = pending_of(shared, asked.id);
+        assert!(
+            !stripped.is_empty() && stripped.iter().all(left_out),
+            "{stripped:?}"
+        );
+        let back = live(shared, asked.id);
+        assert!(
+            back.proxy.as_ref().is_some_and(|p| p.asked.is_none())
+                && back.name.as_deref() == Some("proxy.example.net"),
+            "{back:?}"
+        );
+        // The choice turned off: the next batch is stripped, and the place is in its window again.
+        let (later, bytes) = open(shared, UID, at([192, 0, 2, 45], 443));
+        bytes.up(shared, 10, 50);
+        cut_and_tell(shared, &clock);
+        assert!(
+            pending_of(shared, later.id)
+                .iter()
+                .any(|f| f.destination == at([192, 0, 2, 45], 443)),
+            "kept while chosen"
+        );
+        choose_tools(shared, &[UID], &[]);
+        let next = pending_of(shared, later.id);
+        assert!(
+            !next.is_empty() && next.iter().all(|f| f.destination.ip().is_unspecified()),
+            "{next:?}"
+        );
+        let now = {
+            use super::super::clock::Clock;
+            clock.wall_ms()
+        };
+        let windowed = shared
+            .now_view(now)
+            .apps
+            .into_iter()
+            .filter(|a| a.uid == Some(UID))
+            .flat_map(|a| a.places)
+            .any(|p| p.flow.destination == at([192, 0, 2, 45], 443) && p.shown_only);
+        assert!(windowed, "shown here only once more");
     }
 
     /// Unit C, test 1: with the switch off, a chosen app's own proxy keeps its first hop and destination, live and in

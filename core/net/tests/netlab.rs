@@ -5220,12 +5220,12 @@ fn the_choice_for_one_app_crosses_a_hand_over() -> Outcome {
 /// The proxy record's unit D (R10), through the whole engine on Linux's TCP stack, with no chain: the lab's app, named a
 /// circumvention tool by the set the network part hands, connects to a server of its own. The flows a debug engine keeps
 /// hold the server's address; the log's records hold none with "Log where these apps connect" off, and hold it with the
-/// switch on.
+/// user's choice for that tool, and with the switch on.
 #[test]
 #[ignore = "needs an unprivileged network namespace; scripts/check.sh rust runs it"]
-fn a_tools_own_connections_are_logged_by_the_switch_alone() -> Outcome {
+fn a_tools_own_connections_are_logged_by_the_switch_or_its_choice() -> Outcome {
     lab(
-        "a_tools_own_connections_are_logged_by_the_switch_alone",
+        "a_tools_own_connections_are_logged_by_the_switch_or_its_choice",
         &Limits {
             close_linger: Duration::from_millis(50),
             ..Limits::default()
@@ -5250,7 +5250,27 @@ fn a_tools_own_connections_are_logged_by_the_switch_alone() -> Outcome {
                 "no address with the switch off"
             );
 
-            // The switch on: the address is logged.
+            // The tool's own choice, the switch off: the address is logged.
+            engine.proxies(datapavan_net::ProxySetting {
+                tools: vec![APP],
+                logged_tools: vec![APP],
+                ..datapavan_net::ProxySetting::default()
+            });
+            let before = LOGGED.lock().map_err(|e| e.to_string())?.len();
+            let mut app = app_connect(server).await?;
+            assert_eq!(exchange(&mut app, b"chosen").await?, b"chosen");
+            drop(app);
+            let since = logged_since(&engine, before).await?;
+            assert!(
+                holds(&since, &SERVER.octets()),
+                "the address under the choice"
+            );
+
+            // The choice off again, and the switch on: the address is logged.
+            engine.proxies(datapavan_net::ProxySetting {
+                tools: vec![APP],
+                ..datapavan_net::ProxySetting::default()
+            });
             engine.tunnels(&datapavan_net::TunnelSetting {
                 log_destinations: true,
                 ..datapavan_net::TunnelSetting::default()
