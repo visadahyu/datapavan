@@ -2,7 +2,7 @@
 title: "Política de privacidad"
 ---
 
-Esta es una traducción. El [texto en inglés](https://datapavan.org/privacy/index.html) es el que se aplica.
+Esta es una traducción. El [texto en inglés](https://datapavan.org/privacy/) es el que se aplica.
 
 - **Vigente desde:** 2026-11-07
 - **Actualización:** 2026-11-18, con las líneas de Datapavan Advanced para la 0.2.0, que aún no se ha publicado

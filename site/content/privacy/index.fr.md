@@ -2,7 +2,7 @@
 title: "Politique de confidentialité"
 ---
 
-Ceci est une traduction. Le [texte anglais](https://datapavan.org/privacy/index.html) est celui qui s’applique.
+Ceci est une traduction. Le [texte anglais](https://datapavan.org/privacy/) est celui qui s’applique.
 
 - **En vigueur :** 2026-11-07
 - **Mise à jour :** 2026-11-18, avec les lignes de Datapavan Advanced pour la 0.2.0, qui n’est pas encore publiée

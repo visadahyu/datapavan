@@ -2,7 +2,7 @@
 title: "Hinweise zum Datenschutz"
 ---
 
-Dies ist eine Übersetzung. Maßgeblich ist der [englische Text](https://datapavan.org/privacy/index.html).
+Dies ist eine Übersetzung. Maßgeblich ist der [englische Text](https://datapavan.org/privacy/).
 
 - **Gültig ab:** 2026-11-07
 - **Aktualisiert:** 2026-11-18, mit den Zeilen zu Datapavan Advanced für Version 0.2.0, die noch nicht veröffentlicht ist

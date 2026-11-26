@@ -39,8 +39,8 @@ def main():
                 bad.append(f"{name}: {what}")
         fonts = 0
         for url in set(re.findall(r"url\(([^)\"']+)\)", html)):
-            target = (page.parent / url).resolve()
-            if not target.exists():
+            target = internal(page, url)
+            if target is None or not target.exists():
                 bad.append(f"{name}: missing {url}")
             else:
                 fonts += target.stat().st_size
@@ -49,9 +49,9 @@ def main():
         if load > LIMIT:
             bad.append(f"{name}: first load is {load} bytes")
         for link in re.findall(r'(?:href|src)="?([^"\s>]+)', html):
-            if re.match(r"[a-z]+:|//|#", link):
+            target = internal(page, link)
+            if target is None:
                 continue
-            target = (page.parent / link.split("#")[0]).resolve()
             # A release's signed files are published beside the site, not built with it (site/README.md).
             if target.is_relative_to(SITE.resolve() / "download"):
                 continue
@@ -59,7 +59,7 @@ def main():
                 bad.append(f"{name}: broken link {link}")
             # A page is linked by its clean address, its folder, as its canonical names it: a link to its index.html
             # is a second address of it, which search engines then hold as a duplicate (Search Console, 2026-11-26).
-            elif link.split("#")[0].endswith("index.html"):
+            elif link.split("#")[0].split("?")[0].endswith("index.html"):
                 bad.append(f"{name}: link {link} names index.html; link the page's folder")
             elif target.is_dir() and not (target / "index.html").exists():
                 bad.append(f"{name}: link {link} is a folder with no page")
@@ -92,6 +92,20 @@ def main():
         print(problem)
     print(f"site: {len(pages)} pages, {len(bad)} problems")
     return 1 if bad else 0
+
+
+def internal(page, link):
+    """The file that a link on PAGE leads to inside the site, or None for a link out of it or within the page. A link
+    to the site by its full address (https://datapavan.org/...) or from its root (/...) is inside it too, and is held
+    to the same rules as a relative one: a search engine follows it the same way (Search Console, 2026-11-26)."""
+    path = link.split("#")[0].split("?")[0]
+    if link.startswith(BASE):
+        return (SITE / path[len(BASE):]).resolve()
+    if path.startswith("/") and not path.startswith("//"):
+        return (SITE / path.lstrip("/")).resolve()
+    if re.match(r"[a-z]+:|//|#", link):
+        return None
+    return (page.parent / path).resolve()
 
 
 def search(pages):

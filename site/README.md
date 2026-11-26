@@ -13,7 +13,8 @@ kept in Git: they go to `download/` on the server beside it, and `hugo.toml` nam
   the phone's own fonts. `static/images` comes from `scripts/store-images.sh`.
 
 The rules, which `scripts/check-site.py` enforces: no script, nothing from another server, about 200 KB or less on a first
-load before images, and no broken link inside the site. Anything meant to be read is text, so that a browser without web
+load before images, and no broken link inside the site, nor one that names `index.html`: a link by the site's full
+address (`https://datapavan.org/...`) or from its root counts as inside it. Anything meant to be read is text, so that a browser without web
 fonts or SVG loses only the look.
 
 News items state facts their sources state, in our own words, and link out. They load nothing from the source's server, and

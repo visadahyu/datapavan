@@ -2,7 +2,7 @@
 title: "隐私政策"
 ---
 
-这是译文。以[英文文本](https://datapavan.org/privacy/index.html)为准。
+这是译文。以[英文文本](https://datapavan.org/privacy/)为准。
 
 - **生效日期：** 2026-11-07
 - **更新日期：** 2026-11-18，加入 Datapavan Advanced 0.2.0 的相关条目，该版本尚未发布
