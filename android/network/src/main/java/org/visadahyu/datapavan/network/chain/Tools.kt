@@ -140,8 +140,11 @@ object Tools {
         return tools
     }
 
-    /** Both sets of tools on this phone, read once: [tools] ([uids], B6's) and [carriers] (R10's, which it holds). */
-    data class Found(val tools: Map<Int, String>, val carriers: Map<Int, String>)
+    /**
+     * Both sets of tools on this phone, read once: [tools] ([uids], B6's) and [carriers] (R10's, which it holds), with the
+     * chain's tool the reading counted ([chosen], its package, or null while the chain is off), for debug builds' dump.
+     */
+    data class Found(val tools: Map<Int, String>, val carriers: Map<Int, String>, val chosen: String? = null)
 
     /**
      * [uids] and [carriers] on this phone: the table as the build put it in the assets, the keys parsed once for every
@@ -164,7 +167,7 @@ object Tools {
         val debuggable = context.applicationInfo.flags and ApplicationInfo.FLAG_DEBUGGABLE != 0
         val test = testTools(testRows(context), debuggable)
         val uidOf = { name: String -> uidOf(context.packageManager, name) }
-        return Found(uids(table, chosen, verdict, test, uidOf), carriers(table, chosen, verdict, test, uidOf))
+        return Found(uids(table, chosen, verdict, test, uidOf), carriers(table, chosen, verdict, test, uidOf), chosen)
     }
 
     @Suppress("DEPRECATION")

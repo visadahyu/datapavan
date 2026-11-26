@@ -473,6 +473,9 @@ class NetworkVpnService : VpnService() {
     private var toolsHanded = IntArray(0)
     private var toolsReadings = 0
 
+    /** The chain's tool the last reading of the tools counted, by package, or null: debug builds' dump. Main thread. */
+    private var toolsReadChosen: String? = null
+
     /** How many times [applyProxies] handed the engine the proxies in this service's life: debug builds' dump. */
     @Volatile
     private var proxiesHanded = 0
@@ -698,6 +701,7 @@ class NetworkVpnService : VpnService() {
                     if (!active || run != runs) return@post
                     org.visadahyu.datapavan.network.proxy.ProxyContext.publishTools(found.tools, found.carriers)
                     toolsReadings++
+                    toolsReadChosen = found.chosen
                     toolsRead = true
                     applyProxies()
                 }
@@ -1454,6 +1458,7 @@ class NetworkVpnService : VpnService() {
         toolsLoggedHanded = IntArray(0)
         toolsHanded = IntArray(0)
         toolsReadings = 0
+        toolsReadChosen = null
         settingAddresses = null
         runs++
         if (active) {
@@ -1784,8 +1789,9 @@ class NetworkVpnService : VpnService() {
      * TOOL connects for itself", by the same rule. Then, always, the kept flows that went through a proxy, one
      * `flow-proxy` line each (no credential: none is kept); `proxy-logged UID...` (or `-`), the chosen apps' UIDs the last
      * hand-over gave the engine; `proxy-logged-tools UID...` (or `-`), the chosen tools' UIDs it gave; `proxy-tools
-     * read=N UID...` (or `-`), how many readings of the tools this run published and the tools it handed, the chain's
-     * among them, for the chain shard's wait after the chain is turned off (audit-D m14);
+     * read=N chosen=PACKAGE UID...` (or `-` for none), how many readings of the tools this run published, the chain's
+     * tool the last one counted, and the tools the last hand-over gave, the chain's among them, for the chain shard's
+     * wait after the chain is turned off (audit-D m14);
      * and on Android 15 and later one `proxy-sandbox UID SANDBOX` for each, the SDK Runtime's UID Android
      * gives that app, for the check that the engine's rule matches Android's; `proxy-handed COUNT`, the hand-overs so
      * far; one `proxy-ended PACKAGE WHY` for each choice that ended without the user while the process lives
@@ -1867,7 +1873,7 @@ class NetworkVpnService : VpnService() {
         Engine.nativeFlowProxies().lineSequence().filter { it.isNotBlank() }.forEach { writer.println("flow-proxy $it") }
         writer.println("proxy-logged ${loggedHanded.joinToString(" ").ifEmpty { "-" }}")
         writer.println("proxy-logged-tools ${toolsLoggedHanded.joinToString(" ").ifEmpty { "-" }}")
-        writer.println("proxy-tools read=$toolsReadings ${toolsHanded.joinToString(" ").ifEmpty { "-" }}")
+        writer.println("proxy-tools read=$toolsReadings chosen=${toolsReadChosen ?: "-"} ${toolsHanded.joinToString(" ").ifEmpty { "-" }}")
         if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.VANILLA_ICE_CREAM) {
             for (uid in loggedHanded) writer.println("proxy-sandbox $uid ${android.os.Process.getSdkSandboxUidForAppUid(uid)}")
         }

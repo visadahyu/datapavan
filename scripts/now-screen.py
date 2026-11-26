@@ -11,8 +11,9 @@ then of it scrolled, are read as one, in order.
 
 Prints, one a line: `row` or `no-row`; `now STATE` (its words); for each state with traffic,
 `bytes STATE SENT RECEIVED` in bytes (STATE one of background, notification, in-use, none, not-yet); `why
-TEXT` for each reason bytes have no state; `through-tool`, `tool` and `tool-hidden` (the tool's servers not
-shown) where the row says so; `place NAME` for
+TEXT` for each reason bytes have no state; `through-tool`, `tool` (the chain's tool), `tool-unchained` (another tool),
+`tool-left-out` (some of a tool's connections no longer shown) and `tool-live-only` (a tool's place shown there only,
+for its window; the proxy record's unit D) where the row says so; `place NAME` for
 each destination shown; `state STATE` for each entry of a history; `off APPS BYTES` for the line on the
 window while the screen was off; and `texts` with every text of the screen, joined by ` | `. Sizes are read
 as Android writes them in English (SI units: 1 kB = 1,000 bytes); the isolates around them are dropped.
@@ -96,6 +97,18 @@ def self_test():
     assert "through-tool" in shown and "bytes in-use 22 142" in shown, shown
     # The same row with no place: none read.
     assert not any(line.startswith("place ") for line in read([dump(chained)], "org.example.w"))
+    # A tool's row (the proxy record's unit D): another tool's, with a place shown there only, and connections no
+    # longer shown; the chain's tool says only that it is.
+    tool = ["Tool", "org.example.t", "Now: in the background", "A circumvention tool. Datapavan does not send apps through it.",
+            "Some of its connections are not shown here. While x is off, Now shows where a circumvention tool connects.",
+            "10.0.2.2", "no name known", "Sent 1 B, received 2 B",
+            "Tool connected here, for itself or for an app that uses it. Now shows this while the connection is open."]
+    read_tool = read([dump(tool)], "org.example.t")
+    for line in ("tool-unchained", "tool-left-out", "tool-live-only", "place 10.0.2.2"):
+        assert line in read_tool, read_tool
+    assert "tool" not in read_tool, read_tool
+    chained_tool = read([dump(["Tool", "org.example.t", "Now: in use", "Your circumvention tool. Its traffic includes x."])], "org.example.t")
+    assert "tool" in chained_tool and "tool-unchained" not in chained_tool and "tool-live-only" not in chained_tool, chained_tool
     # Two rows: the first's places are its own, the second's not among them.
     two = chained + ["example.org", "name from a DNS answer", "Maps", "org.example.maps", "Now: in the background",
                      "maps.example", "name the connection sent", "What this view cannot see"]
@@ -149,8 +162,12 @@ def main(paths, package):
             out.append("through-tool")
         if "Your circumvention tool." in row:
             out.append("tool")
-        if "Where it connects is not shown, because" in row:
-            out.append("tool-hidden")
+        if "A circumvention tool. Datapavan does not send apps through it." in row:
+            out.append("tool-unchained")
+        if "Some of its connections are not shown here." in row:
+            out.append("tool-left-out")
+        if "connected here, for itself or for an app that uses it." in row:
+            out.append("tool-live-only")
         for match in re.finditer(r"(?:\n|, )([^\n,]+)(?:\n|, )(" + "|".join(NAMED) + ")", "\n" + row):
             out.append(f"place {match.group(1)}")
         for match in re.finditer(r"State: ([a-z ]+)", row):
