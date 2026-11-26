@@ -770,7 +770,6 @@ impl Peer {
 
 /// Where a mapping's peers' answers come from: what the mapping lets in, with what finds a stand-in
 /// without a scan of every peer under the table's lock.
-#[derive(Default)]
 struct Sources {
     /// Each address answers come from, with the addresses the app knows its peers by.
     addresses: HashMap<IpAddr, Known>,
@@ -808,8 +807,31 @@ struct Sources {
 /// The identifiers the app sent the peers of one association through the tool (ADR 0044, unit 9b, fix
 /// round 2), by their fingerprints ([`identifiers::fingerprint`], which holds the port), each with the
 /// peers that keep it among those they were sent ([`TOLD`]).
-#[derive(Default)]
 struct Fingerprints(HashMap<u64, Keepers>);
+
+impl Default for Fingerprints {
+    fn default() -> Self {
+        Self(crate::map())
+    }
+}
+
+impl Default for Sources {
+    // Written, not derived: each map's keys made out of line, in the fields' order (the cold paths' second pass).
+    fn default() -> Self {
+        Self {
+            addresses: crate::map(),
+            aliases: crate::map(),
+            waiting: crate::map(),
+            names: crate::map(),
+            beside: crate::map(),
+            beside_on: crate::map(),
+            named_beside: crate::map(),
+            named_of: crate::map(),
+            told: Fingerprints::default(),
+            turn: Cell::new(0),
+        }
+    }
+}
 
 /// The peers of an association that keep one fingerprint: how many, and the exclusive-or of the
 /// addresses the app knows them by, each as an IPv6 address, an IPv4 one mapped (fix round 5). Where one
@@ -870,7 +892,6 @@ impl Fingerprints {
 }
 
 /// An address answers come from.
-#[derive(Default)]
 struct Known {
     /// The addresses the app knows the peers whose answers come from it by, itself or stand-ins the tool
     /// resolved to it, each with how many peers have it (fix round 5, review I's I7: one address, the
@@ -879,6 +900,16 @@ struct Known {
     /// The same, in the order they came (fix round 6, review K: walked for each, 16,384 stand-ins bound
     /// to one address took 0.18 s to end under the table's lock).
     order: Ordered<IpAddr>,
+}
+
+impl Default for Known {
+    // Written, not derived: each map's keys made out of line, in the fields' order (the cold paths' second pass).
+    fn default() -> Self {
+        Self {
+            peers: crate::map(),
+            order: Ordered::default(),
+        }
+    }
 }
 
 impl Known {
@@ -925,7 +956,7 @@ impl<T> Default for Ordered<T> {
     fn default() -> Self {
         Self {
             order: BTreeMap::new(),
-            at: HashMap::new(),
+            at: crate::map(),
             next: 0,
         }
     }
@@ -1305,7 +1336,8 @@ impl Mapping {
         if owns.is_empty() {
             return;
         }
-        let used: HashSet<u64> = peers.values().filter_map(|peer| peer.via).collect();
+        let mut used: HashSet<u64> = crate::set();
+        used.extend(peers.values().filter_map(|peer| peer.via));
         let orphans: Vec<u64> = owns
             .keys()
             .filter(|own| !used.contains(own))
