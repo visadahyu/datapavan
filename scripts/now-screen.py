@@ -121,12 +121,33 @@ def self_test():
     assert "now in use" in read([dump(prefix)], "org.example.w"), read([dump(prefix)], "org.example.w")
     assert "now in the background" in read([dump(prefix)], "org.example.w.b")
     assert "no-row" in read([dump(chained)], "org.example")
+    # Two dumps of one list scrolled half a page: the lines both show are read once, so the row's bytes are one line.
+    upper = ["Now", "Showing one app."] + chained[1:5]
+    lower = chained[3:] + ["What this view cannot see"]
+    once = read([dump(upper), dump(lower)], "org.example.w")
+    assert [line for line in once if line.startswith("bytes ")] == ["bytes in-use 22 142"], once
+    assert "through-tool" in once and "open" not in once, once
+    # A row that runs to the end of the texts read is open, as it may go on below the screen; one the next row or the
+    # section after the rows ends is not.
+    assert "open" in read([dump(chained)], "org.example.w"), read([dump(chained)], "org.example.w")
+    assert "open" not in first and "open" not in read([dump(prefix)], "org.example.w")
     print("now-screen.py: self-test passed")
     return 0
 
 
+def joined(dumps):
+    """The texts of dumps of one list scrolled down between them, in order: of each dump after the first, what it
+    repeats of the one before (the longest run that ends the one and begins the other) is read once, so that no line of
+    a row that both show counts twice (unit D's activity check: a row's bytes read twice summed as two numbers)."""
+    every = []
+    for found in dumps:
+        overlap = next((k for k in range(min(len(every), len(found)), 0, -1) if every[-k:] == found[:k]), 0)
+        every += found[overlap:]
+    return every
+
+
 def main(paths, package):
-    every = [text for path in paths for text in texts(path)]
+    every = joined([texts(path) for path in paths])
     text = "\n".join(every)
     out = []
     off = re.search(r"While the screen was off \(([^)]*)\), (\d+) apps? you were not using sent " + SIZE, text)
@@ -148,7 +169,11 @@ def main(paths, package):
         out.append("no-row")
     else:
         out.append("row")
-        row = "\n".join(lines[first:row_end(lines, first, package == "-")])
+        end = row_end(lines, first, package == "-")
+        # A row that runs to the last text read may go on below the screen's edge: the reader then reads further.
+        if end == len(lines):
+            out.append("open")
+        row = "\n".join(lines[first:end])
         now = re.search(r"Now: ([a-z ]+)", row)
         if now:
             out.append(f"now {now.group(1).strip()}")

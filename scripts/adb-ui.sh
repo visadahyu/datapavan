@@ -320,14 +320,17 @@ network_now() {
         dump_screen || continue
         adb shell cat "$DUMP" >"$3" 2>/dev/null || continue
         read=$(python3 -I "$(dirname "${BASH_SOURCE[0]}")/now-screen.py" "$3" "$2") || continue
-        grep -qx row <<<"$read" && grep -q '^bytes ' <<<"$read" && break
-        # The row may run below the screen's edge: the screen scrolled half a page is read after the top.
+        # Read whole: the row's bytes shown, and the row ended on the screen.
+        grep -qx row <<<"$read" && grep -q '^bytes ' <<<"$read" && ! grep -qx open <<<"$read" && break
+        # The row may run below the screen's edge: its bytes, or a line under them (seconds not told yet, "through your
+        # tool", a tool's own lines), out of this dump, as on CI for unit D (run 45824380227). The screen scrolled half
+        # a page is read with the top, and the list goes back to its top.
         swipe_up
-        dump_screen || continue
-        adb shell cat "$DUMP" >"$3.more" 2>/dev/null || continue
-        read=$(python3 -I "$(dirname "${BASH_SOURCE[0]}")/now-screen.py" "$3" "$3.more" "$2") || continue
-        grep -qx row <<<"$read" && grep -q '^bytes ' <<<"$read" && break
+        dump_screen || { scroll_to_top; continue; }
+        adb shell cat "$DUMP" >"$3.more" 2>/dev/null || { scroll_to_top; continue; }
+        read=$(python3 -I "$(dirname "${BASH_SOURCE[0]}")/now-screen.py" "$3" "$3.more" "$2") || { scroll_to_top; continue; }
         scroll_to_top
+        grep -qx row <<<"$read" && grep -q '^bytes ' <<<"$read" && break
     done
     printf '%s\n' "$read"
 }
