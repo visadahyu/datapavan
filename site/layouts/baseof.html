@@ -24,7 +24,15 @@ it in their own opening. scripts/check-site.py refuses a description that anothe
 {{- $desc := cond $isHome $t.desc_home (index $own (path.Base (strings.TrimSuffix "/" .RelPermalink)) | default "") -}}
 {{- with .Description }}{{ $desc = . }}{{ else }}{{ if eq .Section "guides" }}{{ with .Summary }}{{ $desc = . | plainify | htmlUnescape | replaceRE `\s+` " " | strings.TrimSpace | truncate 160 }}{{ end }}{{ end }}{{ end }}
 <title>{{ $title }}</title>
+{{- /* The mark as an SVG for browsers, and as pictures for what shows a raster icon: search results (Google: a
+square, a multiple of 48 px), older browsers and phones' home screens (scripts/site-images.sh). The bar of a phone's
+browser takes the page's paper in each scheme (site/assets/style.css). */}}
+<link rel="icon" href="{{ $toSite }}favicon.ico" sizes="16x16 32x32 48x48">
 <link rel="icon" href="{{ $toSite }}favicon.svg" type="image/svg+xml">
+<link rel="icon" href="{{ $toSite }}favicon-192.png" type="image/png" sizes="192x192">
+<link rel="apple-touch-icon" href="{{ $toSite }}apple-touch-icon.png">
+<meta name="theme-color" content="#FBF7F0" media="(prefers-color-scheme: light)">
+<meta name="theme-color" content="#14161C" media="(prefers-color-scheme: dark)">
 {{- if $is404 }}
 <meta name="robots" content="noindex">
 {{- else }}

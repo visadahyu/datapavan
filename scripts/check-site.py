@@ -34,7 +34,7 @@ def main():
         html = page.read_text(encoding="utf-8")
         for pattern, what in (
             (r"<script|<iframe|<object|<embed", "script or frame"),
-            (r'<link\b(?![^>]*rel="?(alternate|icon|canonical)")', "a link tag other than alternate, icon or canonical"),
+            (r'<link\b(?![^>]*rel="?(alternate|icon|apple-touch-icon|canonical)")', "a link tag other than alternate, an icon or canonical"),
             (r'(src|srcset)="?https?:|url\(\s*["\']?https?:|@import|rel="?icon"? href="?https?:', "loads from another server"),
             (r'\son[a-z]+="', "inline event handler"),
         ):
@@ -67,6 +67,19 @@ def main():
             elif target.is_dir() and not (target / "index.html").exists():
                 bad.append(f"{name}: link {link} is a folder with no page")
     bad += search(pages)
+    # The mark as search results and phones show it (scripts/site-images.sh), and the browser bar's colour in each
+    # scheme: the page's paper.
+    paper = schemes((ROOT / "site/assets/style.css").read_text(encoding="utf-8"))
+    for page in pages:
+        html = page.read_text(encoding="utf-8")
+        for rel, href in (("icon", "favicon.ico"), ("icon", "favicon.svg"), ("icon", "favicon-192.png"),
+                          ("apple-touch-icon", "apple-touch-icon.png")):
+            if not re.search(rf'<link rel="{rel}" href="[./]*{re.escape(href)}"', html):
+                bad.append(f"{page.relative_to(SITE)}: no {rel} {href}")
+        for scheme in ("light", "dark"):
+            colour = paper[scheme].get("--paper", "")
+            if f'<meta name="theme-color" content="{colour}" media="(prefers-color-scheme: {scheme})">' not in html:
+                bad.append(f"{page.relative_to(SITE)}: no theme-color {colour}, the paper of the {scheme} scheme")
     # An element of nothing but microdata still takes a place in the layout: as a child of a grid or a flex row, an
     # empty cell that pushes the rest out of place. Microdata goes inside an element that shows something.
     for page in pages:

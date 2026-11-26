@@ -10,7 +10,9 @@ kept in Git: they go to `download/` on the server beside it, and `hugo.toml` nam
 - `content/privacy/`: written by the build from `PRIVACY.md`, which stays the one source.
 - `layouts/`, `assets/style.css`: the pages. The drawing is `layouts/_partials/drawing-*.html`.
 - `static/`: fonts under the SIL Open Font License 1.1 (`static/fonts/LICENSES.txt`), images, `security.txt`. Chinese uses
-  the phone's own fonts. `static/images` comes from `scripts/store-images.sh`.
+  the phone's own fonts. `static/images` comes from `scripts/store-images.sh`, except the link-preview card
+  (`images/card.png`), which `scripts/site-images.sh` draws from the mark and the name, as it draws the raster icons
+  beside `static/favicon.svg` (`favicon.ico`, `favicon-192.png`, `apple-touch-icon.png`).
 
 The rules, which `scripts/check-site.py` enforces: no script, nothing from another server, about 200 KB or less on a first
 load before images, and no broken link inside the site, nor one that names `index.html`: a link by the site's full
