@@ -56,6 +56,12 @@ WORK="$(mktemp -d)"
 SERVER=""
 
 cleanup() {
+    # The switch and the tool's choice back off, whatever step failed (review D-rest m9): the next run starts from a
+    # cleared app all the same.
+    if [ -n "${TOOL_UID:-}" ]; then
+        dump log-destinations off >/dev/null 2>&1 || true
+        dump tool-log "$TOOL" off >/dev/null 2>&1 || true
+    fi
     adb shell am force-stop "$PKG" >/dev/null 2>&1 || true
     adb shell am force-stop "$TOOL" >/dev/null 2>&1 || true
     adb uninstall "$TOOL" >/dev/null 2>&1 || true
@@ -431,7 +437,9 @@ echo "ok: on the chain screen: the network part's password set in the tool, one 
 # as through the tool; it marks the tool; and it keeps the destinations of the shell, which goes directly. Every
 # connection of the tool shows under the tool's row, there only, for its window: its own connection to its server
 # (D9), and those it makes directly for the picked app, by address and by a name only the tool resolves, each at a port of
-# its own (audit-D M5). The log keeps no address of any of them.
+# its own (audit-D M5). The log keeps no address of any of them. "Now" keys a place with no name by its address alone
+# (`same_place`), so the three are one place at the test server's address, showing one of their ports: the live view
+# is counted per address, and the ports are told apart by the debug engine's flows and by the log's records.
 grep -q "log-retention 1 set" <<<"$(dump log-retention 1)" || fail "the log's retention was not set"
 # Opens the tool's own connection to its server, or closes it, and waits for its line.
 open_own() {
@@ -462,32 +470,35 @@ ask_through_tool "network.test:$RESIDUAL_PORT"
 grep -q 'activity-read true' <<<"$(dump activity-read)" || fail "the tracker of the apps' states did not read"
 activity_line() { grep "^activity-app $1 " <<<"$(dump | sed 's/^ *//')" || true; }
 # A tool's own places as the dump gives them, one a line (audit-D M5): ADDRESS:PORT, `v` for shown there only or `-`,
-# and the name; and how many of them are at the address and port $2 in the lines $1.
+# and the name; the places at the address $2 in the lines $1, whatever port they show; the debug engine's flows of the
+# tool to the address and port $1, by their app end, which tell the ports apart; and whether it keeps one there now that
+# was not among the ends $2 (it keeps 512 flows, the oldest out first, so a count could stand still).
 tool_places() { dump | sed 's/^ *//' | awk -v uid="$TOOL_UID" '$1 == "activity-place" && $2 == uid { print $3, $4, $6 }'; }
-places_at() { awk -v at="$2" '$1 == at' <<<"$1" | wc -l; }
+places_at() { awk -v at="$2" '{ address = $1; sub(/:[0-9]+$/, "", address) } address == at' <<<"$1"; }
+tool_flows_to() { flows | awk -v at="$1" -v uid="$TOOL_UID" '$1 == "tcp" && $3 == at && $4 == uid && $5 == "opened" { print $2 }'; }
+new_tool_flow_to() { [ -n "$(awk 'NR == FNR { seen[$1] = 1; next } NF && !($1 in seen)' <(printf '%s\n' "$2") <(tool_flows_to "$1"))" ]; }
 chained=$(activity_line "$WORKLOAD_UID")
 grep -q " through-tool=1 places=0 " <<<"$chained" || fail "the live view keeps a destination of the picked app: $chained"
 grep -q " tool=1 through-tool=0 " <<<"$(activity_line "$TOOL_UID")" || fail "the live view does not mark the tool: $(activity_line "$TOOL_UID")"
 grep -qE " places=[1-9]" <<<"$(activity_line 2000)" || fail "the live view keeps no destination of the shell: $(activity_line 2000)"
-places=$(tool_places)
-for at in "$HOST:$OWN_PORT" "$HOST:$RESIDUAL_PORT"; do
-    [ "$(places_at "$places" "$at")" -eq 1 ] || fail "the live view does not hold one place of the tool at $at: $(tr '\n' ';' <<<"$places")"
+for at in "$HOST:$PORT" "$HOST:$OWN_PORT" "$HOST:$RESIDUAL_PORT"; do
+    [ -n "$(tool_flows_to "$at")" ] || fail "the debug engine kept no flow of the tool to $at: its own connections are not counted under it"
 done
-[ "$(places_at "$places" "$HOST:$PORT")" -ge 1 ] ||
-    fail "the live view does not show where the tool connected directly for the picked app: $(tr '\n' ';' <<<"$places")"
-[ -z "$(awk -v a="$HOST:$PORT" -v b="$HOST:$OWN_PORT" -v c="$HOST:$RESIDUAL_PORT" '($1 == a || $1 == b || $1 == c) && $2 != "v"' <<<"$places")" ] ||
+places=$(tool_places)
+at_host=$(places_at "$places" "$HOST")
+[ -n "$at_host" ] || fail "the live view does not show where the tool connected: $(tr '\n' ';' <<<"$places")"
+[ -z "$(awk '$2 != "v"' <<<"$at_host")" ] ||
     fail "a place of the tool is not shown there only, for its window, while the switch is off: $(tr '\n' ';' <<<"$places")"
 [ -z "$(awk '$3 == "network.test"' <<<"$places")" ] || fail "the tool's place holds the name only the tool resolved: $(tr '\n' ';' <<<"$places")"
-echo "ok: the live view keeps no destination of the picked app, marks the tool, and shows each of the tool's connections there only, for its window"
+echo "ok: the live view keeps no destination of the picked app, marks the tool, and shows the tool's connections there only, for their window"
 # The same from the screen (W5's third part): "Now" shows the picked app's bytes as sent through the tool, and no place
-# it reached; and the tool's own row its places, the address the tool connected to, there only, for their window, never
+# it reached; and the tool's own row its place, the address the tool connected to, there only, for its window, never
 # the name only the tool resolved. The run's names and addresses are looked for in every text of the picked app's screen
 # too, so that a place read as something else still fails the check (review c1 of W5's third part, screens, M1).
 screens=$(mktemp -d)
 chained_screen=$(network_now "$PKG" "$WORKLOAD" "$screens/now.xml")
 tool_screen=$(network_now "$PKG" "$TOOL" "$screens/tool.xml")
 rm -rf "$screens"
-adb shell input keyevent KEYCODE_BACK
 grep -qx through-tool <<<"$chained_screen" || fail "\"Now\" does not show the picked app as sent through the tool: $(tr '\n' ';' <<<"$chained_screen" | cut -c1-800)"
 ! grep -q '^place ' <<<"$chained_screen" || fail "\"Now\" names a place of the picked app: $(grep '^place ' <<<"$chained_screen")"
 for name in network.test "$HOST"; do
@@ -498,45 +509,90 @@ grep -qx "place $HOST" <<<"$tool_screen" || fail "\"Now\" does not show where th
 grep -qx tool-live-only <<<"$tool_screen" ||
     fail "\"Now\" does not say that the tool's places are shown there only, for their window: $(tr '\n' ';' <<<"$tool_screen" | cut -c1-800)"
 ! grep -qF network.test <<<"$(grep '^texts ' <<<"$tool_screen")" || fail "\"Now\" shows on the tool's row the name only the tool resolved"
-echo "ok: on the screen, \"Now\" shows the picked app through the tool with no place it reached, and the tool's places there only, for their window"
+echo "ok: on the screen, \"Now\" shows the picked app through the tool with no place it reached, and the tool's place there only, for its window"
 # The log keeps the tool's connections and the picked app's, with no address of either while the switch is off.
 dump log-flush >/dev/null
 tool_records() { dump log-today | sed -n "s/^ *log-record tcp $TOOL_UID //p"; }
+stripped_records() { grep -cE '^[0.:]+ ' <<<"$1" || true; }
 records=$(tool_records)
-[ -n "$(grep -E '^[0.:]+ ' <<<"$records" || true)" ] || fail "the log holds no record of the tool's connections: the check proves nothing"
+[ "$(stripped_records "$records")" -ge 3 ] || fail "the log holds no record of each of the tool's three connections: the check proves nothing"
 ! grep -qF "$HOST:" <<<"$records" || fail "with the switch off, the log holds where the tool connected: $(grep -F "$HOST:" <<<"$records" | head -3 | tr '\n' ';')"
 picked=$(dump log-today | sed -n "s/^ *log-record tcp $WORKLOAD_UID //p")
 [ -n "$picked" ] || fail "the log holds no record of the picked app: the check proves nothing"
 ! grep -qE "$HOST:|network\.test" <<<"$picked" || fail "with the switch off, the log holds where the picked app connected"
 echo "ok: with the switch off, the log keeps the tool's connections and the picked app's, with no address of either"
 
-# The tool's own choice, "Log where TOOL connects for itself" (D7), the switch off: from then on, the tool's own connection
+# The tool's own choice, "Log where TOOL connects for itself" (D7), the switch off, turned on on the tool's row in "Now" as
+# a user does, through its link's and its confirmation's tags (review D-rest m9): from then on, the tool's own connection
 # is logged with its address, and the one it makes for the picked app's request by address is not (what the chain asked
-# the tool for). The request by a name only the tool resolves cannot be tied to it, and is logged as the tool's own:
-# the choice's confirmation says Datapavan cannot always tell them apart. "Now" then shows the tool's places in full.
-grep -q "tool-log $TOOL on" <<<"$(dump tool-log "$TOOL" on)" || fail "the tool's own choice was not taken"
+# the tool for). The request by a name only the tool resolves, sent with no hello Datapavan can read, cannot be tied to
+# it, and is logged as the tool's own: the choice's confirmation says Datapavan cannot always tell them apart. "Now" then
+# shows the tool's place in full.
+# Taps the element tagged $1 ("Now" and the confirmation give their tags as resource ids), scrolling down to it, and
+# moved up first from the gesture bar when it lies there.
+tap_tag() {
+    local bounds height left top right bottom try
+    for _ in $(seq 1 10); do
+        has_id "$1" && break
+        swipe_up
+    done
+    height=$(adb shell wm size | tr -d '\r' | sed -n 's/.*x\([0-9]*\)$/\1/p' | tail -1)
+    for try in 1 2; do
+        has_id "$1" || return 1
+        bounds=$(adb shell cat "$DUMP" | tr -d '\r' |
+            sed -n "s/.*resource-id=\"$1\"[^>]*bounds=\"\[\([0-9]*\),\([0-9]*\)\]\[\([0-9]*\),\([0-9]*\)\]\".*/\1 \2 \3 \4/p" | sed -n 1p)
+        [ -n "$bounds" ] || return 1
+        read -r left top right bottom <<<"$bounds"
+        if [ "$try" = 1 ] && [ "$bottom" -gt $((height * 7 / 8)) ]; then
+            swipe_up
+            continue
+        fi
+        adb shell input tap $(( (left + right) / 2 )) $(( (top + bottom) / 2 ))
+        return 0
+    done
+    return 1
+}
 tool_handed() { grep -qE "^proxy-logged-tools (.* )?$TOOL_UID( |$)" <<<"$(dump | sed 's/^ *//')"; }
-within 10 tool_handed || fail "the hand-over did not give the engine the tool chosen: $(dump | sed 's/^ *//' | grep '^proxy-logged-tools')"
+tool_not_handed() { grep -qE "^proxy-logged-tools -$" <<<"$(dump | sed 's/^ *//')"; }
+# The tool's row from its top, as network_now left it.
+scroll_to_top
+tap_tag tool-log-link || fail "the tool's place in \"Now\" offers no link to log where the tool connects for itself"
+within 10 has_id tool-log-yes || fail "the link did not ask for its confirmation"
+tap_tag tool-log-yes || fail "the confirmation's yes could not be tapped"
+adb shell input keyevent KEYCODE_BACK
+within 10 tool_handed || fail "the hand-over did not give the engine the tool chosen on the screen: $(dump | sed 's/^ *//' | grep '^proxy-logged-tools')"
 no_window() { [ -z "$(awk '$2 == "v"' <<<"$(tool_places)")" ]; }
 within 10 no_window || fail "with the tool chosen, \"Now\" still shows its places only for their window: $(tool_places | tr '\n' ';')"
 close_own || fail "the test tool did not close its own connection"
 open_own || fail "the test tool did not open its own connection again"
-ask_through_tool "$HOST:$PORT"
-ask_through_tool "network.test:$RESIDUAL_PORT"
 dump log-flush >/dev/null
 records=$(tool_records)
 grep -qF "$HOST:$OWN_PORT " <<<"$records" || fail "with the tool chosen, the log does not hold the tool's own connection with its address"
+# The request by address: the tool's flow there is born (the debug engine keeps it), and its record is kept with no
+# address, where the choice keeps the own connection's: the positive control of the check that follows (n7).
+flows_before=$(tool_flows_to "$HOST:$PORT")
+stripped=$(stripped_records "$records")
+ask_through_tool "$HOST:$PORT"
+dump log-flush >/dev/null
+records=$(tool_records)
+new_tool_flow_to "$HOST:$PORT" "$flows_before" || fail "the debug engine kept no new flow of the tool to $HOST:$PORT"
+[ "$(stripped_records "$records")" -gt "$stripped" ] || fail "with the tool chosen, the log holds no record of the tool's flow for the picked app's request by address"
 ! grep -qF "$HOST:$PORT " <<<"$records" ||
     fail "with the tool chosen, the log holds where the tool connected for the picked app's request by address: $(grep -F "$HOST:$PORT " <<<"$records" | head -2 | tr '\n' ';')"
-grep -qF "$HOST:$RESIDUAL_PORT " <<<"$records" ||
+ask_through_tool "network.test:$RESIDUAL_PORT"
+dump log-flush >/dev/null
+grep -qF "$HOST:$RESIDUAL_PORT " <<<"$(tool_records)" ||
     fail "the request by a name only the tool resolves is not logged as the tool's own, as the choice's words say it may be"
-echo "ok: with the tool chosen, its own connection is logged with its address, the one for the picked app's request by address is not, and the request by a name only the tool resolves is logged as its own"
-# The switch on, the choice off: the tool's connections are logged with their addresses, the one for the picked app too.
+echo "ok: with the tool chosen on its row, its own connection is logged with its address, the one for the picked app's request by address is not, and the request by a name only the tool resolves is logged as its own"
+# The switch on, the choice off and no longer handed (n7): the tool's connections are logged with their addresses, the
+# one for the picked app too.
 grep -q "tool-log $TOOL off" <<<"$(dump tool-log "$TOOL" off)" || fail "the tool's own choice was not turned off"
+within 10 tool_not_handed || fail "the hand-over still gives the engine the tool chosen: $(dump | sed 's/^ *//' | grep '^proxy-logged-tools')"
 grep -q "log-destinations on" <<<"$(dump log-destinations on)" || fail "the switch \"Log where apps connect ...\" was not turned on"
-own_logged=$(grep -cF "$HOST:$OWN_PORT " <<<"$records" || true)
 sleep 2
 close_own || fail "the test tool did not close its own connection"
+dump log-flush >/dev/null
+own_logged=$(grep -cF "$HOST:$OWN_PORT " <<<"$(tool_records)" || true)
 open_own || fail "the test tool did not open its own connection again"
 ask_through_tool "$HOST:$PORT"
 dump log-flush >/dev/null
@@ -622,16 +678,24 @@ echo "ok: with the tool stopped, the screen says the apps wait, and its switch t
 # The tool's own row while it is not chained (the proxy record's unit D, R10; audit-D m14): the chain turned off through
 # its settings, as the screen just did, and the tools read again with no chain's tool, the test tool still counts as a
 # tool, by debug builds' rule alone (its package under this project's own prefix). Its own connection shows in "Now"
-# there only, for its window, also once it ended; the log keeps no address of it; with the switch on, it does.
+# there only, for its window; the log keeps no address of it; with the switch on, it does.
 chain_off_read() { grep -qE "^proxy-tools read=[0-9]+ chosen=- (.* )?$TOOL_UID( |$)" <<<"$(dump | sed 's/^ *//')"; }
 within 30 chain_off_read ||
     fail "the tools were not read again with the chain off, or the test tool is no tool by the debug rule: $(dump | sed 's/^ *//' | grep '^proxy-tools')"
 dump log-flush >/dev/null
 records=$(tool_records)
 own_logged=$(grep -cF "$HOST:$OWN_PORT " <<<"$records" || true)
-stripped=$(grep -cE '^[0.:]+ ' <<<"$records" || true)
+stripped=$(stripped_records "$records")
+flows_before=$(tool_flows_to "$HOST:$OWN_PORT")
 open_own || fail "the test tool, not chained, did not open its own connection"
-own_shown_only() { [ "$(awk -v at="$HOST:$OWN_PORT" '$1 == at && $2 == "v"' <<<"$(tool_places)" | wc -l)" -eq 1 ]; }
+new_tool_flow_to "$HOST:$OWN_PORT" "$flows_before" || fail "the debug engine kept no new flow of the tool, not chained, to $HOST:$OWN_PORT"
+# Its place, at the test server's address, shown there only: a tool not chained that the debug rule did not count, or
+# whose window the engine did not keep, would show it in full.
+own_shown_only() {
+    local at
+    at=$(places_at "$(tool_places)" "$HOST")
+    [ -n "$at" ] && [ -z "$(awk '$2 != "v"' <<<"$at")" ]
+}
 within 10 own_shown_only || fail "the tool's own connection, not chained, is not shown there only, for its window: $(tool_places | tr '\n' ';')"
 grep -q " tool=0 through-tool=0 " <<<"$(activity_line "$TOOL_UID")" || fail "the live view marks the tool as chained: $(activity_line "$TOOL_UID")"
 screens=$(mktemp -d)
@@ -642,14 +706,14 @@ for line in tool-unchained tool-live-only "place $HOST"; do
     grep -qx "$line" <<<"$tool_screen" || fail "\"Now\" does not show the tool, not chained, as such ($line): $(tr '\n' ';' <<<"$tool_screen" | cut -c1-800)"
 done
 ! grep -qx tool <<<"$tool_screen" || fail "\"Now\" shows the tool, not chained, as the chain's"
+# Its window after it ends is the engine's tests' to prove (tests 1, 4 and 5): the place it shares with the tool's
+# earlier connections to that address stays for theirs too, so no check here could fail for its own.
 close_own || fail "the test tool did not close its own connection"
-sleep 2
-own_shown_only || fail "the tool's own connection, ended, is no longer shown there only, for its window: $(tool_places | tr '\n' ';')"
 dump log-flush >/dev/null
 records=$(tool_records)
 [ "$(grep -cF "$HOST:$OWN_PORT " <<<"$records" || true)" -eq "$own_logged" ] ||
     fail "with the switch off, the log holds where the tool, not chained, connected for itself"
-[ "$(grep -cE '^[0.:]+ ' <<<"$records" || true)" -gt "$stripped" ] || fail "the log holds no new record of the tool's own connection: the check proves nothing"
+[ "$(stripped_records "$records")" -gt "$stripped" ] || fail "the log holds no new record of the tool's own connection: the check proves nothing"
 grep -q "log-destinations on" <<<"$(dump log-destinations on)" || fail "the switch \"Log where apps connect ...\" was not turned on"
 sleep 2
 open_own || fail "the test tool, not chained, did not open its own connection again"
@@ -659,7 +723,7 @@ dump log-flush >/dev/null
     fail "with the switch on, the log does not hold where the tool, not chained, connected for itself"
 grep -q "log-destinations off" <<<"$(dump log-destinations off)" || fail "the switch \"Log where apps connect ...\" was not turned off again"
 adb shell am force-stop "$TOOL"
-echo "ok: the tool, not chained, counted by its package alone in a debug build: its own connection shown there only, for its window, after it ended too, and logged with its address only with the switch on"
+echo "ok: the tool, not chained, counted by its package alone in a debug build: its own connection shown there only, for its window, and logged with its address only with the switch on"
 
 # An app left out of the tunnel (ADR 0041), chosen on the screen as a user would: the network part sets its tunnel up
 # again, the app still reaches the server, and the network part sees no new traffic of it. Taken back, the network part
