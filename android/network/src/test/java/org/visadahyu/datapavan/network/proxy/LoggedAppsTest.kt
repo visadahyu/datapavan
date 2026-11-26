@@ -6,12 +6,14 @@ import org.junit.Assert.assertTrue
 import org.junit.Test
 import org.visadahyu.datapavan.network.proxy.LoggedApps.Ended
 import org.visadahyu.datapavan.network.proxy.LoggedApps.Entry
+import org.visadahyu.datapavan.network.proxy.LoggedApps.Kind
 
 /**
  * The store of the user's choice for one app (the proxy record's unit C, C6 and C7): kept by package and first install
  * time, never by UID; handed by the UIDs the packages hold now, a shared UID only while every package of it was chosen,
  * never a tool's or the PAC handler's, and nothing before the tools were read; memory only under ADR 0047's profile,
- * which writes nothing when turned off; and the wipe.
+ * which writes nothing when turned off; and the wipe. With it, the choice for one tool (unit D, D7), a kind of its own
+ * in the same lines: handed only while its UID is a tool's, and nothing before the tools were read.
  */
 class LoggedAppsTest {
     /** The preferences, in memory. */
@@ -48,7 +50,7 @@ class LoggedAppsTest {
     }
 
     private fun handed(tools: Set<Int> = emptySet(), pac: Int? = null, toolsRead: Boolean = true) =
-        LoggedApps.handed(store.entries(), phone, tools, pac, toolsRead, store.ended())
+        LoggedApps.handed(store.entries(), phone, tools, pac, toolsRead, store.ended(), store.entries(Kind.TOOL))
 
     /** Hands as the service does: the UIDs, with what was stale forgotten. */
     private fun hand(tools: Set<Int> = emptySet(), pac: Int? = null, toolsRead: Boolean = true): List<Int> =
@@ -273,15 +275,121 @@ class LoggedAppsTest {
         assertEquals(emptyList<Int>(), hand())
     }
 
-    /** The lines of a kind this build does not know (unit D's tools) stay as they are, and are never read as an app's. */
+    /**
+     * The lines of each kind are read as that kind's alone: a tool's never as an app's, nor an app's as a tool's; and a
+     * line of a kind this build does not know stays as it is (audit-C 23).
+     */
     @Test
-    fun anotherKindsLinesStayAsTheyAre() {
-        disk.lines = setOf("tool\tcom.example.tool\t7000", "app\tcom.example.other\t2000", "app\tbroken", "app\t\t3")
+    fun eachKindsLinesAreItsOwnAndAnUnknownKindStaysAsItIs() {
+        disk.lines = setOf(
+            "tool\tcom.example.tool\t7000", "app\tcom.example.other\t2000", "app\tbroken", "app\t\t3", "later\tcom.example.later\t9",
+            "tool\tbroken",
+        )
         assertEquals(setOf(Entry("com.example.other", 2_000)), store.entries())
+        assertEquals(setOf(Entry("com.example.tool", 7_000)), store.entries(Kind.TOOL))
         store.choose(LoggedApps.entriesOfUid(phone, 10_123))
-        store.stop(listOf("com.example.other"))
+        store.stop(listOf("com.example.other", "com.example.tool"))
         assertTrue("tool\tcom.example.tool\t7000" in disk.lines)
+        assertTrue("later\tcom.example.later\t9" in disk.lines)
         assertEquals(setOf(Entry("com.example.messenger", 1_000)), store.entries())
+        store.stop(listOf("com.example.tool"), Kind.TOOL)
+        assertEquals(emptySet<Entry>(), store.entries(Kind.TOOL))
+        assertTrue("later\tcom.example.later\t9" in disk.lines)
+        assertEquals(setOf(Entry("com.example.messenger", 1_000)), store.entries())
+    }
+
+    /**
+     * A tool is chosen as a kind of its own, by package and first install time, never by UID (D7): handed as a tool,
+     * never as an app, and only while its UID is one of the tools; its choice ended at once, asking for a hand-over each
+     * time. The same package chosen as an app is the apps' choice apart.
+     */
+    @Test
+    fun aToolIsChosenAndStoppedAsAKindOfItsOwn() {
+        store.choose(LoggedApps.entriesOfUid(phone, 10_123), Kind.TOOL)
+        assertEquals(setOf("tool\tcom.example.messenger\t1000"), disk.lines)
+        assertEquals(emptySet<Entry>(), store.entries())
+        val handed = handed(tools = setOf(10_123))
+        assertEquals(listOf(10_123) to emptyList<Int>(), handed.tools to handed.uids)
+        assertEquals(setOf(10_123), store.toolsChosen(phone, setOf(10_123)))
+        assertEquals(1, asked)
+        store.stop(listOf("com.example.messenger"), Kind.TOOL)
+        assertEquals(emptyList<Int>(), handed(tools = setOf(10_123)).tools)
+        assertEquals(2, asked)
+        assertEquals(emptySet<String>(), disk.lines)
+    }
+
+    /**
+     * A tool chosen that is no tool now, its key changed, or the chain's tool another, is stale and dropped once the
+     * tools were read, saying nothing; so is one removed, installed again, or joined by another package (D7).
+     */
+    @Test
+    fun aToolChosenThatIsNoToolNowIsStale() {
+        store.choose(LoggedApps.entriesOfUid(phone, 10_123), Kind.TOOL)
+        store.choose(LoggedApps.entriesOfUid(phone, 10_124), Kind.TOOL)
+        assertEquals(listOf(10_123, 10_124), handed(tools = setOf(10_123, 10_124)).tools)
+        val handed = handed(tools = setOf(10_124))
+        assertEquals(listOf(10_124), handed.tools)
+        assertEquals(setOf(Entry("com.example.messenger", 1_000)), handed.staleTools)
+        store.drop(handed)
+        assertEquals(setOf(Entry("com.example.other", 2_000)), store.entries(Kind.TOOL))
+        assertEquals(emptyMap<String, Ended>(), store.ended())
+        // Installed again: a new first install time, whatever its UID.
+        phone.installed["com.example.other"] = 10_124 to 2_500L
+        assertEquals(emptyList<Int>(), hand(tools = setOf(10_124)))
+        assertEquals(emptySet<Entry>(), store.entries(Kind.TOOL))
+        // Joined by a package not chosen.
+        store.choose(LoggedApps.entriesOfUid(phone, 10_124), Kind.TOOL)
+        phone.installed["com.example.joined"] = 10_124 to 3_000L
+        assertEquals(setOf(Entry("com.example.other", 2_500)), handed(tools = setOf(10_124)).staleTools)
+        // Removed.
+        phone.installed.remove("com.example.joined")
+        phone.installed.remove("com.example.other")
+        assertEquals(setOf(Entry("com.example.other", 2_500)), handed(tools = setOf(10_124)).staleTools)
+    }
+
+    /**
+     * Before the tools were read once in this run, no tool chosen is handed, and none is found stale for not being a tool
+     * (audit-D m8): the set is not known yet, so a choice is never lost in the seconds after a start. Once read, it is
+     * handed. One removed needs no tools, and goes at once.
+     */
+    @Test
+    fun theToolsChosenWaitForTheToolsToBeRead() {
+        store.choose(LoggedApps.entriesOfUid(phone, 10_123), Kind.TOOL)
+        store.choose(LoggedApps.entriesOfUid(phone, 10_124), Kind.TOOL)
+        phone.installed.remove("com.example.other")
+        val early = handed(tools = emptySet(), toolsRead = false)
+        assertEquals(emptyList<Int>(), early.tools)
+        assertEquals(setOf(Entry("com.example.other", 2_000)), early.staleTools)
+        store.drop(early)
+        assertEquals(setOf(Entry("com.example.messenger", 1_000)), store.entries(Kind.TOOL))
+        val read = handed(tools = setOf(10_123), toolsRead = true)
+        assertEquals(listOf(10_123), read.tools)
+        assertEquals(emptySet<Entry>(), read.staleTools)
+    }
+
+    /**
+     * Under the profile the tools chosen live in memory with the apps (D6, C6): nothing written, turning it off writes
+     * nothing and keeps nothing, and the screen-off and the wipe take them too.
+     */
+    @Test
+    fun theProfileKeepsTheToolsChosenInMemoryAsTheApps() {
+        store.choose(LoggedApps.entriesOfUid(phone, 10_123), Kind.TOOL)
+        store.setProfile(true)
+        assertEquals(emptySet<String>(), disk.lines)
+        assertEquals(listOf(10_123), handed(tools = setOf(10_123)).tools)
+        val writes = disk.writes
+        store.choose(LoggedApps.entriesOfUid(phone, 10_124), Kind.TOOL)
+        assertEquals(writes, disk.writes)
+        store.clearSession()
+        assertEquals(emptySet<Entry>(), store.entries(Kind.TOOL))
+        store.choose(LoggedApps.entriesOfUid(phone, 10_124), Kind.TOOL)
+        store.setProfile(false)
+        assertEquals(emptySet<String>(), disk.lines)
+        assertEquals(emptySet<Entry>(), store.entries(Kind.TOOL))
+        store.choose(LoggedApps.entriesOfUid(phone, 10_124), Kind.TOOL)
+        store.wipe()
+        assertEquals(emptySet<Entry>(), store.entries(Kind.TOOL))
+        assertEquals(emptySet<String>(), disk.lines)
     }
 
     /** The debug builds' `proxy-log` takes only this project's own packages, never a real app's (K9). */

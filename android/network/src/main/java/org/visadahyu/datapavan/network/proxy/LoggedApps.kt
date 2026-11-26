@@ -9,10 +9,10 @@ import org.visadahyu.datapavan.network.NetworkVpnService
 
 /**
  * The user's choice for one app, "Log where APP connects through a proxy" (the proxy record's unit C, R3; ADR 0052,
- * decision 8), in the preferences `logged_proxies` of the network process: one line per package, its kind, its package
- * name and its first install time, never a UID, and nothing of any flow. The kind is `app` for this choice; unit D adds
- * the tools' own choice as a kind of its own in the same lines, which this build keeps as they are and reads nothing of
- * (audit-C 23).
+ * decision 8), and for one circumvention tool, "Log where TOOL connects for itself" (unit D, R10, D7), in the
+ * preferences `logged_proxies` of the network process: one line per package, its kind, its package name and its first
+ * install time, never a UID, and nothing of any flow. The kind is `app` for an app's choice and `tool` for a tool's
+ * ([Kind]); a line of a kind this build does not know stays as it is, and is never read as either (audit-C 23).
  *
  * Why the first install time: Android gives a removed app's UID to another after a reboot, and a package name can be
  * installed again by anyone. An entry whose package is gone, or whose first install time changed, is dropped at the
@@ -20,8 +20,10 @@ import org.visadahyu.datapavan.network.NetworkVpnService
  * found gone is remembered in this process's memory alone ([Ended.REMOVED]), so that, installed again while the process
  * lives, its rows say so, as they do when the network part saw only the new first install time (review C-rest 1). A UID
  * is handed only while every package that holds it now was chosen, so a package that joins it ends the choice; never
- * Android's own UIDs, a circumvention tool's or Android's PAC handler's. The engine decides what is logged, per flow,
- * and leaves out a flow it reads as through Android's setting or a local proxy whatever is handed.
+ * Android's own UIDs, a circumvention tool's or Android's PAC handler's. A tool's choice is handed only while its UID is
+ * a tool's that can carry traffic inside the VPN (`chain.Tools.carriers`); one that is no tool now is dropped, and says
+ * nothing (D7). Neither kind is handed before the tools were read in a run (audit-D m8). The engine decides what is
+ * logged, per flow, and leaves out a flow it reads as through Android's setting or a local proxy whatever is handed.
  *
  * Under ADR 0047's profile ([setProfile]) nothing of it is written: the lines live in this process alone
  * ([Session.PROCESS], which the screens and the service share), and are lost when it ends; [clearSession], at W9's
@@ -57,6 +59,12 @@ class LoggedApps internal constructor(
     data class Entry(val packageName: String, val firstInstall: Long)
 
     /**
+     * The kind of a choice, as its lines write it: [APP], "Log where APP connects through a proxy" (unit C), or [TOOL],
+     * "Log where TOOL connects for itself" (unit D).
+     */
+    enum class Kind(internal val word: String) { APP("app"), TOOL("tool") }
+
+    /**
      * Why an app's choice ended without the user (audit-C 13): it was installed again ([INSTALLED_AGAIN]), Android now
      * counts another app with it ([SHARED]), or Datapavan now counts it as a circumvention tool, by its signing key or
      * as the chain's tool ([TOOL]); each said on that app's rows. Or its package was gone at a hand-over ([REMOVED]),
@@ -65,8 +73,17 @@ class LoggedApps internal constructor(
      */
     enum class Ended { INSTALLED_AGAIN, SHARED, TOOL, REMOVED }
 
-    /** What one hand-over gives: the UIDs to hand the engine, sorted; the entries found stale; and why each ended. */
-    data class Handed(val uids: List<Int>, val stale: Set<Entry>, val ended: Map<String, Ended>)
+    /**
+     * What one hand-over gives: the apps' UIDs to hand the engine, sorted; the apps' entries found stale; and why each
+     * ended; then the tools' UIDs to hand the engine, sorted, and the tools' entries found stale (unit D).
+     */
+    data class Handed(
+        val uids: List<Int>,
+        val stale: Set<Entry>,
+        val ended: Map<String, Ended>,
+        val tools: List<Int> = emptyList(),
+        val staleTools: Set<Entry> = emptySet(),
+    )
 
     /** What Android's package manager says: a package's UID and first install time, and a UID's packages. */
     interface Packages {
@@ -92,23 +109,29 @@ class LoggedApps internal constructor(
     /** Whether the profile keeps the choice in memory only. */
     val memoryOnly: Boolean get() = synchronized(session) { store.memoryOnly() }
 
-    /** The packages chosen, with their first install times, as kept: on disk, or in memory under the profile. */
-    fun entries(): Set<Entry> = synchronized(session) { current().mapNotNull(::entryOf).toSet() }
+    /**
+     * The packages chosen of the kind [kind], with their first install times, as kept: on disk, or in memory under the
+     * profile.
+     */
+    fun entries(kind: Kind = Kind.APP): Set<Entry> = synchronized(session) { current().mapNotNull { entryOf(it, kind) }.toSet() }
 
-    /** Chooses one app: every package of its UID with its first install time, for a shared UID ([entriesOfUid]). */
-    fun choose(entries: Collection<Entry>) {
+    /**
+     * Chooses one app, or with [Kind.TOOL] one tool: every package of its UID with its first install time, for a shared
+     * UID ([entriesOfUid]).
+     */
+    fun choose(entries: Collection<Entry>, kind: Kind = Kind.APP) {
         if (entries.isEmpty()) return
         val names = entries.map { it.packageName }.toSet()
         synchronized(session) {
-            put(current().filterNot { entryOf(it)?.packageName in names }.toSet() + entries.map(::line))
-            names.forEach(session.ended::remove)
+            put(current().filterNot { entryOf(it, kind)?.packageName in names }.toSet() + entries.map { line(it, kind) })
+            if (kind == Kind.APP) names.forEach(session.ended::remove)
         }
         changed()
     }
 
-    /** Ends the choice for the packages [packages]: from now on the engine strips what they kept (R6). */
-    fun stop(packages: Collection<String>) {
-        synchronized(session) { put(current().filterNot { entryOf(it)?.packageName in packages }.toSet()) }
+    /** Ends the choice of the kind [kind] for the packages [packages]: from now on the engine strips what they kept (R6). */
+    fun stop(packages: Collection<String>, kind: Kind = Kind.APP) {
+        synchronized(session) { put(current().filterNot { entryOf(it, kind)?.packageName in packages }.toSet()) }
         changed()
     }
 
@@ -117,9 +140,10 @@ class LoggedApps internal constructor(
      * calls it as it hands the choice, so it asks for no hand-over again.
      */
     fun drop(handed: Handed) {
-        if (handed.stale.isEmpty() && handed.ended.isEmpty()) return
+        if (handed.stale.isEmpty() && handed.ended.isEmpty() && handed.staleTools.isEmpty()) return
         synchronized(session) {
-            if (handed.stale.isNotEmpty()) put(current() - handed.stale.map(::line).toSet())
+            val gone = handed.stale.map { line(it, Kind.APP) } + handed.staleTools.map { line(it, Kind.TOOL) }
+            if (gone.isNotEmpty()) put(current() - gone.toSet())
             session.ended.putAll(handed.ended)
         }
     }
@@ -133,6 +157,13 @@ class LoggedApps internal constructor(
      */
     fun chosen(packages: Packages, tools: Set<Int>, pacHandler: Int?): Set<Int> =
         handed(entries(), packages, tools, pacHandler, ready = true).uids.toSet()
+
+    /**
+     * The tools' UIDs the hand-over hands now ([handed]'s [Handed.tools]), for the screens, by the same rule, [tools]
+     * being the tools whose own connections follow R10 (unit D). It writes nothing.
+     */
+    fun toolsChosen(packages: Packages, tools: Set<Int>): Set<Int> =
+        handed(emptySet(), packages, tools, null, ready = true, toolEntries = entries(Kind.TOOL)).tools.toSet()
 
     /**
      * ADR 0047's profile on or off, by W9's switch (and the debug builds' `tunnel-profile on|off`). On, the lines on disk
@@ -187,9 +218,6 @@ class LoggedApps internal constructor(
         private const val LINES = "lines"
         private const val MEMORY_ONLY = "memory_only"
 
-        /** The kind of a line of this choice; unit D's tools are a kind of their own. */
-        private const val APP = "app"
-
         /**
          * The store of this process, whose changes the running service hands to the engine at once
          * ([NetworkVpnService.ACTION_APPLY_PROXIES]); in the network process alone (review C-rest 5).
@@ -221,6 +249,12 @@ class LoggedApps internal constructor(
          * handler's ([pacHandler]); else it is handed. Before, no UID is handed: a tool whose key is known is then
          * never covered in the seconds after a start, nor a flow to Android's setting before its addresses are known. A
          * package found gone at an earlier hand-over ([before], [Ended.REMOVED]) and installed now was installed again.
+         *
+         * The tools chosen ([toolEntries], unit D, D7) by the same rule, but the other way round: once [ready], a tool's
+         * UID is handed only while it is one of [tools], the tools whose own connections follow R10, and its entries are
+         * stale while it is not (its key changed, or the chain's tool is another now). Before, none is handed and none is
+         * found stale for it, as the apps wait (audit-D m8): a choice is never lost in the seconds after a start. A
+         * tool's choice that ended keeps no reason: its rows say nothing of it.
          */
         fun handed(
             entries: Set<Entry>,
@@ -229,6 +263,7 @@ class LoggedApps internal constructor(
             pacHandler: Int?,
             ready: Boolean,
             before: Map<String, Ended> = emptyMap(),
+            toolEntries: Set<Entry> = emptySet(),
         ): Handed {
             val stale = HashSet<Entry>()
             val ended = HashMap<String, Ended>()
@@ -269,7 +304,27 @@ class LoggedApps internal constructor(
                 stale += fresh
                 for (entry in fresh) ended[entry.packageName] = why
             }
-            return Handed(uids.sorted(), stale, ended)
+            val staleTools = HashSet<Entry>()
+            val toolsByUid = HashMap<Int, MutableList<Entry>>()
+            for (entry in toolEntries) {
+                val uid = packages.uidOf(entry.packageName)
+                if (uid == null || packages.firstInstallOf(entry.packageName) != entry.firstInstall) {
+                    staleTools += entry
+                } else {
+                    toolsByUid.getOrPut(uid) { mutableListOf() } += entry
+                }
+            }
+            val toolUids = mutableListOf<Int>()
+            for ((uid, fresh) in toolsByUid) {
+                val chosen = fresh.map { it.packageName }.toSet()
+                when {
+                    !ProxyChoice.application(uid) || packages.packagesOf(uid).any { it !in chosen } -> staleTools += fresh
+                    !ready -> continue
+                    uid in tools -> toolUids += uid
+                    else -> staleTools += fresh
+                }
+            }
+            return Handed(uids.sorted(), stale, ended, toolUids.sorted(), staleTools)
         }
 
         /** The entries of every package of [uid], each with its first install time, for one choice of a shared UID too. */
@@ -307,18 +362,19 @@ class LoggedApps internal constructor(
         }
 
         /**
-         * Whether the debug builds' `proxy-log PACKAGE on|off` may write the choice for [packageName]: a package of this
-         * project's own (`org.visadahyu.datapavan.` and after), never a real app's, as `messenger-client` refuses one.
+         * Whether the debug builds' `proxy-log PACKAGE on|off` and `tool-log PACKAGE on|off` may write the choice for
+         * [packageName]: a package of this project's own (`org.visadahyu.datapavan.` and after), never a real app's, as
+         * `messenger-client` refuses one.
          */
         fun debugAllowed(packageName: String): Boolean = packageName.startsWith("org.visadahyu.datapavan.")
 
-        internal fun line(entry: Entry): String = "$APP\t${entry.packageName}\t${entry.firstInstall}"
+        internal fun line(entry: Entry, kind: Kind = Kind.APP): String = "${kind.word}\t${entry.packageName}\t${entry.firstInstall}"
 
-        /** The entry of a line of this choice's kind; null for another kind's, or a line that does not parse. */
-        internal fun entryOf(line: String): Entry? {
+        /** The entry of a line of the kind [kind]; null for another kind's, or a line that does not parse. */
+        internal fun entryOf(line: String, kind: Kind = Kind.APP): Entry? {
             val parts = line.split('\t')
             val time = parts.getOrNull(2)?.toLongOrNull()
-            return if (parts.size == 3 && parts[0] == APP && parts[1].isNotEmpty() && time != null) Entry(parts[1], time) else null
+            return if (parts.size == 3 && parts[0] == kind.word && parts[1].isNotEmpty() && time != null) Entry(parts[1], time) else null
         }
     }
 
