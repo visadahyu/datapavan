@@ -103,10 +103,14 @@ class AndroidProxyTest {
     fun theHolderKeepsWhatTheServicePublished() {
         ProxyContext.clear()
         ProxyContext.publish(AndroidProxy(global = server), pacHandler = 10_092)
-        ProxyContext.publishTools(mapOf(10_200 to "Orbot"))
-        assertEquals(ProxyContext.State(AndroidProxy(global = server), 10_092, mapOf(10_200 to "Orbot")), ProxyContext.state.value)
+        ProxyContext.publishTools(mapOf(10_200 to "Orbot", 10_201 to "Psiphon"), mapOf(10_200 to "Orbot"))
+        assertEquals(
+            ProxyContext.State(AndroidProxy(global = server), 10_092, mapOf(10_200 to "Orbot", 10_201 to "Psiphon"), mapOf(10_200 to "Orbot")),
+            ProxyContext.state.value,
+        )
         ProxyContext.publish(AndroidProxy(), pacHandler = null)
-        assertEquals(mapOf(10_200 to "Orbot"), ProxyContext.state.value.tools)
+        assertEquals(mapOf(10_200 to "Orbot", 10_201 to "Psiphon"), ProxyContext.state.value.tools)
+        assertEquals(mapOf(10_200 to "Orbot"), ProxyContext.state.value.carriers)
         assertEquals(false, ProxyContext.state.value.android.any)
         ProxyContext.clear()
         assertEquals(ProxyContext.State(), ProxyContext.state.value)

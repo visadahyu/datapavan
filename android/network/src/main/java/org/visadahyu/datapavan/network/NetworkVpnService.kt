@@ -497,7 +497,9 @@ class NetworkVpnService : VpnService() {
      * forgotten; the circumvention tools by UID, the chain's tool among them from the chain's settings at once (review
      * C-rest 8); and Android's PAC handler's UID, read here each time, since [publishProxyContext] reads nothing before
      * the tunnel is this process's default network (audit-C 15). The engine never counts a tool or the handler among
-     * the chosen, nor covers a flow it reads as through Android's setting or a local proxy. Under strict Private DNS,
+     * the chosen, nor covers a flow it reads as through Android's setting or a local proxy. The tools are those whose own
+     * connections follow R10, the chain's tool among them (`chain.Tools.carriers`; unit D, audit-D M3). Under strict
+     * Private DNS,
      * where it tells the setting by the addresses handed alone, the addresses of an earlier lookup go with the names,
      * and no app the user chose is handed while the setting's names have none yet (review C-engine, major 1 (a)). Main
      * thread only.
@@ -539,7 +541,9 @@ class NetworkVpnService : VpnService() {
         val strict = dnsState.value is PrivateDns.Strict
         val (onLink, transport) = onLinkOf(current)
         val pacHandler = org.visadahyu.datapavan.network.proxy.PacHandler.uid(packageManager)
-        val tools = org.visadahyu.datapavan.network.proxy.ProxyContext.state.value.tools.keys + listOfNotNull(chainToolUid())
+        // The tools whose own connections follow R10 (unit D, audit-D M3), the chain's tool at once: those the engine
+        // counts as tools, and that no app's choice covers.
+        val tools = org.visadahyu.datapavan.network.proxy.ProxyContext.state.value.carriers.keys + listOfNotNull(chainToolUid())
         // The setting's proxies by name, and the addresses this run last found for them, kept until the names change: a
         // first hand without them would leave, under strict DNS, a chosen app's flow to the setting read as its own.
         val named = direct.filter { (_, info) -> org.visadahyu.datapavan.network.dns.Exchanger.numeric(info.host.removePrefix("[").removeSuffix("]")) == null }
@@ -674,10 +678,10 @@ class NetworkVpnService : VpnService() {
         val run = runs
         try {
             toolLookups.execute {
-                val tools = org.visadahyu.datapavan.network.chain.Tools.uids(this)
+                val found = org.visadahyu.datapavan.network.chain.Tools.read(this)
                 main.post {
                     if (!active || run != runs) return@post
-                    org.visadahyu.datapavan.network.proxy.ProxyContext.publishTools(tools)
+                    org.visadahyu.datapavan.network.proxy.ProxyContext.publishTools(found.tools, found.carriers)
                     toolsRead = true
                     applyProxies()
                 }

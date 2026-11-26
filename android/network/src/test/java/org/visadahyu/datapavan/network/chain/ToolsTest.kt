@@ -11,7 +11,9 @@ import org.visadahyu.datapavan.audit.SignatureVerdict
 /**
  * Which installed apps are circumvention tools, by UID (the proxy record's unit B, B6; audit-B 7 and 18): a row of the
  * table of mode `vpn` or `proxy`, or one of the three `none` rows the maintainer named, judged genuine by its signing
- * key; and the tool the user chose for the chain. The table and the keys as the build copies them, from the repository.
+ * key; and the tool the user chose for the chain. Of them, those whose own connections follow R10 (unit D, audit-D
+ * M3): the ones that can carry traffic inside Datapavan's VPN. And in a debug build, W6's test tool under this project's
+ * own prefix only. The table and the keys as the build copies them, from the repository.
  */
 class ToolsTest {
     private val table: List<KnownTool> = ToolTable.parse(File("../../data/tools/tools.tsv").readText())
@@ -124,5 +126,69 @@ class ToolsTest {
         val tools = Tools.uids(table, null, verdict) { name -> installed[name]?.takeIf { name in only } }
         assertEquals(listOf("com.v2ray.ang"), judged)
         assertEquals(mapOf(uid("com.v2ray.ang") to "v2rayNG"), tools)
+    }
+
+    /**
+     * R10 counts only the tools that can carry traffic inside Datapavan's VPN (audit-D M3, the maintainer's decision of
+     * 2026-11-25): a row with a proxy mode, a guessed one ("proxy?") included, and the three named rows. A row of mode
+     * `vpn` alone is a tool for B6's facts and an ordinary app for R10, genuine or not.
+     */
+    @Test
+    fun onlyAToolThatCanCarryTrafficInsideTheVpnIsACarrier() {
+        val carriers = Tools.carriers(table, null, { signers.judge(it, recorded(it), fresh = true) }, installed::get)
+        val tools = tools(signing = ::recorded)
+        assertEquals("v2rayNG", carriers[uid("com.v2ray.ang")])
+        assertEquals("Orbot", carriers[uid("org.torproject.android")])
+        for (name in listOf("com.wireguard.android", "com.psiphon3", "org.getlantern.lantern", "com.windscribe.vpn")) {
+            assertTrue(name, uid(name) !in carriers)
+        }
+        assertEquals("WireGuard", tools[uid("com.wireguard.android")])
+        // Every carrier is a tool of B6's: the record's set is the facts' set narrowed.
+        assertTrue(tools.entries.containsAll(carriers.entries))
+        val genuine = { name: String -> SignatureVerdict.Genuine(name, "developer", pastKeyOnly = false) }
+        val all = Tools.carriers(table, null, genuine, installed::get)
+        assertEquals(table.count { it.proxyMode } + 3, all.size)
+        assertEquals("Karing", all[uid("com.nebula.karing")])
+        assertEquals("MahsaNG", all[uid("com.MahsaNet.MahsaNG")])
+        assertEquals(setOf("Tor Browser", "Tor Browser (alpha)", "Briar"), Tools.NAMED_TOOLS.map { all[uid(it)] }.toSet())
+        assertTrue(uid("com.psiphon3.subscription") !in all)
+        // A squatted copy is no carrier either.
+        assertEquals(emptyMap<Int, String>(), Tools.carriers(table, null, { SignatureVerdict.UnknownKey(it, "0".repeat(64)) }, installed::get))
+    }
+
+    /** The chain's tool is a carrier by the user's choice, whatever its key and its mode: a VPN-only row's too. */
+    @Test
+    fun theChainsToolIsACarrierWhateverItsKeyAndMode() {
+        val chosen = Tools.carriers(table, "com.wireguard.android", { null }, installed::get)
+        assertEquals(mapOf(uid("com.wireguard.android") to "WireGuard"), chosen)
+        assertEquals(chosen, Tools.uids(table, "com.wireguard.android", { null }, installed::get))
+    }
+
+    /**
+     * Debug builds count W6's test tool as a tool whatever its key (D8), so that the chain shard can check a tool that is
+     * not chained: only a row under this project's own prefix, and none in a build that is not debuggable. A test row
+     * under another prefix is no tool, so a real tool's package can never be made one by the debug rule.
+     */
+    @Test
+    fun theDebugTestToolIsAToolOnlyUnderTheProjectsPrefix() {
+        val rows = ToolTable.parse(File("src/debug/assets/tools-test.tsv").readText())
+        val test = "org.visadahyu.datapavan.testtool"
+        assertEquals(listOf(test), rows.map { it.packageName })
+        assertEquals(setOf(test), Tools.testTools(rows, debuggable = true))
+        assertEquals(emptySet<String>(), Tools.testTools(rows, debuggable = false))
+        val other = rows.single().copy(packageName = "org.example.testtool")
+        val lookalike = rows.single().copy(packageName = "org.visadahyu.datapavanx.testtool")
+        assertEquals(emptySet<String>(), Tools.testTools(listOf(other, lookalike), debuggable = true))
+        val uids = mapOf(test to 42, "org.example.testtool" to 43, "org.visadahyu.datapavanx.testtool" to 44)
+        val withTest = rows + other + lookalike
+        val counted = Tools.testTools(withTest, debuggable = true)
+        // With no key recorded for any of them, only the project's own row counts, in both sets.
+        assertEquals(mapOf(42 to "Datapavan test tool"), Tools.carriers(withTest, null, { null }, counted, uids::get))
+        assertEquals(mapOf(42 to "Datapavan test tool"), Tools.uids(withTest, null, { null }, counted, uids::get))
+        assertEquals(emptyMap<Int, String>(), Tools.carriers(withTest, null, { null }, Tools.testTools(withTest, debuggable = false), uids::get))
+        // The test tool's package is never judged by a key: none is recorded for it.
+        val judged = mutableListOf<String>()
+        Tools.carriers(rows, null, { judged += it; null }, counted, uids::get)
+        assertEquals(emptyList<String>(), judged)
     }
 }

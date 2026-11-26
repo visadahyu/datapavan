@@ -295,8 +295,8 @@ class NowActivity : ComponentActivity() {
      */
     private fun readChoices(): ProxyChoices {
         val published = org.visadahyu.datapavan.network.proxy.ProxyContext.state.value
-        val tools = published.tools.keys.ifEmpty {
-            ownTools ?: org.visadahyu.datapavan.network.chain.Tools.uids(this).keys.also { ownTools = it }
+        val tools = published.carriers.keys.ifEmpty {
+            ownTools ?: org.visadahyu.datapavan.network.chain.Tools.read(this).carriers.keys.also { ownTools = it }
         }
         val pacHandler = published.pacHandler ?: org.visadahyu.datapavan.network.proxy.PacHandler.uid(packageManager)
         val store = LoggedApps.of(this)

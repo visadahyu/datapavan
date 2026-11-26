@@ -23,15 +23,29 @@ object Tools {
      */
     fun table(context: Context): List<KnownTool> {
         val table = context.assets.open(ToolTable.ASSET).bufferedReader().use { ToolTable.parse(it.readText()) }
-        val test = try {
-            context.assets.open(TEST_ASSET).bufferedReader().use { ToolTable.parse(it.readText()) }
-        } catch (e: java.io.FileNotFoundException) {
-            emptyList()
-        }
-        return Guides.withNamedPorts(table + test, Guides.book(context))
+        return Guides.withNamedPorts(table + testRows(context), Guides.book(context))
     }
 
     private const val TEST_ASSET = "tools-test.tsv"
+
+    /** The rows of W6's test tool, which only debug builds carry (src/debug/assets/tools-test.tsv); none in a release. */
+    private fun testRows(context: Context): List<KnownTool> = try {
+        context.assets.open(TEST_ASSET).bufferedReader().use { ToolTable.parse(it.readText()) }
+    } catch (e: java.io.FileNotFoundException) {
+        emptyList()
+    }
+
+    /** The prefix of this project's own packages, such as W6's test tool's. */
+    const val PROJECT_PREFIX = "org.visadahyu.datapavan."
+
+    /**
+     * The packages of W6's test tool that count as circumvention tools whatever their key, as a pure function the JVM
+     * tests hold (the proxy record's unit D, D8): in a [debuggable] build only, and only a row of [rows] under this
+     * project's own prefix ([PROJECT_PREFIX]), so that scripts/verify-chain.sh can check a tool that is not chained. A
+     * release build carries no such rows; a row under another prefix is never one, whoever put it there.
+     */
+    fun testTools(rows: List<KnownTool>, debuggable: Boolean): Set<String> =
+        if (debuggable) rows.map { it.packageName }.filter { it.startsWith(PROJECT_PREFIX) }.toSet() else emptySet()
 
     /**
      * Searches for the user's tool once. [from] names the part of the network part that asks (the screen, the
@@ -68,19 +82,57 @@ object Tools {
      * [verdict] judges [SignatureVerdict.Genuine]: by its signing key, never by its package name, so a package of a
      * tool's name signed with another key (`UnknownKey`, `Modified`, `Disguised`, or none recorded) is an ordinary app.
      * A real copy from a store whose key is not recorded yet is one too, until its key is: the honest direction. The
-     * tool the user chose for the chain ([chosen]) counts as well, by the user's own choice, whatever its key.
+     * tool the user chose for the chain ([chosen]) counts as well, by the user's own choice, whatever its key; and in a
+     * debug build W6's test tool ([test], [testTools]). This is the set whose proxy rows say they are a tool's own
+     * connection (B6); the record's rule for a tool's own connections takes the narrower [carriers].
      */
     fun uids(
         table: List<KnownTool>,
         chosen: String?,
         verdict: (String) -> SignatureVerdict?,
+        test: Set<String>,
         uidOf: (String) -> Int?,
+    ): Map<Int, String> = found(table, chosen, verdict, uidOf, test) { it.vpnMode || it.proxyMode || it.packageName in NAMED_TOOLS }
+
+    /** [uids] with no test tool, as a release build counts them. */
+    fun uids(table: List<KnownTool>, chosen: String?, verdict: (String) -> SignatureVerdict?, uidOf: (String) -> Int?): Map<Int, String> =
+        uids(table, chosen, verdict, emptySet(), uidOf)
+
+    /**
+     * The circumvention tools whose own connections follow R10 (the proxy record's unit D; audit-D M3, as the maintainer
+     * decided on 2026-11-25), by UID, as a pure function the JVM tests hold: those of [uids] that can carry traffic inside
+     * Datapavan's VPN. That is a row of mode `proxy` (a `proxy?` mode counting, as B6 does), one of [NAMED_TOOLS], which
+     * carry Tor inside, and the chain's tool ([chosen]), whatever its key. A row of mode `vpn` alone, such as Psiphon's,
+     * Lantern's or Windscribe's, cannot run its tunnel while Datapavan is the VPN, so its connections inside it are its
+     * own API, ads and analytics: it stays an ordinary app, here and for the choice of one app's proxy (unit C). It is
+     * the set the engine is handed as the tools, and every line of R10 on the screens reads it.
+     */
+    fun carriers(
+        table: List<KnownTool>,
+        chosen: String?,
+        verdict: (String) -> SignatureVerdict?,
+        test: Set<String>,
+        uidOf: (String) -> Int?,
+    ): Map<Int, String> = found(table, chosen, verdict, uidOf, test) { it.proxyMode || it.packageName in NAMED_TOOLS }
+
+    /** [carriers] with no test tool, as a release build counts them. */
+    fun carriers(table: List<KnownTool>, chosen: String?, verdict: (String) -> SignatureVerdict?, uidOf: (String) -> Int?): Map<Int, String> =
+        carriers(table, chosen, verdict, emptySet(), uidOf)
+
+    /** The rows of [table] that [counts] takes, installed and genuine or a test tool's, and the chain's tool. */
+    private fun found(
+        table: List<KnownTool>,
+        chosen: String?,
+        verdict: (String) -> SignatureVerdict?,
+        uidOf: (String) -> Int?,
+        test: Set<String>,
+        counts: (KnownTool) -> Boolean,
     ): Map<Int, String> {
         val tools = mutableMapOf<Int, String>()
         for (tool in table) {
-            if (!tool.vpnMode && !tool.proxyMode && tool.packageName !in NAMED_TOOLS) continue
+            if (!counts(tool) && tool.packageName !in test) continue
             val uid = uidOf(tool.packageName) ?: continue
-            if (verdict(tool.packageName) is SignatureVerdict.Genuine) tools[uid] = tool.name
+            if (tool.packageName in test || verdict(tool.packageName) is SignatureVerdict.Genuine) tools[uid] = tool.name
         }
         if (chosen != null) {
             uidOf(chosen)?.let { uid -> tools[uid] = table.firstOrNull { it.packageName == chosen }?.name ?: chosen }
@@ -88,21 +140,31 @@ object Tools {
         return tools
     }
 
+    /** Both sets of tools on this phone, read once: [tools] ([uids], B6's) and [carriers] (R10's, which it holds). */
+    data class Found(val tools: Map<Int, String>, val carriers: Map<Int, String>)
+
     /**
-     * [uids] on this phone: the table as the build put it in the assets, the keys parsed once for every package
-     * ([ToolKeys.judge]), and the chain's tool while the chain is on. Blocking: call it off the main thread, at the
-     * tunnel's start and at each change of the apps. With the table or the keys unreadable, only the chain's tool counts.
+     * [uids] and [carriers] on this phone: the table as the build put it in the assets, the keys parsed once for every
+     * package ([ToolKeys.judge]) and each package judged once for both, the chain's tool while the chain is on, and in a
+     * debug build W6's test tool ([testTools]). Blocking: call it off the main thread, at the tunnel's start and at each
+     * change of the apps. With the table or the keys unreadable, only the chain's tool counts.
      */
-    fun uids(context: Context): Map<Int, String> {
+    fun read(context: Context): Found {
         val table = try {
             table(context)
         } catch (e: java.io.IOException) {
             emptyList()
         }
         val judge: (String) -> SignatureVerdict? = ToolKeys.judge(context) ?: { null }
+        val judged = HashMap<String, SignatureVerdict?>()
+        // A null verdict is kept too: getOrPut would judge such a package again.
+        val verdict = { name: String -> if (name in judged) judged[name] else judge(name).also { judged[name] = it } }
         val chain = ChainSettings.of(context)
         val chosen = chain.lastTool?.packageName?.takeIf { chain.on }
-        return uids(table, chosen, judge) { uidOf(context.packageManager, it) }
+        val debuggable = context.applicationInfo.flags and ApplicationInfo.FLAG_DEBUGGABLE != 0
+        val test = testTools(testRows(context), debuggable)
+        val uidOf = { name: String -> uidOf(context.packageManager, name) }
+        return Found(uids(table, chosen, verdict, test, uidOf), carriers(table, chosen, verdict, test, uidOf))
     }
 
     @Suppress("DEPRECATION")
