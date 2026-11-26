@@ -49,7 +49,15 @@
 @font-face{font-family:"Sofia Sans Extra Condensed";src:url(../../fonts/sofia-sans-extra-condensed-latin-wght-normal.woff2) format("woff2");font-weight:1 1000;font-display:swap;unicode-range:U+0000-00FF,U+0131,U+0152-0153,U+02BB-02BC,U+02C6,U+02DA,U+02DC,U+2000-200B,U+200F,U+2012-204E,U+2050-206F,U+20AC,U+2122,U+2191,U+2193,U+2212,U+2215,U+FEFF,U+FFFD;}
 @font-face{font-family:"Sofia Sans";src:url(../../fonts/sofia-sans-cyrillic-wght-normal.woff2) format("woff2");font-weight:1 1000;font-display:swap;unicode-range:U+0301,U+0400-045F,U+0490-0491,U+04B0-04B1,U+2116;}
 @font-face{font-family:"Sofia Sans";src:url(../../fonts/sofia-sans-latin-wght-normal.woff2) format("woff2");font-weight:1 1000;font-display:swap;unicode-range:U+0000-00FF,U+0131,U+0152-0153,U+02BB-02BC,U+02C6,U+02DA,U+02DC,U+2000-200B,U+200F,U+2012-204E,U+2050-206F,U+20AC,U+2122,U+2191,U+2193,U+2212,U+2215,U+FEFF,U+FFFD;}
-:root{--f-disp:"Sofia Sans Extra Condensed","Arial Narrow",sans-serif;--f-sub:"Sofia Sans",system-ui,sans-serif;--f-body:"Sofia Sans",system-ui,sans-serif;--h1w:800;--h1lh:.95;--h2lh:1;--h1ls:0;--blh:1.55;--notlh:1.45;--big:clamp(5rem,31vw,28rem);--biglh:.95}
+/* Fallbacks with the web fonts' metrics, written by scripts/font-fallbacks.mjs */
+@font-face{font-family:"Sofia Sans Extra Condensed Roboto";src:local("Roboto Bold"),local("Roboto-Bold");font-weight:1 1000;size-adjust:68.01%;ascent-override:132.34%;descent-override:44.11%;line-gap-override:0%}
+@font-face{font-family:"Sofia Sans Extra Condensed Narrow";src:local("Arial Narrow Bold"),local("ArialNarrow-Bold"),local("Liberation Sans Narrow Bold"),local("LiberationSansNarrow-Bold");font-weight:1 1000;size-adjust:79.29%;ascent-override:113.51%;descent-override:37.84%;line-gap-override:0%}
+@font-face{font-family:"Sofia Sans Roboto";src:local("Roboto"),local("Roboto Regular"),local("Roboto-Regular");font-weight:100 549;size-adjust:97.54%;ascent-override:92.27%;descent-override:30.76%;line-gap-override:0%}
+@font-face{font-family:"Sofia Sans Roboto";src:local("Roboto Bold"),local("Roboto-Bold");font-weight:550 1000;size-adjust:98.28%;ascent-override:91.57%;descent-override:30.52%;line-gap-override:0%}
+@font-face{font-family:"Sofia Sans Arial";src:local("Arial"),local("ArialMT"),local("Liberation Sans"),local("LiberationSans"),local("Arimo");font-weight:100 549;size-adjust:99.12%;ascent-override:90.80%;descent-override:30.27%;line-gap-override:0%}
+@font-face{font-family:"Sofia Sans Arial";src:local("Arial Bold"),local("Arial-BoldMT"),local("Liberation Sans Bold"),local("LiberationSans-Bold"),local("Arimo Bold"),local("Arimo-Bold");font-weight:550 1000;size-adjust:94.07%;ascent-override:95.67%;descent-override:31.89%;line-gap-override:0%}
+/* End of the fallbacks */
+:root{--f-disp:"Sofia Sans Extra Condensed","Sofia Sans Extra Condensed Roboto","Sofia Sans Extra Condensed Narrow","Arial Narrow",sans-serif;--f-sub:"Sofia Sans","Sofia Sans Roboto","Sofia Sans Arial",system-ui,sans-serif;--f-body:"Sofia Sans","Sofia Sans Roboto","Sofia Sans Arial",system-ui,sans-serif;--h1w:800;--h1lh:.95;--h2lh:1;--h1ls:0;--blh:1.55;--notlh:1.45;--big:clamp(5rem,31vw,28rem);--biglh:.95}
 
 *{box-sizing:border-box}
 html{-webkit-text-size-adjust:100%;scroll-behavior:smooth}

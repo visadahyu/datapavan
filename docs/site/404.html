@@ -15,7 +15,21 @@
 <meta name="robots" content="noindex">
 <style>
 @font-face{font-family:"Archivo";src:url(/fonts/archivo-latin-wdth-normal.woff2) format("woff2");font-weight:100 900;font-stretch:62% 125%;font-display:swap;}
-:root{--f-disp:"Archivo",system-ui,sans-serif;--f-sub:"Archivo",system-ui,sans-serif;--f-body:"Archivo",system-ui,sans-serif;--h1w:800;--h1lh:.92;--h2lh:.98;--h1ls:-.015em;--blh:1.6;--notlh:1.45;--big:clamp(5rem,31vw,28rem);--biglh:.92}
+/* Fallbacks with the web fonts' metrics, written by scripts/font-fallbacks.mjs */
+@font-face{font-family:"Archivo Roboto";src:local("Roboto"),local("Roboto Regular"),local("Roboto-Regular");font-weight:100 549;font-stretch:50% 200%;size-adjust:98.68%;ascent-override:89.18%;descent-override:21.28%;line-gap-override:0%}
+@font-face{font-family:"Archivo Roboto";src:local("Roboto Bold"),local("Roboto-Bold");font-weight:550 1000;font-stretch:95% 200%;size-adjust:104.35%;ascent-override:84.33%;descent-override:20.12%;line-gap-override:0%}
+@font-face{font-family:"Archivo Roboto";src:local("Roboto Bold"),local("Roboto-Bold");font-weight:550 1000;font-stretch:83.5% 95%;size-adjust:97.91%;ascent-override:89.88%;descent-override:21.45%;line-gap-override:0%}
+@font-face{font-family:"Archivo Roboto";src:local("Roboto Bold"),local("Roboto-Bold");font-weight:550 1000;font-stretch:76% 83.5%;size-adjust:90.33%;ascent-override:97.43%;descent-override:23.25%;line-gap-override:0%}
+@font-face{font-family:"Archivo Roboto";src:local("Roboto Bold"),local("Roboto-Bold");font-weight:550 1000;font-stretch:68% 76%;size-adjust:84.68%;ascent-override:103.93%;descent-override:24.80%;line-gap-override:0%}
+@font-face{font-family:"Archivo Roboto";src:local("Roboto Bold"),local("Roboto-Bold");font-weight:550 1000;font-stretch:50% 68%;size-adjust:76.47%;ascent-override:115.08%;descent-override:27.46%;line-gap-override:0%}
+@font-face{font-family:"Archivo Arial";src:local("Arial"),local("ArialMT"),local("Liberation Sans"),local("LiberationSans"),local("Arimo");font-weight:100 549;font-stretch:50% 200%;size-adjust:98.18%;ascent-override:89.63%;descent-override:21.39%;line-gap-override:0%}
+@font-face{font-family:"Archivo Arial";src:local("Arial Bold"),local("Arial-BoldMT"),local("Liberation Sans Bold"),local("LiberationSans-Bold"),local("Arimo Bold"),local("Arimo-Bold");font-weight:550 1000;font-stretch:95% 200%;size-adjust:97.73%;ascent-override:90.05%;descent-override:21.49%;line-gap-override:0%}
+@font-face{font-family:"Archivo Arial";src:local("Arial Bold"),local("Arial-BoldMT"),local("Liberation Sans Bold"),local("LiberationSans-Bold"),local("Arimo Bold"),local("Arimo-Bold");font-weight:550 1000;font-stretch:83.5% 95%;size-adjust:91.87%;ascent-override:95.79%;descent-override:22.86%;line-gap-override:0%}
+@font-face{font-family:"Archivo Arial";src:local("Arial Bold"),local("Arial-BoldMT"),local("Liberation Sans Bold"),local("LiberationSans-Bold"),local("Arimo Bold"),local("Arimo-Bold");font-weight:550 1000;font-stretch:76% 83.5%;size-adjust:84.75%;ascent-override:103.84%;descent-override:24.78%;line-gap-override:0%}
+@font-face{font-family:"Archivo Arial";src:local("Arial Bold"),local("Arial-BoldMT"),local("Liberation Sans Bold"),local("LiberationSans-Bold"),local("Arimo Bold"),local("Arimo-Bold");font-weight:550 1000;font-stretch:68% 76%;size-adjust:79.45%;ascent-override:110.76%;descent-override:26.43%;line-gap-override:0%}
+@font-face{font-family:"Archivo Arial";src:local("Arial Bold"),local("Arial-BoldMT"),local("Liberation Sans Bold"),local("LiberationSans-Bold"),local("Arimo Bold"),local("Arimo-Bold");font-weight:550 1000;font-stretch:50% 68%;size-adjust:71.75%;ascent-override:122.65%;descent-override:29.27%;line-gap-override:0%}
+/* End of the fallbacks */
+:root{--f-disp:"Archivo","Archivo Roboto","Archivo Arial",system-ui,sans-serif;--f-sub:"Archivo","Archivo Roboto","Archivo Arial",system-ui,sans-serif;--f-body:"Archivo","Archivo Roboto","Archivo Arial",system-ui,sans-serif;--h1w:800;--h1lh:.92;--h2lh:.98;--h1ls:-.015em;--blh:1.6;--notlh:1.45;--big:clamp(5rem,31vw,28rem);--biglh:.92}
 
 *{box-sizing:border-box}
 html{-webkit-text-size-adjust:100%;scroll-behavior:smooth}

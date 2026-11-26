@@ -13,6 +13,11 @@ kept in Git: they go to `download/` on the server beside it, and `hugo.toml` nam
   the phone's own fonts. `static/images` comes from `scripts/store-images.sh`, except the link-preview card
   (`images/card.png`), which `scripts/site-images.sh` draws from the mark and the name, as it draws the raster icons
   beside `static/favicon.svg` (`favicon.ico`, `favicon-192.png`, `apple-touch-icon.png`).
+- `assets/script-*.css`: each script's web fonts, and after each, fallback faces on the reader's own fonts (Roboto,
+  Arial, Arial Narrow, Noto Naskh Arabic) set to its width and height, so that its arrival moves nothing (layout
+  shift). `scripts/font-fallbacks.mjs` measures them in Chrome on the site's own words and writes them; run it again
+  after changing a web font or the widths and weights the stylesheet uses. Roboto, Android's, is measured from a
+  file of it where the computer has none (`--file Roboto=regular.ttf,bold.ttf`).
 
 The rules, which `scripts/check-site.py` enforces: no script, nothing from another server, about 200 KB or less on a first
 load before images, and no broken link inside the site, nor one that names `index.html`: a link by the site's full
