@@ -5,11 +5,13 @@
 # refused, or an echo, then fails as if the network part were at fault (2026-11-18: a program on 127.0.0.1:8791 made
 # verify-network.sh's "refused" step read an empty answer).
 #
-#   . scripts/host-ports.sh; host_server [--sentinel FILE]
+#   . scripts/host-ports.sh; host_server [--sentinel FILE] [--tool]
 #       starts the test server on free ports and holds them until the check ends: TCP PORT (HTTP), UDP
 #       PORT+1 (echo), TCP PORT+1 bound without listening (refused, as the checks want, and taken from any
-#       other program), and with --sentinel TCP and UDP PORT+3 (verify-chain.sh's sentinel, which writes to
-#       FILE). It sets PORT and SERVER (the server's pid, for the check's cleanup to stop). The base is
+#       other program), with --sentinel TCP and UDP PORT+3 (verify-chain.sh's sentinel, which writes to
+#       FILE), and with --tool TCP PORT+4 (a tool's own server, which answers a line) and PORT+5 (HTTP again, for
+#       verify-chain.sh's request a tool cannot be told apart for; the proxy record's unit D). It sets PORT and
+#       SERVER (the server's pid, for the check's cleanup to stop). The base is
 #       NETWORK_TEST_PORT if it is set, else the first of 8790, 8800, ... 8990 the server can hold; with
 #       HOST_PORTS_FIXED=1, as for a phone, whose computer's firewall was opened for 8790 and 8791, it is
 #       8790 and is never moved. A port held at a base that may not move stops the check at once, naming
@@ -71,6 +73,11 @@ host_server() {
     if [ "${1:-}" = --sentinel ]; then
         sentinel=(--sentinel "$2")
         offsets+=(3)
+        shift 2
+    fi
+    if [ "${1:-}" = --tool ]; then
+        sentinel+=(--tool)
+        offsets+=(4 5)
     fi
     if [ -n "${NETWORK_TEST_PORT:-}" ]; then
         first=$NETWORK_TEST_PORT tries=1
@@ -153,7 +160,7 @@ time.sleep(60)' "$1" "$2" "$3" "$4")
     # A free base well away from the checks' own, and below the kernel's range of ports for outgoing
     # connections (32768 up), found by starting the real server there.
     mark=$(mktemp -u)
-    HOST_PORTS_FIRST=$((20000 + RANDOM % 10000)) HOST_PORTS_TRIES=50 host_server --sentinel "$mark" 2>/dev/null ||
+    HOST_PORTS_FIRST=$((20000 + RANDOM % 10000)) HOST_PORTS_TRIES=50 host_server --sentinel "$mark" --tool 2>/dev/null ||
         { echo "self-test: the server started nowhere" >&2; return 1; }
     base=$PORT
     # The sentinel's file is there once the server is ready, for verify-chain.sh to count its lines at once.
@@ -189,6 +196,12 @@ for kind in (socket.SOCK_STREAM, socket.SOCK_DGRAM):
     except OSError:
         pass
 socket.create_connection(("127.0.0.1", base + 3), timeout=5).close()
+# The tool's own server answers a line and holds the connection; the next port serves HTTP again (unit D).
+own = socket.create_connection(("127.0.0.1", base + 4), timeout=5)
+own.sendall(b"own\n")
+assert own.makefile("rb").readline() == b"own\n"
+own.close()
+assert urllib.request.urlopen(f"http://127.0.0.1:{base + 5}/ping", timeout=5).read() == b"pong"
 PY
     for _ in $(seq 1 50); do grep -qx tcp "$mark" 2>/dev/null && break; sleep 0.1; done
     grep -qx tcp "$mark" 2>/dev/null || fail_test "the sentinel did not write a connection to its file"

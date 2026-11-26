@@ -36,8 +36,15 @@ import java.util.Map;
  * carrying its transaction ID and the sender's address (RFC 8489), and logs "stun answered ADDRESS".
  * It is the check's server, not part of what a tool does; it holds the phone's loopback only.
  *
+ * With the "own" extra (HOST:PORT) it opens one TCP connection of its own, as a tool reaches its server (the proxy
+ * record's unit D, D9): it sends the line "own", reads the answer's line, logs "own HOST PORT open", and keeps the
+ * connection open until "stop-own" closes it, which logs "own closed"; a new "own" closes the one before. Both are
+ * taken by a running service too, with or without a port.
+ *
  *   am start-foreground-service -n org.visadahyu.datapavan.testtool/.ToolService \
  *       --ei port 10870 [--es user U --es password P] [--es map network.test=10.0.2.2] [--ei stun 10871]
+ *   am start-foreground-service -n org.visadahyu.datapavan.testtool/.ToolService --es own 10.0.2.2:8794
+ *   am start-foreground-service -n org.visadahyu.datapavan.testtool/.ToolService --ez stop-own true
  */
 public final class ToolService extends Service {
     private static final String TAG = "DatapavanTestTool";
@@ -45,6 +52,8 @@ public final class ToolService extends Service {
     /** 127.0.0.1, where the table says the tool listens; Android's loopback address of choice is ::1. */
     private static final InetAddress LOOPBACK = loopback();
     private volatile ServerSocket server;
+    /** The tool's own connection, while one is open (D9). */
+    private Socket own;
     private final Map<String, String> names = new HashMap<>();
     private byte[] user;
     private byte[] password;
@@ -58,7 +67,13 @@ public final class ToolService extends Service {
                 .setSmallIcon(android.R.drawable.stat_sys_upload)
                 .build();
         startForeground(1, notification);
-        if (server != null || intent == null) return START_NOT_STICKY;
+        if (intent != null) {
+            if (intent.getBooleanExtra("stop-own", false)) closeOwn();
+            String target = intent.getStringExtra("own");
+            if (target != null) new Thread(() -> openOwn(target), "tool-own").start();
+        }
+        // A start that only opens or closes the own connection starts no proxy.
+        if (server != null || intent == null || !intent.hasExtra("port")) return START_NOT_STICKY;
         int port = intent.getIntExtra("port", 10870);
         String u = intent.getStringExtra("user");
         String p = intent.getStringExtra("password");
@@ -89,8 +104,68 @@ public final class ToolService extends Service {
         }
     }
 
+    /**
+     * Opens the tool's own connection to [target], HOST:PORT, as a tool reaches its server: one line out, one line back,
+     * then held open. A connection that fails logs why.
+     */
+    private void openOwn(String target) {
+        int colon = target.lastIndexOf(':');
+        if (colon < 0) {
+            Log.i(TAG, "own " + target + " refused: no port");
+            return;
+        }
+        String host = target.substring(0, colon);
+        int port;
+        try {
+            port = Integer.parseInt(target.substring(colon + 1));
+        } catch (NumberFormatException e) {
+            Log.i(TAG, "own " + target + " refused: no port");
+            return;
+        }
+        closeOwn();
+        Socket socket = new Socket();
+        try {
+            socket.connect(new InetSocketAddress(resolve(host), port), 10_000);
+            socket.setSoTimeout(10_000);
+            socket.getOutputStream().write("own\n".getBytes(StandardCharsets.US_ASCII));
+            InputStream in = socket.getInputStream();
+            int b;
+            while ((b = in.read()) >= 0 && b != '\n') {
+            }
+            if (b < 0) throw new IOException("no answer");
+            socket.setSoTimeout(0);
+        } catch (IOException e) {
+            Log.i(TAG, "own " + host + " " + port + " failed: " + e);
+            try {
+                socket.close();
+            } catch (IOException ignored) {
+            }
+            return;
+        }
+        synchronized (this) {
+            own = socket;
+        }
+        Log.i(TAG, "own " + host + " " + port + " open");
+    }
+
+    /** Closes the tool's own connection, if one is open. */
+    private void closeOwn() {
+        Socket socket;
+        synchronized (this) {
+            socket = own;
+            own = null;
+        }
+        if (socket == null) return;
+        try {
+            socket.close();
+        } catch (IOException ignored) {
+        }
+        Log.i(TAG, "own closed");
+    }
+
     @Override
     public void onDestroy() {
+        closeOwn();
         ServerSocket s = server;
         if (s != null) {
             try {

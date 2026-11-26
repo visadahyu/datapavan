@@ -8,10 +8,13 @@
 # after the checks found it free (review 4 of W5's first part, minor 2): TCP on the next port too, bound
 # without listening, so that a connection there is refused, as the checks want, and no other program can
 # listen there; and with --sentinel, TCP and UDP three ports on, where each connection and datagram is
-# written as "tcp" or "udp" to FILE, for verify-chain.sh. Once every port is bound it prints "ready PORT";
-# a port it cannot bind ends it at once, with the error.
+# written as "tcp" or "udp" to FILE, for verify-chain.sh. With --tool, for verify-chain.sh's tool (the proxy record's
+# unit D): TCP four ports on answers each connection's first line with the line "own" and holds it open until the
+# other end closes it, as a tool's server would, and TCP five ports on serves the same as the first port, for the
+# request the tool cannot be told apart for. Once every port is bound it prints "ready PORT"; a port it cannot bind
+# ends it at once, with the error.
 #
-#   python3 -I scripts/network-lab/server.py [port, default 8790] [--sentinel FILE]
+#   python3 -I scripts/network-lab/server.py [port, default 8790] [--sentinel FILE] [--tool]
 import selectors
 import socket
 import sys
@@ -78,6 +81,22 @@ def echo_udp(sock):
         sock.sendto(data, peer)
 
 
+def own_server(listener):
+    """Answers each connection's first line with "own", then holds it open until the other end closes it."""
+
+    def serve(connection):
+        with connection:
+            reader = connection.makefile("rb")
+            if reader.readline():
+                connection.sendall(b"own\n")
+                while reader.read(4096):
+                    pass
+
+    while True:
+        connection, _ = listener.accept()
+        threading.Thread(target=serve, args=(connection,), daemon=True).start()
+
+
 def sentinel(tcp, udp, out):
     """Writes "tcp" for each connection and "udp" for each datagram that reaches the sentinel's port."""
     selector = selectors.DefaultSelector()
@@ -98,6 +117,9 @@ def main(args):
         at = args.index("--sentinel")
         sentinel_log = args[at + 1]
         del args[at:at + 2]
+    tool = "--tool" in args
+    if tool:
+        args.remove("--tool")
     port = int(args[0]) if args else 8790
     try:
         ThreadingHTTPServer.daemon_threads = True
@@ -114,12 +136,18 @@ def main(args):
             guard_udp.bind(("0.0.0.0", port + 3))
             # Made before "ready", so that the check can mark it at once.
             guard_log = open(sentinel_log, "a", encoding="utf-8")
+        if tool:
+            own = socket.create_server(("0.0.0.0", port + 4))
+            residual = ThreadingHTTPServer(("0.0.0.0", port + 5), Handler)
     except OSError as error:
         print(f"the test server could not hold its ports from {port}: {error}", file=sys.stderr, flush=True)
         return 1
     threading.Thread(target=echo_udp, args=(echo,), daemon=True).start()
     if sentinel_log is not None:
         threading.Thread(target=sentinel, args=(guard_tcp, guard_udp, guard_log), daemon=True).start()
+    if tool:
+        threading.Thread(target=own_server, args=(own,), daemon=True).start()
+        threading.Thread(target=residual.serve_forever, daemon=True).start()
     print(f"ready {port}", flush=True)
     try:
         http.serve_forever()
