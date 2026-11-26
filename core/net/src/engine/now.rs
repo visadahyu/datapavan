@@ -1558,6 +1558,14 @@ mod tests {
             Some((full.clone(), false, 10)),
             "open"
         );
+        // Its open segment, cut now, within its window: stripped as it enters the log, not by the sweep.
+        shared.flush();
+        let entered = records_of(shared, 1);
+        assert!(
+            !entered.is_empty() && entered.iter().all(no_destination),
+            "{entered:?}"
+        );
+        assert_eq!(shown(shared, T + 1_500), Some((full.clone(), false, 10)));
         shared.finish(1);
         let window = u64::try_from(SHOWN.as_millis()).unwrap_or(u64::MAX);
         clock.pass(window - 1_000);
@@ -2311,6 +2319,8 @@ mod tests {
             Some((0, false, [70, 0])),
             "direct, not through the tool"
         );
+        // Its bytes have no place, but it is no circumvention tool: nothing says its own are not shown (R10).
+        assert!(app_now(&shared, UID, T + 2_000).is_some_and(|a| !a.servers_hidden));
         // A flow opened now goes through the tool.
         let routed = open(&shared, 2);
         up_at(&shared, &clock, &routed, 2_500, 5);
