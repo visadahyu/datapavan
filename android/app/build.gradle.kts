@@ -774,6 +774,11 @@ val remappedRustFlags = cargoHome.map { home ->
     listOf(
         "--remap-path-prefix=$home/registry/src=/cargo/registry/src",
         "--remap-path-prefix=${repositoryRoot.asFile.absolutePath}=/datapavan",
+        // crates.io's sources by a short name in the panic locations, /c/<crate>-<version>/..., about 5.6 KB less per
+        // ABI (the cold paths' third pass, ADR 0053). rustc applies the last remap that matches, so another registry
+        // keeps the first one's name. The directory is cargo's own for crates.io with the pinned toolchain
+        // (rust-toolchain.toml); scripts/check.sh android fails a library that names it again.
+        "--remap-path-prefix=$home/registry/src/index.crates.io-1949cf8c6b5b557f=/c",
     )
 }
 

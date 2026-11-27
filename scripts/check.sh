@@ -232,6 +232,22 @@ unwind_tables() {
     echo "  x86_64: .eh_frame, read through the section headers, no index; arm64-v8a: .eh_frame with its index"
 }
 
+# Fails when a native library of the APK $1, $2 on each ABI, names crates.io's sources by their directory: both
+# native tasks remap it to /c (the cold paths' third pass, ADR 0053), and a cargo that named the directory otherwise
+# would bring back about 5.6 KB per ABI unseen. Read from a file, not a pipe that grep could close early.
+registry_paths() {
+    local apk=$1 lib=$2 abi work
+    work=$(mktemp -d)
+    for abi in arm64-v8a armeabi-v7a x86_64; do
+        unzip -p "$apk" "lib/$abi/$lib" >"$work/lib.so" 2>/dev/null || true
+        [ -s "$work/lib.so" ] || { echo "$apk has no lib/$abi/$lib" >&2; exit 1; }
+        ! grep -qaF /cargo/registry/src/index.crates.io- "$work/lib.so" ||
+            { echo "lib/$abi/$lib names crates.io's sources by their directory: the remap to /c is lost" >&2; exit 1; }
+    done
+    rm -rf "$work"
+    echo "  $(basename "$apk"): $lib, crates.io's sources as /c on every ABI"
+}
+
 # Fails when the APK $1 does not carry, under assets/licences/, each of the files $2... as the repository has
 # them (NOTICE, W7's fix round, review M4).
 licence_texts() {
@@ -280,6 +296,9 @@ android_gates() {
     echo "== Android: the network part's unwind tables, for tombstones (ADR 0053, the size pass)"
     unwind_tables "$out/build-advanced/outputs/apk/release/app-release-unsigned.apk" libdatapavan_network.so \
         "${ANDROID_HOME:-${ANDROID_SDK_ROOT:-$HOME/Android/sdk}}/ndk/$(sed -n 's/^ *ndkVersion = "\(.*\)"/\1/p' "$ROOT/android/app/build.gradle.kts")"
+    echo "== Android: both native libraries name crates.io's sources by the short remap (ADR 0053, the third pass)"
+    registry_paths "$out/build-advanced/outputs/apk/release/app-release-unsigned.apk" libdatapavan_network.so
+    registry_paths "$out/build/outputs/apk/release/app-release-unsigned.apk" libdatapavan.so
     # The table of the Java and Kotlin libraries comes along, held by the build to each variant's classpath
     # (checkJvmComponents): the licence screen reads its list from these files (W7, part 2).
     echo "== Android: the release APKs carry NOTICE, their native libraries' licence texts and their libraries' table (licences/)"
