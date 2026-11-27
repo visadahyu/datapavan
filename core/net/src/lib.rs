@@ -9,6 +9,7 @@
 pub mod answers;
 pub mod blocking;
 pub mod catalogue;
+pub mod connect;
 pub mod dns;
 pub mod dnscache;
 pub mod engine;

@@ -1,0 +1,6 @@
+HTTP/1.0 403 Access violation
+Server: tinyproxy/1.11.1
+Content-Type: text/html
+Connection: close
+
+<p>The administrator of this proxy has not configured it to service requests to this host.</p>

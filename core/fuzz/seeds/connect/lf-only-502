@@ -1,0 +1,3 @@
+HTTP/1.0 502 Bad Gateway
+Via: 1.1 proxy.example
+

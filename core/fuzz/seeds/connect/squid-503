@@ -1,0 +1,5 @@
+HTTP/1.1 503 Service Unavailable
+Server: squid
+X-Squid-Error: ERR_CONNECT_FAIL 111
+Content-Length: 0
+
