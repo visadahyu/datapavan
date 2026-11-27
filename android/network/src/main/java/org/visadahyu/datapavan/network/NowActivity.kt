@@ -17,6 +17,7 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateMapOf
 import androidx.compose.runtime.mutableStateOf
+import androidx.core.content.edit
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.lifecycleScope
 import androidx.lifecycle.repeatOnLifecycle
@@ -97,7 +98,7 @@ class NowActivity : ComponentActivity() {
                 // once with no dialog, so its own page for Datapavan opens instead. Whether Android was asked once is
                 // kept beyond this screen, which a rotation or a new "Now" makes again (S2's review, m8).
                 if (!nowPrefs.getBoolean(ASKED_LOCAL, false) || shouldShowRequestPermissionRationale(NetworkVpnService.LOCAL_NETWORK)) {
-                    nowPrefs.edit().putBoolean(ASKED_LOCAL, true).apply()
+                    nowPrefs.edit { putBoolean(ASKED_LOCAL, true) }
                     askLocal.launch(NetworkVpnService.LOCAL_NETWORK)
                 } else {
                     startActivity(
