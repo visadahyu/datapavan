@@ -158,7 +158,11 @@ object NetworkProxy {
         val ipv6: Boolean,
     )
 
-    /** The network's own proxy as `Engine.nativeBeneathProxy` takes it (S2). */
+    /**
+     * The network's own proxy as `Engine.nativeBeneathProxy` takes it (S2). With [always] and no [proxies], the switch's
+     * hold (S2's review, m2): the engine keeps each new direct app's flow waiting until the next setting, for up to its
+     * direct share (3 s), and then fails it where none came, so that with the switch on no app goes directly.
+     */
     data class EngineProxy(
         val network: Long,
         val proxies: List<InetSocketAddress>,
@@ -174,7 +178,8 @@ object NetworkProxy {
      * why ([engineWhy]); the key of the switch "Send apps through this proxy" ([key]) and the user's choice ([always]);
      * whether the engine's proxy is on the local network ([local], for "Now"'s place: by range or within the network's
      * own prefixes); and whether Datapavan lacks the local-network grant Android 17 may want for it ([noGrant], advice
-     * for "Now" alone).
+     * for "Now" alone). With the switch on and no address the engine can use, [engine] is the switch's hold, with the
+     * reason in [engineWhy] (S2's review, m2).
      */
     data class Settled(
         val addresses: List<InetSocketAddress>,
@@ -192,7 +197,10 @@ object NetworkProxy {
      * a pure function the JVM tests hold. [own] says whether an address is one of the phone's own ([usable]); [facts]
      * are the network's, null where there is none; [granted] is Android 17's local-network grant; [through] the user's
      * choice by key ([org.visadahyu.datapavan.network.proxy.ThroughProxy]). The engine takes the network's own proxy
-     * alone ([forEngine]); the grant only sets [Settled.noGrant], whatever it says of an address.
+     * alone ([forEngine]); the grant only sets [Settled.noGrant], whatever it says of an address. With the switch on and
+     * no address the engine can use (unresolved, the phone's own, link-local), the engine is handed the switch's hold
+     * (S2's review, m2), so that no app goes directly; never for a proxy on the phone itself, which the engine never uses
+     * (decision 3) and whose line in "Now" says so, with no switch.
      */
     fun settle(
         setting: Setting?,
@@ -218,8 +226,10 @@ object NetworkProxy {
         fun onLink(address: InetAddress) = facts.prefixes.any { (prefix, length) ->
             org.visadahyu.datapavan.network.TunnelAddresses.sameSubnet(address, prefix, length)
         }
-        val proxy = engine.takeIf { it.isNotEmpty() }?.let {
-            EngineProxy(facts.network, it, setting.exclusions.joinToString(","), facts.ipv4, facts.ipv6, always)
+        val proxy = if (engine.isNotEmpty() || (always && engineWhy != Why.LOOPBACK)) {
+            EngineProxy(facts.network, engine, setting.exclusions.joinToString(","), facts.ipv4, facts.ipv6, always)
+        } else {
+            null
         }
         return Settled(
             addresses, because, proxy, engineWhy, key, always,
@@ -227,6 +237,14 @@ object NetworkProxy {
             noGrant = engine.any { withoutGrant(it.address, facts.transport, onLink(it.address), granted) },
         )
     }
+
+    /**
+     * The switch's hold for [setting], [choose]'s choice for [why], on the network of [facts], while its name is looked
+     * up (S2's review, m2): what [settle] hands the engine where no address is found yet, the hold where the user's
+     * switch is on for it ([through]), else null.
+     */
+    fun hold(setting: Setting, why: Why, facts: Facts, through: (String) -> Boolean): EngineProxy? =
+        settle(setting, emptyList(), why, { false }, facts, granted = true, through).engine
 
     /**
      * Whether a socket to the network's own proxy, which the engine asked for on the network of [handle], is bound to the
@@ -388,8 +406,10 @@ class ResolverProxy(
 /**
  * The network's own proxy as last handed to the engine (the proxy record's unit S2), and when to hand it (S2's review,
  * m5), as a class the JVM tests hold: at a settle or a change of network only when it is another ([settle]), and at
- * each engine's start whatever it is ([start]), since the engines' setting starts empty after a stop (audit m7). [hand]
- * is `Engine.nativeBeneathProxy`'s call. Not thread-safe: the caller holds its lock.
+ * each engine's start whatever it is ([start]), since the engines' setting starts empty after a stop (audit m7). Where
+ * the switch is on, the switch's hold is handed in place of none until the settle (S2's review, m2): before a lookup
+ * ([settling]) and while no network is beneath ([none]). [hand] is `Engine.nativeBeneathProxy`'s call. Not
+ * thread-safe: the caller holds its lock.
  */
 class BeneathHand(private val hand: (NetworkProxy.EngineProxy?) -> Unit) {
     /** The proxy handed last, or null for none. */
@@ -405,6 +425,24 @@ class BeneathHand(private val hand: (NetworkProxy.EngineProxy?) -> Unit) {
 
     /** Hands the one handed last again, to an engine that starts with none. */
     fun start() = hand(handed)
+
+    /**
+     * Before a settle that waits for the lookup of a proxy's name on the network of handle [network] (S2's review, m2):
+     * [hold], the switch's hold or null where the switch is off ([NetworkProxy.hold]), where the one handed last is
+     * another network's or none, so that the one before goes with its network as at a new network, or where the switch
+     * was off for it; the one handed stays while it is this network's with the switch on.
+     */
+    fun settling(hold: NetworkProxy.EngineProxy?, network: Long) {
+        val held = handed
+        if (held == null || held.network != network || (hold != null && !held.always)) settle(hold)
+    }
+
+    /**
+     * No network beneath, at a lost network and at a settle with none (S2's review, m2): the switch's hold of no network
+     * where the switch was on for the one handed last, with its exclusions and families, so that no app goes directly
+     * before the next network's own settle; else none.
+     */
+    fun none() = settle(handed?.takeIf { it.always }?.copy(network = 0L, proxies = emptyList()))
 }
 
 /**

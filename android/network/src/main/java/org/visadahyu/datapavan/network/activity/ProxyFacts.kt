@@ -124,10 +124,11 @@ object ProxyFacts {
     /**
      * The engine's counters of apps' own proxies (ADR 0052), by their places: declared, with a password, inferred,
      * substituted, taken back, covers; (the proxy record's unit U) the `UDP ASSOCIATE`s tied, and the relays named
-     * elsewhere; and (unit S2) the network's own proxy's: its tries, opened, refused, password, unreachable, by name and
-     * stale, which say that this phone's network names a proxy.
+     * elsewhere; and (unit S2) the network's own proxy's: its tries, opened, refused, password, unreachable, by name,
+     * stale and the flows its switch's hold kept waiting (S2's review, m2), which say that this phone's network names a
+     * proxy.
      */
-    val COUNTERS: Set<Int> = (61..66).toSet() + (71..79)
+    val COUNTERS: Set<Int> = (61..66).toSet() + (71..80)
 
     /**
      * The engine's counters as the network part's dump writes them: all of them in a debuggable build; in a release,

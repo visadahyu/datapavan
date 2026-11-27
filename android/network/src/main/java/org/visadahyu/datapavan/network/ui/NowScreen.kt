@@ -963,8 +963,9 @@ internal fun androidProxyLines(
  * fails, or always by the user's choice, with its place and the switch, whatever the proxy answered; then, as lines of
  * their own, that it asked for a password ([password]: some connections were refused, S2's review M1), and that
  * Datapavan lacks the local-network grant Android 17 may want for it ([ProxyContext.Beneath.noGrant], advice, M2). On
- * the phone itself, at a tool's known port or another (decision 3). Else not used, as before the engine used it, with
- * the switch where the user turned it on, since apps then go directly whatever it says (S2's review, m2).
+ * the phone itself, at a tool's known port or another (decision 3). Else not used, as before the engine used it; where
+ * the user turned the switch on, a line of its own in place of that one, with the switch, since the engine then lets
+ * none of the connections it would send through the proxy go directly, and they fail (S2's review, m2).
  */
 private fun networkProxyLines(at: String, beneath: ProxyContext.Beneath, password: Boolean): List<ProxyLine> {
     val through = ProxyLine.Tap.THROUGH.takeIf { beneath.key != null }
@@ -984,9 +985,12 @@ private fun networkProxyLines(at: String, beneath: ProxyContext.Beneath, passwor
             beneath.tool?.let { ProxyLine(R.string.now_proxy_network_tool, args = listOf(isolate(it)), tap = ProxyLine.Tap.CHAIN) }
                 ?: ProxyLine(R.string.now_proxy_network_phone, args = listOf(at)),
         )
-        else -> listOfNotNull(
-            ProxyLine(R.string.now_proxy_network_unused, args = listOf(at)),
-            ProxyLine(R.string.now_proxy_network_unused_on, tap = through).takeIf { beneath.always && through != null },
+        else -> listOf(
+            if (beneath.always && through != null) {
+                ProxyLine(R.string.now_proxy_network_unused_on, args = listOf(at), tap = through)
+            } else {
+                ProxyLine(R.string.now_proxy_network_unused, args = listOf(at))
+            },
         )
     }
 }

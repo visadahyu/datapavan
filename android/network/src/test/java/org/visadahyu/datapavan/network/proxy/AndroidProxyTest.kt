@@ -112,10 +112,11 @@ class AndroidProxyTest {
         )
         for (why in listOf(NetworkProxy.Why.UNRESOLVED, NetworkProxy.Why.OWN, NetworkProxy.Why.LINK_LOCAL, NetworkProxy.Why.NONE)) {
             assertEquals(why.word, ProxyLine(R.string.now_proxy_network_unused, args = at), line(ProxyContext.Beneath(why)))
-            // The switch left on where the engine cannot use the proxy: said, and drawn so that it can be turned off (m2).
+            // The switch left on where the engine cannot use the proxy: a line of its own, since its connections then fail
+            // (the switch's hold), with the switch drawn so that it can be turned off (m2).
             assertEquals(
                 why.word,
-                listOf(ProxyLine(R.string.now_proxy_network_unused, args = at), ProxyLine(R.string.now_proxy_network_unused_on, tap = through)),
+                listOf(ProxyLine(R.string.now_proxy_network_unused_on, args = at, tap = through)),
                 lines(ProxyContext.Beneath(why, key = "1 proxy.example.net 3128", always = true)),
             )
             assertEquals(why.word, 1, lines(ProxyContext.Beneath(why, key = "1 proxy.example.net 3128")).size)
@@ -213,6 +214,10 @@ class AndroidProxyTest {
             assertTrue(name, !text(name).contains("this network", ignoreCase = true))
         }
         assertTrue(text("now_proxy_network_pac").startsWith("This network\\'s settings give a PAC file."))
+        // m2's hold: with the switch on and no address to use, the line says the connections fail, never that apps go
+        // directly, and how to let them.
+        assertTrue(text("now_proxy_network_unused_on").startsWith(text("now_proxy_network_unused").removeSuffix(" Others connect directly.")))
+        assertTrue(text("now_proxy_network_unused_on").endsWith("fail. Turn the switch off to let them go directly."))
         val names = listOf("now_proxy_global", "now_proxy_global_pac", "now_proxy_network", "now_proxy_network_pac") +
             listOf("always", "remote", "unused", "unused_on", "no_grant", "phone", "tool", "password", "password_always")
                 .map { "now_proxy_network_$it" }

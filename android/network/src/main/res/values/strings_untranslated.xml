@@ -33,8 +33,8 @@
     and the row's and the history's words. None says who set the proxy. The fix round of unit S2's review: the password
     in a line of its own under the network's line and its switch (now_proxy_network_password's new words, and
     now_proxy_network_password_always), the local-network grant as advice under that line (now_proxy_network_no_grant's
-    new words), the switch left on where the engine cannot use the proxy (now_proxy_network_unused_on), and the history's
-    words in the past tense (history_destination_network_proxy, history_network_proxy_off's new words).
+    new words), the switch left on where the engine cannot use the proxy (now_proxy_network_unused_on; since the switch's
+    hold, the line whole, and its connections fail rather than go directly), and the history's words in the past tense (history_destination_network_proxy, history_network_proxy_off's new words).
 -->
 <resources xmlns:tools="http://schemas.android.com/tools" tools:ignore="MissingTranslation">
     <!-- In "Now", under a proxy whose address is shown while the switch is off: facts only. "While", not "because":
@@ -130,9 +130,10 @@
     <string name="now_proxy_network_password">This network\'s proxy asked for a password for some connections, which Android does not keep for a network. Those connections were refused.</string>
     <!-- As above, with the switch now_proxy_send_through on: apps then make no direct try. -->
     <string name="now_proxy_network_password_always">This network\'s proxy asked for a password for some connections, which Android does not keep for a network. Those connections were refused. With the switch on, apps do not try to connect directly, so where the proxy asks for a password they cannot connect at all.</string>
-    <!-- Unit S2, under now_proxy_network_unused, with the switch now_proxy_send_through below it, where the user turned it
-         on but the engine has no address of the proxy it can use: apps then go directly. -->
-    <string name="now_proxy_network_unused_on">The switch below is on, but Datapavan cannot use this proxy now, so apps connect directly.</string>
+    <!-- Unit S2, in place of now_proxy_network_unused, with the switch now_proxy_send_through below it, where the user
+         turned it on but the engine has no address of the proxy it can use: %1$s is its host and port. The engine then
+         lets no connection it would send through the proxy go directly, and those connections fail (S2's review, m2). -->
+    <string name="now_proxy_network_unused_on">This network\'s settings name a proxy: %1$s. Apps that were already running when Datapavan started use it, and so do the apps you left out. The switch below is on, but Datapavan cannot use this proxy now, so the connections it would send through it fail. Turn the switch off to let them go directly.</string>
     <!-- Unit S2, on a destination's row in Now: the connection went through the network's own proxy. The record does not
          keep which of the two reasons it was. -->
     <string name="now_destination_network_proxy">Went through this network\'s proxy: a direct connection failed on this network, or the switch to send apps through it is on.</string>

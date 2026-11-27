@@ -179,7 +179,8 @@ class NetworkVpnService : VpnService() {
     /**
      * The network beneath's own proxy as last handed to the engine (the proxy record's unit S2), under
      * [resolverProxyLock]: [settleResolverProxy] hands it whenever it changes, [startEngine] again at each start (audit
-     * m7), and a new network or none hands none at once.
+     * m7), and a new network its own at once, or the switch's hold while its name is looked up; a lost one hands none,
+     * or the switch's hold where the switch was on (S2's review, m2).
      */
     private val beneathHand = org.visadahyu.datapavan.network.dns.BeneathHand { next ->
         Engine.nativeBeneathProxy(
@@ -253,9 +254,10 @@ class NetworkVpnService : VpnService() {
                 // (the DoT crash's audit, finding 1).
                 current = network
                 networkGeneration++
-                // The engine's proxy goes with the network before, before any lookup for this one (S2).
-                synchronized(resolverProxyLock) { beneathHand.settle(null) }
                 // The new network's proxy before the first client of its generation is built (the resolver's audit, M5).
+                // The engine's goes with the network before, before any lookup for this one (S2): the recompute hands this
+                // network's, or the switch's hold while its name is looked up, or none, never none first where the
+                // switch is on (S2's review, m2).
                 recomputeResolverProxy()
                 exchanger.networkChanged()
                 exchanger.warm()
@@ -301,7 +303,9 @@ class NetworkVpnService : VpnService() {
             // In the same order as onAvailable's.
             current = null
             networkGeneration++
-            synchronized(resolverProxyLock) { beneathHand.settle(null) }
+            // The switch's hold where the switch was on, so that no app goes directly before the next network's own
+            // settle (S2's review, m2); else none.
+            synchronized(resolverProxyLock) { beneathHand.none() }
             recomputeResolverProxy()
             exchanger.networkChanged()
             // The lost network's prefixes go with it (audit-B 1).
@@ -836,6 +840,14 @@ class NetworkVpnService : VpnService() {
             .map { it.address }.toSet()
         val literal = org.visadahyu.datapavan.network.dns.Exchanger.numeric(org.visadahyu.datapavan.network.dns.NetworkProxy.bare(setting.host))
         if (literal != null) return settleResolverProxy(asked, generation, setting, listOf(literal), why, own, facts)
+        // While the name is looked up: the switch's hold where the switch is on for this setting, and none of another
+        // network's (S2's review, m2).
+        val hold = org.visadahyu.datapavan.network.dns.NetworkProxy.hold(
+            setting, why, facts, org.visadahyu.datapavan.network.proxy.ThroughProxy.of(this)::on,
+        )
+        synchronized(resolverProxyLock) {
+            if (asked == resolverProxyAsked && generation == networkGeneration) beneathHand.settling(hold, facts.network)
+        }
         lookUp {
             val found = try {
                 network.getAllByName(setting.host).toList()
@@ -894,7 +906,8 @@ class NetworkVpnService : VpnService() {
                 // A proxy at one of the tunnel's own addresses moves the tunnel to its other set, as a gateway there does.
                 main.post { if ((forced ?: TunnelAddresses.choose(networksBeneath())) !== addresses) setUpAgain() }
             }
-            beneathHand.settle(settled.engine)
+            // With no network beneath, the switch's hold stays until a network's own settle (S2's review, m2).
+            if (facts == null) beneathHand.none() else beneathHand.settle(settled.engine)
             key = settled.key
             // For "Now"'s line (S2): a proxy on the phone itself at a port that a circumvention tool installed is known to
             // use (decision 3), which the chain carries apps through instead, from the tools this run read.
@@ -2267,7 +2280,7 @@ class NetworkVpnService : VpnService() {
             val (handed, why) = synchronized(resolverProxyLock) { beneathHand.handed to beneathWhy }
             val state = Engine.nativeBeneathState().toIntOrNull() ?: 0
             writer.println(
-                "beneath-proxy ${handed?.proxies?.joinToString(",") { org.visadahyu.datapavan.network.activity.ProxyFacts.hostPort(it.address.hostAddress.orEmpty(), it.port) } ?: "none"} ${why.word} first=${if (state and 1 != 0) "proxy" else "direct"} " +
+                "beneath-proxy ${handed?.proxies?.joinToString(",") { org.visadahyu.datapavan.network.activity.ProxyFacts.hostPort(it.address.hostAddress.orEmpty(), it.port) }?.ifEmpty { "hold" } ?: "none"} ${why.word} first=${if (state and 1 != 0) "proxy" else "direct"} " +
                     "names=${state shr 1 and 1} password=${state shr 2 and 1} always=${if (handed?.always == true) 1 else 0} " +
                     "no-grant=${if (org.visadahyu.datapavan.network.proxy.ProxyContext.state.value.beneath.noGrant) 1 else 0}",
             )
