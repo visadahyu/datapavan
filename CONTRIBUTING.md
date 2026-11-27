@@ -24,7 +24,8 @@ Rust tests, cargo-deny, Android Lint for debug and release (warnings as errors),
 bundle builds, the forbidden-permission guard, and a check that every APK carries the Rust library.
 CI runs the same script, and then the emulator checks in parallel shards (`scripts/emulator-shard.sh`), when a
 change touches what they test (`scripts/ci-scope.sh`). `scripts/emulator-shards.sh` runs the same shards on
-local emulators before a push, and `scripts/batch-merge.sh` brings several approved branches into one branch
+local emulators before a push, or one check of a shard alone (`network:verify-activity.sh`); a check that fails keeps
+the emulator's state for reading (docs/ci-flakes.md, "What a failed check keeps"), and `scripts/batch-merge.sh` brings several approved branches into one branch
 for one CI run before main moves to it.
 
 Right before a push, run `scripts/check.sh prepush`: in a minute or two, with no build and no emulator, it reads

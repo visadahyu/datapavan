@@ -73,3 +73,51 @@ and the defect stays here until it is fixed.
 | 2026-11-12, again 2026-11-14 (run 43606775648, attempt 1) | The network part's search for the user's tool can get `ConnectException` from the tool's port while the tool listens there, and then reports it as not answering. | The chain screen says the tool does not answer and offers no user name and password, until the user looks again; `verify-chain.sh` warns ("the network part's tool search") when its one extra search was needed. | A fix on branch `tool-search` (2026-11-15): before it says that no tool answers, the network part's search tries the remembered tool's refused ports once more after one second (`ToolFinderTest` covers it, with ports shifted by the user's number and only the refused ports greeted again). The cause is not known yet: the tool listened, and a moment later it was found again. A tool restarting its proxy refuses for a moment, and Android also reports a connection its network rules stop (EPERM, EACCES) as a `ConnectException`, perhaps while the screen comes to the front; debug builds now log the error's name, so the next occurrence can settle it. Closes once `verify-chain.sh` runs in CI without the "the network part's tool search" warning. |
 | 2026-11-16 (run 43876121769, attempt 1, and the Android 15 emulator) | The engine stopped accepting TCP connections for the rest of the run at its listener's first accept error, as when Android's netd destroys the sockets on the tunnel's address, or the process is out of descriptors for a moment. | After the tunnel was set up again with the same addresses, every TCP connection through the network part was refused; `verify-network.sh`'s kept connection got no second answer. | A fix on branch `swap-race` (2026-11-16): a listener that no longer listens is bound anew, on a new port, and one that still listens accepts again after a pause (ADR 0044, unit 12b); the network lab destroys the listener and the connections with `ss -K` and runs the engine out of descriptors. Closes once the fix is on main and `verify-network.sh` passes on CI with it. |
 | 2026-11-22 (run 45033044776, attempt 1) | The network part closes its DoT connections on the main thread when the network beneath changes (`Exchanger.networkChanged` from `NetworkCallback.onAvailable`), and closing a TLS socket writes to the network, so StrictMode throws `NetworkOnMainThreadException` (`DotClient.kt:170`) and the process `:network` crashes. | The tunnel goes down at a switch between Wi-Fi and mobile data while a DoT connection is open; `verify-network.sh` fails with "the tunnel went down when the network beneath switched". | A fix on branch `dot-crash` (2026-11-24): the connections are marked closed at once and their sockets closed on the client's own thread; a connection opened on the network before the change is never kept; the TLS handshake is bounded, and one open per server is in flight. `DotClientTest` and `verify-dns.sh`'s step 3a fail on the code before it (step 3a seen failing there with the crash, `NetworkOnMainThreadException` at `DotClient.closeAll`, on 2026-11-24). Closes once the fix is on main and step 3a passes on CI. |
+
+## What a failed check keeps
+
+The emulator checks of the shards keep the device's state when they fail, so that a failure is read from what the
+device held, not guessed from the log's last line (2026-11-27: of three failures of the network shard, one ended with
+no word and another left nothing to read). Each check opts in with `check_evidence_on` in `scripts/adb-ui.sh`, in
+place of its EXIT trap:
+
+- A stop under `set -e` that no `fail` reached prints `CHECK STOPPED: <script>:<line>: <command> (exit n)` and the
+  functions it was in, once, at the command that stopped the check. A failure inside `$(…)`, a pipeline or a
+  condition, which bash reports to the ERR trap too, prints nothing.
+- Every end but a pass keeps the evidence: a `fail`, such a stop, a direct exit, `set -u`, the runner's TERM at its
+  timeout. Into `build/emulator-shards/evidence/<run>/<shard>/<script>-<n>-<label>/`, the label being the failure's
+  first words, `stopped` or `TERM`, it keeps what ended the check and where (`what.txt`), the check's last screen dump
+  and a fresh one, a screencap (black where a protected window is on top, which shows that too), the task stack with
+  the resumed activity and the windows with the focus (`focus.txt` holds their lines), the network part's dump when
+  Advanced is installed, the log since the check began with its events buffer, which records each activity resumed and
+  finished, the device's memory and last crashes, and the check's own folder of screen dumps where it names one
+  (`verify-activity.sh`, `verify-chain.sh`), its dumps only: never a folder of keys, configurations, log databases or
+  APKs. Each adb call is bounded, the whole within 25 s, inside the 30 s the runner gives a shard it stopped; at most
+  five failures of a script in one folder, gzipped, about 2 MB each. The check's cleanup runs after it, and a passing
+  check keeps nothing.
+- Only on an emulator, and only where `EVIDENCE_DIR` is set, which `scripts/emulator-shard.sh` does: a phone's log,
+  windows and screen hold other apps' data.
+- `scripts/emulator-shards.sh` names this run's evidence in its summary and each check's time in the shard's log; CI
+  uploads the folder of a failed shard as the artifact `evidence-<shard>`, kept seven days.
+
+The device's day. The connection log files its records by the device's local day, and an app's history opens at it,
+so a check whose flow crosses the device's midnight cannot be read (2026-11-27: one record of a connection, not two,
+when the network shard ran across local midnight). The runner and CI's emulator step boot the emulator in the time
+zone that puts its local time nearest midday (`scripts/emulator-shard.sh zone`), which leaves a shard about eleven
+hours. The zone is named, as `Asia/Tokyo`, and has no summer time: the emulator hands its zone to Android in the radio's
+time signal, whose name Android reads only up to a `+` or `-`: `Etc/GMT-5` arrived as `Etc/GMT`. Every check that
+keeps evidence also reads the device's clock when it starts and fails, named, when the device's midnight is less than
+two hours away ("the device's day ends in N minutes: a run across it cannot be read"), so that a check run by hand on
+another emulator or a phone never fails falsely there. No check compares a day or a time taken on this computer with
+one of the device: `verify-wireguard-import.sh` formats the picker's time in the device's own zone.
+
+After Back, a check waits for the screen it means: one in another activity by that activity, resumed on top with the
+focus (`back_to` in `scripts/adb-ui.sh`), since a text depends on the list's place and the language and a protected
+window is the screen's before too; one inside the same activity by its own text or id. A screen dump removes the last
+one first and counts only if it wrote one, and `tap_text` says on stderr why it gave up: not found from the list's top
+down, or not in one place.
+
+One check is measured alone with `scripts/emulator-shards.sh <shard>:<check>`, as `network:verify-activity.sh`: it
+runs on an emulator of its own, freshly booted, with the shard's own setup for that check. A failure is never retried
+to pass. Known tap retries that sit against this, left for a later unit: `verify-signed-release.sh`, which taps "Data
+sources" up to five times after Back, and its import's three tries of "Import a data pack".
