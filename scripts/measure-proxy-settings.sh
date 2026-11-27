@@ -60,7 +60,12 @@
 # root` takes, is pass 5's network with the unit's rows: the recorder refusing the target's address with 407 (a
 # password) and with 403 (names only), an exclusion list naming a target, tracker blocking with a blocked lookup and a
 # blocked hello through the proxy, a chained app (with CHAIN_SOCKS=host:port:user:password, a SOCKS5 proxy as the
-# chain's tool, the proxy lab's), and the proxy removed while the VPN runs. On Android 17 and later, each part also has
+# chain's tool, the proxy lab's), and the proxy removed while the VPN runs. PASSES=10, also at pass 3's end, is the
+# switch's hold (S2's review, m2): the Wi-Fi network's proxy at a name that never resolves (proxy.invalid, RFC 6761) on
+# an open network, the switch "Send apps through this proxy" turned on through the debug dump (`proxy-through`, since
+# "Now" draws it only once the engine has an address), so that the engine holds a direct app's new flows and fails
+# them where no proxy comes: the request must fail with no flow of the fixture opened, none through the proxy, and the
+# engine's counter 80 (the flows the hold kept waiting) up; then the switch off, and the same request goes directly. On Android 17 and later, each part also has
 # a copy of the fixture that targets API 37 (M5) fetch the public target and the direct target. SETTINGS names the
 # settings that passes 1 and 3 go through; MEASURE_NAME, a word, starts the output's names, so that two runs (a build
 # before and one after) can go side by side.
@@ -531,12 +536,17 @@ set_setting() {
             wifi_again
             ;;
         wifi-and-global) echo "$(set_setting wifi-proxy); $(set_setting global-setting)" ;;
+        # The switch's hold's (S2's review, m2): the Wi-Fi network's proxy at a name that never resolves.
+        wifi-unresolved)
+            owner wifi-proxy --es host "$UNRESOLVED" --es port "$PROXY_PORT"
+            wifi_again
+            ;;
     esac
 }
 clear_setting() {
     case $1 in
         none) ;;
-        wifi-proxy | wifi-pac | wifi-excluding)
+        wifi-proxy | wifi-pac | wifi-excluding | wifi-unresolved)
             owner wifi-none >/dev/null
             wifi_again
             ;;
@@ -673,6 +683,65 @@ switch_part() {
         now_lines | tee -a "$REPORT"
     fi
     clear_setting wifi-proxy
+}
+
+# The switch's hold (S2's review, m2), on an open network with the VPN on: the Wi-Fi network's proxy at $UNRESOLVED, a
+# name that never resolves, and the switch "Send apps through this proxy" turned on for it through the debug dump, as
+# "Now"'s switch would, which "Now" draws only once the engine has an address. The engine then holds each direct app's
+# new flow, its SYN unanswered, and fails it as an unreachable network once its 3 s passed with no proxy come. Positive
+# evidence, each read after the request: the fixture's own result, its new TCP flows by outcome (none opened), its
+# flows through the proxy (none), and the engine's counter 80, the flows the hold kept waiting, before and after. Then
+# the switch off: the engine has no setting, and the same request goes directly (a flow opened, the counter as it was).
+held_count() { dump | sed -n 's/^ *counters //p' | head -1 | awk '{ print $81 }'; }
+beneath_word() { dump beneath-proxy | sed -n 's/^ *beneath-proxy \([^ ]*\) .*/\1/p' | head -1; }
+beneath_holds() { [ "$(beneath_word)" = hold ]; }
+beneath_none() { [ "$(beneath_word)" = none ]; }
+# The settle of the name that does not resolve, whose key the dump's `proxy-through` sets the switch for.
+beneath_unresolved() { dump beneath-proxy | grep -qE '^ *beneath-proxy none unresolved '; }
+# The fixture's new TCP flows since the step's mark, by outcome, and its new flows through a proxy.
+fixture_outcomes() {
+    local state
+    state=$(dump)
+    printf 'tcp flows by outcome: %s; through a proxy: %s\n' \
+        "$(awk -v uid="$FIXTURE_UID" 'NR == FNR { seen[$1 " " $2 " " $3] = 1; next }
+            !seen[$1 " " $2 " " $3] && $1 == "tcp" && $4 == uid { n[$5]++ }
+            END { for (o in n) printf "%s=%d ", o, n[o] }' <(printf '%s\n' "$FLOWS_BEFORE") <(flows_of "$state") | sed 's/ $//')" \
+        "$(awk 'NR == FNR { seen[$1 " " $2 " " $3] = 1; next } !seen[$1 " " $2 " " $3] { n++ } END { print n + 0 }' \
+            <(printf '%s\n' "$PROXIES_BEFORE") <(proxies_of "$state"))"
+}
+hold_part() {
+    local held through
+    say ""
+    say "-- VPN $VPN, the Wi-Fi network's proxy at $UNRESOLVED:$PROXY_PORT, a name that never resolves, with the switch \"Send apps through this proxy\" on through the dump, then off (S2's review, m2)"
+    mark
+    say "  set: $(set_setting wifi-unresolved)"
+    since_mark | tee -a "$REPORT"
+    say "  networks: $(network_state)"
+    within 30 beneath_unresolved || say "  the engine's setting is not yet the name's that does not resolve"
+    say "  engine: $(beneath_state)"
+    through=$(dump proxy-through on | sed -n 's/^ *\(proxy-through .*\)/\1/p')
+    say "  ${through:-proxy-through: no such command (a build before the hook)}"
+    within 20 beneath_holds || say "  the engine was not handed the switch's hold"
+    say "  the switch on: $(beneath_state)"
+    now_lines | tee -a "$REPORT"
+    held=$(held_count)
+    step "get the public name, https, the switch on" fixture_as "$FIXTURE" fresh timed --es url "https://$PUBLIC/"
+    say "    the fixture's $(fixture_outcomes)"
+    say "    the hold's counter (80): $held -> $(held_count)"
+    held=$(held_count)
+    step "get the public name, http, the switch on" fixture_as "$FIXTURE" fresh timed --es url "http://$PUBLIC/"
+    say "    the fixture's $(fixture_outcomes)"
+    say "    the hold's counter (80): $held -> $(held_count)"
+    through=$(dump proxy-through off | sed -n 's/^ *\(proxy-through .*\)/\1/p')
+    say "  ${through:-proxy-through: no such command}"
+    within 20 beneath_none || say "  the engine still has a setting"
+    say "  the switch off: $(beneath_state)"
+    held=$(held_count)
+    step "get the public name, https, the switch off" fixture_as "$FIXTURE" fresh timed --es url "https://$PUBLIC/"
+    say "    the fixture's $(fixture_outcomes)"
+    say "    the hold's counter (80): $held -> $(held_count)"
+    now_lines | tee -a "$REPORT"
+    clear_setting wifi-unresolved
 }
 
 # Android 17 and later: runs "$@" with Datapavan's local network grant revoked and the VPN started again without it,
@@ -842,6 +911,7 @@ rows_s2() {
 
 SETTINGS="${SETTINGS:-none wifi-proxy wifi-pac global-setting global-owner global-pac}"
 EXCLUDED=example.org
+UNRESOLVED=proxy.invalid
 for pass in ${PASSES:-1 2 3 4}; do
     case $pass in
         1)
@@ -870,8 +940,16 @@ for pass in ${PASSES:-1 2 3 4}; do
             # apps through this proxy"; and on Android 17 and later the local network grant revoked.
             measure wifi-and-global set
             switch_part
+            hold_part
             [ "$SDK_INT" -lt 37 ] || without_grant measure wifi-proxy set
             [ "$SDK_INT" -lt 37 ] || without_grant no_grant_part
+            vpn_stop
+            ;;
+        10)
+            say ""
+            say "== pass 10: the switch's hold, the Wi-Fi network's proxy at a name that never resolves, the switch on (S2's review, m2)"
+            vpn_start
+            hold_part
             vpn_stop
             ;;
         9)

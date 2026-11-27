@@ -19,7 +19,9 @@
 # the choice and a reinstall ends it. On such an emulator too, the network's own proxy (the proxy record's unit S2): the
 # project's device owner sets the Wi-Fi network's proxy to the proxy record's recorder, the emulator's iptables reject
 # every other way out, and a fresh app's request to a public name must answer through it, by the engine's CONNECT to its
-# address; the on-link target gets none. No password or user name reaches the network part's dump, the log, the
+# address; the on-link target gets none; and with the network's proxy at a name that never resolves and the switch "Send
+# apps through this proxy" on, the request fails with no flow opened, and answers directly once the switch is off. No
+# password or user name reaches the network part's dump, the log, the
 # device's log or its crash buffer.
 #
 # The false positives that need a maker's own network (a Telegram CDN data centre beside its ranges, WhatsApp's link
@@ -62,6 +64,8 @@ DATA_OFF=""
 WIFI_PROXY_SET=""
 EGRESS_SET=""
 BENEATH_ROOTED=""
+# The switch "Send apps through this proxy" turned on through the debug dump, for the switch's hold (S2's review, m2).
+THROUGH_SET=""
 
 # Clears Android's global proxy, and clears it again until Android itself holds none. The two writes in a row, ":0"
 # and then the setting's deletion, sometimes leave Android's own copy (global_http_proxy_host and _port) set, and "Now"
@@ -129,6 +133,9 @@ beneath_egress() {
 }
 # The row undone, whatever of it was set, in the reverse order; at its end and by the cleanup.
 beneath_undo() {
+    # The switch first, while the settle still has the key it was set for.
+    [ -z "$THROUGH_SET" ] || dump proxy-through off >/dev/null 2>&1 || true
+    THROUGH_SET=""
     [ -z "$EGRESS_SET" ] || beneath_egress -D >/dev/null 2>&1 || true
     EGRESS_SET=""
     if [ -n "$WIFI_PROXY_SET" ]; then
@@ -660,6 +667,13 @@ echo "ok: a reinstall of the chosen app ends its choice by its first install tim
 # and the resolver's lookup to the first ODoH pair's relay (data/odoh). A preflight connects to both from here first;
 # where either cannot be reached, the row is skipped and says so, as the runner's outage, not the engine's, whatever
 # PROXYLAB_REQUIRED says.
+# Then the switch's hold (S2's review, m2), on the same Wi-Fi network with its way out open again: its proxy at a name
+# that never resolves (proxy.invalid, RFC 6761), and the switch "Send apps through this proxy" turned on for it through
+# the debug dump (`proxy-through`, since "Now" draws the switch only once the engine has an address). The engine holds a
+# direct app's new flow, its SYN unanswered, and fails it as an unreachable network where no proxy came within 3 s: a
+# fresh fixture's request to example.com must fail, the engine must keep a flow of it failed as unreachable and none
+# opened, none through the proxy, and its counter 80 (the flows the hold kept waiting) must rise. With the switch off
+# again, the engine has no setting, and the same request must answer directly, by a flow opened.
 not_run() {
     [ "${PROXYLAB_REQUIRED:-}" != 1 ] || fail "PROXYLAB_REQUIRED=1, and the network's own proxy's row cannot run: $1"
     echo "NOT RUN: the network's own proxy's row: $1"
@@ -773,6 +787,61 @@ PY
     [[ $line == "get failed "* ]] || fail "the on-link direct target answered on a network that rejects it: ${line:-no answer}"
     ! grep -qF "CONNECT $HOST:$((base + 2)) " "$WORK/recorder.tsv" || fail "the engine sent the on-link direct target through the proxy"
     echo "ok: the on-link direct target $HOST:$((base + 2)) is never sent through the proxy ($line)"
+
+    beneath_egress -D || fail "the emulator's iptables rules could not be taken out"
+    EGRESS_SET=""
+    line=$(owner_do wifi-proxy --es host proxy.invalid --es port "$base")
+    [[ $line == "wifi-proxy ok "* ]] || fail "the device owner did not set the Wi-Fi network's proxy to proxy.invalid: $line"
+    wifi_again || fail "Wi-Fi did not come back as the default network after its proxy was set to proxy.invalid"
+    beneath_unresolved() { grep -qE '^ *beneath-proxy none unresolved ' <<<"$(dump beneath-proxy)"; }
+    within 30 beneath_unresolved || fail "the engine's setting is not proxy.invalid's, unresolved: $(dump beneath-proxy | grep 'beneath-proxy' || echo none)"
+    line=$(dump proxy-through on | sed -n 's/^ *\(proxy-through .*\)/\1/p')
+    [ "$line" = "proxy-through on" ] || fail "the dump did not turn the switch on: ${line:-no answer}"
+    THROUGH_SET=1
+    beneath_hold() { grep -qE '^ *beneath-proxy hold .* always=1 ' <<<"$(dump beneath-proxy)"; }
+    within 20 beneath_hold || fail "the engine was not handed the switch's hold: $(dump beneath-proxy | grep 'beneath-proxy' || echo none)"
+    held_count() { dump | sed -n 's/^ *counters //p' | head -1 | awk '{ print $81 }'; }
+    routes_through() { dump | sed -n "s/^ *flow-route $APP_UID network-proxy //p"; }
+    # The fixture's TCP flows kept, by the app's end and the destination, and its new ones' outcomes since $1.
+    fixture_flows() { dump | sed -n 's/^ *flow //p' | awk -v uid="$APP_UID" '$1 == "tcp" && $4 == uid { print $2, $3, $5 }'; }
+    outcomes_since() { awk 'NR == FNR { seen[$1 " " $2] = 1; next } !seen[$1 " " $2] { print $3 }' <(printf '%s\n' "$1") <(fixture_flows) | sort | uniq -c | awk '{ printf "%s=%d ", $2, $1 }'; }
+    fetch() {
+        adb shell am force-stop "$FIXTURE"
+        adb logcat -c
+        adb shell am start -W -n "$FIXTURE/$FIXTURE.ProxyActivity" --es action get --es url "https://example.com/" >/dev/null
+        for _ in $(seq 1 30); do
+            grep -qx done <<<"$(fixture_log)" && break
+            sleep 1
+        done
+        fixture_log | grep -E '^get (ok|failed)' | tail -1 || true
+    }
+    local held routes before outcomes
+    held=$(held_count)
+    routes=$(routes_through)
+    before=$(fixture_flows)
+    line=$(fetch)
+    sleep 1
+    outcomes=$(outcomes_since "$before")
+    [[ $line == "get failed "* ]] || fail "with the switch on and no proxy to be had, the fixture's request answered: ${line:-no answer}"
+    [[ $outcomes == *unreachable=* && $outcomes != *opened=* ]] || fail "the engine's flows of the fixture with the switch's hold: ${outcomes:-none}"
+    [ "$(routes_through)" = "$routes" ] || fail "a flow of the fixture went through the network's proxy, which has no address"
+    [ "$(held_count)" -gt "${held:-0}" ] 2>/dev/null || fail "the engine's counter of the flows the hold kept waiting did not rise: $held -> $(held_count)"
+    echo "ok: with the switch on and the network's proxy at proxy.invalid, the request fails ($line), its flows ${outcomes% }, none opened, the hold's counter $held -> $(held_count)"
+
+    line=$(dump proxy-through off | sed -n 's/^ *\(proxy-through .*\)/\1/p')
+    [ "$line" = "proxy-through off" ] || fail "the dump did not turn the switch off: ${line:-no answer}"
+    THROUGH_SET=""
+    beneath_none() { grep -qE '^ *beneath-proxy none ' <<<"$(dump beneath-proxy)"; }
+    within 20 beneath_none || fail "the engine kept a setting with the switch off: $(dump beneath-proxy | grep 'beneath-proxy' || echo none)"
+    held=$(held_count)
+    before=$(fixture_flows)
+    line=$(fetch)
+    sleep 1
+    outcomes=$(outcomes_since "$before")
+    [ "$line" = "get ok 200" ] || fail "with the switch off, the fixture's request did not answer directly: ${line:-no answer}"
+    [[ $outcomes == *opened=* ]] || fail "the engine kept no opened flow of the fixture with the switch off: ${outcomes:-none}"
+    [ "$(held_count)" = "$held" ] || fail "the hold kept a flow waiting with the switch off: $held -> $(held_count)"
+    echo "ok: with the switch off, the same request answers directly ($line), its flows ${outcomes% }"
     beneath_undo
 }
 beneath_row

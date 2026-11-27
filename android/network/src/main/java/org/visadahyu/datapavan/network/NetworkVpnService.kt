@@ -2239,10 +2239,14 @@ class NetworkVpnService : VpnService() {
      * connections cannot be refused (S2's review, M2).
      * `beneath-proxy` prints `beneath-proxy ADDRESSES WHY first=direct|proxy names=0|1 password=0|1 always=0|1
      * no-grant=0|1`: the network's own proxy as the engine has it (the proxy record's unit S2), its `address:port`s
-     * comma-separated or `none`; `network`, or why it has none, as `dns-proxy`'s reasons with `global` (Android's global
-     * proxy, never the engine's); whether the proxy comes first, whether names do, whether it asked for a password, all
-     * as the running engine learned them; the user's choice "Send apps through this proxy"; and whether "Now" advises
-     * the local-network grant for it. It names no credential.
+     * comma-separated, `hold` for the switch's hold (S2's review, m2) or `none`; `network`, or why it has none, as
+     * `dns-proxy`'s reasons with `global` (Android's global proxy, never the engine's); whether the proxy comes first,
+     * whether names do, whether it asked for a password, all as the running engine learned them; the user's choice "Send
+     * apps through this proxy"; and whether "Now" advises the local-network grant for it. It names no credential.
+     * `proxy-through on|off` sets that choice for the network's own proxy as the last settle found it, as "Now"'s switch
+     * does, and prints `proxy-through on|off`, or `proxy-through refused` where the settle found none: also for a
+     * proxy whose name does not resolve, for which "Now" draws no switch until the engine has an address, so that the
+     * switch's hold has an emulator row (scripts/measure-proxy-settings.sh, PASSES=10; S2's review, m2).
      */
     private fun debugDns(args: List<String>, writer: PrintWriter) {
         fun after(command: String, n: Int) = args.indexOf(command).takeIf { it >= 0 }?.let { args.drop(it + 1).take(n) }
@@ -2275,6 +2279,17 @@ class NetworkVpnService : VpnService() {
                 else -> "direct-first"
             }
             writer.println("dns-proxy ${route?.generation ?: networkGeneration} ${route?.toString() ?: "none"} ${why.word} $first")
+        }
+        after("proxy-through", 1)?.firstOrNull()?.let { how ->
+            // The key of the network's own proxy as the last settle found it, which "Now"'s switch is drawn for.
+            val key = org.visadahyu.datapavan.network.proxy.ProxyContext.state.value.beneath.key
+            if (key != null && (how == "on" || how == "off")) {
+                // The store has this service hand the choice to the engine again, as "Now"'s switch does.
+                org.visadahyu.datapavan.network.proxy.ThroughProxy.of(this).set(key, how == "on")
+                writer.println("proxy-through $how")
+            } else {
+                writer.println("proxy-through refused")
+            }
         }
         if ("beneath-proxy" in args) {
             val (handed, why) = synchronized(resolverProxyLock) { beneathHand.handed to beneathWhy }
