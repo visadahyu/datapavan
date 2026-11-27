@@ -439,31 +439,46 @@ fn octets(ip: IpAddr) -> Vec<u8> {
 }
 
 impl Service {
+    /// Runs `body` with this thread attached to the VM: one copy of the `jni` crate's attach code for every call to
+    /// Kotlin, where each call made its own (the cold paths' third pass, ADR 0053). A body hands its answer back
+    /// through what it captures.
+    #[inline(never)]
+    fn attached(
+        &self,
+        body: &mut dyn FnMut(&mut Env<'_>) -> Result<(), Error>,
+    ) -> Result<(), Error> {
+        self.vm.attach_current_thread(|env| body(env))
+    }
+
     /// Kotlin's `protectSocket(fd, network)`: keeps `fd` out of the tunnel, and for a `network` other than 0 binds it
     /// to the network beneath whose handle that is, only while it is the network beneath (the proxy record's unit S2).
     /// One call for both, so that the JNI's code for it is there once.
     #[inline(never)]
     fn protect_socket(&self, fd: RawFd, network: i64) -> bool {
-        self.vm
-            .attach_current_thread(|env| -> Result<bool, Error> {
-                env.call_method(
+        let mut protected = false;
+        let done = self.attached(&mut |env| {
+            protected = env
+                .call_method(
                     &self.service,
                     jni_str!("protectSocket"),
                     jni_sig!("(IJ)Z"),
                     &[JValue::Int(fd), JValue::Long(network)],
                 )?
-                .z()
-            })
-            .unwrap_or(false)
+                .z()?;
+            Ok(())
+        });
+        done.is_ok() && protected
     }
 }
 
 impl Platform for Service {
     fn owner(&self, protocol: u8, local: SocketAddr, remote: SocketAddr) -> Option<u32> {
-        self.vm
-            .attach_current_thread(|env| -> Result<i32, Error> {
-                let local_ip = env.byte_array_from_slice(&octets(local.ip()))?;
-                let remote_ip = env.byte_array_from_slice(&octets(remote.ip()))?;
+        // Set only by the call: a lost check of the outcome below leaves no UID, never root's 0 (the plan's audit, M1).
+        let mut uid = None;
+        self.attached(&mut |env| {
+            let local_ip = env.byte_array_from_slice(&octets(local.ip()))?;
+            let remote_ip = env.byte_array_from_slice(&octets(remote.ip()))?;
+            uid = Some(
                 env.call_method(
                     &self.service,
                     jni_str!("ownerUid"),
@@ -476,10 +491,12 @@ impl Platform for Service {
                         JValue::Int(i32::from(remote.port())),
                     ],
                 )?
-                .i()
-            })
-            .ok()
-            .and_then(|uid| u32::try_from(uid).ok())
+                .i()?,
+            );
+            Ok(())
+        })
+        .ok()?;
+        u32::try_from(uid?).ok()
     }
 
     fn protect(&self, fd: RawFd) -> bool {
@@ -493,7 +510,7 @@ impl Platform for Service {
     }
 
     fn log(&self, batch: &[u8]) {
-        let _ = self.vm.attach_current_thread(|env| -> Result<(), Error> {
+        let _ = self.attached(&mut |env| {
             let records = env.byte_array_from_slice(batch)?;
             env.call_method(
                 &self.service,
@@ -514,53 +531,51 @@ impl Platform for Service {
     /// its packages and the network part's store ([`app_route`]); none where Kotlin cannot say.
     fn route_of_app(&self, uid: u32) -> Option<AppRoute> {
         let uid = i32::try_from(uid).ok()?;
-        let answer = self
-            .vm
-            .attach_current_thread(|env| -> Result<Option<String>, Error> {
-                let answer = env
-                    .call_method(
-                        &self.service,
-                        jni_str!("routeOfApp"),
-                        jni_sig!("(I)Ljava/lang/String;"),
-                        &[JValue::Int(uid)],
-                    )?
-                    .l()?;
-                if answer.as_raw().is_null() {
-                    return Ok(None);
-                }
-                let answer = JString::cast_local(env, answer)?;
-                Ok(Some(answer.try_to_string(env)?))
-            })
-            .ok()
-            .flatten()?;
-        app_route(&answer)
+        let mut text = None;
+        self.attached(&mut |env| {
+            let answer = env
+                .call_method(
+                    &self.service,
+                    jni_str!("routeOfApp"),
+                    jni_sig!("(I)Ljava/lang/String;"),
+                    &[JValue::Int(uid)],
+                )?
+                .l()?;
+            if answer.as_raw().is_null() {
+                return Ok(());
+            }
+            let answer = JString::cast_local(env, answer)?;
+            text = Some(answer.try_to_string(env)?);
+            Ok(())
+        })
+        .ok()?;
+        app_route(&text?)
     }
 
     /// `NetworkVpnService.resolveEndpoint(name)`: a `WireGuard` endpoint's name asked of Android's own resolver
     /// on the network beneath the tunnel, which uses the user's Private DNS where it is on. Its answer is
     /// `encrypted` or `plain`, then the addresses, by spaces; null where Kotlin has no network to ask.
     fn resolve(&self, name: &str) -> Option<datapavan_net::Resolution> {
-        let answer = self
-            .vm
-            .attach_current_thread(|env| -> Result<Option<String>, Error> {
-                let name = JString::from_str(env, name)?;
-                let answer = env
-                    .call_method(
-                        &self.service,
-                        jni_str!("resolveEndpoint"),
-                        jni_sig!("(Ljava/lang/String;)Ljava/lang/String;"),
-                        &[JValue::Object(&name)],
-                    )?
-                    .l()?;
-                if answer.as_raw().is_null() {
-                    return Ok(None);
-                }
-                let answer = JString::cast_local(env, answer)?;
-                Ok(Some(answer.try_to_string(env)?))
-            })
-            .ok()
-            .flatten()?;
-        resolution(&answer)
+        let mut text = None;
+        self.attached(&mut |env| {
+            let name = JString::from_str(env, name)?;
+            let answer = env
+                .call_method(
+                    &self.service,
+                    jni_str!("resolveEndpoint"),
+                    jni_sig!("(Ljava/lang/String;)Ljava/lang/String;"),
+                    &[JValue::Object(&name)],
+                )?
+                .l()?;
+            if answer.as_raw().is_null() {
+                return Ok(());
+            }
+            let answer = JString::cast_local(env, answer)?;
+            text = Some(answer.try_to_string(env)?);
+            Ok(())
+        })
+        .ok()?;
+        resolution(&text?)
     }
 
     /// `NetworkVpnService.exchange(...)`, which hands the exchange to its own executor and returns at once; the
@@ -592,13 +607,14 @@ impl Platform for Service {
             "{}\n{}\n{addresses}\n{pins}\n{proxy}",
             request.url, request.host
         );
-        self.vm
-            .attach_current_thread(|env| -> Result<bool, Error> {
-                let texts = JString::from_str(env, &texts)?;
-                let user = env.byte_array_from_slice(&user)?;
-                let password = env.byte_array_from_slice(&password)?;
-                let body = env.byte_array_from_slice(&request.body)?;
-                env.call_method(
+        let mut taken = false;
+        let done = self.attached(&mut |env| {
+            let texts = JString::from_str(env, &texts)?;
+            let user = env.byte_array_from_slice(&user)?;
+            let password = env.byte_array_from_slice(&password)?;
+            let body = env.byte_array_from_slice(&request.body)?;
+            taken = env
+                .call_method(
                     &self.service,
                     jni_str!("exchange"),
                     jni_sig!("(JILjava/lang/String;[B[B[B)Z"),
@@ -611,15 +627,16 @@ impl Platform for Service {
                         JValue::Object(&body),
                     ],
                 )?
-                .z()
-            })
-            .unwrap_or(false)
+                .z()?;
+            Ok(())
+        });
+        done.is_ok() && taken
     }
 
     /// `NetworkVpnService.dnsChanged()`, which posts a look at the resolver's state to its main thread and returns
     /// at once.
     fn dns_changed(&self) {
-        let _ = self.vm.attach_current_thread(|env| -> Result<(), Error> {
+        let _ = self.attached(&mut |env| {
             env.call_method(&self.service, jni_str!("dnsChanged"), jni_sig!("()V"), &[])?;
             Ok(())
         });
@@ -628,7 +645,7 @@ impl Platform for Service {
     /// `NetworkVpnService.statesWanted`, which hands a reading to its tracker's own thread when its rules
     /// allow one, and returns at once.
     fn wants_states(&self) {
-        let _ = self.vm.attach_current_thread(|env| -> Result<(), Error> {
+        let _ = self.attached(&mut |env| {
             env.call_method(
                 &self.service,
                 jni_str!("statesWanted"),
