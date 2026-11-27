@@ -656,12 +656,35 @@ echo "ok: a reinstall of the chosen app ends its choice by its first install tim
 # own address, 10.0.2.2, is on-link and rightly never reached through the proxy: the direct target there gets no
 # CONNECT. Where root or the device owner is refused, the row says so and is not run; with PROXYLAB_REQUIRED=1, which CI
 # sets, that fails. Its evidence is the recorder's log, the network part's dump and the device's log, kept on a failure.
+# The row needs this computer's internet (S2's review, m6): the recorder carries the fixture's request to example.com,
+# and the resolver's lookup to the first ODoH pair's relay (data/odoh). A preflight connects to both from here first;
+# where either cannot be reached, the row is skipped and says so, as the runner's outage, not the engine's, whatever
+# PROXYLAB_REQUIRED says.
 not_run() {
     [ "${PROXYLAB_REQUIRED:-}" != 1 ] || fail "PROXYLAB_REQUIRED=1, and the network's own proxy's row cannot run: $1"
     echo "NOT RUN: the network's own proxy's row: $1"
 }
+# The preflight: prints what this computer cannot reach on port 443, nothing where it reaches both.
+runner_reach() {
+    local relay addresses
+    relay=$(awk -F'\t' '!/^#/ && NF >= 2 { print $1; exit }' "$ROOT/data/odoh/pairs.tsv")
+    addresses=$(awk -F'\t' -v id="$relay" '!/^#/ && $1 == id { print $3 ($4 == "-" ? "" : "," $4) }' "$ROOT/data/odoh/relays.tsv")
+    python3 -I - example.com "${addresses%%,*}" <<'PY'
+import socket, sys
+for host in sys.argv[1:]:
+    try:
+        socket.create_connection((host or "(no relay address)", 443), timeout=5).close()
+    except OSError as e:
+        print(f"{host or 'the first relay'}:443 ({e.__class__.__name__})")
+PY
+}
 beneath_row() {
-    local line base flows dest
+    local line base flows dest unreachable
+    unreachable=$(runner_reach | paste -sd ' ')
+    if [ -n "$unreachable" ]; then
+        echo "SKIPPED: the network's own proxy's row: this computer cannot reach $unreachable, the runner's outage, not the engine's"
+        return 0
+    fi
     adb root >/dev/null 2>&1 || true
     timeout 60 adb wait-for-device || true
     for _ in $(seq 1 10); do

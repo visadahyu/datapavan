@@ -72,7 +72,10 @@
 #   address is that address), and those from the tunnel's address, the apps' into tun0 and the engine's listener's
 #   answers. A reset, not "unreachable": Linux reports ENETUNREACH for an ICMP net-unreachable, which the engine reads
 #   as a network without that family and never takes to the proxy. It needs iptables in the namespace; without it, it
-#   says so and fails, so that the test fails rather than pass with direct connections open.
+#   says so and fails, so that the test fails rather than pass with direct connections open. Its IPv6 twin (S2's review,
+#   n4) refuses the namespace's new IPv6 TCP connections alike but the tunnel's, where ip6tables takes the rule; where it
+#   cannot (no ip6tables, or a REJECT module the namespace cannot load), it says on standard error that IPv6 direct
+#   connections stay open, which the lab's IPv4 tests do not rest on, and an IPv6 test must not run there.
 #
 #   netlab-enter.py -- PROGRAM [ARGUMENTS...]
 #   netlab-enter.py --tunnel NAME      (inside the namespace, the new file at standard input)
@@ -279,6 +282,13 @@ def require_proxy(proxy):
     for source in (TUN4, proxy):
         iptables("-A", "OUTPUT", "-s", source, "-j", "ACCEPT")
     iptables("-A", "OUTPUT", "-p", "tcp", "--syn", "-j", "REJECT", "--reject-with", "tcp-reset")
+    try:
+        subprocess.run(["ip6tables", "-w", "-A", "OUTPUT", "-s", TUN6, "-j", "ACCEPT"], check=True, capture_output=True)
+        subprocess.run(["ip6tables", "-w", "-A", "OUTPUT", "-p", "tcp", "--syn", "-j", "REJECT", "--reject-with", "tcp-reset"],
+                       check=True, capture_output=True)
+    except (OSError, subprocess.CalledProcessError) as e:
+        print(f"netlab: ip6tables took no rule ({e.__class__.__name__}), so IPv6 direct connections stay open here: "
+              "no IPv6 test may rest on this network", file=sys.stderr)
 
 
 # Another app on the engine's listener's port: see the head of this file.
