@@ -830,7 +830,14 @@ chaining is, and must follow the same switch.
   whose library Gradle builds at 2,088,312 bytes on x86_64, 1,868,840 on arm64-v8a and 1,385,696 on armeabi-v7a (x86_64
   8,840 under the gate): 2,062,752, 1,849,040 and 1,366,440 bytes, 25,560, 19,800 and 19,256 less, x86_64 34,400 bytes
   under the gate; its sorts and the bridge's one attach take 19,928, 14,232 and 13,688 bytes of that in its steps'
-  builds, and crates.io's sources named `/c` in the panic locations the rest.
+  builds, and crates.io's sources named `/c` in the panic locations the rest. S2's last tip (`2510dfa2`: the R8 keep
+  rule and the hold's emulator row after the hold, no native change) keeps the hold's figures: Gradle's release library
+  2,093,392 bytes on x86_64, 3,760 under the gate and so below the plan's 8 KiB stop, which is why S2 lands on `main`
+  only together with the third pass. With both on `main` (`fb4bd403`), Gradle's gate build (`scripts/check.sh android`'s
+  native budget) gives 2,067,768 bytes on x86_64, 1,853,736 on arm64-v8a and 1,369,080 on armeabi-v7a, 25,624, 19,736
+  and 19,256 less than S2's tip: x86_64 29,384 bytes under the gate (S2's fix round and hold took 5,080 of the 34,400
+  the pass's own base had; the pass frees 64 more here), 13,000 once the forwarder takes its planned 16 KB and 4,808
+  above the 8 KiB stop.
 - **Frontier research, open:** Telegram's fake-TLS hello across versions, told from the device without a JA4 database;
   encapsulated handshakes seen from the device (Xue et al., USENIX Security 2024) for Signal and WhatsApp; and how
   people read "read from the connection" against "inferred", with real users.

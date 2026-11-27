@@ -612,7 +612,11 @@ The words of the allow and the pause are checked with real users under ADR 0046'
   **The library, from Gradle's own build and AGP's strip, against `32b5f261` (S2's tree: 2,088,312, 1,868,840 and
   1,385,696 bytes): 2,062,752 bytes on x86_64, 1,849,040 on arm64-v8a and 1,366,440 on armeabi-v7a, 25,560, 19,800 and
   19,256 less; x86_64 has 34,400 bytes left** (8,840 before), 18,016 once the forwarder takes its planned 16 KB, 9,824
-  above the 8 KiB stop. Gradle's figure is 176 bytes above the steps' builds on x86_64, 1,160 and 1,096 below on
+  above the 8 KiB stop, at that base. **Merged onto S2's last tip (`2510dfa2`, whose fix round and switch's hold added
+  5,080 bytes on x86_64 after `32b5f261`) and `main`, Gradle's gate build gives 2,067,768 bytes on x86_64, 1,853,736 on
+  arm64-v8a and 1,369,080 on armeabi-v7a: x86_64 has 29,384 bytes left, 13,000 once the forwarder takes its 16 KB, 4,808
+  above the 8 KiB stop** (the pass frees 25,624, 19,736 and 19,256 bytes there). Gradle's figure is 176 bytes above the
+  steps' builds on x86_64, 1,160 and 1,096 below on
   arm64-v8a and 320 to 352 above on armeabi-v7a, before and after alike: each step's figure above is the steps' builds',
   the totals Gradle's. *Tests,* each with hand mutants run against the crate's unit tests: the shared sort against
   `std`'s on 12,040 lists of every length to 300 (the permutation applied inverted, the comparator's arguments swapped
@@ -632,7 +636,9 @@ The words of the allow and the pause are checked with real users under ADR 0046'
   the eight callbacks; `attached` and the sort's functions are new), `Engine::activity` differs only by the name of the
   set's collect, whose closure moved into `wanted`, and five small functions of `std`, `core`, `jni` and the proxy
   setting's `clone` by trailing `int3` padding alone; on arm64-v8a the same 17 change length, `Engine::activity` the
-  same way, 33 differ by page loads and their relaxation alone (`adrp`, `add`, `nop`, `adr`, `ldr`) and two by offsets;
+  same way, 33 differ by page loads and their relaxation alone (`adrp`, `add`, `nop`, `adr`, `ldr`) and two by offsets
+  (at the review's trial merge onto `755a213b`, whose native code S2's last tip keeps, 38 by page loads, and libunwind's
+  `getInfoFromDwarfSection` by one load's offset as `.rodata` moved);
   on armeabi-v7a 84 functions change size, are new or are gone, the same cold set. The remap moves no code on x86_64
   (all 3,056 functions the same) and on arm64-v8a only page offsets. *The speed,* before (`32b5f261`) and after, in
   turn, 24 rounds on the development machine pinned to four threads with no emulator running: a packet through WireGuard
@@ -645,7 +651,9 @@ The words of the allow and the pause are checked with real users under ADR 0046'
   Android 15 emulator, built for Android, 16 rounds, a packet through WireGuard 4.70 and 4.65 µs and 3.65 and 3.55,
   directly 4.15 and 4.13 and 4.00 and 3.90, the down path 2.92 and 2.88 and 2.63 and 2.66, opening directly 34.0 and
   33.6 µs, a lookup 48.9 and 50.8, through WireGuard 17.6 and 17.8, each |z| under 1.2. A first set of the host's runs,
-  while another agent's emulator ran (load 7 to 30), read the same, and the list's measure the same verdict. The JNI
+  while another agent's emulator ran (load 7 to 30), read the same, and the list's rank test the same verdict, its
+  medians within the before runs' wider spread under that load: there only the rank test said slower, and the quiet runs
+  met the rule. The JNI
   error check on an Advanced debug APK built with `-Pdatapavan.rustRelease=true`, so the release profile's `entry` (pass
   2's review m2): each type's error thrown and the next call working, as on the debug library. Every emulator shard
   passed once on this tree's APKs, the network shard alone (115 checks, the release build's check,
