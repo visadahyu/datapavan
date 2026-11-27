@@ -48,7 +48,10 @@ FREE_FLOOR_KB=$((14 * 1024 * 1024))
 # What one emulator with a 2 GB guest takes of the host's memory, about.
 EMULATOR_KB=$((5 * 1024 * 1024))
 SHARD_TIMEOUT=${SHARD_TIMEOUT:-45m}
+# The first console port tried; each emulator takes the first free even port from it on, with the next one for adb, so
+# that another runner's emulator on 5600 is left alone and does not fail this run. The emulator takes 5554 to 5682.
 FIRST_PORT=5600
+LAST_PORT=5682
 OUT="$ROOT/build/emulator-shards"
 # This run's name, for its evidence (scripts/emulator-shard.sh): the folders of earlier runs are left as they are.
 RUN_STAMP=$(date -u +%Y%m%dT%H%M%SZ)
@@ -163,12 +166,12 @@ why_not_start() {
     fi
 }
 
-# Slot i: its CPU set, the emulator's PID, the shard and the shard's process group.
-declare -a SLOT_PID SLOT_SHARD SLOT_RUN SLOT_CPUS SLOT_BEGAN
+# Slot i: its CPU set, the emulator's PID, the shard, the shard's process group and the emulator's console port.
+declare -a SLOT_PID SLOT_SHARD SLOT_RUN SLOT_CPUS SLOT_BEGAN SLOT_PORT
 STARTED_PIDS=()
 
 stop_slot() {
-    local i=$1 serial=emulator-$((FIRST_PORT + 2 * $1)) pid=${SLOT_PID[$1]:-}
+    local i=$1 serial=emulator-${SLOT_PORT[$1]:-} pid=${SLOT_PID[$1]:-}
     [ -n "$pid" ] || return 0
     adb -s "$serial" emu kill >/dev/null 2>&1 || true
     for _ in $(seq 1 30); do kill -0 "$pid" 2>/dev/null || break; sleep 1; done
@@ -190,10 +193,28 @@ trap 'exit 130' INT TERM
 # The log of the shard $1 (with any checks named after it, as network:verify-activity.sh).
 log_of() { echo "$OUT/${1//[:,]/-}.log"; }
 
+# The first even port from FIRST_PORT on whose pair no emulator, no listener and no other slot of this run holds.
+# Both lists are read whole: under pipefail, a grep -q that stops reading early fails the pipe, read as free.
+free_port() {
+    local port j taken devices listening
+    devices=$(adb devices)
+    listening=$(ss -ltn 2>/dev/null || true)
+    for ((port = FIRST_PORT; port <= LAST_PORT; port += 2)); do
+        taken=""
+        for j in "${!SLOT_PID[@]}"; do [ -z "${SLOT_PID[$j]}" ] || [ "${SLOT_PORT[$j]:-}" != "$port" ] || taken=1; done
+        [ -z "$taken" ] || continue
+        grep -q "^emulator-$port[[:space:]]" <<<"$devices" && continue
+        grep -qE "[:.]($port|$((port + 1)))[[:space:]]" <<<"$listening" && continue
+        echo "$port"
+        return 0
+    done
+    return 1
+}
+
 # Boots a fresh emulator in slot $1, pinned to its CPU set, in the time zone $2; fails if the port is taken or it does
 # not boot.
 boot_slot() {
-    local i=$1 port=$((FIRST_PORT + 2 * $1)) zone=$2 serial pid
+    local i=$1 port=${SLOT_PORT[$1]} zone=$2 serial pid
     serial=emulator-$port
     if adb devices | grep -q "^$serial[[:space:]]" || ss -ltn 2>/dev/null | grep -qE "[:.]($port|$((port + 1)))[[:space:]]"; then
         echo "port $port is in use, by an emulator this script did not start: not touching it" >&2
@@ -237,16 +258,17 @@ start_next() {
     local i=$1 shard=${pending[0]} beside="" j serial zone
     WHY=$(why_not_start)
     [ -z "$WHY" ] || return 1
+    SLOT_PORT[$i]=$(free_port) || { WHY="no free even port from $FIRST_PORT to $LAST_PORT for an emulator"; return 1; }
     SLOT_CPUS[$i]=$(free_cpu_set)
     pending=("${pending[@]:1}")
-    serial=emulator-$((FIRST_PORT + 2 * i))
+    serial=emulator-${SLOT_PORT[$i]}
     # Local time near midday at boot, read again for each emulator.
     zone=${EMULATOR_TIMEZONE:-$("$ROOT/scripts/emulator-shard.sh" zone)}
     for j in "${!SLOT_SHARD[@]}"; do [ -z "${SLOT_SHARD[$j]}" ] || beside="$beside ${SLOT_SHARD[$j]}"; done
     echo "== $shard: booting $serial on CPUs ${SLOT_CPUS[$i]} in the zone $zone, $(emulators_running) emulators running here"
     [ -z "$beside" ] || echo "   beside this run's$beside"
     if ! boot_slot "$i" "$zone"; then
-        echo "!! $shard: the emulator did not boot (see $OUT/emulator-$((FIRST_PORT + 2 * i)).log)" >&2
+        echo "!! $shard: the emulator did not boot (see $OUT/emulator-${SLOT_PORT[$i]}.log)" >&2
         stop_slot "$i"
         failed+=("$shard")
         return 0
@@ -314,7 +336,7 @@ while :; do
     if [ -z "$busy" ] && [ ${#pending[@]} -gt 0 ]; then
         idle_without_room=$((idle_without_room + 1))
         if [ "$idle_without_room" -ge 12 ]; then
-            echo "!! not starting ${pending[*]}: $(why_not_start)" >&2
+            echo "!! not starting ${pending[*]}: $WHY" >&2
             failed+=("${pending[@]}")
             break
         fi
