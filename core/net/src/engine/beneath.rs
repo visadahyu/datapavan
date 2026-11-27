@@ -34,6 +34,18 @@
 //! ends): its success brings the direct way back first, its failure keeps the proxy first for another [`PREFERRED`].
 //! With the user's choice, the proxy always comes first, and is the only way.
 //!
+//! **The switch's hold** (S2's review, m2, the S-tier option taken as decision 1 says it): with the user's choice on
+//! and no address of the proxy to use, the setting is a hold ([`Beneath::holds`]), which the network part hands while
+//! it settles the proxy of a network whose switch is on (a new network's, before the lookup of a proxy given by name,
+//! and when the network beneath is lost) and while no address it found can be used. A new direct flow it would carry
+//! waits, its SYN unanswered, until a setting replaces it (looked at each [`HOLD_LOOK`]), and then goes as that setting
+//! says: through the proxy that came, directly where none did or the switch is off. It fails, as a proxy that cannot be
+//! reached fails it under the user's choice, once `Limits::beneath_direct` passed since the hold began: a flow then
+//! waits no longer than the direct try that comes first without the switch, its app has sent its SYN at most twice
+//! (Linux's first retransmissions, 1 s and 3 s), and a setting that cannot come, as for a name that does not resolve,
+//! fails the flows at once from then on. The flows of a circumvention tool, and a tunnelled app's to its local network,
+//! are not held: they go on as without the proxy, as chained and tunnelled apps' other flows never come here.
+//!
 //! **What the app sees** (M6): the proxy's `2xx` opens the flow through it. When both ways fail, the app sees the
 //! direct way's outcome, a reset for a direct refusal, whatever the proxy answered. A direct try that ran out of its
 //! share, or a proxy that came first and opened nothing, goes on to one more direct try: a proxy that gave no answer
@@ -89,6 +101,10 @@ pub const PREFERRED: Duration = Duration::from_secs(600);
 /// The most addresses of a proxy kept, as `NetworkProxy.MAX_ADDRESSES`.
 pub const MAX_ADDRESSES: usize = 2;
 
+/// How often a flow the switch's hold keeps waiting looks at the setting again: the most its SYN waits once the setting
+/// came.
+pub const HOLD_LOOK: Duration = Duration::from_millis(25);
+
 /// The network beneath's own proxy, as the network part settled it, and what the engines learned of it.
 #[derive(Debug)]
 pub struct Beneath {
@@ -109,6 +125,8 @@ pub struct Beneath {
     order: Mutex<Order>,
     /// Whether the proxy asked for a password (`407`): a fact a release build shows, naming no app or place (m2).
     password: AtomicBool,
+    /// When the setting was made: the switch's hold lasts `Limits::beneath_direct` from here.
+    since: Instant,
 }
 
 /// What the engine learned of the network's own proxy, for the network part's dump and "Now".
@@ -127,7 +145,8 @@ impl Beneath {
     /// separated), whether the network has IPv4 and IPv6, and whether the user chose to send every direct app through
     /// it.
     /// The addresses kept are at most [`MAX_ADDRESSES`], each once, none on the loopback, link-local, multicast,
-    /// broadcast or unspecified, and none of port 0: `None` when none is left.
+    /// broadcast or unspecified, and none of port 0: `None` when none is left, but the switch's hold where the user
+    /// chose the proxy (the module's comment).
     #[must_use]
     pub fn new(
         network: i64,
@@ -144,7 +163,7 @@ impl Beneath {
             }
         }
         kept.truncate(MAX_ADDRESSES);
-        if kept.is_empty() {
+        if kept.is_empty() && !always {
             return None;
         }
         Some(Self {
@@ -156,7 +175,15 @@ impl Beneath {
             always,
             order: Mutex::default(),
             password: AtomicBool::new(false),
+            since: Instant::now(),
         })
+    }
+
+    /// Whether this setting is the switch's hold: the user's choice, and no address of the proxy to use (the module's
+    /// comment).
+    #[must_use]
+    pub fn holds(&self) -> bool {
+        self.proxies.is_empty()
     }
 
     /// This setting as the engines should hold it, beside `held`, the one held now: `held` itself when it is the same
@@ -512,6 +539,9 @@ fn onward_steps(
             direct,
             probe,
         } = onward;
+        if beneath.holds() {
+            return held(shared, &beneath, target, uid, destination).await;
+        }
         let limits = shared.limits;
         let failure = match through(shared, &beneath, uid, destination, began).await {
             Ok(stream) => {
@@ -550,6 +580,43 @@ fn onward_steps(
         drop(probe);
         (result, false)
     })
+}
+
+/// A flow of `uid` to `destination`, its direct way to `target`, that the switch's hold `hold` met (the module's
+/// comment): it waits for the setting that replaces the hold and goes as that one says, or fails once the hold's time
+/// passed; a circumvention tool's, a chained app's and a tunnelled app's go on at once, as without the proxy.
+async fn held(
+    shared: &Arc<Shared>,
+    hold: &Beneath,
+    target: SocketAddr,
+    uid: Option<u32>,
+    destination: SocketAddr,
+) -> (io::Result<TcpStream>, bool) {
+    if shared.is_tool(uid) || matches!(shared.app_route(uid), Route::Tool(_) | Route::Tunnel(_)) {
+        return (connect_tcp(shared, target).await, false);
+    }
+    Counters::add(&shared.counters.beneath.held, 1);
+    let until = hold
+        .since
+        .checked_add(shared.limits.beneath_direct)
+        .unwrap_or(hold.since);
+    loop {
+        match shared.beneath_for(destination) {
+            None => return (connect_tcp(shared, target).await, false),
+            Some(next) if !next.holds() => {
+                let tried = first(shared, next, target).await;
+                return finish(shared, tried, uid, destination).await;
+            }
+            Some(_) => {}
+        }
+        let left = until.saturating_duration_since(Instant::now());
+        if left.is_zero() {
+            return (Err(io::ErrorKind::NetworkUnreachable.into()), false);
+        }
+        // A look at the setting each `HOLD_LOOK`, by the timer every flow's own times use: a wake-up shared with the
+        // setter's side would be new code beside the packet path's (`Notify`'s polls, inlined anew into `Tun::send`).
+        tokio::time::sleep(left.min(HOLD_LOOK)).await;
+    }
 }
 
 /// Through the proxy to `destination`: by address, then by the flow's own name where the proxy refused the address,
@@ -1996,6 +2063,180 @@ pub(super) mod tests {
         assert!(!through);
         assert_eq!(lab.protects.load(Ordering::SeqCst), 0, "never directly");
         assert_eq!(proxy.heads().len(), 1);
+        Ok(())
+    }
+
+    /// The switch's hold of [`NETWORK`] (S2's review, m2), set on `shared`: the user's choice, and no address yet.
+    fn hold(shared: &Shared) {
+        let Some(hold) = Beneath::new(NETWORK, &[], "", (true, true), true) else {
+            unreachable!("the switch's hold")
+        };
+        assert!(hold.holds());
+        *lock(&shared.beneath) = Some(Arc::new(hold));
+    }
+
+    /// The proxy at `proxy` with the user's choice `always`, as the network part's settle hands it after a hold.
+    fn settled(proxy: SocketAddr, always: bool) -> Option<Arc<Beneath>> {
+        let mut beneath = Beneath::new(
+            NETWORK,
+            &[at("203.0.113.80:3128")],
+            "",
+            (true, true),
+            always,
+        )?;
+        beneath.proxies = vec![proxy];
+        Some(Arc::new(beneath))
+    }
+
+    /// How many flows the switch's hold kept waiting.
+    fn held_flows(shared: &Shared) -> u64 {
+        shared.counters.snapshot()[80]
+    }
+
+    /// S2's review, m2: under the switch's hold a direct app's flow waits, nothing of it sent, until the setting comes,
+    /// and then goes through the proxy that came, never directly.
+    #[tokio::test(flavor = "current_thread")]
+    async fn the_switchs_hold_keeps_a_flow_until_the_proxy_comes() -> io::Result<()> {
+        let proxy = Proxy::new(Reply::Bytes(OPENED)).await?;
+        let (shared, lab) = engine(Lab::default(), proxy.at);
+        hold(&shared);
+        let server = echo_server().await?;
+        let began = Instant::now();
+        let flow = open(&shared, UID, at("198.51.100.7:443"), server);
+        let setting = async {
+            tokio::time::sleep(Duration::from_millis(100)).await;
+            assert_eq!(proxy.heads().len(), 0, "nothing to the proxy while held");
+            assert_eq!(lab.protects.load(Ordering::SeqCst), 0, "nothing directly");
+            assert_eq!(held_flows(&shared), 1);
+            *lock(&shared.beneath) = settled(proxy.at, true);
+        };
+        let ((stream, through), ()) = tokio::join!(flow, setting);
+        assert!(through);
+        // Within a look of the setting, long before the hold's bound (300 ms here).
+        assert!(
+            began.elapsed() < Duration::from_millis(250),
+            "{:?}",
+            began.elapsed()
+        );
+        echoes(&mut stream?).await?;
+        assert_eq!(lab.protects.load(Ordering::SeqCst), 0, "never directly");
+        assert_eq!(
+            proxy.heads(),
+            ["CONNECT 198.51.100.7:443 HTTP/1.1\r\nHost: 198.51.100.7:443\r\n\r\n"]
+        );
+        Ok(())
+    }
+
+    /// The hold's bound: a flow the setting never replaced fails once `Limits::beneath_direct` passed since the hold
+    /// began, as a proxy that cannot be reached fails it under the user's choice, and a flow after that fails at once;
+    /// neither sends anything anywhere.
+    #[tokio::test(flavor = "current_thread")]
+    async fn the_switchs_hold_fails_a_flow_once_its_time_passed() -> io::Result<()> {
+        let proxy = Proxy::new(Reply::Bytes(OPENED)).await?;
+        let (shared, lab) = engine(Lab::default(), proxy.at);
+        hold(&shared);
+        let server = echo_server().await?;
+        let destination = at("198.51.100.7:443");
+        let began = Instant::now();
+        let (stream, through) = open(&shared, UID, destination, server).await;
+        let waited = began.elapsed();
+        assert_eq!(
+            stream.err().map(|e| e.kind()),
+            Some(io::ErrorKind::NetworkUnreachable)
+        );
+        assert!(!through);
+        assert!(
+            waited >= Duration::from_millis(250) && waited < Duration::from_secs(2),
+            "{waited:?}"
+        );
+        let began = Instant::now();
+        let (stream, _) = open(&shared, UID, destination, server).await;
+        assert!(stream.is_err());
+        assert!(began.elapsed() < Duration::from_millis(150), "at once");
+        assert_eq!(lab.protects.load(Ordering::SeqCst), 0, "never directly");
+        assert_eq!(proxy.heads().len(), 0);
+        assert_eq!(held_flows(&shared), 2);
+        Ok(())
+    }
+
+    /// With the switch off nothing is held: no address and no choice is no setting, and a hold replaced by the switch
+    /// turned off, or by none, lets its flow try directly first, as before.
+    #[tokio::test(flavor = "current_thread")]
+    async fn the_switch_off_holds_nothing() -> io::Result<()> {
+        assert!(Beneath::new(NETWORK, &[], "", (true, true), false).is_none());
+        let proxy = Proxy::new(Reply::Bytes(OPENED)).await?;
+        let (shared, lab) = engine(Lab::default(), proxy.at);
+        let server = echo_server().await?;
+        for (n, then) in [settled(proxy.at, false), None].into_iter().enumerate() {
+            hold(&shared);
+            let flow = open(&shared, UID, at("198.51.100.7:443"), server);
+            let setting = async {
+                tokio::time::sleep(Duration::from_millis(50)).await;
+                *lock(&shared.beneath) = then;
+            };
+            let ((stream, through), ()) = tokio::join!(flow, setting);
+            assert!(!through);
+            echoes(&mut stream?).await?;
+            assert_eq!(lab.protects.load(Ordering::SeqCst), n + 1, "directly");
+        }
+        assert_eq!(proxy.heads().len(), 0);
+        Ok(())
+    }
+
+    /// A case of [`the_switchs_hold_keeps_no_tools_or_tunnelled_apps_flow`]: what it is, and what it sets.
+    type Unheld = (&'static str, fn(&Shared));
+
+    /// The hold keeps no circumvention tool's flow, handed or the chain's, nor a tunnelled app's to its local network:
+    /// they go on at once, directly, as without the proxy.
+    #[tokio::test(flavor = "current_thread")]
+    async fn the_switchs_hold_keeps_no_tools_or_tunnelled_apps_flow() -> io::Result<()> {
+        let proxy = Proxy::new(Reply::Bytes(OPENED)).await?;
+        let server = echo_server().await?;
+        let cases: [Unheld; 3] = [
+            ("a handed tool", |s| {
+                s.apply_proxies(ProxySetting {
+                    tools: vec![UID],
+                    ..ProxySetting::default()
+                });
+            }),
+            ("the chain's tool", |s| {
+                *lock(&s.chain) = Some(Arc::new(Chain {
+                    proxy: at("127.0.0.1:10808"),
+                    credentials: None,
+                    tool: UID,
+                    apps: None,
+                    udp: true,
+                    log_destinations: false,
+                }));
+            }),
+            ("a tunnelled app's local flow", |s| {
+                s.tunnels.set(&TunnelSetting {
+                    tunnels: vec![super::super::tunnels::tests::configured(
+                        1,
+                        "0.0.0.0/0",
+                        true,
+                    )],
+                    routes: [(UID, 1)].into_iter().collect(),
+                    ..TunnelSetting::default()
+                });
+            }),
+        ];
+        for (why, setting) in cases {
+            let (shared, lab) = engine(Lab::default(), proxy.at);
+            setting(&shared);
+            hold(&shared);
+            let began = Instant::now();
+            let (stream, through) = open(&shared, UID, at("198.51.100.7:443"), server).await;
+            assert!(!through, "{why}");
+            echoes(&mut stream?).await?;
+            assert!(
+                began.elapsed() < Duration::from_millis(200),
+                "{why}: not held"
+            );
+            assert_eq!(lab.protects.load(Ordering::SeqCst), 1, "{why}: directly");
+            assert_eq!(held_flows(&shared), 0, "{why}");
+        }
+        assert_eq!(proxy.heads().len(), 0);
         Ok(())
     }
 

@@ -640,7 +640,7 @@ pub struct Config {
 }
 
 /// How many counters [`Counters::snapshot`] gives.
-pub const COUNTERS: usize = 80;
+pub const COUNTERS: usize = 81;
 
 /// The counters, in the order of [`Counters::snapshot`].
 #[derive(Debug, Default)]
@@ -734,6 +734,8 @@ struct BeneathCounters {
     unreachable: AtomicU64,
     named: AtomicU64,
     stale: AtomicU64,
+    /// The direct apps' flows the switch's hold kept waiting (S2's review, m2).
+    held: AtomicU64,
 }
 
 impl Counters {
@@ -920,6 +922,7 @@ impl Counters {
             &self.beneath.unreachable,
             &self.beneath.named,
             &self.beneath.stale,
+            &self.beneath.held,
         ]
     }
 }
@@ -1587,7 +1590,8 @@ impl Engine {
     /// started with. The network part keeps what it hands ([`Beneath::kept`]), so that what was learned crosses to
     /// the next engine. While one is held, every answer of the network part's DNS address reaches the apps with a time
     /// to live of 0, as while a chain is on, so that each app's lookup reaches the engine with its app (S2's review,
-    /// M2: a name goes to that proxy only for an app whose own lookup was given it).
+    /// M2: a name goes to that proxy only for an app whose own lookup was given it). The flows the switch's hold
+    /// keeps waiting see the new setting at their next look ([`Beneath::holds`]).
     pub fn beneath(&self, setting: Option<Arc<Beneath>>) {
         *lock(&self.shared.beneath) = setting;
         let on = self.shared.beneath_held()

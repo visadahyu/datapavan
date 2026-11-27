@@ -1500,7 +1500,8 @@ pub extern "system" fn Java_org_visadahyu_datapavan_network_Engine_nativeBlockin
 /// proxy's socket addresses, one `address port` a line, its exclusion list as Android gives it, comma-separated,
 /// whether the network has IPv4 and whether it has IPv6 (S2's review, major 1: an IPv4 destination on a network without
 /// IPv4 never goes through the proxy), and the user's choice "Send apps through this proxy". No line that parses gives
-/// none. Kept for the engines to come, as the chain is.
+/// none, but the switch's hold with the user's choice (S2's review, m2: `Beneath::holds`). Kept for the engines to
+/// come, as the chain is.
 // SAFETY: exported under the JNI name of the Kotlin method `external fun nativeBeneathProxy(network: Long, proxies:
 // String, exclusions: String, ipv4: Boolean, ipv6: Boolean, always: Boolean)`.
 #[unsafe(no_mangle)]
