@@ -22,6 +22,16 @@ Upgrade, and serves one request a connection: it closes after the first answer a
 reads a request out of the body of an Expect request it refused early (the forwarder's audit, m6), by the target's
 own record of what it got.
 
+The forwarder's own requests: each `forward` row of core/net/testdata/forward-requests.tsv (which forward.rs's tests
+hold the engine to) that the lab can carry (to port 80 or 8080, by the row's address or its name example.test, which
+the check makes the target's address on the lab's network and inner.proxylab.test) goes to squid, shipped tinyproxy
+and the lab's ConnectPort-443 tinyproxy as the engine writes it. What the target got, each request's line and Host,
+must be the row's measured `squid` or `tinyproxy` column (the forwarder's audit, m4: the proxy makes the origin's Host,
+not the engine), and each body must arrive whole; "no answer" is a request the proxy left hanging, as it would without
+the VPN (tinyproxy 1.11.2 reads a request's chunked body itself, knows no trailer and matches `chunked` in lower case
+alone, so for `Chunked` it sends no body and the target waits). PROXYLAB_WRITE_VECTORS=PATH writes the table with those two columns
+measured anew to PATH, for a new row or a new proxy version.
+
     python3 -I check.py HOST PORT_SOCKS PORT_HTTP PORT_OPEN PORT_MTG USER PASSWORD MTG_SECRET TARGET_ADDRESS \
         PORT_SQUID PORT_DEBIAN PORT_SEEN
 """
@@ -29,6 +39,7 @@ import base64
 import hashlib
 import hmac
 import os
+import re
 import socket
 import struct
 import sys
@@ -41,6 +52,9 @@ REQUESTS = os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "..", 
                         "connect-requests.tsv")
 # The table's address row, whose address the check replaces with the target's on the lab's network.
 TABLE_ADDRESS = "198.51.100.9"
+# The forwarder's requests (the proxy record's forwarder), and the documentation name its rows use.
+VECTORS = os.path.join(os.path.dirname(REQUESTS), "forward-requests.tsv")
+TABLE_NAME = re.compile(r"example\.test", re.IGNORECASE)
 
 
 def client_hello(name, session=b"\x00" * 32, random=b"\x07" * 32):
@@ -209,6 +223,88 @@ def body_of(data):
     return f"{len(data)} {hashlib.sha256(data).hexdigest()}"
 
 
+def unescape(text):
+    """A vectors cell's bytes: \\r, \\n, \\t, \\\\ and \\xNN written so."""
+    out, i = bytearray(), 0
+    while i < len(text):
+        if text[i] == "\\" and text[i + 1:i + 2] in ("r", "n", "t", "\\"):
+            out += {"r": b"\r", "n": b"\n", "t": b"\t", "\\": b"\\"}[text[i + 1]]
+            i += 2
+        elif text[i] == "\\" and text[i + 1:i + 2] == "x":
+            out.append(int(text[i + 2:i + 4], 16))
+            i += 4
+        else:
+            out += text[i].encode("latin-1")
+            i += 1
+    return bytes(out)
+
+
+def requests_of(data):
+    """The requests in bytes the forwarder wrote, each its head, its body's bytes as sent and its body (a chunked one
+    decoded), in order."""
+    out = []
+    while data:
+        head, _, data = data.partition(b"\r\n\r\n")
+        start = data
+        fields = [f.split(b":", 1) for f in head.split(b"\r\n")[1:] if b":" in f]
+        coding = [v.strip().lower() for k, v in fields if k.strip().lower() == b"transfer-encoding"]
+        length = [v.strip() for k, v in fields if k.strip().lower() == b"content-length"]
+        body = b""
+        if coding and coding[-1].endswith(b"chunked"):
+            while True:
+                size, _, data = data.partition(b"\r\n")
+                size = int(size.split(b";")[0].strip(), 16)
+                if size == 0:
+                    while data.partition(b"\r\n")[0]:
+                        data = data.partition(b"\r\n")[2]
+                    data = data.partition(b"\r\n")[2]
+                    break
+                body, data = body + data[:size], data[size + 2:]
+        elif length:
+            body, data = data[:int(length[0])], data[int(length[0]):]
+        out.append((head, start[:len(start) - len(data)], body))
+    return out
+
+
+def lab_head(head, target):
+    """A head of the table made one the lab can carry: its address the target's, its name inner.proxylab.test (in
+    mixed case where the row's was not in lower case, so that what the proxy makes of the case shows)."""
+    head = head.decode("latin-1").replace(TABLE_ADDRESS, target)
+    head = TABLE_NAME.sub(lambda m: INNER if m.group(0) == m.group(0).lower() else "INNER.ProxyLab.TEST", head)
+    return head.encode("latin-1")
+
+
+def vector_rows():
+    """The table: its header's column names, and its rows as dictionaries, in order."""
+    with open(VECTORS, encoding="utf-8") as table:
+        lines = [line.rstrip("\n") for line in table if not line.startswith("#") and line.strip()]
+    names = lines[0].split("\t")
+    return names, [dict(zip(names, line.split("\t"))) for line in lines[1:]]
+
+
+def carried_by_the_lab(row):
+    """Whether the lab can carry a forward row: IPv4 to port 80 or 8080, by its address or the name example.test."""
+    address, _, port = row["destination"].rpartition(":")
+    names = [n for n in row["names"].split(",") if n]
+    return row["way"] == "forward" and address == TABLE_ADDRESS and port in ("80", "8080") and \
+        all(n == "example.test" for n in names)
+
+
+def what_the_target_got(host, port, row, target):
+    """Sends a row's bytes to the proxy as the engine writes them, its heads made the lab's: the request line and Host
+    the target got for each answer, as the column writes them (the target's address back as the table's), and whether
+    each body came whole."""
+    sent = requests_of(unescape(row["proxy"]))
+    answers, _ = exchange(host, port, b"".join(lab_head(h, target) + b"\r\n\r\n" + raw for h, raw, _ in sent))
+    # An interim answer (100 Continue) is no request's; the proxy's own answer (a 417) is written as its code.
+    got = [lab(a) for a in answers if a[0] is None or a[0] >= 200]
+    seen = " ;; ".join((f"{g[1]} => {g[2]}" if g[1] else f"{g[0]} from the proxy").replace(target, TABLE_ADDRESS)
+                       for g in got)
+    got = [g for g in got if g[1]]
+    whole = all(g[4] == body_of(sent[i][2]) for i, g in enumerate(got) if i < len(sent)) and len(got) <= len(sent)
+    return seen or "no answer", whole
+
+
 def http_get(host, port, user=None, password=None):
     s = connect(host, port)
     auth = ""
@@ -343,6 +439,38 @@ def main(argv):
     answers, _ = exchange(host, http_port, plain("/auth"))
     codes = [a[0] for a in answers]
     check(f"tinyproxy-with-a-password-answers-407-to-a-request-in-absolute-form (answered {codes})", codes == [407])
+
+    # The forwarder's own requests, from the shared table.
+    names, rows = vector_rows()
+    write = os.environ.get("PROXYLAB_WRITE_VECTORS")
+    if write:
+        names += [n for n in ("squid", "tinyproxy") if n not in names]
+    elif "squid" not in names or "tinyproxy" not in names:
+        check(f"the-vectors-have-measured-squid-and-tinyproxy-columns (PROXYLAB_WRITE_VECTORS=PATH writes them)", False)
+        return 1
+    carried = 0
+    for number, row in enumerate(rows, 1):
+        if not carried_by_the_lab(row):
+            if write:
+                row["squid"] = row["tinyproxy"] = "-"
+            continue
+        carried += 1
+        for name, port, column in (("squid", squid_port, "squid"), ("shipped-tinyproxy", debian_port, "tinyproxy"),
+                                   ("tinyproxy-connectport-443", open_port, "tinyproxy")):
+            seen_now, whole = what_the_target_got(host, port, row, target)
+            if write:
+                row[column] = seen_now
+            else:
+                check(f"{name}-carries-vector-row-{number} ({seen_now})", seen_now == row[column] and whole)
+    check(f"the-lab-carries-some-vector-rows ({carried})", carried >= 10)
+    if write:
+        with open(VECTORS, encoding="utf-8") as table:
+            comments = [line for line in table if line.startswith("#")]
+        with open(write, "w", encoding="utf-8") as out:
+            out.writelines(comments)
+            out.write("\t".join(names) + "\n")
+            out.writelines("\t".join(row.get(n, "-") for n in names) + "\n" for row in rows)
+        print(f"wrote {write}", flush=True)
     return 1 if failed else 0
 
 

@@ -1,12 +1,12 @@
 # SPDX-License-Identifier: Apache-2.0
 """The proxy lab's target (scripts/proxylab): what the lab's proxies carry the fixture to, on the lab's own network.
 
-Port 80 speaks HTTP/1.1 with keep-alive (the proxy record's forwarder): it answers every request with 204, as the
-emulator's fixture expects, and its answer's fields say what the target got: X-Lab-Line the request line, X-Lab-Host
-the Host field ("-" for none), X-Lab-Fields the field names in the order they came, X-Lab-Body the body's length and
-SHA-256 (read by Content-Length, or chunked by hand). It closes after a request that asks so. Each request is also
-kept, and port 8081 answers GET /seen with them, one a line (the request line, a tab, the Host field), from the host's
-side only (scripts/proxylab/check.py), so that a request a proxy read out of another's body shows.
+Ports 80 and 8080 speak HTTP/1.1 with keep-alive (the proxy record's forwarder): they answer every request with 204,
+as the emulator's fixture expects, and the answer's fields say what the target got: X-Lab-Line the request line,
+X-Lab-Host the Host field ("-" for none), X-Lab-Fields the field names in the order they came, X-Lab-Body the body's
+length and SHA-256 (read by Content-Length, or chunked by hand). They close after a request that asks so. Each
+request is also kept, and port 8081 answers GET /seen with them, one a line (the request line, a tab, the Host field),
+from the host's side only (scripts/proxylab/check.py), so that a request a proxy read out of another's body shows.
 
 Ports 443 and 5222 echo whatever comes until the client closes: a TLS hello sent through a proxy's tunnel comes back
 as it went, which tells the fixture its bytes passed. Python's standard library alone.
@@ -139,6 +139,7 @@ class Server(socketserver.ThreadingTCPServer):
 def main():
     servers = [
         Server(("0.0.0.0", 80), Http),
+        Server(("0.0.0.0", 8080), Http),
         Server(("0.0.0.0", 8081), Seen),
         Server(("0.0.0.0", 443), Echo),
         Server(("0.0.0.0", 5222), Echo),
