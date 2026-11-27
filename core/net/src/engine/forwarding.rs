@@ -149,22 +149,72 @@ async fn stage(shared: Arc<Shared>, app: TcpStream, proxy: TcpStream, rescue: Bo
             Err(why) => break Err(why),
         }
     };
-    let (_, destination) = rescue.ends;
     let mut out = Zeroizing::new(Vec::new());
-    let first = end.and_then(|end| Ok((end, forward::first(&held[..end], destination, &mut out)?)));
+    // One write of the first bytes and one pump for every way, so that the task holds each once (the forwarder's
+    // size pass): to the proxy, the head rewritten and what followed it framed; else `held` as it came.
+    let (mut other, first, framer, fed) = match way(&shared, &rescue, &held, end, &mut out) {
+        Way::Forward(framer, fed) => {
+            drop(held);
+            (proxy, out, Some(framer), fed)
+        }
+        Way::Reset => return reset(&[&app, &proxy]),
+        way => {
+            drop(proxy);
+            let Some(other) = other_way(&shared, &app, &rescue, way).await else {
+                return;
+            };
+            (other, held, None, Ok(()))
+        }
+    };
+    if other.write_all(&first).await.is_err() || fed.is_err() {
+        Counters::add(
+            &shared.counters.beneath.forward_reset,
+            u64::from(fed.is_err()),
+        );
+        return reset(&[&app, &other]);
+    }
+    drop(first);
+    pump(&shared, app, other, framer).await;
+}
+
+/// Where a first head sends its flow ([`way`]).
+enum Way {
+    /// To the proxy: the head rewritten, and what followed it fed to the framer, into `out`; and whether the framer
+    /// refused that.
+    Forward(Forward, Result<(), Why>),
+    /// No head the forwarder may carry, or its name not bound to the flow's address ([`other_way`]).
+    Connect,
+    /// Its `Host` excluded: the flow's row, if it has one ([`other_way`]).
+    Directly(Option<u64>),
+    /// Its `Host` blocked: reset, recorded blocked.
+    Reset,
+}
+
+/// The way of a flow whose first bytes `held` end their head at `end`: the head checked ([`forward::first`]) and
+/// rewritten into `out`, its name bound to the flow's address, not excluded and not blocked for the app. No await in
+/// it, out of line (the forwarder's size pass).
+#[inline(never)]
+fn way(
+    shared: &Shared,
+    rescue: &Rescue,
+    held: &[u8],
+    end: Result<usize, Why>,
+    out: &mut Zeroizing<Vec<u8>>,
+) -> Way {
+    let (_, destination) = rescue.ends;
+    let first = end.and_then(|end| Ok((end, forward::first(&held[..end], destination, out)?)));
     let Ok((end, first)) = first else {
-        return other_way(&shared, app, proxy, &rescue, &held).await;
+        return Way::Connect;
     };
     let id = shared.tcp_flow_of(rescue.ends.0, destination);
     if let Some(name) = &first.name {
         let bound =
             lock(&shared.names).gave(destination.ip().to_canonical(), None, name, Instant::now());
         if !bound {
-            return other_way(&shared, app, proxy, &rescue, &held).await;
+            return Way::Connect;
         }
         if connect::excluded(name, &rescue.beneath.exclusions) {
-            drop(proxy);
-            return directly(&shared, app, &rescue, &held, id).await;
+            return Way::Directly(id);
         }
         if let Some(entry) = shared.verdict(Some(rescue.uid), name, Path::Connection) {
             shared.count_block(Some(rescue.uid), entry, false);
@@ -172,7 +222,7 @@ async fn stage(shared: Arc<Shared>, app: TcpStream, proxy: TcpStream, rescue: Bo
                 shared.blocked_flow(id, entry);
             }
             Counters::add(&shared.counters.beneath.forward_reset, 1);
-            return reset(&[&app, &proxy]);
+            return Way::Reset;
         }
         if let Some(id) = id {
             shared.forwarded_name(id, name);
@@ -180,50 +230,57 @@ async fn stage(shared: Arc<Shared>, app: TcpStream, proxy: TcpStream, rescue: Bo
     }
     Counters::add(&shared.counters.beneath.forwarded, 1);
     let mut framer = first.forward;
-    let fed = framer.feed(&held[end..], &mut out);
-    drop(held);
-    let mut proxy = proxy;
-    if proxy.write_all(&out).await.is_err() || fed.is_err() {
-        Counters::add(
-            &shared.counters.beneath.forward_reset,
-            u64::from(fed.is_err()),
-        );
-        return reset(&[&app, &proxy]);
-    }
-    drop(out);
-    pump(&shared, app, proxy, Some(framer)).await;
+    let fed = framer.feed(&held[end..], out);
+    Way::Forward(framer, fed)
 }
 
-/// A flow whose first bytes `held` are no head the forwarder may carry: by S2's `CONNECT` where it came by a refusal
-/// remembered, and so may still open; else, or where that is refused too, reset ([`refuse`]).
+/// The connection a flow whose head is not forwarded goes by, its first bytes still to write; `None` once it is
+/// refused ([`refuse`]).
+/// - [`Way::Connect`]: by S2's `CONNECT` where it came by a refusal remembered, and so may still open.
+/// - [`Way::Directly`]: directly, with the flow's time left, where the direct way had not failed and the user did
+///   not choose the proxy, as Android goes for an excluded host (the audit's m16), the flow recorded direct.
 async fn other_way(
     shared: &Arc<Shared>,
-    app: TcpStream,
-    proxy: TcpStream,
+    app: &TcpStream,
     rescue: &Rescue,
-    held: &[u8],
-) {
-    drop(proxy);
+    way: Way,
+) -> Option<TcpStream> {
     let (from, destination) = rescue.ends;
-    if rescue.remembered
-        && let Ok(mut tunnel) = beneath::through(
-            shared,
-            &rescue.beneath,
-            Some(rescue.uid),
-            destination,
-            rescue.began,
-        )
-        .await
-    {
-        Counters::add(&shared.counters.beneath.forward_connect, 1);
-        if tunnel.write_all(held).await.is_ok() {
-            pump(shared, app, tunnel, None).await;
-        } else {
-            reset(&[&app, &tunnel]);
+    let id = if let Way::Directly(id) = way {
+        if rescue.failed.is_none() && !rescue.beneath.always {
+            let left = shared
+                .limits
+                .connect_timeout
+                .saturating_sub(rescue.began.elapsed());
+            if let Ok(Ok(server)) =
+                tokio::time::timeout(left, connect_tcp(shared, rescue.target)).await
+            {
+                rescue.beneath.direct_opened();
+                if let Some(id) = id {
+                    shared.settle_relayed(id, None, Some(Via::Direct));
+                }
+                return Some(server);
+            }
         }
-        return;
-    }
-    refuse(shared, &app, rescue, shared.tcp_flow_of(from, destination));
+        id
+    } else {
+        if rescue.remembered
+            && let Ok(tunnel) = beneath::through(
+                shared,
+                &rescue.beneath,
+                Some(rescue.uid),
+                destination,
+                rescue.began,
+            )
+            .await
+        {
+            Counters::add(&shared.counters.beneath.forward_connect, 1);
+            return Some(tunnel);
+        }
+        shared.tcp_flow_of(from, destination)
+    };
+    refuse(shared, app, rescue, id);
+    None
 }
 
 /// A flow no way can carry: reset, its outcome the direct way's where that failed (M6 of S2's audit), else `Refused`,
@@ -239,39 +296,6 @@ fn refuse(shared: &Shared, app: &TcpStream, rescue: &Rescue, id: Option<u64>) {
     }
     Counters::add(&shared.counters.beneath.forward_reset, 1);
     reset(&[app]);
-}
-
-/// A first `Host` the exclusion list names, its head `held`: directly, with the flow's time left, where the direct way
-/// had not failed and the user did not choose the proxy, as Android goes for an excluded host (the audit's m16), the
-/// flow recorded direct; else reset.
-async fn directly(
-    shared: &Arc<Shared>,
-    app: TcpStream,
-    rescue: &Rescue,
-    held: &[u8],
-    id: Option<u64>,
-) {
-    if rescue.failed.is_none() && !rescue.beneath.always {
-        let left = shared
-            .limits
-            .connect_timeout
-            .saturating_sub(rescue.began.elapsed());
-        if let Ok(Ok(mut server)) =
-            tokio::time::timeout(left, connect_tcp(shared, rescue.target)).await
-        {
-            rescue.beneath.direct_opened();
-            if let Some(id) = id {
-                shared.settle_relayed(id, None, Some(Via::Direct));
-            }
-            if server.write_all(held).await.is_ok() {
-                pump(shared, app, server, None).await;
-            } else {
-                reset(&[&app, &server]);
-            }
-            return;
-        }
-    }
-    refuse(shared, &app, rescue, id);
 }
 
 /// The connection both ways until both end: the app's bytes framed and rewritten by `framer`, or carried as they are
