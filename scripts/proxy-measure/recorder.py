@@ -12,7 +12,9 @@ On this computer's loopback alone, which an emulator reaches as 10.0.2.2, three 
 - BASE + 2, a direct target: 204 for anything (200 and a page for /webview).
 
 Each request is one line of the log (the second argument), tab-separated: milliseconds since 1970, the port's role,
-the request line, the Host header and the User-Agent. Nothing else of a request is kept, no credential header. Python's
+the request line, the Host header and the User-Agent; for a plain request to the proxy (absolute form, the proxy
+record's forwarder), a sixth field, its field names in their order, comma-separated, never their values. Nothing else
+of a request is kept, no credential header. Python's
 standard library alone; it runs until it is stopped.
 
 With a fifth argument `tunnel`, for the resolver unit's run on a network that requires its proxy (R-PLAN.md, "After
@@ -27,6 +29,10 @@ For the unit S2's rows (S2-PLAN.md, section 8, M8), two more modes, each in plac
   name, looked up on this computer. Other addresses are carried as in `tunnel`, so that the resolver still answers;
 - `password`: a CONNECT to one of the addresses listed (every one, with none listed) gets 407 with
   `Proxy-Authenticate: Basic`, as a proxy that asks for a password; others as in `tunnel`.
+For the forwarder's rows (F-PLAN.md, section 9, "The emulator"), one more:
+- `connect-443`: a CONNECT to any port but 443 gets 403, as squid's default (`http_access deny CONNECT !SSL_ports`),
+  logged as `proxy-refused`; a CONNECT to 443 is carried as in `names-only`, so that the resolver still answers. A plain
+  request in absolute form is answered as above, and its field names are logged.
 The mode is the fifth argument, or, with a sixth, the first line of that file, read anew at each request, so that a
 run changes it between its parts: the mode's word, then its addresses comma-separated.
 """
@@ -91,6 +97,9 @@ def main():
             name, _, value = line.partition(":")
             headers[name.strip().lower()] = value.strip()
         fields = [str(int(time.time() * 1000)), role, lines[0], headers.get("host", "-"), headers.get("user-agent", "-")]
+        if role == "proxy" and lines[0].split(" ")[1:2] and lines[0].split(" ")[1].startswith("http://"):
+            # A plain request in absolute form: its field names, never their values (F-PLAN.md, section 9).
+            fields.append(",".join(line.partition(":")[0].strip() for line in lines[1:] if ":" in line) or "-")
         # A tab or a line break in what an app sent would split the line: they become spaces.
         with lock:
             log.write("\t".join(" ".join(f.split()) for f in fields) + "\n")
@@ -122,16 +131,19 @@ def main():
                 target = head.split(" ")[1] if head.count(" ") >= 2 else ""
                 early = seen.split(b"\r\n\r\n", 1)[1] if b"\r\n\r\n" in seen else b""
                 word, listed = mode()
-                tunnels = word in ("tunnel", "names-only", "password")
+                tunnels = word in ("tunnel", "names-only", "password", "connect-443")
                 try:
-                    if role == "proxy" and head.startswith("CONNECT ") and word in ("names-only", "password") and refused(target, listed):
+                    if role == "proxy" and head.startswith("CONNECT ") and word == "connect-443" and not target.endswith(":443"):
+                        record("proxy-refused", f"REFUSED {target} 403 {word}")
+                        self.request.sendall(b"HTTP/1.1 403 Forbidden\r\nContent-Length: 0\r\nConnection: close\r\n\r\n")
+                    elif role == "proxy" and head.startswith("CONNECT ") and word in ("names-only", "password") and refused(target, listed):
                         status = "403 Forbidden" if word == "names-only" else "407 Proxy Authentication Required"
                         record("proxy-refused", f"REFUSED {target} {status.split(' ')[0]} {word}")
                         extra = "Proxy-Authenticate: Basic realm=\"recorder\"\r\n" if word == "password" else ""
                         self.request.sendall(f"HTTP/1.1 {status}\r\n{extra}Content-Length: 0\r\nConnection: close\r\n\r\n".encode("ascii"))
                     elif role == "proxy" and head.startswith("CONNECT ") and tunnels and tunnel_to(target):
                         carry(self.request, tunnel_to(target), early)
-                    elif role == "proxy" and head.startswith("CONNECT ") and word == "names-only" and named(target):
+                    elif role == "proxy" and head.startswith("CONNECT ") and word in ("names-only", "connect-443") and named(target):
                         carry(self.request, named(target), early)
                     elif role == "proxy" and head.startswith("CONNECT "):
                         self.request.sendall(b"HTTP/1.1 200 Connection established\r\n\r\n")
