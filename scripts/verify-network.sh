@@ -226,6 +226,40 @@ device() {
     timeout "$seconds" adb shell "$@" 2>&1 | tr -d '\r' || true
 }
 
+# The first reading of "$@" that is whole numbers only, separated by spaces, tried once a second for up to 10 s; nothing
+# and a failure if none is. Each read below whose value a count or a comparison takes is made so: as a condition, so
+# that an adb that fails (through adb_again, which waits for a device that dropped off and says so), an empty dump or
+# one cut short is the caller's named failure, never a stop without a word, and an empty value never passes a
+# comparison (the network shard's first run on 2026-11-26 ended at the listener check with no word, beside four other
+# emulators; its cause is not known).
+numbers_from() {
+    local value
+    for _ in $(seq 1 10); do
+        if value=$("$@") && [[ $value =~ ^[0-9]+( [0-9]+)*$ ]]; then
+            printf '%s\n' "$value"
+            return 0
+        fi
+        sleep 1
+    done
+    return 1
+}
+
+# The network part's own account, read whole through adb_again.
+account() {
+    local dump
+    dump=$(adb_again shell dumpsys activity service "$PKG/org.visadahyu.datapavan.network.NetworkVpnService" </dev/null) ||
+        return 1
+    tr -d '\r' <<<"$dump"
+}
+
+# The fields $@ of the network part's counters, separated by spaces, as numbers_from reads them.
+counters_of() {
+    local dump
+    dump=$(account) || return 1
+    sed -n 's/^ *counters //p' <<<"$dump" | awk -v fields="$*" '
+        { n = split(fields, f, " "); for (i = 1; i <= n; i++) printf "%s%s", $f[i], (i < n ? " " : "\n") }'
+}
+
 # TCP, a connection closed at once, a refused one, UDP and DNS, each checked by what the app saw and
 # by the flow the engine recorded with the shell's UID.
 traffic() {
@@ -534,12 +568,11 @@ echo "ok: an unreachable IPv6 address gets the app an ICMPv6 error"
 # engine carries each echo request through one of its own, protected. The 34th counter counts requests carried,
 # the 35th replies, the 37th requests dropped because Android gave the network part no ICMP socket. A reply needs the
 # network beneath to carry ICMP, which a CI runner may not, so it is reported, not required.
-echo_counters() {
-    adb shell dumpsys activity service "$PKG/org.visadahyu.datapavan.network.NetworkVpnService" | tr -d '\r' | sed -n 's/^ *counters //p' | awk '{print $34, $35, $37}'
-}
-read -r carried0 replies0 unsupported0 <<<"$(echo_counters)"
+echo_counts=$(numbers_from counters_of 34 35 37) || fail "the network part's counters of ping could not be read before the ping"
+read -r carried0 replies0 unsupported0 <<<"$echo_counts"
 device 12 "ping -c 2 -W 3 1.1.1.1" >/dev/null 2>&1 || true
-read -r carried1 replies1 unsupported1 <<<"$(echo_counters)"
+echo_counts=$(numbers_from counters_of 34 35 37) || fail "the network part's counters of ping could not be read after the ping"
+read -r carried1 replies1 unsupported1 <<<"$echo_counts"
 if [ "${unsupported1:-0}" != "${unsupported0:-0}" ]; then
     if is_emulator; then fail "Android gave the network part no ICMP socket on the emulator: ping was dropped"; fi
     echo "skipped: ping, as this phone gives the network part no ICMP socket (dropped and counted)"
@@ -562,15 +595,12 @@ fi
 # a time to live other than the app's (the second review of unit 11b found the check passed so). The emulator's NAT
 # answers ICMP itself, a TTL-1 ping included, so there it is reported, as is a network that sends no "time exceeded".
 # Each output is read whole before it is parsed.
-exceeded_counter() {
-    adb shell dumpsys activity service "$PKG/org.visadahyu.datapavan.network.NetworkVpnService" | tr -d '\r' | sed -n 's/^ *counters //p' | awk '{print $42}'
-}
 if [ "${unsupported1:-0}" != "${unsupported0:-0}" ]; then
     echo "skipped: a ping with a time to live of 1, as this phone gives the network part no ICMP socket"
 else
-    exceeded0=$(exceeded_counter)
+    exceeded0=$(numbers_from counters_of 42) || fail "the network part's count of \"time exceeded\" could not be read before the ping"
     traced=$(device 12 "ping -c 1 -t 1 -W 3 1.1.1.1")
-    exceeded1=$(exceeded_counter)
+    exceeded1=$(numbers_from counters_of 42) || fail "the network part's count of \"time exceeded\" could not be read after the ping"
     said=$(head -n 4 <<<"$traced" | paste -sd ' ' | cut -c1-300)
     exceeded_line=$(grep -i -m1 'exceeded' <<<"$traced" || true)
     if [ -n "$exceeded_line" ]; then
@@ -668,8 +698,10 @@ netd_destroyed() {
     grep -oE "$pattern.*" <<<"$log" | head -3 | paste -sd ';' - | sed 's/;/; /g' || true
 }
 # The network part's count of setups, "kept N anew M": those the running engine took, and those a new engine took.
-setups_line() {
-    adb shell dumpsys activity service "$PKG/org.visadahyu.datapavan.network.NetworkVpnService" </dev/null | tr -d '\r' | sed -n 's/^ *setups //p'
+setups_counts() {
+    local dump
+    dump=$(account) || return 1
+    sed -n 's/^ *setups kept \([0-9]*\) anew \([0-9]*\)$/\1 \2/p' <<<"$dump"
 }
 # The interfaces that hold the tunnel's IPv4 address, one a line.
 tunnel_interfaces() {
@@ -685,7 +717,7 @@ kept_since=$SECONDS
 kept_answered 1 || fail "a connection kept open through the network part got no answer to its first request; the device has: $(device 5 "ls -l $KEPT_OUT; head -c 300 $KEPT_OUT; ps -A -o PID,NAME | grep -E ' (nc|sleep)\$'" | tr '\n' ' ')"
 # Android's log is read from here on, by the device's own clock, and the network part's count of setups.
 setup_since=$(adb shell date +%s </dev/null | tr -d '\r')
-setups_before=$(setups_line)
+setups_before=$(numbers_from setups_counts) || fail "the network part's count of setups could not be read before the tunnel was set up again"
 adb shell dumpsys activity service "$PKG/org.visadahyu.datapavan.network.NetworkVpnService" setup-again </dev/null | grep -q '^ *setup-again' ||
     fail "the debug command to set the tunnel up again failed"
 moved=""
@@ -712,11 +744,11 @@ if ! kept_answered 2; then
         fail "the connection kept open through the network part carried no answer after the tunnel was set up again with the same addresses (interface $interface, then $moved), and a new connection through the network part right after got none either: the engine did not take it (netd's destroys on the tunnel's address: ${kept_destroyed:-none})"
     [ -n "$kept_destroyed" ] ||
         fail "the connection kept open through the network part carried no answer after the tunnel was set up again with the same addresses (interface $interface, then $moved; the marker came after $asked s, within the device's 60 s wait for it), and netd destroyed no socket on the tunnel's address: a stall (a new connection through the network part passed)"
-    read -r _ kept0 _ anew0 <<<"$setups_before"
-    setups_after=$(setups_line)
-    read -r _ kept1 _ anew1 <<<"$setups_after"
-    [ -n "$kept0" ] && [ "${kept1:-}" = "$((kept0 + 1))" ] && [ "${anew1:-}" = "$anew0" ] ||
-        fail "netd destroyed the sockets on the tunnel's address ($kept_destroyed), but the running engine did not take the tunnel set up again: the network part's setups went from '$setups_before' to '$setups_after', so the kept connection may have ended with a new engine"
+    read -r kept0 anew0 <<<"$setups_before"
+    setups_after=$(numbers_from setups_counts) || fail "the network part's count of setups could not be read after the tunnel was set up again"
+    read -r kept1 anew1 <<<"$setups_after"
+    [ "$kept1" = "$((kept0 + 1))" ] && [ "$anew1" = "$anew0" ] ||
+        fail "netd destroyed the sockets on the tunnel's address ($kept_destroyed), but the running engine did not take the tunnel set up again: the network part's setups went from 'kept $kept0 anew $anew0' to 'kept $kept1 anew $anew1', so the kept connection may have ended with a new engine"
     note="netd destroyed the sockets on the tunnel's address when the tunnel was set up again with the same addresses ($kept_destroyed): the connection kept open through the network part ended with them, as Android ends it; a new connection through the network part passed right after"
     echo "::warning title=netd destroyed the tunnel's sockets::$note"
     [ -z "${GITHUB_STEP_SUMMARY:-}" ] || echo "- verify-network.sh: $note (ADR 0044, unit 12b)" >>"$GITHUB_STEP_SUMMARY"
@@ -740,12 +772,11 @@ fi
 # looks at what the request is: the 39th counter counts the datagrams it rebuilt. On an emulator it must rise; a
 # phone's shell may not send such a ping, so there it is reported. The reply is larger than the tunnel's MTU too,
 # and is written whole; a CI runner's network may carry no ICMP, so it is reported, not required.
-rebuilt_counters() {
-    adb shell dumpsys activity service "$PKG/org.visadahyu.datapavan.network.NetworkVpnService" | tr -d '\r' | sed -n 's/^ *counters //p' | awk '{print $39, $35}'
-}
-read -r rebuilt0 replies0 <<<"$(rebuilt_counters)"
+rebuilt_counts=$(numbers_from counters_of 39 35) || fail "the network part's counters of fragments could not be read before the ping"
+read -r rebuilt0 replies0 <<<"$rebuilt_counts"
 device 12 "ping -c 2 -s 2000 -W 3 1.1.1.1" >/dev/null 2>&1 || true
-read -r rebuilt1 replies1 <<<"$(rebuilt_counters)"
+rebuilt_counts=$(numbers_from counters_of 39 35) || fail "the network part's counters of fragments could not be read after the ping"
+read -r rebuilt1 replies1 <<<"$rebuilt_counts"
 if [ "${rebuilt1:-0}" -gt "${rebuilt0:-0}" ]; then
     if [ "${replies1:-0}" -gt "${replies0:-0}" ]; then
         echo "ok: a ping larger than the tunnel's MTU is put together from its fragments, and its replies came back"
@@ -763,27 +794,41 @@ fi
 # come from is closed at once and counted (the 19th counter): it never takes another app's waiting
 # upstream connection. The listener's port is in /proc/net/tcp: listening (0A), the network part's UID, on the
 # tunnel's IPv4 address, which the kernel prints as hex in reverse byte order.
-strangers() {
-    adb shell dumpsys activity service "$PKG/org.visadahyu.datapavan.network.NetworkVpnService" | tr -d '\r' | sed -n 's/^ *counters //p' | awk '{print $19}'
+uid_read() {
+    local list
+    list=$(adb_again shell cmd package list packages -U "$PKG" </dev/null) || return 1
+    tr -d '\r' <<<"$list" | sed -n "s/^package:$PKG uid:\([0-9]*\)$/\1/p"
 }
-network_uid=$(adb shell cmd package list packages -U "$PKG" | tr -d '\r' | sed -n "s/^package:$PKG uid:\([0-9]*\)$/\1/p")
-listener_hex=$(python3 -I -c 'import sys; print("".join(f"{int(b):02X}" for b in reversed(sys.argv[1].split("."))))' "$(tunnel_address)")
-listener=$(adb shell cat /proc/net/tcp 2>/dev/null | tr -d '\r' | python3 -I -c '
+# The listener's port: a phone may not show /proc/net/tcp, which the shell then reads as nothing, not as adb's failure.
+listener_port() {
+    local tcp
+    tcp=$(adb_again shell 'cat /proc/net/tcp 2>/dev/null; true' </dev/null) || return 1
+    tr -d '\r' <<<"$tcp" | python3 -I -c '
 import sys
 for line in sys.stdin:
     f = line.split()
     if len(f) > 7 and f[3] == "0A" and f[7] == sys.argv[1] and f[1].startswith(sys.argv[2] + ":"):
         print(int(f[1].split(":")[1], 16))
-        break' "$network_uid" "$listener_hex")
+        break' "$network_uid" "$listener_hex"
+}
+network_uid=$(numbers_from uid_read) || fail "the network part's UID could not be read: $(uid_read 2>&1 | head -3)"
+listener_address=$(tunnel_address) && [[ $listener_address =~ ^[0-9]+(\.[0-9]+){3}$ ]] ||
+    fail "the tunnel's IPv4 address could not be read: '$(addresses_line)'"
+listener_hex=$(python3 -I -c 'import sys; print("".join(f"{int(b):02X}" for b in reversed(sys.argv[1].split("."))))' "$listener_address")
+listener=""
+if is_emulator; then
+    listener=$(numbers_from listener_port) ||
+        fail "the network part's listener is not in /proc/net/tcp within 10 s (its UID $network_uid, the tunnel's address $listener_address)"
+elif ! listener=$(listener_port) || ! [[ $listener =~ ^[0-9]+$ ]]; then
+    listener=""
+fi
 if [ -n "$listener" ]; then
-    before=$(strangers)
-    answer=$(device 8 "echo hello | nc -w 5 $(tunnel_address) $listener")
+    before=$(numbers_from counters_of 19) || fail "the network part's count of connections straight to its listener could not be read before one"
+    answer=$(device 8 "echo hello | nc -w 5 $listener_address $listener")
     [ -z "$answer" ] || fail "a connection straight to the network part's listener got an answer: $answer"
-    after=$(strangers)
+    after=$(numbers_from counters_of 19) || fail "the network part's count of connections straight to its listener could not be read after one"
     [ "$after" = $((before + 1)) ] || fail "a connection straight to the network part's listener was not counted: $before, then $after"
     echo "ok: a connection straight to the network part's listener is closed at once and counted"
-elif is_emulator; then
-    fail "the network part's listener is not in /proc/net/tcp"
 else
     echo "skipped: the listener check, as this phone does not show /proc/net/tcp"
 fi

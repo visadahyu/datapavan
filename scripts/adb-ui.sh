@@ -18,10 +18,12 @@ device_back() {
 }
 
 # What the device was doing when it dropped off, told on the run: its memory, and the crashes, kills and hangs
-# Android logged last. The emulator's own logs, never a phone's.
+# Android logged last. The emulator's own logs, never a phone's: there they name other apps, so a phone tells its memory
+# only (verify-network.sh, which runs on phones too, reads through adb_again).
 device_story() {
     echo "  memory: $(adb shell cat /proc/meminfo 2>/dev/null | tr -d '\r' |
         awk '/^(MemTotal|MemAvailable|SwapFree):/ {printf "%s %s kB; ", $1, $2}')"
+    is_emulator || return 0
     adb shell logcat -d -b crash -t 20 2>/dev/null | tr -d '\r' | sed 's/^/  crash: /' || true
     adb shell logcat -d -b main,system -t 2000 2>/dev/null | tr -d '\r' |
         grep -E 'lowmemorykiller|Watchdog|ANR in|FATAL EXCEPTION|Kill .*adj|Killing ' | tail -15 | sed 's/^/  log: /' || true
@@ -29,11 +31,12 @@ device_story() {
 
 # Runs adb with its arguments; when the device stopped answering, waits for it, says what it was doing, and runs
 # the command once more, so that a dropped connection is waited for and told instead of ending a check that runs
-# under set -e without a word (CI, 2026-11-19, docs/ci-flakes.md).
+# under set -e without a word (CI, 2026-11-19, docs/ci-flakes.md). What it tells goes to stderr, so that its output
+# is the command's alone, as a read into a variable or a file needs, and is not lost where that output is discarded.
 adb_again() {
     adb "$@" && return 0
-    echo "  adb $* got no answer from the device: waiting for it"
-    device_back 120 || { echo "the device did not answer adb again within 120 s" >&2; return 1; }
+    echo "  adb $* got no answer from the device: waiting for it" >&2
+    device_back 120 >&2 || { echo "the device did not answer adb again within 120 s" >&2; return 1; }
     adb "$@"
 }
 
