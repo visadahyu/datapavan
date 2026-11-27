@@ -31,7 +31,7 @@
 //! **Copies:** every buffer that may hold a head is `Zeroizing`, and grows only by replacement ([`reserve`]): a `Vec`
 //! that grows in place frees its old allocation unzeroed (the audit's m3).
 
-use crate::blocking::{HttpHost, http_host};
+use crate::blocking::{HttpHost, http_host_again};
 use std::net::{IpAddr, Ipv4Addr, Ipv6Addr, SocketAddr};
 use zeroize::Zeroizing;
 
@@ -161,6 +161,45 @@ struct Fields<'a> {
     codings: usize,
 }
 
+/// The field names the reader acts on, compared without case.
+#[derive(Clone, Copy, PartialEq, Eq)]
+enum Name {
+    Host,
+    Length,
+    Coding,
+    Connection,
+    Upgrade,
+    ProxyAuthorization,
+}
+
+/// Each of [`Name`] in lower case: the three that frame or route first.
+const NAMES: [(&[u8], Name); 6] = [
+    (b"host", Name::Host),
+    (b"content-length", Name::Length),
+    (b"transfer-encoding", Name::Coding),
+    (b"connection", Name::Connection),
+    (b"upgrade", Name::Upgrade),
+    (b"proxy-authorization", Name::ProxyAuthorization),
+];
+
+/// Whether `bytes` is `lower`, an ASCII lower-case word, in any case: as `eq_ignore_ascii_case`, written here so that
+/// the tracker gate's copy of that, in the relay's task, keeps its one caller (the forwarder's size pass).
+fn lower_eq(bytes: &[u8], lower: &[u8]) -> bool {
+    bytes.len() == lower.len()
+        && bytes
+            .iter()
+            .zip(lower)
+            .all(|(b, l)| b.to_ascii_lowercase() == *l)
+}
+
+/// Which of [`NAMES`] `name` is, if any.
+fn known(name: &[u8]) -> Option<Name> {
+    NAMES
+        .iter()
+        .find(|(lower, _)| lower_eq(name, lower))
+        .map(|&(_, known)| known)
+}
+
 /// Reads the field lines of `section` (each ending in CRLF, the blank line left out) into `fields`; `trailers` refuses
 /// every field that frames, routes or changes the meaning, which has no place in a trailer.
 fn fields<'a>(section: &'a [u8], fields: &mut Fields<'a>, trailers: bool) -> Result<(), Why> {
@@ -179,35 +218,40 @@ fn fields<'a>(section: &'a [u8], fields: &mut Fields<'a>, trailers: bool) -> Res
         {
             return Err(Why::Field);
         }
-        let is = |wanted: &str| name.eq_ignore_ascii_case(wanted.as_bytes());
-        let framing = is("host") || is("content-length") || is("transfer-encoding");
-        if is("upgrade") || is("proxy-authorization") || (trailers && framing) {
+        let name = known(name);
+        let framing = matches!(name, Some(Name::Host | Name::Length | Name::Coding));
+        if matches!(name, Some(Name::Upgrade | Name::ProxyAuthorization)) || (trailers && framing) {
             return Err(Why::Meaning);
         }
-        if is("connection") {
-            for option in value.split(|&b| b == b',') {
-                let option = trimmed(option);
-                if [&b"host"[..], b"content-length", b"transfer-encoding"]
-                    .iter()
-                    .any(|named| option.eq_ignore_ascii_case(named))
-                {
-                    return Err(Why::Meaning);
+        match name {
+            Some(Name::Connection) => {
+                for option in value.split(|&b| b == b',') {
+                    if matches!(
+                        known(trimmed(option)),
+                        Some(Name::Host | Name::Length | Name::Coding)
+                    ) {
+                        return Err(Why::Meaning);
+                    }
                 }
             }
-        } else if is("host") {
-            fields.hosts += 1;
-            fields.host = value;
-        } else if is("content-length") {
-            fields.lengths += 1;
-            if value.is_empty() || value.len() > 19 || !value.iter().all(u8::is_ascii_digit) {
-                return Err(Why::Framing);
+            Some(Name::Host) => {
+                fields.hosts += 1;
+                fields.host = value;
             }
-            fields.length = value.iter().fold(0, |n, &d| n * 10 + u64::from(d - b'0'));
-        } else if is("transfer-encoding") {
-            fields.codings += 1;
-            if !value.eq_ignore_ascii_case(b"chunked") {
-                return Err(Why::Framing);
+            Some(Name::Length) => {
+                fields.lengths += 1;
+                if value.is_empty() || value.len() > 19 || !value.iter().all(u8::is_ascii_digit) {
+                    return Err(Why::Framing);
+                }
+                fields.length = value.iter().fold(0, |n, &d| n * 10 + u64::from(d - b'0'));
             }
+            Some(Name::Coding) => {
+                fields.codings += 1;
+                if !lower_eq(value, b"chunked") {
+                    return Err(Why::Framing);
+                }
+            }
+            _ => {}
         }
     }
     Ok(())
@@ -417,8 +461,9 @@ pub fn first(
     let read = read(head)?;
     let (authority, name) = if let Some(host) = read.host {
         let (name, gate) = authority(host, destination)?;
-        // The gate decides by what its own reader finds within its 8 KiB: the same host, or nothing goes (m2).
-        if http_host(head) != HttpHost::Found(gate) {
+        // The gate decides by what its own reader finds within its 8 KiB: the same host, or nothing goes (m2). Matched,
+        // not compared: `HttpHost`'s `==` in the library moves the gate's machine code in the relay's task (measured).
+        if !matches!(http_host_again(head), HttpHost::Found(found) if found == gate) {
             return Err(Why::Host);
         }
         (Box::<[u8]>::from(host), name)

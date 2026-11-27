@@ -2,6 +2,7 @@
 //! (m2); a second reader's view of every rewritten head; and the growth of the buffers by replacement (m3).
 
 use super::*;
+use crate::blocking::http_host;
 use crate::proxies::{self, Asked, Declared, Kind};
 
 /// How a flow went, as a vector's first column names it.

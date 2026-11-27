@@ -254,6 +254,29 @@ pub enum HttpHost {
 /// host in its target, and is the proxy reader's (`crate::proxies`), not read here.
 #[must_use]
 pub fn http_host(start: &[u8]) -> HttpHost {
+    read_host(start, |name| name.eq_ignore_ascii_case(b"host"))
+}
+
+/// [`http_host`] for the forwarder's check that this reader finds its own `Host` (`crate::forward`): the same reader,
+/// its one comparison of a name with `host` written out rather than core's, so that the tracker gate's copy, inlined
+/// into the relay's task on the packet path, keeps both its own call and core's inlined in it (the forwarder's size
+/// pass).
+#[must_use]
+pub fn http_host_again(start: &[u8]) -> HttpHost {
+    read_host(start, |name| {
+        name.len() == 4
+            && name
+                .iter()
+                .zip(b"host")
+                .all(|(b, l)| b.to_ascii_lowercase() == *l)
+    })
+}
+
+/// [`http_host`]'s reader, `is_host` telling a field name `host` in any case. Inlined into both: with a call
+/// between, the gate's copy in the relay's task is no longer its machine code of before the forwarder (measured).
+#[allow(clippy::inline_always)]
+#[inline(always)]
+fn read_host(start: &[u8], is_host: impl Fn(&[u8]) -> bool) -> HttpHost {
     let start = &start[..start.len().min(MAX_HTTP_HEAD)];
     let full = start.len() == MAX_HTTP_HEAD;
     let space = match start.iter().take(21).position(|&c| !c.is_ascii_uppercase()) {
@@ -294,7 +317,7 @@ pub fn http_host(start: &[u8]) -> HttpHost {
         let Some(colon) = header.iter().position(|&c| c == b':') else {
             continue;
         };
-        if !header[..colon].eq_ignore_ascii_case(b"host") {
+        if !is_host(&header[..colon]) {
             continue;
         }
         let value = std::str::from_utf8(&header[colon + 1..])
@@ -488,5 +511,23 @@ pub(crate) mod tests {
         let mut long = b"GET / HTTP/1.1\r\nX: ".to_vec();
         long.resize(MAX_HTTP_HEAD + 10, b'a');
         assert_eq!(http_host(&long), HttpHost::None);
+    }
+
+    #[test]
+    fn the_forwarders_copy_of_the_reader_reads_as_the_gates() {
+        for start in [
+            &b"GET / HTTP/1.1\r\nHost: a.example\r\n\r\n"[..],
+            b"GET / HTTP/1.1\r\nHOST: a.example\r\n\r\n",
+            b"GET / HTTP/1.1\r\nhOsT: a.example\r\n\r\n",
+            b"GET / HTTP/1.1\r\nHosts: a.example\r\nHost: b.example\r\n\r\n",
+            b"GET / HTTP/1.1\r\nHos: a.example\r\n\r\n",
+            b"GET / HTTP/1.1\r\nHost : a.example\r\n\r\n",
+            b"GET / HTTP/1.1\r\nH\xc3\xb6st: a.example\r\n\r\n",
+            b"GET / HTTP/1.1\r\nX-Host: a.example\r\n\r\n",
+            b"GET / HTTP/1.1\r\nAccept: */*\r\n\r\n",
+            b"GET / HTTP/1.1\r\nHost: a.exa",
+        ] {
+            assert_eq!(http_host_again(start), http_host(start), "{start:?}");
+        }
     }
 }
