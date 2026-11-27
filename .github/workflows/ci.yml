@@ -555,6 +555,13 @@ jobs:
           name: zxing
           path: ~/.gradle/caches/modules-2/files-2.1/com.google.zxing/core/3.5.4/ci
 
+      # The emulator's local time near midday at its boot, so that no check runs across the device's midnight, where
+      # the connection log starts a new day (docs/ci-flakes.md, 2026-11-27): the zone scripts/emulator-shard.sh
+      # names for now.
+      - name: The emulator's time zone
+        id: zone
+        run: echo "zone=$(scripts/emulator-shard.sh zone)" >>"$GITHUB_OUTPUT"
+
       # Bounded, so that an emulator that does not shut down once every check passed cannot hold the job to its
       # limit (docs/ci-flakes.md, 2026-11-19).
       - name: Emulator checks
@@ -573,12 +580,23 @@ jobs:
           # AVDs have four.
           cores: 4
           ram-size: 4096M
-          emulator-options: -no-window -gpu swiftshader_indirect -noaudio -no-boot-anim -camera-back none -no-snapshot
+          emulator-options: -no-window -gpu swiftshader_indirect -noaudio -no-boot-anim -camera-back none -no-snapshot -timezone ${{ steps.zone.outputs.zone }}
           # The runner's emulator listens on its default port: the shard runs only on a serial it is given. Once the
           # shard passed, the emulator is stopped within a bound (scripts/emulator-stop.sh, docs/ci-flakes.md).
           script: |
             ANDROID_SERIAL=emulator-5554 scripts/emulator-shard.sh ${{ matrix.shard }}
             scripts/emulator-stop.sh emulator-5554
+
+      # What each failed check kept of the emulator's state (scripts/adb-ui.sh's keep_evidence): the screen, the task
+      # stack, the windows, the log since the check began (docs/ci-flakes.md, "What a failed check keeps").
+      - name: Keep the evidence of the failed checks
+        if: failure()
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: evidence-${{ matrix.shard }}
+          path: build/emulator-shards/evidence/
+          if-no-files-found: ignore
+          retention-days: 7
 
       - name: Keep the lab peers' logs
         if: failure() && matrix.shard == 'wireguard'

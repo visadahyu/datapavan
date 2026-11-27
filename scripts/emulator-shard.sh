@@ -8,7 +8,22 @@
 #   scripts/emulator-shard.sh list       the shards, one per line
 #   scripts/emulator-shard.sh check      only says whether the device in ANDROID_SERIAL may run a shard,
 #                                        reading two of its properties and nothing else
+#   scripts/emulator-shard.sh checks <shard>
+#                                        the shard's checks, one per line
+#   scripts/emulator-shard.sh zone       the time zone for an emulator booted now (below)
 #   scripts/emulator-shard.sh <shard>    runs the shard's checks on the device in ANDROID_SERIAL
+#   scripts/emulator-shard.sh <shard>:<check>[,<check>...]
+#                                        runs only those checks of the shard, in the shard's order, as the
+#                                        shard runs them: one check measured alone, as network:verify-activity.sh
+#
+# Each check's time is logged. A check that fails keeps its evidence (scripts/adb-ui.sh's keep_evidence: the screen,
+# the task stack, the windows, the log) in build/emulator-shards/evidence/<run>/<shard>/, the run named by
+# EVIDENCE_RUN (scripts/emulator-shards.sh sets one for all its shards) or by the time the shard starts; CI uploads
+# that folder when a shard fails (docs/ci-flakes.md, "What a failed check keeps").
+#
+# The device's day must not end during a shard: the connection log files its records by the device's local day, and
+# the history opens at it. So the emulator is booted in the time zone that puts its local time nearest midday
+# ("zone", read by scripts/emulator-shards.sh and by CI's emulator step), which leaves a shard about eleven hours.
 #
 # A shard installs apps, changes settings, sets a PIN and taps: it runs only on an emulator, named by its
 # serial (ANDROID_SERIAL=emulator-NNNN) and saying so itself, never on a phone or on "the only device adb
@@ -56,6 +71,43 @@ checks_of() {
     esac
 }
 
+# The time zone that puts a device booted now nearest midday, from this computer's clock in UTC, whatever its own zone:
+# one named zone for each whole hour from UTC, none with summer time. Not Etc/GMT-N: the emulator hands its zone to
+# Android in the radio's time signal (NITZ), and Android reads the name there only up to a + or -, so Etc/GMT-5 arrives
+# as Etc/GMT (the Android 15 emulator, 2026-11-27). Twelve hours behind UTC is the same time of day as twelve ahead.
+zone() {
+    local now offset
+    now=$(date -u +%H:%M)
+    # Minutes from now to midday in UTC, -719 to 720, rounded to whole hours, -12 to 12.
+    offset=$(( (720 - (10#${now%:*} * 60 + 10#${now#*:}) + 30 + 1440) / 60 - 24 ))
+    case $offset in
+        12 | -12) echo Pacific/Tarawa ;;
+        11) echo Pacific/Guadalcanal ;;
+        10) echo Pacific/Port_Moresby ;;
+        9) echo Asia/Tokyo ;;
+        8) echo Asia/Singapore ;;
+        7) echo Asia/Bangkok ;;
+        6) echo Asia/Dhaka ;;
+        5) echo Asia/Karachi ;;
+        4) echo Asia/Dubai ;;
+        3) echo Asia/Riyadh ;;
+        2) echo Africa/Johannesburg ;;
+        1) echo Africa/Lagos ;;
+        0) echo Africa/Abidjan ;;
+        -1) echo Atlantic/Cape_Verde ;;
+        -2) echo Atlantic/South_Georgia ;;
+        -3) echo America/Cayenne ;;
+        -4) echo America/La_Paz ;;
+        -5) echo America/Bogota ;;
+        -6) echo America/Costa_Rica ;;
+        -7) echo America/Phoenix ;;
+        -8) echo Pacific/Pitcairn ;;
+        -9) echo Pacific/Gambier ;;
+        -10) echo Pacific/Honolulu ;;
+        -11) echo Pacific/Pago_Pago ;;
+    esac
+}
+
 # Whether ANDROID_SERIAL names an emulator, by its serial and by what the device says of itself. Only
 # getprop is run on the device.
 emulator_guard() {
@@ -80,16 +132,48 @@ emulator_guard() {
     echo "ok: $serial is an emulator"
 }
 
+# At the shard's end: how long the check that ended it ran, and the evidence this shard kept.
+shard_end() {
+    local status=$1
+    if [ "$status" != 0 ] && [ -n "${check:-}" ]; then
+        echo "== $check failed after $((SECONDS - check_began)) s (exit $status)" >&2
+    fi
+    if [ -d "$EVIDENCE_DIR" ] && [ -n "$(ls -A "$EVIDENCE_DIR")" ]; then
+        echo "== evidence kept in ${EVIDENCE_DIR#"$ROOT/"}/: $(ls "$EVIDENCE_DIR" | paste -sd ' ' -)" >&2
+    fi
+}
+
 case "${1:-}" in
     list) tr ' ' '\n' <<<"$SHARDS" ;;
     check) emulator_guard ;;
-    "") echo "usage: $0 list | $0 <shard>" >&2; exit 2 ;;
+    checks) checks_of "${2:-}" | tr ' ' '\n' || { echo "no shard named ${2:-}; the shards are: $SHARDS" >&2; exit 2; } ;;
+    zone) zone ;;
+    "") echo "usage: $0 list | check | zone | <shard>[:<check>[,<check>...]]" >&2; exit 2 ;;
     *)
-        shard=$1
+        shard=${1%%:*}
         checks=$(checks_of "$shard") || { echo "no shard named $shard; the shards are: $SHARDS" >&2; exit 2; }
+        case $1 in
+            *:*)
+                only=" ${1#*:} "
+                only=${only//,/ }
+                for check in $only; do
+                    grep -qw -- "$check" <<<"$checks" || { echo "no check $check in the shard $shard: $checks" >&2; exit 2; }
+                done
+                kept=""
+                for check in $checks; do
+                    case $only in *" $check "*) kept="$kept $check" ;; esac
+                done
+                checks=${kept# }
+                ;;
+        esac
         emulator_guard >/dev/null || exit 2
-        echo "== Emulator shard $shard on $ANDROID_SERIAL: $checks"
+        EVIDENCE_DIR="$ROOT/build/emulator-shards/evidence/${EVIDENCE_RUN:-$(date -u +%Y%m%dT%H%M%SZ)}/$shard"
+        export EVIDENCE_DIR
+        check=""
+        trap 'shard_end $?' EXIT
+        echo "== Emulator shard $shard on $ANDROID_SERIAL, its time $(adb shell "date '+%H:%M %Z'" </dev/null | tr -d '\r'): $checks"
         for check in $checks; do
+            check_began=$SECONDS
             case $check in
                 screenshots.sh)
                     # The screenshots shard has Basic to itself: installed fresh here, as smoke.sh does in
@@ -156,7 +240,9 @@ case "${1:-}" in
                     ;;
                 *) "$ROOT/scripts/$check" ;;
             esac
+            echo "== $check passed in $((SECONDS - check_began)) s"
         done
+        check=""
         echo "== Emulator shard $shard passed"
         ;;
 esac

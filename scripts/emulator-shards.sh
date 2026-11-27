@@ -12,9 +12,11 @@
 # its serial, every check runs with ANDROID_SERIAL set to it, and only emulators this script started are
 # touched. Everything it started is stopped at the end, also on failure or Ctrl-C.
 #
-#   scripts/emulator-shards.sh [--alone] [--avd NAME] [shard...]
+#   scripts/emulator-shards.sh [--alone] [--avd NAME] [shard[:check[,check...]]...]
 #
-# With no shard named, every shard runs. --alone runs them one after another, for timing-sensitive work
+# With no shard named, every shard runs; a shard named with checks after a colon runs only those, on an emulator of
+# their own, as network:verify-activity.sh (scripts/emulator-shard.sh), which is how one check is measured alone,
+# each run on a freshly booted emulator. --alone runs them one after another, for timing-sensitive work
 # on a busy machine (the network shard holds the chain and release checks). The AVD defaults to CI's image,
 # dp-api35-ci, which is brought to CI's phone size (1080 x 2400 at 420 dpi) with animations off, as CI's
 # runner does. Build the APKs first:
@@ -22,7 +24,13 @@
 #   (cd android && ./gradlew assembleDebug && ./gradlew -Pdatapavan.edition=advanced \
 #       --project-cache-dir .gradle-advanced :app:assembleDebug :app:assembleRelease)
 #
-# Each shard's output goes to build/emulator-shards/<shard>.log; the script fails if any shard failed.
+# Each emulator boots in the time zone that puts its local time nearest midday (scripts/emulator-shard.sh zone), so
+# that no shard runs across the device's midnight; EMULATOR_TIMEZONE names another zone, for a try of the checks' guard
+# against it.
+#
+# Each shard's output goes to build/emulator-shards/<shard>.log, with each check's time; a check that fails keeps its
+# evidence in build/emulator-shards/evidence/<this run>/<shard>/, and the summary names this run's. The script fails if
+# any shard failed.
 set -euo pipefail
 
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
@@ -42,6 +50,8 @@ EMULATOR_KB=$((5 * 1024 * 1024))
 SHARD_TIMEOUT=${SHARD_TIMEOUT:-45m}
 FIRST_PORT=5600
 OUT="$ROOT/build/emulator-shards"
+# This run's name, for its evidence (scripts/emulator-shard.sh): the folders of earlier runs are left as they are.
+RUN_STAMP=$(date -u +%Y%m%dT%H%M%SZ)
 
 shards=()
 while [ $# -gt 0 ]; do
@@ -57,7 +67,18 @@ done
 known=$("$ROOT/scripts/emulator-shard.sh" list)
 [ ${#shards[@]} -gt 0 ] || mapfile -t shards <<<"$known"
 for shard in "${shards[@]}"; do
-    grep -qx "$shard" <<<"$known" || { echo "no shard named $shard; the shards are: $(echo $known)" >&2; exit 2; }
+    grep -qx "${shard%%:*}" <<<"$known" || { echo "no shard named ${shard%%:*}; the shards are: $(echo $known)" >&2; exit 2; }
+    case $shard in
+        *:*)
+            in_shard=$("$ROOT/scripts/emulator-shard.sh" checks "${shard%%:*}")
+            IFS=, read -ra named <<<"${shard#*:}"
+            [ ${#named[@]} -gt 0 ] || { echo "no check named after $shard" >&2; exit 2; }
+            for check in "${named[@]}"; do
+                grep -qx -- "$check" <<<"$in_shard" ||
+                    { echo "no check $check in the shard ${shard%%:*}; its checks are: $(echo $in_shard)" >&2; exit 2; }
+            done
+            ;;
+    esac
 done
 for apk in android/app/build/outputs/apk/debug/app-debug.apk android/app/build-advanced/outputs/apk/debug/app-debug.apk \
     android/app/build-advanced/outputs/apk/release/app-release-unsigned.apk; do
@@ -143,7 +164,7 @@ why_not_start() {
 }
 
 # Slot i: its CPU set, the emulator's PID, the shard and the shard's process group.
-declare -a SLOT_PID SLOT_SHARD SLOT_RUN SLOT_CPUS
+declare -a SLOT_PID SLOT_SHARD SLOT_RUN SLOT_CPUS SLOT_BEGAN
 STARTED_PIDS=()
 
 stop_slot() {
@@ -166,9 +187,13 @@ cleanup() {
 trap cleanup EXIT
 trap 'exit 130' INT TERM
 
-# Boots a fresh emulator in slot $1, pinned to its CPU set; fails if the port is taken or it does not boot.
+# The log of the shard $1 (with any checks named after it, as network:verify-activity.sh).
+log_of() { echo "$OUT/${1//[:,]/-}.log"; }
+
+# Boots a fresh emulator in slot $1, pinned to its CPU set, in the time zone $2; fails if the port is taken or it does
+# not boot.
 boot_slot() {
-    local i=$1 port=$((FIRST_PORT + 2 * $1)) serial pid
+    local i=$1 port=$((FIRST_PORT + 2 * $1)) zone=$2 serial pid
     serial=emulator-$port
     if adb devices | grep -q "^$serial[[:space:]]" || ss -ltn 2>/dev/null | grep -qE "[:.]($port|$((port + 1)))[[:space:]]"; then
         echo "port $port is in use, by an emulator this script did not start: not touching it" >&2
@@ -177,7 +202,8 @@ boot_slot() {
     # The screen of CI's pixel_7 profile from the start: on dp-api35-ci's 320 x 640 display, "wm size 1080x2400" below is
     # held to the display's own shape and gives 1080 x 1920 (seen 2026-11-22).
     taskset -c "${SLOT_CPUS[$i]}" "$EMULATOR" -avd "$AVD" -read-only -port "$port" -no-window -gpu swiftshader_indirect \
-        -noaudio -no-boot-anim -camera-back none -no-snapshot -no-metrics -skin 1080x2400 >"$OUT/emulator-$port.log" 2>&1 &
+        -noaudio -no-boot-anim -camera-back none -no-snapshot -no-metrics -skin 1080x2400 -timezone "$zone" \
+        >"$OUT/emulator-$port.log" 2>&1 &
     pid=$!
     SLOT_PID[$i]=$pid
     STARTED_PIDS+=("$pid")
@@ -208,30 +234,33 @@ slots=$MAX_EMULATORS
 # with the reason in WHY, when they do not.
 WHY=""
 start_next() {
-    local i=$1 shard=${pending[0]} beside="" j serial
+    local i=$1 shard=${pending[0]} beside="" j serial zone
     WHY=$(why_not_start)
     [ -z "$WHY" ] || return 1
     SLOT_CPUS[$i]=$(free_cpu_set)
     pending=("${pending[@]:1}")
     serial=emulator-$((FIRST_PORT + 2 * i))
+    # Local time near midday at boot, read again for each emulator.
+    zone=${EMULATOR_TIMEZONE:-$("$ROOT/scripts/emulator-shard.sh" zone)}
     for j in "${!SLOT_SHARD[@]}"; do [ -z "${SLOT_SHARD[$j]}" ] || beside="$beside ${SLOT_SHARD[$j]}"; done
-    echo "== $shard: booting $serial on CPUs ${SLOT_CPUS[$i]}, $(emulators_running) emulators running here"
+    echo "== $shard: booting $serial on CPUs ${SLOT_CPUS[$i]} in the zone $zone, $(emulators_running) emulators running here"
     [ -z "$beside" ] || echo "   beside this run's$beside"
-    if ! boot_slot "$i"; then
+    if ! boot_slot "$i" "$zone"; then
         echo "!! $shard: the emulator did not boot (see $OUT/emulator-$((FIRST_PORT + 2 * i)).log)" >&2
         stop_slot "$i"
         failed+=("$shard")
         return 0
     fi
     SLOT_SHARD[$i]=$shard
+    SLOT_BEGAN[$i]=$SECONDS
     # Its own process group, pinned to its emulator's threads, and stopped after SHARD_TIMEOUT.
-    ANDROID_SERIAL=$serial setsid taskset -c "${SLOT_CPUS[$i]}" timeout -k 30 "$SHARD_TIMEOUT" \
-        "$ROOT/scripts/emulator-shard.sh" "$shard" >"$OUT/$shard.log" 2>&1 &
+    EVIDENCE_RUN=$RUN_STAMP ANDROID_SERIAL=$serial setsid taskset -c "${SLOT_CPUS[$i]}" timeout -k 30 "$SHARD_TIMEOUT" \
+        "$ROOT/scripts/emulator-shard.sh" "$shard" >"$(log_of "$shard")" 2>&1 &
     SLOT_RUN[$i]=$!
     STARTED_PIDS+=("${SLOT_RUN[$i]}")
 }
 
-for i in $(seq 0 $((slots - 1))); do SLOT_SHARD[$i]=""; SLOT_RUN[$i]=""; SLOT_PID[$i]=""; SLOT_CPUS[$i]=""; done
+for i in $(seq 0 $((slots - 1))); do SLOT_SHARD[$i]=""; SLOT_RUN[$i]=""; SLOT_PID[$i]=""; SLOT_CPUS[$i]=""; SLOT_BEGAN[$i]=0; done
 waiting=""
 idle_without_room=0
 while :; do
@@ -240,15 +269,22 @@ while :; do
         if [ -n "${SLOT_RUN[$i]}" ] && ! kill -0 "${SLOT_RUN[$i]}" 2>/dev/null; then
             status=0
             wait "${SLOT_RUN[$i]}" || status=$?
+            # A check the timeout stopped keeps its evidence and runs its cleanup first, within 30 s (adb-ui.sh's
+            # check_exit), after the shard's own process ended: its group is given that long, with its emulator.
+            if [ "$status" = 124 ]; then
+                for _ in $(seq 1 35); do pgrep -g "${SLOT_RUN[$i]}" >/dev/null || break; sleep 1; done
+            fi
             # What the shard left behind in its group, test servers included.
             kill -TERM -- "-${SLOT_RUN[$i]}" 2>/dev/null || true
+            took="$(( (SECONDS - SLOT_BEGAN[i]) / 60 )) min"
+            log=$(log_of "${SLOT_SHARD[$i]}")
             if [ "$status" = 0 ]; then
-                echo "ok: ${SLOT_SHARD[$i]} (log: ${OUT#"$ROOT/"}/${SLOT_SHARD[$i]}.log)"
+                echo "ok: ${SLOT_SHARD[$i]}, $took (log: ${log#"$ROOT/"})"
                 passed+=("${SLOT_SHARD[$i]}")
             else
                 [ "$status" != 124 ] || echo "FAILED: ${SLOT_SHARD[$i]} ran past $SHARD_TIMEOUT and was stopped" >&2
-                echo "FAILED: ${SLOT_SHARD[$i]}; its log ends:" >&2
-                tail -15 "$OUT/${SLOT_SHARD[$i]}.log" | sed 's/^/    /' >&2
+                echo "FAILED: ${SLOT_SHARD[$i]}, after $took; its log ends:" >&2
+                tail -15 "$log" | sed 's/^/    /' >&2
                 failed+=("${SLOT_SHARD[$i]}")
             fi
             SLOT_RUN[$i]=""
@@ -283,4 +319,8 @@ while :; do
 done
 
 echo "== passed: ${passed[*]:-none}; failed: ${failed[*]:-none}"
+if [ -d "$OUT/evidence/$RUN_STAMP" ]; then
+    echo "== evidence of this run's failures:"
+    find "$OUT/evidence/$RUN_STAMP" -mindepth 2 -maxdepth 2 -type d | sort | sed "s|^$ROOT/|    |"
+fi
 [ ${#failed[@]} -eq 0 ]
