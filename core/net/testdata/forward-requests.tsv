@@ -7,128 +7,132 @@
 # reason, as forward::Why names it, or -), the destination the app connected to, the names Datapavan's own resolvers
 # gave it (comma-separated, lower case), the app's bytes, and the bytes to the proxy. Bytes escape \r, \n, \t, \\
 # and \xNN.
-way	why	destination	names	app	proxy
-forward	-	198.51.100.9:80	example.test	GET /path?query HTTP/1.1\r\nHost: example.test\r\nUser-Agent: okhttp/4.12.0\r\nAccept-Encoding: gzip\r\nConnection: Keep-Alive\r\n\r\n	GET http://example.test/path?query HTTP/1.1\r\nHost: example.test\r\nUser-Agent: okhttp/4.12.0\r\nAccept-Encoding: gzip\r\nConnection: Keep-Alive\r\n\r\n
-forward	-	198.51.100.9:80	example.test	HEAD / HTTP/1.1\r\nHost: example.test\r\n\r\n	HEAD http://example.test/ HTTP/1.1\r\nHost: example.test\r\n\r\n
-forward	-	198.51.100.9:80	example.test	POST /form HTTP/1.1\r\nHost: example.test\r\nContent-Type: application/x-www-form-urlencoded\r\nContent-Length: 7\r\n\r\na=1&b=2	POST http://example.test/form HTTP/1.1\r\nHost: example.test\r\nContent-Type: application/x-www-form-urlencoded\r\nContent-Length: 7\r\n\r\na=1&b=2
-connect	Trailers	198.51.100.9:80	example.test	PUT /up HTTP/1.1\r\nHost: example.test\r\nTransfer-Encoding: chunked\r\n\r\n5\r\nhello\r\nA\r\n0123456789\r\n0\r\nChecksum: 1f\r\n\r\n	
-forward	-	198.51.100.9:80	example.test	PATCH /p HTTP/1.1\r\nHost: example.test\r\nTransfer-Encoding:  Chunked \r\n\r\na\r\n0123456789\r\n0\r\n\r\n	PATCH http://example.test/p HTTP/1.1\r\nHost: example.test\r\nTransfer-Encoding: chunked\r\n\r\na\r\n0123456789\r\n0\r\n\r\n
-forward	-	198.51.100.9:80	example.test	PUT /t HTTP/1.1\r\nHost: example.test\r\nTransfer-Encoding:chunked\r\n\r\n0\r\n\r\n	PUT http://example.test/t HTTP/1.1\r\nHost: example.test\r\nTransfer-Encoding: chunked\r\n\r\n0\r\n\r\n
-forward	-	198.51.100.9:80	example.test	PUT /t HTTP/1.1\r\nHost: example.test\r\ntransfer-encoding:\tCHUNKED\t\r\nX-B: 2\r\n\r\n000\r\n\r\n	PUT http://example.test/t HTTP/1.1\r\nHost: example.test\r\ntransfer-encoding: chunked\r\nX-B: 2\r\n\r\n000\r\n\r\n
-forward	-	198.51.100.9:80	example.test	GET /1 HTTP/1.1\r\nHost: example.test\r\n\r\nPOST /2 HTTP/1.1\r\nHost: example.test\r\nTransfer-Encoding: cHuNkEd  \r\n\r\n2\r\nhi\r\n0\r\n\r\n	GET http://example.test/1 HTTP/1.1\r\nHost: example.test\r\n\r\nPOST http://example.test/2 HTTP/1.1\r\nHost: example.test\r\nTransfer-Encoding: chunked\r\n\r\n2\r\nhi\r\n0\r\n\r\n
-forward	-	198.51.100.9:80	example.test	DELETE /item/7 HTTP/1.1\r\nHost: example.test\r\nContent-Length: 0\r\n\r\n	DELETE http://example.test/item/7 HTTP/1.1\r\nHost: example.test\r\nContent-Length: 0\r\n\r\n
-forward	-	198.51.100.9:80	example.test	OPTIONS /x HTTP/1.1\r\nHost: example.test\r\n\r\n	OPTIONS http://example.test/x HTTP/1.1\r\nHost: example.test\r\n\r\n
-forward	-	198.51.100.9:80	example.test	OPTIONS * HTTP/1.1\r\nHost: example.test\r\n\r\n	OPTIONS http://example.test HTTP/1.1\r\nHost: example.test\r\n\r\n
-forward	-	198.51.100.9:80	example.test	GET / HTTP/1.0\r\nHost: example.test\r\n\r\n	GET http://example.test/ HTTP/1.0\r\nHost: example.test\r\n\r\n
-forward	-	198.51.100.9:80		GET / HTTP/1.0\r\nUser-Agent: Wget/1.21\r\n\r\n	GET http://198.51.100.9/ HTTP/1.0\r\nUser-Agent: Wget/1.21\r\n\r\n
-forward	-	198.51.100.9:8080		GET /a HTTP/1.0\r\n\r\n	GET http://198.51.100.9:8080/a HTTP/1.0\r\n\r\n
-forward	-	[2001:db8::9]:80		GET / HTTP/1.0\r\n\r\n	GET http://[2001:db8::9]/ HTTP/1.0\r\n\r\n
-forward	-	198.51.100.9:8080	example.test	GET /p HTTP/1.1\r\nHost: example.test:8080\r\n\r\n	GET http://example.test:8080/p HTTP/1.1\r\nHost: example.test:8080\r\n\r\n
-forward	-	198.51.100.9:80	example.test	GET /p HTTP/1.1\r\nHost: example.test:80\r\n\r\n	GET http://example.test:80/p HTTP/1.1\r\nHost: example.test:80\r\n\r\n
-forward	-	198.51.100.9:80	example.test	GET /p HTTP/1.1\r\nHost: Example.TEST.\r\n\r\n	GET http://Example.TEST./p HTTP/1.1\r\nHost: Example.TEST.\r\n\r\n
-forward	-	198.51.100.9:80	example.test	GET /p HTTP/1.1\r\nhost:\texample.test \r\n\r\n	GET http://example.test/p HTTP/1.1\r\nhost:\texample.test \r\n\r\n
-forward	-	198.51.100.9:80		GET /p HTTP/1.1\r\nHost: 198.51.100.9\r\n\r\n	GET http://198.51.100.9/p HTTP/1.1\r\nHost: 198.51.100.9\r\n\r\n
-forward	-	[2001:db8::9]:80		GET /p HTTP/1.1\r\nHost: [2001:db8::9]\r\n\r\n	GET http://[2001:db8::9]/p HTTP/1.1\r\nHost: [2001:db8::9]\r\n\r\n
-forward	-	[2001:db8::9]:8080		GET /p HTTP/1.1\r\nHost: [2001:DB8::9]:8080\r\n\r\n	GET http://[2001:DB8::9]:8080/p HTTP/1.1\r\nHost: [2001:DB8::9]:8080\r\n\r\n
-forward	-	198.51.100.9:80	cdn_1.example.test	GET /p HTTP/1.1\r\nHost: cdn_1.example.test\r\n\r\n	GET http://cdn_1.example.test/p HTTP/1.1\r\nHost: cdn_1.example.test\r\n\r\n
-forward	-	198.51.100.9:80	example.test	GET /generate_204 HTTP/1.1\r\nHost: example.test\r\nUpgrade-Insecure-Requests: 1\r\nUser-Agent: Mozilla/5.0 (Linux; Android 15) Chrome/131.0 Mobile Safari/537.36\r\nAccept: text/html\r\nAccept-Language: en-US,en;q=0.9\r\nCookie: a=b; c=d\r\n\r\n	GET http://example.test/generate_204 HTTP/1.1\r\nHost: example.test\r\nUpgrade-Insecure-Requests: 1\r\nUser-Agent: Mozilla/5.0 (Linux; Android 15) Chrome/131.0 Mobile Safari/537.36\r\nAccept: text/html\r\nAccept-Language: en-US,en;q=0.9\r\nCookie: a=b; c=d\r\n\r\n
-forward	-	198.51.100.9:80	example.test	GET / HTTP/1.1\r\nHost: example.test\r\nUser-Agent: curl/8.11.0\r\nAccept: */*\r\n\r\n	GET http://example.test/ HTTP/1.1\r\nHost: example.test\r\nUser-Agent: curl/8.11.0\r\nAccept: */*\r\n\r\n
-forward	-	198.51.100.9:80	example.test	POST /api HTTP/1.1\r\nHost: example.test\r\nUser-Agent: python-requests/2.32.3\r\nAccept-Encoding: gzip, deflate\r\nAccept: */*\r\nConnection: keep-alive\r\nContent-Length: 2\r\nContent-Type: application/json\r\n\r\n{}	POST http://example.test/api HTTP/1.1\r\nHost: example.test\r\nUser-Agent: python-requests/2.32.3\r\nAccept-Encoding: gzip, deflate\r\nAccept: */*\r\nConnection: keep-alive\r\nContent-Length: 2\r\nContent-Type: application/json\r\n\r\n{}
-forward	-	198.51.100.9:80	example.test	GET /v?x=%20y HTTP/1.1\r\nUser-Agent: Dalvik/2.1.0 (Linux; U; Android 15)\r\nHost: example.test\r\nConnection: Keep-Alive\r\nAccept-Encoding: gzip\r\n\r\n	GET http://example.test/v?x=%20y HTTP/1.1\r\nUser-Agent: Dalvik/2.1.0 (Linux; U; Android 15)\r\nHost: example.test\r\nConnection: Keep-Alive\r\nAccept-Encoding: gzip\r\n\r\n
-forward	-	198.51.100.9:80	example.test	GET /c HTTP/1.1\r\nHost: example.test\r\nX-Note: caf\xc3\xa9\r\n\r\n	GET http://example.test/c HTTP/1.1\r\nHost: example.test\r\nX-Note: caf\xc3\xa9\r\n\r\n
-forward	-	198.51.100.9:80	example.test	GET /1 HTTP/1.1\r\nHost: example.test\r\n\r\nPOST /2 HTTP/1.1\r\nHost: example.test\r\nContent-Length: 3\r\n\r\nabcPUT /3 HTTP/1.1\r\nHost: example.test\r\nTransfer-Encoding: chunked\r\n\r\n3\r\nxyz\r\n0\r\n\r\n	GET http://example.test/1 HTTP/1.1\r\nHost: example.test\r\n\r\nPOST http://example.test/2 HTTP/1.1\r\nHost: example.test\r\nContent-Length: 3\r\n\r\nabcPUT http://example.test/3 HTTP/1.1\r\nHost: example.test\r\nTransfer-Encoding: chunked\r\n\r\n3\r\nxyz\r\n0\r\n\r\n
-forward	-	198.51.100.9:80		GET /1 HTTP/1.0\r\n\r\nGET /2 HTTP/1.0\r\n\r\n	GET http://198.51.100.9/1 HTTP/1.0\r\n\r\nGET http://198.51.100.9/2 HTTP/1.0\r\n\r\n
-connect	NotHttp	198.51.100.9:80	example.test	\x16\x03\x01\x00\xa5\x01\x00\x00\xa1\x03\x03	
-connect	NotHttp	198.51.100.9:80	example.test	PRI\x00 * HTTP/2.0\r\n\r\n	
-connect	NotHttp	198.51.100.9:80	example.test	get / HTTP/1.1\r\nHost: example.test\r\n\r\n	
-connect	NotHttp	198.51.100.9:80	example.test	SSH-2.0-OpenSSH_9.9\r\n	
-connect	Target	198.51.100.9:80	example.test	GET http://example.test/ HTTP/1.1\r\nHost: example.test\r\n\r\n	
-connect	Target	198.51.100.9:80	example.test	CONNECT example.test:443 HTTP/1.1\r\nHost: example.test:443\r\n\r\n	
-connect	Version	198.51.100.9:80	example.test	PRI * HTTP/2.0\r\n\r\nSM\r\n\r\n	
-connect	Target	198.51.100.9:80	example.test	GET * HTTP/1.1\r\nHost: example.test\r\n\r\n	
-connect	Target	198.51.100.9:80	example.test	GET /a#b HTTP/1.1\r\nHost: example.test\r\n\r\n	
-connect	Target	198.51.100.9:80	example.test	GET example.test HTTP/1.1\r\nHost: example.test\r\n\r\n	
-connect	Line	198.51.100.9:80	example.test	GET /a b HTTP/1.1\r\nHost: example.test\r\n\r\n	
-connect	Version	198.51.100.9:80	example.test	GET / HTTP/1.2\r\nHost: example.test\r\n\r\n	
-connect	Version	198.51.100.9:80	example.test	GET / HTTP/2.0\r\nHost: example.test\r\n\r\n	
-connect	Version	198.51.100.9:80	example.test	GET / http/1.1\r\nHost: example.test\r\n\r\n	
-connect	Line	198.51.100.9:80	example.test	GET /\r\n\r\n	
-connect	Line	198.51.100.9:80	example.test	GET / HTTP/1.1\nHost: example.test\n\n	
-connect	Line	198.51.100.9:80	example.test	GET / HTTP/1.1\r\nHost: example.test\r\n\n	
-connect	Line	198.51.100.9:80	example.test	GET / HTTP/1.1\r\nHost: example\r.test\r\n\r\n	
-connect	Field	198.51.100.9:80	example.test	GET / HTTP/1.1\r\nHost: example.test\r\nX-A: 1\r\n  folded\r\n\r\n	
-connect	Field	198.51.100.9:80	example.test	GET / HTTP/1.1\r\nHost : example.test\r\n\r\n	
-connect	Field	198.51.100.9:80	example.test	GET / HTTP/1.1\r\nHost: example.test\r\nno colon here\r\n\r\n	
-connect	Field	198.51.100.9:80	example.test	GET / HTTP/1.1\r\nHost: example.test\r\nX-A: a\x00b\r\n\r\n	
-connect	Field	198.51.100.9:80	example.test	GET / HTTP/1.1\r\nHost: example.test\r\nX-A: a\x0bb\r\n\r\n	
-connect	Field	198.51.100.9:80	example.test	GET / HTTP/1.1\r\nHost: example.test\r\nX(A): 1\r\n\r\n	
-connect	Field	198.51.100.9:80	example.test	GET / HTTP/1.1\r\n Host: example.test\r\n\r\n	
-connect	Host	198.51.100.9:80	example.test	GET / HTTP/1.1\r\nUser-Agent: x\r\n\r\n	
-connect	Host	198.51.100.9:80	example.test	GET / HTTP/1.1\r\nHost: example.test\r\nHost: example.test\r\n\r\n	
-connect	Host	198.51.100.9:80	example.test	GET / HTTP/1.1\r\nHost: \r\n\r\n	
-connect	Host	198.51.100.9:80	example.test	GET / HTTP/1.1\r\nHost: user@example.test\r\n\r\n	
-connect	Host	198.51.100.9:80	example.test	GET / HTTP/1.1\r\nHost: exa%6dple.test\r\n\r\n	
-connect	Host	198.51.100.9:80	example.test	GET / HTTP/1.1\r\nHost: ex\xc3\xa4mple.test\r\n\r\n	
-connect	Host	198.51.100.9:80	example.test	GET / HTTP/1.1\r\nHost: example..test\r\n\r\n	
-connect	Host	198.51.100.9:80	example.test	GET / HTTP/1.1\r\nHost: .example.test\r\n\r\n	
-connect	Host	198.51.100.9:80	example.test	GET / HTTP/1.1\r\nHost: example.test..\r\n\r\n	
-connect	Host	198.51.100.9:80	example.test	GET / HTTP/1.1\r\nHost: example.123\r\n\r\n	
-connect	Host	198.51.100.9:80	example.test	GET / HTTP/1.1\r\nHost: 0x7f.1\r\n\r\n	
-connect	Host	198.51.100.9:80	example.test	GET / HTTP/1.1\r\nHost: example test\r\n\r\n	
-connect	Host	[2001:db8::9]:80		GET / HTTP/1.1\r\nHost: [2001:db8::9%25eth0]\r\n\r\n	
-connect	Port	[2001:db8::9]:80		GET / HTTP/1.1\r\nHost: 2001:db8::9\r\n\r\n	
-connect	Host	198.51.100.9:80		GET / HTTP/1.1\r\nHost: 198.051.100.9\r\n\r\n	
-connect	Port	198.51.100.9:80	example.test	GET / HTTP/1.1\r\nHost: example.test:8080\r\n\r\n	
-connect	Port	198.51.100.9:8080	example.test	GET / HTTP/1.1\r\nHost: example.test\r\n\r\n	
-connect	Port	198.51.100.9:80	example.test	GET / HTTP/1.1\r\nHost: example.test:080\r\n\r\n	
-connect	Port	198.51.100.9:80	example.test	GET / HTTP/1.1\r\nHost: example.test:\r\n\r\n	
-connect	Port	198.51.100.9:80	example.test	GET / HTTP/1.1\r\nHost: example.test:+80\r\n\r\n	
-connect	Port	198.51.100.9:80	example.test	GET / HTTP/1.1\r\nHost: example.test:65616\r\n\r\n	
-connect	Address	198.51.100.9:80		GET / HTTP/1.1\r\nHost: 203.0.113.7\r\n\r\n	
-connect	Address	[2001:db8::9]:80		GET / HTTP/1.1\r\nHost: [2001:db8::10]\r\n\r\n	
-connect	Unbound	198.51.100.9:80	example.test	GET / HTTP/1.1\r\nHost: popular.example\r\n\r\n	
-connect	Unbound	198.51.100.9:80	other.example	GET / HTTP/1.1\r\nHost: example.test\r\n\r\n	
-connect	Framing	198.51.100.9:80	example.test	POST / HTTP/1.1\r\nHost: example.test\r\nContent-Length: 5\r\nTransfer-Encoding: chunked\r\n\r\n0\r\n\r\n	
-connect	Framing	198.51.100.9:80	example.test	POST / HTTP/1.1\r\nHost: example.test\r\nTransfer-Encoding: chunked\r\nContent-Length: 5\r\n\r\n0\r\n\r\n	
-connect	Framing	198.51.100.9:80	example.test	POST / HTTP/1.1\r\nHost: example.test\r\nContent-Length: 5\r\nContent-Length: 5\r\n\r\nhello	
-connect	Framing	198.51.100.9:80	example.test	POST / HTTP/1.1\r\nHost: example.test\r\nContent-Length: 5, 5\r\n\r\nhello	
-connect	Framing	198.51.100.9:80	example.test	POST / HTTP/1.1\r\nHost: example.test\r\nContent-Length: +5\r\n\r\nhello	
-connect	Framing	198.51.100.9:80	example.test	POST / HTTP/1.1\r\nHost: example.test\r\nContent-Length: 12345678901234567890\r\n\r\n	
-connect	Framing	198.51.100.9:80	example.test	POST / HTTP/1.1\r\nHost: example.test\r\nTransfer-Encoding: gzip, chunked\r\n\r\n	
-connect	Framing	198.51.100.9:80	example.test	POST / HTTP/1.1\r\nHost: example.test\r\nTransfer-Encoding: chunked, chunked\r\n\r\n	
-connect	Framing	198.51.100.9:80	example.test	POST / HTTP/1.1\r\nHost: example.test\r\nTransfer-Encoding: chunked\r\nTransfer-Encoding: chunked\r\n\r\n	
-connect	Framing	198.51.100.9:80	example.test	POST / HTTP/1.1\r\nHost: example.test\r\nTransfer-Encoding: xchunked\r\n\r\n	
-connect	Field	198.51.100.9:80	example.test	POST / HTTP/1.1\r\nHost: example.test\r\nTransfer-Encoding:\x0bchunked\r\n\r\n	
-connect	Framing	198.51.100.9:80	example.test	POST / HTTP/1.0\r\nHost: example.test\r\nTransfer-Encoding: chunked\r\n\r\n	
-connect	Framing	198.51.100.9:80	example.test	GET / HTTP/1.1\r\nHost: example.test\r\nContent-Length: 5\r\n\r\nhello	
-connect	Framing	198.51.100.9:80	example.test	HEAD / HTTP/1.1\r\nHost: example.test\r\nTransfer-Encoding: chunked\r\n\r\n0\r\n\r\n	
-connect	Meaning	198.51.100.9:80	example.test	GET /chat HTTP/1.1\r\nHost: example.test\r\nUpgrade: websocket\r\nConnection: Upgrade\r\nSec-WebSocket-Key: dGhlIHNhbXBsZSBub25jZQ==\r\nSec-WebSocket-Version: 13\r\n\r\n	
-connect	Meaning	198.51.100.9:80	example.test	GET / HTTP/1.1\r\nHost: example.test\r\nConnection: Upgrade, HTTP2-Settings\r\nUpgrade: h2c\r\nHTTP2-Settings: AAMAAABkAAQAAP__\r\n\r\n	
-connect	Meaning	198.51.100.9:80	example.test	GET / HTTP/1.1\r\nHost: example.test\r\nProxy-Authorization: Basic dXNlcjpwYXNz\r\n\r\n	
-forward	-	198.51.100.9:80	example.test	POST / HTTP/1.1\r\nHost: example.test\r\nExpect: 100-continue\r\nContent-Length: 5\r\n\r\nhello	POST http://example.test/ HTTP/1.1\r\nHost: example.test\r\nExpect: 100-continue\r\nContent-Length: 5\r\n\r\nhello
-forward	-	198.51.100.9:80	example.test	POST / HTTP/1.1\r\nHost: example.test\r\nExpect: y 100-continue\r\nContent-Length: 5\r\n\r\nhello	POST http://example.test/ HTTP/1.1\r\nHost: example.test\r\nExpect: y 100-continue\r\nContent-Length: 5\r\n\r\nhello
-connect	Meaning	198.51.100.9:80	example.test	POST / HTTP/1.1\r\nHost: example.test\r\nConnection: close, Content-Length\r\nContent-Length: 5\r\n\r\nhello	
-connect	Meaning	198.51.100.9:80	example.test	GET / HTTP/1.1\r\nHost: example.test\r\nConnection: host\r\n\r\n	
-connect	Meaning	198.51.100.9:80	example.test	POST / HTTP/1.1\r\nHost: example.test\r\nConnection: Transfer-Encoding\r\nTransfer-Encoding: chunked\r\n\r\n0\r\n\r\n	
-reset	OtherHost	198.51.100.9:80	example.test	GET /1 HTTP/1.1\r\nHost: example.test\r\n\r\nGET /2 HTTP/1.1\r\nHost: other.example\r\n\r\n	GET http://example.test/1 HTTP/1.1\r\nHost: example.test\r\n\r\n
-reset	OtherHost	198.51.100.9:80	example.test	GET /1 HTTP/1.1\r\nHost: example.test\r\n\r\nGET /2 HTTP/1.1\r\nHost: Example.test\r\n\r\n	GET http://example.test/1 HTTP/1.1\r\nHost: example.test\r\n\r\n
-reset	OtherHost	198.51.100.9:80	example.test	GET /1 HTTP/1.1\r\nHost: example.test\r\n\r\nGET /2 HTTP/1.1\r\nHost: example.test:80\r\n\r\n	GET http://example.test/1 HTTP/1.1\r\nHost: example.test\r\n\r\n
-reset	OtherHost	198.51.100.9:80		GET /1 HTTP/1.0\r\n\r\nGET /2 HTTP/1.0\r\nHost: example.test\r\n\r\n	GET http://198.51.100.9/1 HTTP/1.0\r\n\r\n
-reset	Framing	198.51.100.9:80	example.test	GET /1 HTTP/1.1\r\nHost: example.test\r\n\r\nPOST /2 HTTP/1.1\r\nHost: example.test\r\nContent-Length: 3\r\nTransfer-Encoding: chunked\r\n\r\n0\r\n\r\n	GET http://example.test/1 HTTP/1.1\r\nHost: example.test\r\n\r\n
-reset	Meaning	198.51.100.9:80	example.test	GET /1 HTTP/1.1\r\nHost: example.test\r\n\r\nGET /ws HTTP/1.1\r\nHost: example.test\r\nUpgrade: websocket\r\nConnection: Upgrade\r\n\r\n	GET http://example.test/1 HTTP/1.1\r\nHost: example.test\r\n\r\n
-reset	Target	198.51.100.9:80	example.test	GET /1 HTTP/1.1\r\nHost: example.test\r\n\r\nGET http://example.test/2 HTTP/1.1\r\nHost: example.test\r\n\r\n	GET http://example.test/1 HTTP/1.1\r\nHost: example.test\r\n\r\n
-reset	NotHttp	198.51.100.9:80	example.test	GET /1 HTTP/1.1\r\nHost: example.test\r\n\r\n\x16\x03\x01\x00\x05	GET http://example.test/1 HTTP/1.1\r\nHost: example.test\r\n\r\n
-reset	Line	198.51.100.9:80	example.test	GET /1 HTTP/1.1\r\nHost: example.test\r\n\r\nGET /2 HTTP/1.1\nHost: example.test\r\n\r\n	GET http://example.test/1 HTTP/1.1\r\nHost: example.test\r\n\r\n
-reset	Chunk	198.51.100.9:80	example.test	POST /c HTTP/1.1\r\nHost: example.test\r\nTransfer-Encoding: chunked\r\n\r\n5;ext=1\r\nhello\r\n0\r\n\r\n	POST http://example.test/c HTTP/1.1\r\nHost: example.test\r\nTransfer-Encoding: chunked\r\n\r\n
-reset	Chunk	198.51.100.9:80	example.test	POST /c HTTP/1.1\r\nHost: example.test\r\nTransfer-Encoding: chunked\r\n\r\n0x5\r\nhello\r\n0\r\n\r\n	POST http://example.test/c HTTP/1.1\r\nHost: example.test\r\nTransfer-Encoding: chunked\r\n\r\n
-reset	Chunk	198.51.100.9:80	example.test	POST /c HTTP/1.1\r\nHost: example.test\r\nTransfer-Encoding: chunked\r\n\r\n5 \r\nhello\r\n0\r\n\r\n	POST http://example.test/c HTTP/1.1\r\nHost: example.test\r\nTransfer-Encoding: chunked\r\n\r\n
-reset	Chunk	198.51.100.9:80	example.test	POST /c HTTP/1.1\r\nHost: example.test\r\nTransfer-Encoding: chunked\r\n\r\n00000000000000005\r\nhello\r\n0\r\n\r\n	POST http://example.test/c HTTP/1.1\r\nHost: example.test\r\nTransfer-Encoding: chunked\r\n\r\n
-reset	Chunk	198.51.100.9:80	example.test	POST /c HTTP/1.1\r\nHost: example.test\r\nTransfer-Encoding: chunked\r\n\r\n5\nhello\r\n0\r\n\r\n	POST http://example.test/c HTTP/1.1\r\nHost: example.test\r\nTransfer-Encoding: chunked\r\n\r\n
-reset	Chunk	198.51.100.9:80	example.test	POST /c HTTP/1.1\r\nHost: example.test\r\nTransfer-Encoding: chunked\r\n\r\n5\r\nhelloX\r\n0\r\n\r\n	POST http://example.test/c HTTP/1.1\r\nHost: example.test\r\nTransfer-Encoding: chunked\r\n\r\n5\r\nhello
-reset	Chunk	198.51.100.9:80	example.test	POST /c HTTP/1.1\r\nHost: example.test\r\nTransfer-Encoding: chunked\r\n\r\n\r\n	POST http://example.test/c HTTP/1.1\r\nHost: example.test\r\nTransfer-Encoding: chunked\r\n\r\n
-connect	Trailers	198.51.100.9:80	example.test	POST /c HTTP/1.1\r\nHost: example.test\r\nTransfer-Encoding: chunked\r\n\r\n0\r\nContent-Length: 5\r\n\r\n	
-connect	Trailers	198.51.100.9:80	example.test	POST /c HTTP/1.1\r\nHost: example.test\r\nTransfer-Encoding: chunked\r\n\r\n0\r\nno colon\r\n\r\n	
-reset	Trailers	198.51.100.9:80	example.test	GET /1 HTTP/1.1\r\nHost: example.test\r\n\r\nPUT /2 HTTP/1.1\r\nHost: example.test\r\nTransfer-Encoding: chunked\r\n\r\n3\r\nxyz\r\n0\r\nChecksum: 1f\r\n\r\nGET /3 HTTP/1.1\r\nHost: example.test\r\n\r\n	GET http://example.test/1 HTTP/1.1\r\nHost: example.test\r\n\r\nPUT http://example.test/2 HTTP/1.1\r\nHost: example.test\r\nTransfer-Encoding: chunked\r\n\r\n3\r\nxyz\r\n
-reset	Chunk	198.51.100.9:80	example.test	POST /c HTTP/1.1\r\nHost: example.test\r\nTransfer-Encoding: chunked\r\n\r\n0\r\n\rX	POST http://example.test/c HTTP/1.1\r\nHost: example.test\r\nTransfer-Encoding: chunked\r\n\r\n
-connect	Target	198.51.100.9:80	example.test	GET /p@evil.example/ HTTP/1.1\r\nHost: example.test\r\n\r\n	
-connect	Target	198.51.100.9:80	example.test	GET /p\\@evil.example/ HTTP/1.1\r\nHost: example.test\r\n\r\n	
+# The last two columns are the proxy lab's, measured (scripts/proxylab/check.py; PROXYLAB_WRITE_VECTORS=PATH writes
+# them anew): what the lab's target got from squid 6.13 and from tinyproxy 1.11.2 for a forward row the lab can carry,
+# each request's line and Host (`LINE => HOST`, requests joined by ` ;; `, the proxy's own answer as `CODE from the
+# proxy`), or - for a row the lab cannot carry. The proxy, not the engine, makes the origin's Host (the audit's m4).
+way	why	destination	names	app	proxy	squid	tinyproxy
+forward	-	198.51.100.9:80	example.test	GET /path?query HTTP/1.1\r\nHost: example.test\r\nUser-Agent: okhttp/4.12.0\r\nAccept-Encoding: gzip\r\nConnection: Keep-Alive\r\n\r\n	GET http://example.test/path?query HTTP/1.1\r\nHost: example.test\r\nUser-Agent: okhttp/4.12.0\r\nAccept-Encoding: gzip\r\nConnection: Keep-Alive\r\n\r\n	GET /path?query HTTP/1.1 => inner.proxylab.test	GET /path?query HTTP/1.1 => inner.proxylab.test
+forward	-	198.51.100.9:80	example.test	HEAD / HTTP/1.1\r\nHost: example.test\r\n\r\n	HEAD http://example.test/ HTTP/1.1\r\nHost: example.test\r\n\r\n	HEAD / HTTP/1.1 => inner.proxylab.test	HEAD / HTTP/1.1 => inner.proxylab.test
+forward	-	198.51.100.9:80	example.test	POST /form HTTP/1.1\r\nHost: example.test\r\nContent-Type: application/x-www-form-urlencoded\r\nContent-Length: 7\r\n\r\na=1&b=2	POST http://example.test/form HTTP/1.1\r\nHost: example.test\r\nContent-Type: application/x-www-form-urlencoded\r\nContent-Length: 7\r\n\r\na=1&b=2	POST /form HTTP/1.1 => inner.proxylab.test	POST /form HTTP/1.1 => inner.proxylab.test
+connect	Trailers	198.51.100.9:80	example.test	PUT /up HTTP/1.1\r\nHost: example.test\r\nTransfer-Encoding: chunked\r\n\r\n5\r\nhello\r\nA\r\n0123456789\r\n0\r\nChecksum: 1f\r\n\r\n		-	-
+forward	-	198.51.100.9:80	example.test	PATCH /p HTTP/1.1\r\nHost: example.test\r\nTransfer-Encoding:  Chunked \r\n\r\na\r\n0123456789\r\n0\r\n\r\n	PATCH http://example.test/p HTTP/1.1\r\nHost: example.test\r\nTransfer-Encoding: chunked\r\n\r\na\r\n0123456789\r\n0\r\n\r\n	PATCH /p HTTP/1.1 => inner.proxylab.test	PATCH /p HTTP/1.1 => inner.proxylab.test
+forward	-	198.51.100.9:80	example.test	PUT /t HTTP/1.1\r\nHost: example.test\r\nTransfer-Encoding:chunked\r\n\r\n0\r\n\r\n	PUT http://example.test/t HTTP/1.1\r\nHost: example.test\r\nTransfer-Encoding: chunked\r\n\r\n0\r\n\r\n	PUT /t HTTP/1.1 => inner.proxylab.test	PUT /t HTTP/1.1 => inner.proxylab.test
+forward	-	198.51.100.9:80	example.test	PUT /t HTTP/1.1\r\nHost: example.test\r\ntransfer-encoding:\tCHUNKED\t\r\nX-B: 2\r\n\r\n000\r\n\r\n	PUT http://example.test/t HTTP/1.1\r\nHost: example.test\r\ntransfer-encoding: chunked\r\nX-B: 2\r\n\r\n000\r\n\r\n	PUT /t HTTP/1.1 => inner.proxylab.test	PUT /t HTTP/1.1 => inner.proxylab.test
+forward	-	198.51.100.9:80	example.test	GET /1 HTTP/1.1\r\nHost: example.test\r\n\r\nPOST /2 HTTP/1.1\r\nHost: example.test\r\nTransfer-Encoding: cHuNkEd  \r\n\r\n2\r\nhi\r\n0\r\n\r\n	GET http://example.test/1 HTTP/1.1\r\nHost: example.test\r\n\r\nPOST http://example.test/2 HTTP/1.1\r\nHost: example.test\r\nTransfer-Encoding: chunked\r\n\r\n2\r\nhi\r\n0\r\n\r\n	GET /1 HTTP/1.1 => inner.proxylab.test ;; POST /2 HTTP/1.1 => inner.proxylab.test	GET /1 HTTP/1.1 => inner.proxylab.test
+forward	-	198.51.100.9:80	example.test	DELETE /item/7 HTTP/1.1\r\nHost: example.test\r\nContent-Length: 0\r\n\r\n	DELETE http://example.test/item/7 HTTP/1.1\r\nHost: example.test\r\nContent-Length: 0\r\n\r\n	DELETE /item/7 HTTP/1.1 => inner.proxylab.test	DELETE /item/7 HTTP/1.1 => inner.proxylab.test
+forward	-	198.51.100.9:80	example.test	OPTIONS /x HTTP/1.1\r\nHost: example.test\r\n\r\n	OPTIONS http://example.test/x HTTP/1.1\r\nHost: example.test\r\n\r\n	OPTIONS /x HTTP/1.1 => inner.proxylab.test	OPTIONS /x HTTP/1.1 => inner.proxylab.test
+forward	-	198.51.100.9:80	example.test	OPTIONS * HTTP/1.1\r\nHost: example.test\r\n\r\n	OPTIONS http://example.test HTTP/1.1\r\nHost: example.test\r\n\r\n	OPTIONS / HTTP/1.1 => inner.proxylab.test	OPTIONS / HTTP/1.1 => inner.proxylab.test
+forward	-	198.51.100.9:80	example.test	GET / HTTP/1.0\r\nHost: example.test\r\n\r\n	GET http://example.test/ HTTP/1.0\r\nHost: example.test\r\n\r\n	GET / HTTP/1.1 => inner.proxylab.test	GET / HTTP/1.0 => inner.proxylab.test
+forward	-	198.51.100.9:80		GET / HTTP/1.0\r\nUser-Agent: Wget/1.21\r\n\r\n	GET http://198.51.100.9/ HTTP/1.0\r\nUser-Agent: Wget/1.21\r\n\r\n	GET / HTTP/1.1 => 198.51.100.9	GET / HTTP/1.0 => 198.51.100.9
+forward	-	198.51.100.9:8080		GET /a HTTP/1.0\r\n\r\n	GET http://198.51.100.9:8080/a HTTP/1.0\r\n\r\n	GET /a HTTP/1.1 => 198.51.100.9:8080	GET /a HTTP/1.0 => 198.51.100.9:8080
+forward	-	[2001:db8::9]:80		GET / HTTP/1.0\r\n\r\n	GET http://[2001:db8::9]/ HTTP/1.0\r\n\r\n	-	-
+forward	-	198.51.100.9:8080	example.test	GET /p HTTP/1.1\r\nHost: example.test:8080\r\n\r\n	GET http://example.test:8080/p HTTP/1.1\r\nHost: example.test:8080\r\n\r\n	GET /p HTTP/1.1 => inner.proxylab.test:8080	GET /p HTTP/1.1 => inner.proxylab.test:8080
+forward	-	198.51.100.9:80	example.test	GET /p HTTP/1.1\r\nHost: example.test:80\r\n\r\n	GET http://example.test:80/p HTTP/1.1\r\nHost: example.test:80\r\n\r\n	GET /p HTTP/1.1 => inner.proxylab.test	GET /p HTTP/1.1 => inner.proxylab.test
+forward	-	198.51.100.9:80	example.test	GET /p HTTP/1.1\r\nHost: Example.TEST.\r\n\r\n	GET http://Example.TEST./p HTTP/1.1\r\nHost: Example.TEST.\r\n\r\n	GET /p HTTP/1.1 => inner.proxylab.test	GET /p HTTP/1.1 => INNER.ProxyLab.TEST.
+forward	-	198.51.100.9:80	example.test	GET /p HTTP/1.1\r\nhost:\texample.test \r\n\r\n	GET http://example.test/p HTTP/1.1\r\nhost:\texample.test \r\n\r\n	GET /p HTTP/1.1 => inner.proxylab.test	GET /p HTTP/1.1 => inner.proxylab.test
+forward	-	198.51.100.9:80		GET /p HTTP/1.1\r\nHost: 198.51.100.9\r\n\r\n	GET http://198.51.100.9/p HTTP/1.1\r\nHost: 198.51.100.9\r\n\r\n	GET /p HTTP/1.1 => 198.51.100.9	GET /p HTTP/1.1 => 198.51.100.9
+forward	-	[2001:db8::9]:80		GET /p HTTP/1.1\r\nHost: [2001:db8::9]\r\n\r\n	GET http://[2001:db8::9]/p HTTP/1.1\r\nHost: [2001:db8::9]\r\n\r\n	-	-
+forward	-	[2001:db8::9]:8080		GET /p HTTP/1.1\r\nHost: [2001:DB8::9]:8080\r\n\r\n	GET http://[2001:DB8::9]:8080/p HTTP/1.1\r\nHost: [2001:DB8::9]:8080\r\n\r\n	-	-
+forward	-	198.51.100.9:80	cdn_1.example.test	GET /p HTTP/1.1\r\nHost: cdn_1.example.test\r\n\r\n	GET http://cdn_1.example.test/p HTTP/1.1\r\nHost: cdn_1.example.test\r\n\r\n	-	-
+forward	-	198.51.100.9:80	example.test	GET /generate_204 HTTP/1.1\r\nHost: example.test\r\nUpgrade-Insecure-Requests: 1\r\nUser-Agent: Mozilla/5.0 (Linux; Android 15) Chrome/131.0 Mobile Safari/537.36\r\nAccept: text/html\r\nAccept-Language: en-US,en;q=0.9\r\nCookie: a=b; c=d\r\n\r\n	GET http://example.test/generate_204 HTTP/1.1\r\nHost: example.test\r\nUpgrade-Insecure-Requests: 1\r\nUser-Agent: Mozilla/5.0 (Linux; Android 15) Chrome/131.0 Mobile Safari/537.36\r\nAccept: text/html\r\nAccept-Language: en-US,en;q=0.9\r\nCookie: a=b; c=d\r\n\r\n	GET /generate_204 HTTP/1.1 => inner.proxylab.test	GET /generate_204 HTTP/1.1 => inner.proxylab.test
+forward	-	198.51.100.9:80	example.test	GET / HTTP/1.1\r\nHost: example.test\r\nUser-Agent: curl/8.11.0\r\nAccept: */*\r\n\r\n	GET http://example.test/ HTTP/1.1\r\nHost: example.test\r\nUser-Agent: curl/8.11.0\r\nAccept: */*\r\n\r\n	GET / HTTP/1.1 => inner.proxylab.test	GET / HTTP/1.1 => inner.proxylab.test
+forward	-	198.51.100.9:80	example.test	POST /api HTTP/1.1\r\nHost: example.test\r\nUser-Agent: python-requests/2.32.3\r\nAccept-Encoding: gzip, deflate\r\nAccept: */*\r\nConnection: keep-alive\r\nContent-Length: 2\r\nContent-Type: application/json\r\n\r\n{}	POST http://example.test/api HTTP/1.1\r\nHost: example.test\r\nUser-Agent: python-requests/2.32.3\r\nAccept-Encoding: gzip, deflate\r\nAccept: */*\r\nConnection: keep-alive\r\nContent-Length: 2\r\nContent-Type: application/json\r\n\r\n{}	POST /api HTTP/1.1 => inner.proxylab.test	POST /api HTTP/1.1 => inner.proxylab.test
+forward	-	198.51.100.9:80	example.test	GET /v?x=%20y HTTP/1.1\r\nUser-Agent: Dalvik/2.1.0 (Linux; U; Android 15)\r\nHost: example.test\r\nConnection: Keep-Alive\r\nAccept-Encoding: gzip\r\n\r\n	GET http://example.test/v?x=%20y HTTP/1.1\r\nUser-Agent: Dalvik/2.1.0 (Linux; U; Android 15)\r\nHost: example.test\r\nConnection: Keep-Alive\r\nAccept-Encoding: gzip\r\n\r\n	GET /v?x=%20y HTTP/1.1 => inner.proxylab.test	GET /v?x=%20y HTTP/1.1 => inner.proxylab.test
+forward	-	198.51.100.9:80	example.test	GET /c HTTP/1.1\r\nHost: example.test\r\nX-Note: caf\xc3\xa9\r\n\r\n	GET http://example.test/c HTTP/1.1\r\nHost: example.test\r\nX-Note: caf\xc3\xa9\r\n\r\n	GET /c HTTP/1.1 => inner.proxylab.test	GET /c HTTP/1.1 => inner.proxylab.test
+forward	-	198.51.100.9:80	example.test	GET /1 HTTP/1.1\r\nHost: example.test\r\n\r\nPOST /2 HTTP/1.1\r\nHost: example.test\r\nContent-Length: 3\r\n\r\nabcPUT /3 HTTP/1.1\r\nHost: example.test\r\nTransfer-Encoding: chunked\r\n\r\n3\r\nxyz\r\n0\r\n\r\n	GET http://example.test/1 HTTP/1.1\r\nHost: example.test\r\n\r\nPOST http://example.test/2 HTTP/1.1\r\nHost: example.test\r\nContent-Length: 3\r\n\r\nabcPUT http://example.test/3 HTTP/1.1\r\nHost: example.test\r\nTransfer-Encoding: chunked\r\n\r\n3\r\nxyz\r\n0\r\n\r\n	GET /1 HTTP/1.1 => inner.proxylab.test ;; POST /2 HTTP/1.1 => inner.proxylab.test ;; PUT /3 HTTP/1.1 => inner.proxylab.test	GET /1 HTTP/1.1 => inner.proxylab.test
+forward	-	198.51.100.9:80		GET /1 HTTP/1.0\r\n\r\nGET /2 HTTP/1.0\r\n\r\n	GET http://198.51.100.9/1 HTTP/1.0\r\n\r\nGET http://198.51.100.9/2 HTTP/1.0\r\n\r\n	GET /1 HTTP/1.1 => 198.51.100.9	GET /1 HTTP/1.0 => 198.51.100.9
+connect	NotHttp	198.51.100.9:80	example.test	\x16\x03\x01\x00\xa5\x01\x00\x00\xa1\x03\x03		-	-
+connect	NotHttp	198.51.100.9:80	example.test	PRI\x00 * HTTP/2.0\r\n\r\n		-	-
+connect	NotHttp	198.51.100.9:80	example.test	get / HTTP/1.1\r\nHost: example.test\r\n\r\n		-	-
+connect	NotHttp	198.51.100.9:80	example.test	SSH-2.0-OpenSSH_9.9\r\n		-	-
+connect	Target	198.51.100.9:80	example.test	GET http://example.test/ HTTP/1.1\r\nHost: example.test\r\n\r\n		-	-
+connect	Target	198.51.100.9:80	example.test	CONNECT example.test:443 HTTP/1.1\r\nHost: example.test:443\r\n\r\n		-	-
+connect	Version	198.51.100.9:80	example.test	PRI * HTTP/2.0\r\n\r\nSM\r\n\r\n		-	-
+connect	Target	198.51.100.9:80	example.test	GET * HTTP/1.1\r\nHost: example.test\r\n\r\n		-	-
+connect	Target	198.51.100.9:80	example.test	GET /a#b HTTP/1.1\r\nHost: example.test\r\n\r\n		-	-
+connect	Target	198.51.100.9:80	example.test	GET example.test HTTP/1.1\r\nHost: example.test\r\n\r\n		-	-
+connect	Line	198.51.100.9:80	example.test	GET /a b HTTP/1.1\r\nHost: example.test\r\n\r\n		-	-
+connect	Version	198.51.100.9:80	example.test	GET / HTTP/1.2\r\nHost: example.test\r\n\r\n		-	-
+connect	Version	198.51.100.9:80	example.test	GET / HTTP/2.0\r\nHost: example.test\r\n\r\n		-	-
+connect	Version	198.51.100.9:80	example.test	GET / http/1.1\r\nHost: example.test\r\n\r\n		-	-
+connect	Line	198.51.100.9:80	example.test	GET /\r\n\r\n		-	-
+connect	Line	198.51.100.9:80	example.test	GET / HTTP/1.1\nHost: example.test\n\n		-	-
+connect	Line	198.51.100.9:80	example.test	GET / HTTP/1.1\r\nHost: example.test\r\n\n		-	-
+connect	Line	198.51.100.9:80	example.test	GET / HTTP/1.1\r\nHost: example\r.test\r\n\r\n		-	-
+connect	Field	198.51.100.9:80	example.test	GET / HTTP/1.1\r\nHost: example.test\r\nX-A: 1\r\n  folded\r\n\r\n		-	-
+connect	Field	198.51.100.9:80	example.test	GET / HTTP/1.1\r\nHost : example.test\r\n\r\n		-	-
+connect	Field	198.51.100.9:80	example.test	GET / HTTP/1.1\r\nHost: example.test\r\nno colon here\r\n\r\n		-	-
+connect	Field	198.51.100.9:80	example.test	GET / HTTP/1.1\r\nHost: example.test\r\nX-A: a\x00b\r\n\r\n		-	-
+connect	Field	198.51.100.9:80	example.test	GET / HTTP/1.1\r\nHost: example.test\r\nX-A: a\x0bb\r\n\r\n		-	-
+connect	Field	198.51.100.9:80	example.test	GET / HTTP/1.1\r\nHost: example.test\r\nX(A): 1\r\n\r\n		-	-
+connect	Field	198.51.100.9:80	example.test	GET / HTTP/1.1\r\n Host: example.test\r\n\r\n		-	-
+connect	Host	198.51.100.9:80	example.test	GET / HTTP/1.1\r\nUser-Agent: x\r\n\r\n		-	-
+connect	Host	198.51.100.9:80	example.test	GET / HTTP/1.1\r\nHost: example.test\r\nHost: example.test\r\n\r\n		-	-
+connect	Host	198.51.100.9:80	example.test	GET / HTTP/1.1\r\nHost: \r\n\r\n		-	-
+connect	Host	198.51.100.9:80	example.test	GET / HTTP/1.1\r\nHost: user@example.test\r\n\r\n		-	-
+connect	Host	198.51.100.9:80	example.test	GET / HTTP/1.1\r\nHost: exa%6dple.test\r\n\r\n		-	-
+connect	Host	198.51.100.9:80	example.test	GET / HTTP/1.1\r\nHost: ex\xc3\xa4mple.test\r\n\r\n		-	-
+connect	Host	198.51.100.9:80	example.test	GET / HTTP/1.1\r\nHost: example..test\r\n\r\n		-	-
+connect	Host	198.51.100.9:80	example.test	GET / HTTP/1.1\r\nHost: .example.test\r\n\r\n		-	-
+connect	Host	198.51.100.9:80	example.test	GET / HTTP/1.1\r\nHost: example.test..\r\n\r\n		-	-
+connect	Host	198.51.100.9:80	example.test	GET / HTTP/1.1\r\nHost: example.123\r\n\r\n		-	-
+connect	Host	198.51.100.9:80	example.test	GET / HTTP/1.1\r\nHost: 0x7f.1\r\n\r\n		-	-
+connect	Host	198.51.100.9:80	example.test	GET / HTTP/1.1\r\nHost: example test\r\n\r\n		-	-
+connect	Host	[2001:db8::9]:80		GET / HTTP/1.1\r\nHost: [2001:db8::9%25eth0]\r\n\r\n		-	-
+connect	Port	[2001:db8::9]:80		GET / HTTP/1.1\r\nHost: 2001:db8::9\r\n\r\n		-	-
+connect	Host	198.51.100.9:80		GET / HTTP/1.1\r\nHost: 198.051.100.9\r\n\r\n		-	-
+connect	Port	198.51.100.9:80	example.test	GET / HTTP/1.1\r\nHost: example.test:8080\r\n\r\n		-	-
+connect	Port	198.51.100.9:8080	example.test	GET / HTTP/1.1\r\nHost: example.test\r\n\r\n		-	-
+connect	Port	198.51.100.9:80	example.test	GET / HTTP/1.1\r\nHost: example.test:080\r\n\r\n		-	-
+connect	Port	198.51.100.9:80	example.test	GET / HTTP/1.1\r\nHost: example.test:\r\n\r\n		-	-
+connect	Port	198.51.100.9:80	example.test	GET / HTTP/1.1\r\nHost: example.test:+80\r\n\r\n		-	-
+connect	Port	198.51.100.9:80	example.test	GET / HTTP/1.1\r\nHost: example.test:65616\r\n\r\n		-	-
+connect	Address	198.51.100.9:80		GET / HTTP/1.1\r\nHost: 203.0.113.7\r\n\r\n		-	-
+connect	Address	[2001:db8::9]:80		GET / HTTP/1.1\r\nHost: [2001:db8::10]\r\n\r\n		-	-
+connect	Unbound	198.51.100.9:80	example.test	GET / HTTP/1.1\r\nHost: popular.example\r\n\r\n		-	-
+connect	Unbound	198.51.100.9:80	other.example	GET / HTTP/1.1\r\nHost: example.test\r\n\r\n		-	-
+connect	Framing	198.51.100.9:80	example.test	POST / HTTP/1.1\r\nHost: example.test\r\nContent-Length: 5\r\nTransfer-Encoding: chunked\r\n\r\n0\r\n\r\n		-	-
+connect	Framing	198.51.100.9:80	example.test	POST / HTTP/1.1\r\nHost: example.test\r\nTransfer-Encoding: chunked\r\nContent-Length: 5\r\n\r\n0\r\n\r\n		-	-
+connect	Framing	198.51.100.9:80	example.test	POST / HTTP/1.1\r\nHost: example.test\r\nContent-Length: 5\r\nContent-Length: 5\r\n\r\nhello		-	-
+connect	Framing	198.51.100.9:80	example.test	POST / HTTP/1.1\r\nHost: example.test\r\nContent-Length: 5, 5\r\n\r\nhello		-	-
+connect	Framing	198.51.100.9:80	example.test	POST / HTTP/1.1\r\nHost: example.test\r\nContent-Length: +5\r\n\r\nhello		-	-
+connect	Framing	198.51.100.9:80	example.test	POST / HTTP/1.1\r\nHost: example.test\r\nContent-Length: 12345678901234567890\r\n\r\n		-	-
+connect	Framing	198.51.100.9:80	example.test	POST / HTTP/1.1\r\nHost: example.test\r\nTransfer-Encoding: gzip, chunked\r\n\r\n		-	-
+connect	Framing	198.51.100.9:80	example.test	POST / HTTP/1.1\r\nHost: example.test\r\nTransfer-Encoding: chunked, chunked\r\n\r\n		-	-
+connect	Framing	198.51.100.9:80	example.test	POST / HTTP/1.1\r\nHost: example.test\r\nTransfer-Encoding: chunked\r\nTransfer-Encoding: chunked\r\n\r\n		-	-
+connect	Framing	198.51.100.9:80	example.test	POST / HTTP/1.1\r\nHost: example.test\r\nTransfer-Encoding: xchunked\r\n\r\n		-	-
+connect	Field	198.51.100.9:80	example.test	POST / HTTP/1.1\r\nHost: example.test\r\nTransfer-Encoding:\x0bchunked\r\n\r\n		-	-
+connect	Framing	198.51.100.9:80	example.test	POST / HTTP/1.0\r\nHost: example.test\r\nTransfer-Encoding: chunked\r\n\r\n		-	-
+connect	Framing	198.51.100.9:80	example.test	GET / HTTP/1.1\r\nHost: example.test\r\nContent-Length: 5\r\n\r\nhello		-	-
+connect	Framing	198.51.100.9:80	example.test	HEAD / HTTP/1.1\r\nHost: example.test\r\nTransfer-Encoding: chunked\r\n\r\n0\r\n\r\n		-	-
+connect	Meaning	198.51.100.9:80	example.test	GET /chat HTTP/1.1\r\nHost: example.test\r\nUpgrade: websocket\r\nConnection: Upgrade\r\nSec-WebSocket-Key: dGhlIHNhbXBsZSBub25jZQ==\r\nSec-WebSocket-Version: 13\r\n\r\n		-	-
+connect	Meaning	198.51.100.9:80	example.test	GET / HTTP/1.1\r\nHost: example.test\r\nConnection: Upgrade, HTTP2-Settings\r\nUpgrade: h2c\r\nHTTP2-Settings: AAMAAABkAAQAAP__\r\n\r\n		-	-
+connect	Meaning	198.51.100.9:80	example.test	GET / HTTP/1.1\r\nHost: example.test\r\nProxy-Authorization: Basic dXNlcjpwYXNz\r\n\r\n		-	-
+forward	-	198.51.100.9:80	example.test	POST / HTTP/1.1\r\nHost: example.test\r\nExpect: 100-continue\r\nContent-Length: 5\r\n\r\nhello	POST http://example.test/ HTTP/1.1\r\nHost: example.test\r\nExpect: 100-continue\r\nContent-Length: 5\r\n\r\nhello	POST / HTTP/1.1 => inner.proxylab.test	POST / HTTP/1.1 => inner.proxylab.test
+forward	-	198.51.100.9:80	example.test	POST / HTTP/1.1\r\nHost: example.test\r\nExpect: y 100-continue\r\nContent-Length: 5\r\n\r\nhello	POST http://example.test/ HTTP/1.1\r\nHost: example.test\r\nExpect: y 100-continue\r\nContent-Length: 5\r\n\r\nhello	417 from the proxy	POST / HTTP/1.1 => inner.proxylab.test
+connect	Meaning	198.51.100.9:80	example.test	POST / HTTP/1.1\r\nHost: example.test\r\nConnection: close, Content-Length\r\nContent-Length: 5\r\n\r\nhello		-	-
+connect	Meaning	198.51.100.9:80	example.test	GET / HTTP/1.1\r\nHost: example.test\r\nConnection: host\r\n\r\n		-	-
+connect	Meaning	198.51.100.9:80	example.test	POST / HTTP/1.1\r\nHost: example.test\r\nConnection: Transfer-Encoding\r\nTransfer-Encoding: chunked\r\n\r\n0\r\n\r\n		-	-
+reset	OtherHost	198.51.100.9:80	example.test	GET /1 HTTP/1.1\r\nHost: example.test\r\n\r\nGET /2 HTTP/1.1\r\nHost: other.example\r\n\r\n	GET http://example.test/1 HTTP/1.1\r\nHost: example.test\r\n\r\n	-	-
+reset	OtherHost	198.51.100.9:80	example.test	GET /1 HTTP/1.1\r\nHost: example.test\r\n\r\nGET /2 HTTP/1.1\r\nHost: Example.test\r\n\r\n	GET http://example.test/1 HTTP/1.1\r\nHost: example.test\r\n\r\n	-	-
+reset	OtherHost	198.51.100.9:80	example.test	GET /1 HTTP/1.1\r\nHost: example.test\r\n\r\nGET /2 HTTP/1.1\r\nHost: example.test:80\r\n\r\n	GET http://example.test/1 HTTP/1.1\r\nHost: example.test\r\n\r\n	-	-
+reset	OtherHost	198.51.100.9:80		GET /1 HTTP/1.0\r\n\r\nGET /2 HTTP/1.0\r\nHost: example.test\r\n\r\n	GET http://198.51.100.9/1 HTTP/1.0\r\n\r\n	-	-
+reset	Framing	198.51.100.9:80	example.test	GET /1 HTTP/1.1\r\nHost: example.test\r\n\r\nPOST /2 HTTP/1.1\r\nHost: example.test\r\nContent-Length: 3\r\nTransfer-Encoding: chunked\r\n\r\n0\r\n\r\n	GET http://example.test/1 HTTP/1.1\r\nHost: example.test\r\n\r\n	-	-
+reset	Meaning	198.51.100.9:80	example.test	GET /1 HTTP/1.1\r\nHost: example.test\r\n\r\nGET /ws HTTP/1.1\r\nHost: example.test\r\nUpgrade: websocket\r\nConnection: Upgrade\r\n\r\n	GET http://example.test/1 HTTP/1.1\r\nHost: example.test\r\n\r\n	-	-
+reset	Target	198.51.100.9:80	example.test	GET /1 HTTP/1.1\r\nHost: example.test\r\n\r\nGET http://example.test/2 HTTP/1.1\r\nHost: example.test\r\n\r\n	GET http://example.test/1 HTTP/1.1\r\nHost: example.test\r\n\r\n	-	-
+reset	NotHttp	198.51.100.9:80	example.test	GET /1 HTTP/1.1\r\nHost: example.test\r\n\r\n\x16\x03\x01\x00\x05	GET http://example.test/1 HTTP/1.1\r\nHost: example.test\r\n\r\n	-	-
+reset	Line	198.51.100.9:80	example.test	GET /1 HTTP/1.1\r\nHost: example.test\r\n\r\nGET /2 HTTP/1.1\nHost: example.test\r\n\r\n	GET http://example.test/1 HTTP/1.1\r\nHost: example.test\r\n\r\n	-	-
+reset	Chunk	198.51.100.9:80	example.test	POST /c HTTP/1.1\r\nHost: example.test\r\nTransfer-Encoding: chunked\r\n\r\n5;ext=1\r\nhello\r\n0\r\n\r\n	POST http://example.test/c HTTP/1.1\r\nHost: example.test\r\nTransfer-Encoding: chunked\r\n\r\n	-	-
+reset	Chunk	198.51.100.9:80	example.test	POST /c HTTP/1.1\r\nHost: example.test\r\nTransfer-Encoding: chunked\r\n\r\n0x5\r\nhello\r\n0\r\n\r\n	POST http://example.test/c HTTP/1.1\r\nHost: example.test\r\nTransfer-Encoding: chunked\r\n\r\n	-	-
+reset	Chunk	198.51.100.9:80	example.test	POST /c HTTP/1.1\r\nHost: example.test\r\nTransfer-Encoding: chunked\r\n\r\n5 \r\nhello\r\n0\r\n\r\n	POST http://example.test/c HTTP/1.1\r\nHost: example.test\r\nTransfer-Encoding: chunked\r\n\r\n	-	-
+reset	Chunk	198.51.100.9:80	example.test	POST /c HTTP/1.1\r\nHost: example.test\r\nTransfer-Encoding: chunked\r\n\r\n00000000000000005\r\nhello\r\n0\r\n\r\n	POST http://example.test/c HTTP/1.1\r\nHost: example.test\r\nTransfer-Encoding: chunked\r\n\r\n	-	-
+reset	Chunk	198.51.100.9:80	example.test	POST /c HTTP/1.1\r\nHost: example.test\r\nTransfer-Encoding: chunked\r\n\r\n5\nhello\r\n0\r\n\r\n	POST http://example.test/c HTTP/1.1\r\nHost: example.test\r\nTransfer-Encoding: chunked\r\n\r\n	-	-
+reset	Chunk	198.51.100.9:80	example.test	POST /c HTTP/1.1\r\nHost: example.test\r\nTransfer-Encoding: chunked\r\n\r\n5\r\nhelloX\r\n0\r\n\r\n	POST http://example.test/c HTTP/1.1\r\nHost: example.test\r\nTransfer-Encoding: chunked\r\n\r\n5\r\nhello	-	-
+reset	Chunk	198.51.100.9:80	example.test	POST /c HTTP/1.1\r\nHost: example.test\r\nTransfer-Encoding: chunked\r\n\r\n\r\n	POST http://example.test/c HTTP/1.1\r\nHost: example.test\r\nTransfer-Encoding: chunked\r\n\r\n	-	-
+connect	Trailers	198.51.100.9:80	example.test	POST /c HTTP/1.1\r\nHost: example.test\r\nTransfer-Encoding: chunked\r\n\r\n0\r\nContent-Length: 5\r\n\r\n		-	-
+connect	Trailers	198.51.100.9:80	example.test	POST /c HTTP/1.1\r\nHost: example.test\r\nTransfer-Encoding: chunked\r\n\r\n0\r\nno colon\r\n\r\n		-	-
+reset	Trailers	198.51.100.9:80	example.test	GET /1 HTTP/1.1\r\nHost: example.test\r\n\r\nPUT /2 HTTP/1.1\r\nHost: example.test\r\nTransfer-Encoding: chunked\r\n\r\n3\r\nxyz\r\n0\r\nChecksum: 1f\r\n\r\nGET /3 HTTP/1.1\r\nHost: example.test\r\n\r\n	GET http://example.test/1 HTTP/1.1\r\nHost: example.test\r\n\r\nPUT http://example.test/2 HTTP/1.1\r\nHost: example.test\r\nTransfer-Encoding: chunked\r\n\r\n3\r\nxyz\r\n	-	-
+reset	Chunk	198.51.100.9:80	example.test	POST /c HTTP/1.1\r\nHost: example.test\r\nTransfer-Encoding: chunked\r\n\r\n0\r\n\rX	POST http://example.test/c HTTP/1.1\r\nHost: example.test\r\nTransfer-Encoding: chunked\r\n\r\n	-	-
+connect	Target	198.51.100.9:80	example.test	GET /p@evil.example/ HTTP/1.1\r\nHost: example.test\r\n\r\n		-	-
+connect	Target	198.51.100.9:80	example.test	GET /p\\@evil.example/ HTTP/1.1\r\nHost: example.test\r\n\r\n		-	-
