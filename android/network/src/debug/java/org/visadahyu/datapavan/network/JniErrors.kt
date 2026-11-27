@@ -18,7 +18,9 @@ import java.lang.reflect.InvocationTargetException
  * exception is pending. Not checked: `Int` (`nativeRouteMtu` cannot fail), `ByteArray` and `LongArray`
  * (`nativeActivity` and `nativeCounters` take no input), and the panic path, which only debug builds catch (a release
  * build aborts) and no input reaches. One line per type, `jni-error TYPE ok` or `jni-error TYPE failed: WHY`; release
- * builds carry none: their JniErrors, in src/release, gives no line.
+ * builds carry none: their JniErrors, in src/release, gives no line. It runs against the Rust library of the build it
+ * is in, which for the debug APK the network shard installs is the debug profile's: the release profile's entry code
+ * (fat LTO, identical-code folding on x86_64, panic abort) is not reached on its error path by this check.
  */
 object JniErrors {
     fun check(): List<String> = listOf(

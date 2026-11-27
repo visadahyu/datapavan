@@ -412,8 +412,9 @@ The words of the allow and the pause are checked with real users under ADR 0046'
   (`udp::open_udp`'s, 42 KB, and `Engine::start_with`'s, 29 KB) only moves their bytes (the first pass). What the two
   passes took is gone: of `std`'s `RandomState::new` inlined, 620 bytes are left on x86_64, all in tokio's and
   GotaTun's own code and in `keys` itself, and the `jni` crate's entry code is one copy per return type. No free setting
-  is left for x86_64: what remains is code and GotaTun's table. Not measured: arm64 and armv7 on a phone,
-  which this pass did not touch; nothing kept changes their code.
+  is left for x86_64: what remains is code and GotaTun's table. Not measured: arm64 and armv7 on a phone, which the
+  settings pass did not touch; the two cold-path passes below change their code, and the second grows arm64-v8a's
+  library by 512 bytes of unwind entries for its JNI entry (stated there).
 - **The cold paths** (2026-11-25, the maintainer's route that day over a review of the gate: room for the proxy record's
   next units, from code that runs once per engine start, per flow opened or question to Android, with no change of
   behaviour and none on the packet path; build settings untouched). *Where the bytes were,* by the size pass's method,
@@ -503,7 +504,9 @@ The words of the allow and the pause are checked with real users under ADR 0046'
     each return type an input can make fail, a call with a null throws a `RuntimeException` whose message starts
     "Rust error:", and the next call works; Int, ByteArray and LongArray have no input that fails, the default value
     returned with the exception is dropped by Java and cannot be read, and the panic path, caught in debug builds alone,
-    has no input that reaches it;
+    has no input that reaches it; and it runs against the debug profile's Rust library, which the network shard
+    installs, so the release profile's `entry` (fat LTO, `--icf=all` on x86_64, `panic = "abort"`) is exercised on
+    its success paths by the release build's checks (`verify-network-release.sh`) and on its error path by none;
   - one entry per return type for every JNI function (`entry`, seven types, the body a closure behind one indirect
     call), with the same error policy: −4,352 on x86_64 and −1,344 on armeabi-v7a, and **+512 on arm64-v8a**, where
     `.text` shrinks by 1,600 bytes but the 38 closures and six entries made functions of their own bring their unwind
@@ -540,7 +543,11 @@ The words of the allow and the pause are checked with real users under ADR 0046'
   34.65 and 33.95, through WireGuard 18.9 and 19.0; on the Android 15 emulator, built for Android, twenty rounds, the
   down path 2.82 and 2.85 µs and 2.60 and 2.65, sent directly 4.05 and 4.00 and 3.90 and 3.88, through WireGuard 4.58
   and 4.65 and 3.55 and 3.50, opening directly 34.05 and 34.3 µs, a lookup 49.15 and 50.45, through WireGuard 18.45 and
-  18.2. Each median after sits within the before runs' spread, a rank test's |z| under 1.6 each; the mapping's sources
+  18.2. The plan's rule, "after runs within the before runs' spread", is read on the medians with a rank test: read on
+  every single run it would drop an unchanged build about three times in four (all eight of eight runs from one
+  distribution land inside the other eight's range with probability 8·7/(16·15), about 0.23), and here 2 of 8 single
+  runs per size on the host and 1 of 20 on the emulator fell just outside, on both sides. Each median after sits within
+  the before runs' spread, a rank test's |z| under 1.6 each; the mapping's sources
   alone, against the build before them, |z| under 0.7 on the down path. The engine's own release measures, 24 rounds
   each in turn: a count 13.4 ns both, a mark 178 and 176 ns, the live view 1.02 ms both, an answer among 4,000 peers 175
   and 176.5 ns, 16,384 stand-ins bound to one address added in 4.97 and 4.92 ms and removed in 2.37 and 2.40, beside one
