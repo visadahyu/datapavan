@@ -511,24 +511,30 @@ impl Resolver {
     /// The state for the network screen and the checks, one `key value` per line.
     pub(super) fn status(&self) -> String {
         let config = self.config();
-        let ladder = lock(&self.ladder);
         let now = Instant::now();
-        let way = match (ladder.now(), &config) {
-            (_, None) => "off".to_owned(),
-            (Now::Unknown, _) => "none".to_owned(),
-            (Now::Way(step), Some(config)) => config.name(step),
-            (Now::Fallback(since), _) => {
-                format!("fallback {}", now.duration_since(since).as_secs())
-            }
-            (Now::Failing(since), _) => format!("failing {}", now.duration_since(since).as_secs()),
+        let (way, validated, held) = {
+            let ladder = lock(&self.ladder);
+            let way = match (ladder.now(), &config) {
+                (_, None) => "off".to_owned(),
+                (Now::Unknown, _) => "none".to_owned(),
+                (Now::Way(step), Some(config)) => config.name(step),
+                (Now::Fallback(since), _) => {
+                    format!("fallback {}", now.duration_since(since).as_secs())
+                }
+                (Now::Failing(since), _) => {
+                    format!("failing {}", now.duration_since(since).as_secs())
+                }
+            };
+            (way, ladder.validated(), ladder.held(now))
         };
         let c = &self.counts;
         let n = |a: &AtomicU64| a.load(Ordering::Relaxed);
-        let times = lock(&self.times);
+        // The latencies copied under the lock and sorted after it: every encrypted answer takes the ladder and the
+        // times (`ask`).
+        let times = lock(&self.times).clone();
         let mut latency = String::new();
-        for (name, kept) in ["odoh", "doh", "dot", "network"].iter().zip(times.iter()) {
-            let mut sorted = kept.clone();
-            sorted.sort_unstable();
+        for (name, mut sorted) in ["odoh", "doh", "dot", "network"].iter().zip(times) {
+            crate::sort(&mut sorted);
             let at = |p: usize| {
                 sorted
                     .get((sorted.len() * p / 100).min(sorted.len().saturating_sub(1)))
@@ -547,8 +553,8 @@ impl Resolver {
             "way {way}\nstrict {}\nvalidated {}\nheld {}\nanswers odoh {} doh {} dot {} network {} failed {} local {} \
              stale {} cached {}\nsearch {}\n{latency}",
             u8::from(config.as_ref().is_some_and(|c| c.strict)),
-            u8::from(ladder.validated()),
-            ladder.held(now),
+            u8::from(validated),
+            held,
             n(&c.odoh),
             n(&c.doh),
             n(&c.dot),
@@ -1780,6 +1786,24 @@ mod tests {
         let again = answer(&shared, &app_query("www.example.com", 1), false, None).await;
         assert_eq!(read(again).0, Some(v4(10, 53, 1, 1)));
         assert_eq!(fake.seen(Carry::Odoh).len(), 1);
+    }
+
+    /// The latencies kept are read in order: each way's count, median and 95th percentile (the cold paths' third
+    /// pass: their sort shared, ADR 0053).
+    #[test]
+    fn the_status_reads_each_ways_latencies_in_order() {
+        let (shared, _fake) = resolving("");
+        *lock(&shared.resolver.times) = [
+            vec![30, 10, 20],
+            Vec::new(),
+            (1..=100).rev().collect(),
+            vec![7],
+        ];
+        let status = shared.resolver.status();
+        assert!(status.contains("\nlatency odoh 3 20 30\n"), "{status}");
+        assert!(status.contains("\nlatency doh 0 0 0\n"), "{status}");
+        assert!(status.contains("\nlatency dot 100 51 96\n"), "{status}");
+        assert!(status.ends_with("\nlatency network 1 7 7\n"), "{status}");
     }
 
     #[tokio::test(flavor = "current_thread")]

@@ -725,7 +725,9 @@ impl Tunnels {
                 )
             })
             .collect();
-        answers.sort_by_key(|(uid, _)| *uid);
+        // Sorted with the table let go, which each new flow takes (`route_of`).
+        drop(table);
+        crate::sort_by(&mut answers, |a, b| a.0.cmp(&b.0));
         answers
     }
 
@@ -828,7 +830,9 @@ impl Tunnels {
             .copied()
             .filter(|id| !table.tunnels.contains_key(id))
             .collect();
-        missing.sort_unstable();
+        // Sorted with the table let go, which each new flow takes (`route_of`).
+        drop(table);
+        crate::sort(&mut missing);
         missing.dedup();
         states.extend(missing.into_iter().map(|id| TunnelState {
             id,
@@ -2936,6 +2940,44 @@ pub(super) mod tests {
             [(1, false)],
             "the state says its apps wait for a configuration"
         );
+    }
+
+    /// The tunnels apps are routed to with no configuration set come after the ones set, each once, by number; and
+    /// the network part's answers kept come by UID, whatever order they were given in (the cold paths' third pass:
+    /// their sorts shared, ADR 0053).
+    #[test]
+    fn the_tunnels_waiting_and_the_answers_kept_come_by_number() {
+        let shared = shared();
+        shared.tunnels.set(&setting(
+            vec![configured(4, "10.0.0.0/8", false)],
+            &[
+                (10_300, 3),
+                (10_301, 1),
+                (10_302, 4),
+                (10_303, 2),
+                (10_304, 3),
+                (10_305, 1),
+            ],
+            false,
+        ));
+        let states: Vec<_> = shared
+            .tunnels
+            .states(Duration::ZERO)
+            .iter()
+            .map(|s| (s.id, s.configured))
+            .collect();
+        assert_eq!(states, [(4, true), (1, false), (2, false), (3, false)]);
+        let now = Instant::now();
+        for uid in [10_405, 10_401, 10_404, 10_402, 10_403] {
+            let route = (uid % 2 == 0).then_some(AppRoute::Direct);
+            shared.tunnels.answered(uid, route, now);
+        }
+        let answers = shared.tunnels.answers();
+        assert_eq!(
+            answers.iter().map(|(uid, _)| *uid).collect::<Vec<_>>(),
+            [10_401, 10_402, 10_403, 10_404, 10_405]
+        );
+        assert_eq!(answers[1].1, Some(AppRoute::Direct), "each with its answer");
     }
 
     /// A SYN of the app at port 40,000 to 93.184.216.34:443, with an MSS of 1,460.

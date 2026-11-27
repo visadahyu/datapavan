@@ -330,7 +330,7 @@ impl Config {
                     (start, start | (!mask(width, n.prefix) & top))
                 })
                 .collect();
-            ranges.sort_unstable();
+            crate::sort(&mut ranges);
             // The first address not covered yet.
             let mut next = 0u128;
             for (start, end) in ranges {

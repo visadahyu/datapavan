@@ -442,7 +442,9 @@ impl Shared {
                 Some((uid, table.entries().get(entry)?.host.clone(), tally))
             })
             .collect();
-        out.sort_by(|a, b| (a.0, &a.1).cmp(&(b.0, &b.1)));
+        // Sorted with the lock let go, which a blocked flow takes.
+        drop(blocks);
+        crate::sort_by(&mut out, |a, b| (a.0, &a.1).cmp(&(b.0, &b.1)));
         out
     }
 
@@ -899,6 +901,35 @@ mod tests {
         assert_eq!(
             (tallies[0].0, tallies[0].2.lookups, tallies[0].2.connections),
             (APP, 6, 0)
+        );
+    }
+
+    /// The tallies come by app, then by the row's host, whatever order they were counted in (the cold paths' third
+    /// pass: their sort shared, ADR 0053).
+    #[test]
+    fn the_tallies_come_by_app_then_by_host() {
+        let (shared, _) = blocking(ROWS);
+        for (uid, name) in [
+            (OTHER, "googleads.g.doubleclick.net"),
+            (APP, "googleads.g.doubleclick.net"),
+            (OTHER, "app-measurement.com"),
+            (APP, "app-measurement.com"),
+        ] {
+            assert!(shared.lookup_blocked(Some(uid), &query(name, 1)).is_some());
+        }
+        let rows: Vec<(u32, String)> = shared
+            .blocked_tallies()
+            .into_iter()
+            .map(|(uid, host, _)| (uid, host))
+            .collect();
+        assert_eq!(
+            rows,
+            [
+                (APP, "app-measurement.com".to_owned()),
+                (APP, "googleads.g.doubleclick.net".to_owned()),
+                (OTHER, "app-measurement.com".to_owned()),
+                (OTHER, "googleads.g.doubleclick.net".to_owned()),
+            ]
         );
     }
 

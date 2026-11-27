@@ -69,3 +69,89 @@ pub fn map<K, V>() -> std::collections::HashMap<K, V> {
 pub fn set<T>() -> std::collections::HashSet<T> {
     std::collections::HashSet::with_hasher(keys())
 }
+
+/// Sorts `items` by `cmp`, stably, through the one copy of `std`'s stable sort that every caller shares
+/// (`sort_indices`): the indices `0..len` are sorted, comparing the items they name, and the items are then moved into
+/// that order, each cycle of the permutation walked once. The result is `items.sort_by(cmp)`'s, and for a type whose
+/// equal values cannot be told apart (integers, addresses) `sort_unstable`'s too. Each caller keeps only this small
+/// generic part, where `std`'s sort was built again for every element type, 3 to 6 KB each (the cold paths' third
+/// pass, ADR 0053). For cold paths only: it allocates `len` words, and each comparison is an indirect call.
+pub(crate) fn sort_by<T>(items: &mut [T], mut cmp: impl FnMut(&T, &T) -> std::cmp::Ordering) {
+    if items.len() < 2 {
+        return;
+    }
+    let mut order: Vec<usize> = (0..items.len()).collect();
+    {
+        let items = &*items;
+        sort_indices(&mut order, &mut |a, b| cmp(&items[a], &items[b]));
+    }
+    // The item at `order[i]` goes to `i`: each cycle walked from its first index, each index marked done.
+    for start in 0..order.len() {
+        let mut at = start;
+        loop {
+            let from = std::mem::replace(&mut order[at], usize::MAX);
+            if from == start || from == usize::MAX {
+                break;
+            }
+            items.swap(at, from);
+            at = from;
+        }
+    }
+}
+
+/// [`sort_by`] in the items' own order.
+pub(crate) fn sort<T: Ord>(items: &mut [T]) {
+    sort_by(items, T::cmp);
+}
+
+/// `std`'s stable sort, built once, for [`sort_by`]'s indices.
+#[inline(never)]
+fn sort_indices(order: &mut [usize], cmp: &mut dyn FnMut(usize, usize) -> std::cmp::Ordering) {
+    order.sort_by(|&a, &b| cmp(a, b));
+}
+
+#[cfg(test)]
+mod tests {
+    /// The shared sort gives `std`'s answers: `slice::sort_by`'s, ties in their first order, on lists of every
+    /// length to 300 with 1 to 4 and 1 to 1,000 distinct keys, and `sort_unstable`'s on the keys alone; and on lists
+    /// already in order, in reverse, and of one key.
+    #[test]
+    fn the_shared_sort_gives_std_s_order() {
+        let mut x: u64 = 0x9E37_79B9_7F4A_7C15;
+        let mut next = move || {
+            x ^= x << 13;
+            x ^= x >> 7;
+            x ^= x << 17;
+            x
+        };
+        for len in 0..=300usize {
+            for round in 0..40 {
+                let keys = 1 + next() % if round % 2 == 0 { 4 } else { 1_000 };
+                let list: Vec<(u64, usize)> = (0..len).map(|i| (next() % keys, i)).collect();
+                let mut want = list.clone();
+                want.sort_by_key(|p| p.0);
+                let mut got = list.clone();
+                super::sort_by(&mut got, |a, b| a.0.cmp(&b.0));
+                assert_eq!(got, want, "length {len}, {keys} keys");
+                let mut want: Vec<u64> = list.iter().map(|p| p.0).collect();
+                let mut got = want.clone();
+                want.sort_unstable();
+                super::sort(&mut got);
+                assert_eq!(got, want, "length {len}, {keys} keys");
+            }
+        }
+        for len in [0, 1, 2, 3, 1_000] {
+            let ordered: Vec<usize> = (0..len).collect();
+            let mut got = ordered.clone();
+            super::sort(&mut got);
+            assert_eq!(got, ordered);
+            let mut got: Vec<usize> = ordered.iter().rev().copied().collect();
+            super::sort(&mut got);
+            assert_eq!(got, ordered);
+            let one: Vec<(u8, usize)> = (0..len).map(|i| (7, i)).collect();
+            let mut got = one.clone();
+            super::sort_by(&mut got, |a, b| a.0.cmp(&b.0));
+            assert_eq!(got, one, "ties keep their order");
+        }
+    }
+}
