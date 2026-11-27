@@ -996,17 +996,7 @@ impl Shared {
         view: &View,
         found: &mut HashMap<std::net::IpAddr, Option<(Network, String)>>,
     ) {
-        let wanted: Vec<_> = view
-            .apps
-            .values()
-            .flat_map(|app| app.places.iter())
-            .filter(|(flow, _)| flow.named_by != NamedBy::Organisation)
-            .map(|(flow, _)| flow.destination.ip())
-            .filter(|address| !found.contains_key(address))
-            .collect::<std::collections::BTreeSet<_>>()
-            .into_iter()
-            .take(LOOKUPS_PER_VIEW)
-            .collect();
+        let wanted = wanted(view, found);
         if wanted.is_empty() {
             return;
         }
@@ -1035,6 +1025,24 @@ impl Shared {
         }
         self.organisation(flow.destination.ip())
     }
+}
+
+/// The view's destinations not `found` yet that a snapshot looks up: the smallest first, each once, at most
+/// [`LOOKUPS_PER_VIEW`].
+fn wanted(
+    view: &View,
+    found: &HashMap<std::net::IpAddr, Option<(Network, String)>>,
+) -> Vec<std::net::IpAddr> {
+    view.apps
+        .values()
+        .flat_map(|app| app.places.iter())
+        .filter(|(flow, _)| flow.named_by != NamedBy::Organisation)
+        .map(|(flow, _)| flow.destination.ip())
+        .filter(|address| !found.contains_key(address))
+        .collect::<std::collections::BTreeSet<_>>()
+        .into_iter()
+        .take(LOOKUPS_PER_VIEW)
+        .collect()
 }
 
 /// The live view as it is built: each app's bytes by window and column, and its destinations'.
@@ -3019,6 +3027,114 @@ mod tests {
         assert_eq!(named(&shared.now_view(T + 3_000)), 100);
         assert_eq!(probe.reads.load(Relaxed), reads, "looked up once");
         assert_eq!(probe.held.load(Relaxed), 0, "no read under a lock");
+    }
+
+    /// A snapshot looks up the smallest of the addresses not known yet first, [`LOOKUPS_PER_VIEW`] of them, each
+    /// once though two apps went to it, IPv4's before IPv6's (`IpAddr`'s order); the next snapshot the rest (the cold
+    /// paths' third pass, its audit M1).
+    #[test]
+    fn a_snapshot_looks_up_the_smallest_addresses_first_each_once() {
+        use std::net::IpAddr;
+        let (shared, _, _) = telling_at(T);
+        let v4 = |i: u8| IpAddr::from([93, 184, 216, i]);
+        let v6 = |i: u16| IpAddr::from([0x2001, 0xdb8, 0, 0, 0, 0, 0, i]);
+        // Two apps, each in an order of its own: 40 IPv4 and 60 IPv6 addresses in all, 20 of each in both.
+        let apps: [(u32, Vec<IpAddr>); 2] = [
+            (UID, (0..30).rev().map(v4).chain((0..40).map(v6)).collect()),
+            (
+                UID + 1,
+                (10..40).map(v4).chain((20..60).rev().map(v6)).collect(),
+            ),
+        ];
+        {
+            let mut activity = lock(&shared.activity);
+            let mut id = 0;
+            for (uid, addresses) in &apps {
+                for &address in addresses {
+                    id += 1;
+                    let to = Flow {
+                        destination: SocketAddr::new(address, 443),
+                        name: None,
+                        named_by: NamedBy::Unknown,
+                        ..flow(id, Some(*uid))
+                    };
+                    activity.counts.count(
+                        Some(*uid),
+                        T / 1000,
+                        [1, 0, 0, 0],
+                        BACKGROUND,
+                        Seen::Flow(&to),
+                    );
+                }
+            }
+        }
+        let looked = || {
+            let mut looked: Vec<IpAddr> = lock(&shared.activity)
+                .counts
+                .organisations
+                .keys()
+                .copied()
+                .collect();
+            looked.sort_unstable();
+            looked
+        };
+        let _ = shared.now_view(T + 1_000);
+        let first: Vec<IpAddr> = (0..40).map(v4).chain((0..24).map(v6)).collect();
+        assert_eq!(looked(), first);
+        let _ = shared.now_view(T + 2_000);
+        let every: Vec<IpAddr> = (0..40).map(v4).chain((0..60).map(v6)).collect();
+        assert_eq!(looked(), every);
+    }
+
+    /// What building the list of addresses a snapshot looks up costs ([`wanted`]), alone, at 2,048 and 4,096
+    /// distinct addresses not known yet, IPv4 and IPv6 in turn, in apps of [`PLACES_PER_APP`] places: the median of
+    /// 400 builds, printed, for the cold paths' third pass (ADR 0053). Run it in a release build: `cargo test -p
+    /// datapavan-net --release --lib -- --ignored --nocapture what_the_list_to_look_up_costs`.
+    #[test]
+    #[ignore = "a measurement, not a check: run it in a release build"]
+    fn what_the_list_to_look_up_costs() {
+        use std::net::IpAddr;
+        use std::time::Instant;
+        let per_app = u32::try_from(PLACES_PER_APP).unwrap_or(u32::MAX);
+        for addresses in [2_048u32, 4_096] {
+            let mut view = View::new(T, None, None, 0);
+            for i in 0..addresses {
+                // A bijection of u32: every address its own.
+                let mixed = i.wrapping_mul(0x9E37_79B1);
+                let address = if i % 2 == 0 {
+                    IpAddr::from(mixed.to_be_bytes())
+                } else {
+                    IpAddr::from(std::net::Ipv6Addr::from_bits(
+                        (0x2001_0db8_u128 << 96) | u128::from(mixed),
+                    ))
+                };
+                let uid = 10_000 + i / per_app;
+                let place = Flow {
+                    destination: SocketAddr::new(address, 443),
+                    name: None,
+                    named_by: NamedBy::Unknown,
+                    ..flow(u64::from(i), Some(uid))
+                };
+                view.apps
+                    .entry(Some(uid))
+                    .or_default()
+                    .places
+                    .push((place, [[0; 2]; 3]));
+            }
+            let found = crate::map();
+            let mut each: Vec<std::time::Duration> = (0..400)
+                .map(|_| {
+                    let started = Instant::now();
+                    std::hint::black_box(wanted(std::hint::black_box(&view), &found));
+                    started.elapsed()
+                })
+                .collect();
+            each.sort_unstable();
+            println!(
+                "the list to look up among {addresses} addresses: {:.2} us",
+                each[each.len() / 2].as_secs_f64() * 1e6
+            );
+        }
     }
 
     /// Minutes counted out of order are kept in order.
