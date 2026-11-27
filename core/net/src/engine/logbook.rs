@@ -34,11 +34,12 @@
 //!   moment after a quarter hour falls in the quarter hour before.
 
 use super::activity::{Force, Mark, NO_SECOND, Of, Piece};
-use super::{Counters, DnsUse, Ech, Flow, LOG_DELAY, NamedBy, Outcome, Shared, lock};
+use super::{Counters, DnsUse, Ech, Flow, LOG_DELAY, NamedBy, Outcome, Shared, Via, lock};
 use crate::log;
-use crate::packet;
+use crate::packet::{self, TCP};
 use crate::states::Placed;
 use std::collections::{HashMap, VecDeque};
+use std::net::SocketAddr;
 use std::sync::atomic::{AtomicBool, AtomicU64, Ordering};
 use std::sync::{Arc, Mutex};
 use std::time::Duration;
@@ -550,14 +551,80 @@ impl Shared {
     /// comes first, so that a segment of a quarter hour before keeps the outcome the flow had then,
     /// whoever cuts it (review 1 of W5's first part, engine, finding 2).
     pub(super) fn finish_as(&self, id: u64, outcome: Outcome) {
-        self.log_now();
-        match lock(&self.live).get_mut(&id) {
-            Some(live) => live.flow.outcome = outcome,
-            None => return,
+        if self.settle_relayed(id, Some(outcome), None) {
+            self.finish_closed(id);
+        }
+    }
+
+    /// The live TCP flow from the app's end `app` to `destination`, the latest such: the forwarder's stage knows a
+    /// flow by its ends, its number made only once its SYN was answered (the proxy record's forwarder).
+    #[cold]
+    #[inline(never)]
+    pub(super) fn tcp_flow_of(&self, app: SocketAddr, destination: SocketAddr) -> Option<u64> {
+        lock(&self.live)
+            .iter()
+            .filter(|(_, live)| {
+                live.flow.protocol == TCP
+                    && live.flow.app == app
+                    && live.flow.destination == destination
+            })
+            .map(|(id, _)| *id)
+            .max()
+    }
+
+    /// The forwarded flow `id` named by its first `Host`, `name` in the form names compare, which Datapavan's own
+    /// resolvers gave its address (the forwarder's audit, M3): the proxy fetches that name, so the record never names
+    /// the flow by another name the address had. Still named by DNS; a name from the flow itself stays.
+    #[cold]
+    #[inline(never)]
+    pub(super) fn forwarded_name(&self, id: u64, name: &str) {
+        let rename = |flow: &mut Flow| {
+            if matches!(
+                flow.named_by,
+                NamedBy::Dns | NamedBy::Organisation | NamedBy::Unknown
+            ) {
+                flow.name = Some(name.to_owned());
+                flow.named_by = NamedBy::Dns;
+                flow.network = None;
+            }
+        };
+        if let Some(live) = lock(&self.live).get_mut(&id) {
+            rename(&mut live.flow);
         }
         if let Some(flow) = lock(&self.flows).iter_mut().rev().find(|f| f.id == id) {
-            flow.outcome = outcome;
+            rename(flow);
         }
+    }
+
+    /// The TCP flow `id`, which the engine ended or turned itself after its SYN was answered, given `outcome` and
+    /// `via`, its last segment left to the relay's end after the linger, as every relayed flow's (the forwarder's
+    /// audit, m14): its outcome in its last segment, the counters and the flows kept, the cut first, as
+    /// [`Shared::finish_as`] does. Whether it was still live.
+    pub(super) fn settle_relayed(
+        &self,
+        id: u64,
+        outcome: Option<Outcome>,
+        via: Option<Via>,
+    ) -> bool {
+        self.log_now();
+        let settled = |flow: &mut Flow| {
+            if let Some(outcome) = outcome {
+                flow.outcome = outcome;
+            }
+            if let Some(via) = via {
+                flow.via = via;
+            }
+        };
+        match lock(&self.live).get_mut(&id) {
+            Some(live) => settled(&mut live.flow),
+            None => return false,
+        }
+        if let Some(flow) = lock(&self.flows).iter_mut().rev().find(|f| f.id == id) {
+            settled(flow);
+        }
+        let Some(outcome) = outcome else {
+            return true;
+        };
         let counter = match outcome {
             // A flow blocking refused is counted where it is refused (`Shared::count_block`).
             Outcome::Opened | Outcome::Blocked => None,
@@ -568,7 +635,7 @@ impl Shared {
         if let Some(counter) = counter {
             Counters::add(counter, 1);
         }
-        self.finish_closed(id);
+        true
     }
 
     /// A TCP flow whose rewriting is gone: its segment is cut as [`Shared::finish`] cuts it, and its last

@@ -70,6 +70,7 @@ mod chain;
 mod clock;
 mod echo;
 mod errors;
+mod forwarding;
 mod hops;
 mod kept;
 mod logbook;
@@ -640,7 +641,7 @@ pub struct Config {
 }
 
 /// How many counters [`Counters::snapshot`] gives.
-pub const COUNTERS: usize = 81;
+pub const COUNTERS: usize = 86;
 
 /// The counters, in the order of [`Counters::snapshot`].
 #[derive(Debug, Default)]
@@ -736,6 +737,18 @@ struct BeneathCounters {
     stale: AtomicU64,
     /// The direct apps' flows the switch's hold kept waiting (S2's review, m2).
     held: AtomicU64,
+    /// The forwarder ([`forwarding`]): flows whose first head went to the proxy in absolute form;
+    forwarded: AtomicU64,
+    /// flows sent to the forwarder by a refusal remembered, whose first bytes went by `CONNECT` after all;
+    forward_connect: AtomicU64,
+    /// flows the forwarder reset: first bytes no way could carry, a later head refused, an excluded or blocked
+    /// `Host`, or no head within the flow's time;
+    forward_reset: AtomicU64,
+    /// flows whose first byte came more than [`forwarding::LATE`] after their SYN was answered, never cut (the
+    /// audit's M2: the late writers, measured);
+    first_wait: AtomicU64,
+    /// and flows sent to the forwarder at once, by a refusal of their port remembered.
+    remembered: AtomicU64,
 }
 
 impl Counters {
@@ -923,6 +936,11 @@ impl Counters {
             &self.beneath.named,
             &self.beneath.stale,
             &self.beneath.held,
+            &self.beneath.forwarded,
+            &self.beneath.forward_connect,
+            &self.beneath.forward_reset,
+            &self.beneath.first_wait,
+            &self.beneath.remembered,
         ]
     }
 }

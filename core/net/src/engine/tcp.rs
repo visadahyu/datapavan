@@ -638,7 +638,7 @@ async fn upstream(
         let (upstream, via, proxied) = match shared.route(uid, destination) {
             Route::Direct => {
                 let (upstream, proxied) =
-                    beneath::finish(shared, direct(uid).await, uid, destination).await;
+                    beneath::finish(shared, direct(uid).await, uid, (app, destination)).await;
                 (upstream, None, proxied)
             }
             Route::Tool(chain) if lookups => {
@@ -688,7 +688,7 @@ async fn upstream(
             (uid, direct.await, Some(share))
         }
     };
-    let (upstream, proxied) = beneath::finish(shared, tried, uid, destination).await;
+    let (upstream, proxied) = beneath::finish(shared, tried, uid, (app, destination)).await;
     Some((uid, upstream, share, None, None, proxied))
 }
 
@@ -1463,7 +1463,8 @@ mod tests {
         let cannot: &[u8] = b"HTTP/1.1 502 Bad Gateway\r\n\r\n";
         for (reply, always, outcome, via, protocol) in [
             (OPENED, false, Outcome::Opened, Via::NetworkProxy, TCP),
-            (refused, true, Outcome::Refused, Via::Direct, TCP),
+            // Refused: the forwarder rescues the flow, its SYN answered (the maintainer's decision of 2026-11-27).
+            (refused, true, Outcome::Opened, Via::NetworkProxy, TCP),
             (
                 cannot,
                 true,
@@ -1471,7 +1472,7 @@ mod tests {
                 Via::Direct,
                 packet::ICMP,
             ),
-            (refused, false, Outcome::Failed, Via::Direct, packet::ICMP),
+            (refused, false, Outcome::Opened, Via::NetworkProxy, TCP),
         ] {
             let proxy = Proxy::new(Reply::Bytes(reply)).await?;
             let (shared, _) = engine(
@@ -1530,7 +1531,13 @@ mod tests {
         });
         let destination = SocketAddr::from(([198, 51, 100, 7], 443));
         let tried = beneath::first(&shared, held(&shared), destination).await;
-        let (stream, through) = beneath::finish(&shared, tried, Some(UID), destination).await;
+        let (stream, through) = beneath::finish(
+            &shared,
+            tried,
+            Some(UID),
+            (SocketAddr::from(([10, 0, 0, 2], 40_000)), destination),
+        )
+        .await;
         assert!(through);
         let upstream = Upstream {
             stream: stream?,
