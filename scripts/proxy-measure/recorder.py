@@ -16,9 +16,19 @@ the request line, the Host header and the User-Agent. Nothing else of a request 
 standard library alone; it runs until it is stopped.
 
 With a fifth argument `tunnel`, for the resolver unit's run on a network that requires its proxy (R-PLAN.md, "After
-the audit"): a CONNECT to an address, as the network part's resolver sends one (by the data pack's address, never a
-name), is carried to that address on port 443 from this computer, both ways, and logged as `proxy-tunnel`; a CONNECT
-to a name is answered as above. Nothing of what crosses the tunnel is read or kept.
+the audit"): a CONNECT to a public address on port 443 or 80, as the network part's resolver sends one (by the data
+pack's address, never a name) and the engine sends a direct app's (the unit S2), is carried to that address from this
+computer, both ways, and logged as `proxy-tunnel`, once when it opens and once when it closes, with the bytes each way;
+a CONNECT to a name is answered as above. Nothing of what crosses the tunnel is read or kept but its length.
+
+For the unit S2's rows (S2-PLAN.md, section 8, M8), two more modes, each in place of `tunnel`:
+- `names-only`: a CONNECT to one of the addresses listed after the mode's word gets 403, as a proxy that takes names
+  alone; with no address listed, every address does. A CONNECT to a public name on port 443 or 80 is carried to that
+  name, looked up on this computer. Other addresses are carried as in `tunnel`, so that the resolver still answers;
+- `password`: a CONNECT to one of the addresses listed (every one, with none listed) gets 407 with
+  `Proxy-Authenticate: Basic`, as a proxy that asks for a password; others as in `tunnel`.
+The mode is the fifth argument, or, with a sixth, the first line of that file, read anew at each request, so that a
+run changes it between its parts: the mode's word, then its addresses comma-separated.
 """
 import ipaddress
 import socket
@@ -48,7 +58,20 @@ class Server(socketserver.ThreadingTCPServer):
 
 def main():
     base, path, cert, key = int(sys.argv[1]), sys.argv[2], sys.argv[3], sys.argv[4]
-    tunnels = len(sys.argv) > 5 and sys.argv[5] == "tunnel"
+    start_mode = sys.argv[5] if len(sys.argv) > 5 else ""
+    mode_file = sys.argv[6] if len(sys.argv) > 6 else None
+
+    def mode():
+        """The mode's word and the addresses it names, from the mode file where one is given and holds a line."""
+        line = start_mode
+        if mode_file:
+            try:
+                with open(mode_file, encoding="ascii") as f:
+                    line = f.readline().strip() or start_mode
+            except OSError:
+                pass
+        word, _, listed = line.partition(" ")
+        return word, {a for a in listed.replace(",", " ").split() if a}
     log = open(path, "a", buffering=1, encoding="utf-8")
     tls = ssl.SSLContext(ssl.PROTOCOL_TLS_SERVER)
     tls.load_cert_chain(cert, key)
@@ -97,9 +120,19 @@ def main():
                     return
                 record(role, head)
                 target = head.split(" ")[1] if head.count(" ") >= 2 else ""
+                early = seen.split(b"\r\n\r\n", 1)[1] if b"\r\n\r\n" in seen else b""
+                word, listed = mode()
+                tunnels = word in ("tunnel", "names-only", "password")
                 try:
-                    if role == "proxy" and head.startswith("CONNECT ") and tunnels and tunnel_to(target):
-                        carry(self.request, tunnel_to(target), seen.split(b"\r\n\r\n", 1)[1] if b"\r\n\r\n" in seen else b"")
+                    if role == "proxy" and head.startswith("CONNECT ") and word in ("names-only", "password") and refused(target, listed):
+                        status = "403 Forbidden" if word == "names-only" else "407 Proxy Authentication Required"
+                        record("proxy-refused", f"REFUSED {target} {status.split(' ')[0]} {word}")
+                        extra = "Proxy-Authenticate: Basic realm=\"recorder\"\r\n" if word == "password" else ""
+                        self.request.sendall(f"HTTP/1.1 {status}\r\n{extra}Content-Length: 0\r\nConnection: close\r\n\r\n".encode("ascii"))
+                    elif role == "proxy" and head.startswith("CONNECT ") and tunnels and tunnel_to(target):
+                        carry(self.request, tunnel_to(target), early)
+                    elif role == "proxy" and head.startswith("CONNECT ") and word == "names-only" and named(target):
+                        carry(self.request, named(target), early)
                     elif role == "proxy" and head.startswith("CONNECT "):
                         self.request.sendall(b"HTTP/1.1 200 Connection established\r\n\r\n")
                         names.value = "-"
@@ -124,13 +157,39 @@ def main():
         return Handler
 
     def tunnel_to(authority):
-        """The address and port of a CONNECT to an address on port 443, or None for a name or another port."""
+        """The address and port of a CONNECT to a public address on port 443 or 80, or None for a name or another."""
         host, _, port = authority.rpartition(":")
         try:
             address = ipaddress.ip_address(host.strip("[]"))
         except ValueError:
             return None
-        return (str(address), 443) if port == "443" and address.is_global else None
+        return (str(address), int(port)) if port in ("443", "80") and address.is_global else None
+
+    def named(authority):
+        """The name and port of a CONNECT to a name on port 443 or 80 that this computer resolves to public addresses
+        alone, or None."""
+        host, _, port = authority.rpartition(":")
+        if port not in ("443", "80") or not host or host.startswith("["):
+            return None
+        try:
+            ipaddress.ip_address(host)
+            return None
+        except ValueError:
+            pass
+        try:
+            found = {info[4][0] for info in socket.getaddrinfo(host, int(port), socket.AF_INET, socket.SOCK_STREAM)}
+        except OSError:
+            return None
+        return (host, int(port)) if found and all(ipaddress.ip_address(a).is_global for a in found) else None
+
+    def refused(authority, listed):
+        """Whether the mode refuses a CONNECT to this authority: an address it lists, or any address with none listed."""
+        host, _, _ = authority.rpartition(":")
+        try:
+            address = ipaddress.ip_address(host.strip("[]"))
+        except ValueError:
+            return False
+        return not listed or str(address) in listed
 
     def carry(client, where, early):
         try:
@@ -145,13 +204,16 @@ def main():
             upstream.sendall(early)
         client.settimeout(None)
         upstream.settimeout(None)
+        # The bytes each way, counted and never kept: from the app (up) and to it (down).
+        carried = {"up": len(early), "down": 0}
 
-        def pipe(a, b):
+        def pipe(a, b, way):
             try:
                 while True:
                     data = a.recv(16384)
                     if not data:
                         break
+                    carried[way] += len(data)
                     b.sendall(data)
             except OSError:
                 pass
@@ -161,11 +223,12 @@ def main():
                 except OSError:
                     pass
 
-        other = threading.Thread(target=pipe, args=(upstream, client), daemon=True)
+        other = threading.Thread(target=pipe, args=(upstream, client, "down"), daemon=True)
         other.start()
-        pipe(client, upstream)
+        pipe(client, upstream, "up")
         other.join(30)
         upstream.close()
+        record("proxy-tunnel", f"TUNNEL {where[0]}:{where[1]} closed up={carried['up']} down={carried['down']}")
 
     servers = [
         Server(("127.0.0.1", base), handler("proxy")),

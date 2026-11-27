@@ -17,7 +17,8 @@ import java.util.List;
  * then "done":
  *
  * <ul>
- *   <li>{@code wifi-proxy} (extras "host", "port"), {@code wifi-pac} ("url"), {@code wifi-none}: the saved Wi-Fi
+ *   <li>{@code wifi-proxy} (extras "host", "port", and "exclusions", the proxy's exclusion list comma-separated, if
+ *       any), {@code wifi-pac} ("url"), {@code wifi-none}: the saved Wi-Fi
  *       network "AndroidWifi" (the emulator's) gets that proxy of its own, or none, through
  *       {@code WifiConfiguration.setHttpProxy} and {@code WifiManager.updateNetwork}, which a device owner may do to a
  *       network another app saved;</li>
@@ -61,7 +62,9 @@ public class OwnerActivity extends Activity {
     }
 
     private ProxyInfo direct() {
-        return ProxyInfo.buildDirectProxy(extra("host"), Integer.parseInt(extra("port")));
+        String exclusions = extra("exclusions");
+        if (exclusions.isEmpty()) return ProxyInfo.buildDirectProxy(extra("host"), Integer.parseInt(extra("port")));
+        return ProxyInfo.buildDirectProxy(extra("host"), Integer.parseInt(extra("port")), java.util.Arrays.asList(exclusions.split(",")));
     }
 
     private ProxyInfo pac() {
@@ -118,6 +121,12 @@ public class OwnerActivity extends Activity {
     private String wifi(ProxyInfo proxy) throws Refused {
         WifiConfiguration network = saved();
         network.setHttpProxy(proxy);
+        // Below API 33 Android has no MAC randomization setting to mask (Android 10, the unit S2's run once there).
+        if (android.os.Build.VERSION.SDK_INT < 33) {
+            int id = getSystemService(WifiManager.class).updateNetwork(network);
+            if (id >= 0) return "network " + id + " saved=" + describe(saved().getHttpProxy());
+            throw new Refused("update-refused");
+        }
         int listed = network.getMacRandomizationSetting();
         int[] settings = {listed, WifiConfiguration.RANDOMIZATION_AUTO, WifiConfiguration.RANDOMIZATION_PERSISTENT,
             WifiConfiguration.RANDOMIZATION_NON_PERSISTENT, WifiConfiguration.RANDOMIZATION_NONE};
@@ -133,6 +142,7 @@ public class OwnerActivity extends Activity {
         if (proxy == null) return "none";
         Uri pac = proxy.getPacFileUrl();
         if (pac != null && !Uri.EMPTY.equals(pac)) return "pac:" + pac + "@" + proxy.getPort();
-        return proxy.getHost() + ":" + proxy.getPort();
+        String[] excluded = proxy.getExclusionList();
+        return proxy.getHost() + ":" + proxy.getPort() + (excluded == null || excluded.length == 0 ? "" : " except=" + String.join(",", excluded));
     }
 }

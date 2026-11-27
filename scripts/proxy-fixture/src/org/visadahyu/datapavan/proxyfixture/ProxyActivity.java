@@ -50,6 +50,10 @@ import javax.crypto.spec.SecretKeySpec;
  *       as an app that reads them itself does (under a PAC, the framework's handler on the phone's loopback);</li>
  *   <li>{@code webview}: a WebView, Chromium's network stack in this app's process, loads "url".</li>
  * </ul>
+ *
+ * <p>For the engine's way through the network's own proxy (the proxy record's unit S2): {@code resolve}, the
+ * addresses Android's resolver gives the extra "name", comma-separated; and {@code timed}, the same GET as
+ * {@code get}, with the milliseconds it took, so that a direct try's share before the proxy can be read.
  */
 public class ProxyActivity extends Activity {
     private static final String TAG = "DatapavanProxyFixture";
@@ -101,6 +105,8 @@ public class ProxyActivity extends Activity {
             case "lookup": return lookup(extra("name"));
             case "read": return read();
             case "get": return get(extra("url"));
+            case "timed": return timed(extra("url"));
+            case "resolve": return resolve(extra("name"));
             case "property": return property(extra("url"));
             default: throw new IllegalArgumentException();
         }
@@ -165,6 +171,26 @@ public class ProxyActivity extends Activity {
         } finally {
             connection.disconnect();
         }
+    }
+
+    private static String timed(String url) throws Exception {
+        long start = System.nanoTime();
+        String status;
+        try {
+            status = get(url);
+        } catch (Exception e) {
+            status = "failed-" + e.getClass().getSimpleName();
+        }
+        return status + " ms=" + (System.nanoTime() - start) / 1_000_000;
+    }
+
+    private static String resolve(String name) throws Exception {
+        StringBuilder addresses = new StringBuilder();
+        for (java.net.InetAddress address : java.net.InetAddress.getAllByName(name)) {
+            if (addresses.length() > 0) addresses.append(',');
+            addresses.append(address.getHostAddress());
+        }
+        return addresses.toString();
     }
 
     private static String property(String url) throws Exception {

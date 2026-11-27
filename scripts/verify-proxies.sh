@@ -16,8 +16,11 @@
 # user's choice for one app (the proxy record's unit C) never covers the lab's local address; on an emulator that `adb
 # root` takes, a rule of its own `nat` table sends the network part's connections to a TEST-NET address to the lab, and
 # there the chosen app's proxy is named and logged with the switch off, until the choice is turned off; an update keeps
-# the choice and a reinstall ends it. No password or user name reaches the network part's dump, the log, the device's
-# log or its crash buffer.
+# the choice and a reinstall ends it. On such an emulator too, the network's own proxy (the proxy record's unit S2): the
+# project's device owner sets the Wi-Fi network's proxy to the proxy record's recorder, the emulator's iptables reject
+# every other way out, and a fresh app's request to a public name must answer through it, by the engine's CONNECT to its
+# address; the on-link target gets none. No password or user name reaches the network part's dump, the log, the
+# device's log or its crash buffer.
 #
 # The false positives that need a maker's own network (a Telegram CDN data centre beside its ranges, WhatsApp's link
 # previews and backups beside Meta's networks) are checked in the engine's network lab (core/net/tests/netlab.rs) and
@@ -49,6 +52,16 @@ ROOTED=""
 UNROOT=""
 DNAT_SET=""
 DNAT_RULE=""
+# The network's own proxy's row (the proxy record's unit S2): the recorder it started, the device owner, mobile data
+# off, the Wi-Fi network's proxy and the egress rules it set, and whether it rooted the emulator, each undone at the
+# row's end or by the cleanup.
+OWNER=org.visadahyu.datapavan.proxyowner
+RECORDER=""
+OWNER_SET=""
+DATA_OFF=""
+WIFI_PROXY_SET=""
+EGRESS_SET=""
+BENEATH_ROOTED=""
 
 # Clears Android's global proxy, and clears it again until Android itself holds none. The two writes in a row, ":0"
 # and then the setting's deletion, sometimes leave Android's own copy (global_http_proxy_host and _port) set, and "Now"
@@ -69,8 +82,77 @@ clear_global_proxy() {
     return 1
 }
 
+# The network's own proxy's row: the device owner's action $1 with the extras after it, its line.
+owner_do() {
+    local line
+    adb logcat -c
+    adb shell am start -W -n "$OWNER/$OWNER.OwnerActivity" --es action "$1" "${@:2}" >/dev/null
+    for _ in $(seq 1 30); do
+        adb logcat -d -s DatapavanProxyOwner | tr -d '\r' | grep -q 'DatapavanProxyOwner: done$' && break
+        sleep 1
+    done
+    line=$(adb logcat -d -s DatapavanProxyOwner | tr -d '\r' | sed -n "s/.*DatapavanProxyOwner: \($1 \(ok\|failed\) .*\)/\1/p" | tail -1)
+    echo "${line:-$1 no-answer}"
+}
+wifi_connected() { adb shell cmd wifi status | tr -d '\r' | grep -q 'Wifi is connected to "AndroidWifi"'; }
+wifi_default() {
+    local dc default
+    dc=$(adb shell dumpsys connectivity | tr -d '\r')
+    default=$(sed -n 's/^Active default network: //p' <<<"$dc" | head -1)
+    [ -n "$default" ] && grep -qE "network\{$default\} +handle\{[0-9]+\} +ni\{WIFI" <<<"$dc"
+}
+# Wi-Fi off and on, so that the saved network's proxy reaches its link (scripts/measure-proxy-settings.sh).
+wifi_again() {
+    adb shell svc wifi disable
+    sleep 2
+    adb shell svc wifi enable
+    within 60 wifi_connected && within 30 wifi_default
+}
+# Every connection out of the emulator rejected but on the loopback, into the VPN's interface and to the recorder's
+# proxy, first in OUTPUT; "-D" takes them out.
+beneath_egress() {
+    local op=$1
+    if [ "$op" = -I ]; then
+        adb shell iptables -w -I OUTPUT 1 -j REJECT && adb shell ip6tables -w -I OUTPUT 1 -j REJECT &&
+            adb shell iptables -w -I OUTPUT 1 -d "$HOST" -p tcp --dport "$BENEATH_PORT" -j ACCEPT &&
+            for table in iptables ip6tables; do
+                adb shell "$table" -w -I OUTPUT 1 -o tun+ -j ACCEPT && adb shell "$table" -w -I OUTPUT 1 -o lo -j ACCEPT || return 1
+            done
+    else
+        adb shell iptables -w -D OUTPUT -d "$HOST" -p tcp --dport "$BENEATH_PORT" -j ACCEPT
+        for table in iptables ip6tables; do
+            adb shell "$table" -w -D OUTPUT -o lo -j ACCEPT
+            adb shell "$table" -w -D OUTPUT -o tun+ -j ACCEPT
+            adb shell "$table" -w -D OUTPUT -j REJECT
+        done
+    fi
+}
+# The row undone, whatever of it was set, in the reverse order; at its end and by the cleanup.
+beneath_undo() {
+    [ -z "$EGRESS_SET" ] || beneath_egress -D >/dev/null 2>&1 || true
+    EGRESS_SET=""
+    if [ -n "$WIFI_PROXY_SET" ]; then
+        owner_do wifi-none >/dev/null 2>&1 || true
+        wifi_again >/dev/null 2>&1 || true
+        WIFI_PROXY_SET=""
+    fi
+    if [ -n "$OWNER_SET" ]; then
+        adb shell dpm remove-active-admin "$OWNER/.OwnerReceiver" >/dev/null 2>&1 || true
+        adb uninstall "$OWNER" >/dev/null 2>&1 || true
+        OWNER_SET=""
+    fi
+    if [ -n "$DATA_OFF" ]; then adb shell svc data enable >/dev/null 2>&1 || true; DATA_OFF=""; fi
+    if [ -n "$RECORDER" ]; then kill "$RECORDER" 2>/dev/null || true; wait "$RECORDER" 2>/dev/null || true; RECORDER=""; fi
+    if [ -n "$BENEATH_ROOTED" ]; then
+        adb unroot >/dev/null 2>&1 || true
+        timeout 60 adb wait-for-device >/dev/null 2>&1 || true
+        BENEATH_ROOTED=""
+    fi
+}
+
 cleanup() {
     local status=$?
+    beneath_undo
     if [ -n "$DNAT_SET" ]; then adb shell "iptables -w -t nat -D OUTPUT $DNAT_RULE" >/dev/null 2>&1 || true; fi
     if [ -n "$UNROOT" ]; then
         adb unroot >/dev/null 2>&1 || true
@@ -564,6 +646,113 @@ within 10 names_none || fail "the choice outlived the fixture's reinstall: proxy
 [ "$(ended_why "$FIXTURE")" = installed-again ] ||
     fail "the fixture installed again, seen by its first install time alone, says '$(ended_why "$FIXTURE")', not installed again"
 echo "ok: a reinstall of the chosen app ends its choice by its first install time alone, and says so"
+
+# 7. The network's own proxy (the proxy record's unit S2; S2-PLAN.md, section 8, and its audit's M4): on an emulator
+# that `adb root` takes, the project's test-only device owner (scripts/proxy-owner) sets the Wi-Fi network's own proxy
+# to the recorder (scripts/proxy-measure/recorder.py, its tunnel mode, on this computer's loopback), mobile data off so
+# that Wi-Fi is the network beneath, and the emulator's iptables reject every connection out but to the recorder. A
+# fresh fixture's request to a public name (example.com, RFC 2606) must answer through it: the engine counts its flow
+# under `network-proxy`, and the recorder carried a CONNECT to that flow's address with no User-Agent. The recorder's
+# own address, 10.0.2.2, is on-link and rightly never reached through the proxy: the direct target there gets no
+# CONNECT. Where root or the device owner is refused, the row says so and is not run; with PROXYLAB_REQUIRED=1, which CI
+# sets, that fails. Its evidence is the recorder's log, the network part's dump and the device's log, kept on a failure.
+not_run() {
+    [ "${PROXYLAB_REQUIRED:-}" != 1 ] || fail "PROXYLAB_REQUIRED=1, and the network's own proxy's row cannot run: $1"
+    echo "NOT RUN: the network's own proxy's row: $1"
+}
+beneath_row() {
+    local line base flows dest
+    adb root >/dev/null 2>&1 || true
+    timeout 60 adb wait-for-device || true
+    for _ in $(seq 1 10); do
+        [ "$(adb shell id -u 2>/dev/null | tr -d '\r')" = 0 ] && BENEATH_ROOTED=1 && break
+        sleep 1
+    done
+    [ -n "$BENEATH_ROOTED" ] || { BENEATH_ROOTED=1; not_run "this $(adb shell getprop ro.build.type | tr -d '\r') build refuses adb root"; return 0; }
+    # Three free ports in a row on this computer's loopback, from 18300, for the recorder's proxy, PAC and direct target.
+    base=$(python3 -I - <<'PY'
+import socket, sys
+def free(port):
+    s = socket.socket()
+    try:
+        s.bind(("127.0.0.1", port))
+        return True
+    except OSError:
+        return False
+    finally:
+        s.close()
+for base in range(18300, 18400, 10):
+    if all(free(base + i) for i in range(3)):
+        print(base)
+        break
+else:
+    sys.exit("no three free ports in a row from 18300")
+PY
+) || fail "no free ports for the recorder"
+    BENEATH_PORT=$base
+    openssl req -x509 -newkey ec -pkeyopt ec_paramgen_curve:prime256v1 -nodes -days 1 -subj "/CN=inner.proxylab.test" \
+        -keyout "$WORK/recorder-key.pem" -out "$WORK/recorder-cert.pem" >/dev/null 2>&1 || fail "no certificate for the recorder"
+    : >"$WORK/recorder.tsv"
+    python3 -I "$ROOT/scripts/proxy-measure/recorder.py" "$base" "$WORK/recorder.tsv" "$WORK/recorder-cert.pem" \
+        "$WORK/recorder-key.pem" tunnel >"$WORK/recorder.out" 2>&1 &
+    RECORDER=$!
+    recorder_ready() { grep -qx ready "$WORK/recorder.out" 2>/dev/null; }
+    within 10 recorder_ready || fail "the recorder did not start: $(cat "$WORK/recorder.out")"
+    "$ROOT/scripts/proxy-owner/build.sh" >/dev/null 2>&1 || fail "the device owner could not be built"
+    adb shell dpm remove-active-admin "$OWNER/.OwnerReceiver" >/dev/null 2>&1 || true
+    adb uninstall "$OWNER" >/dev/null 2>&1 || true
+    adb install -t "$ROOT/build/proxy-owner/proxy-owner.apk" >/dev/null || fail "the device owner did not install"
+    OWNER_SET=1
+    if ! adb shell dpm set-device-owner "$OWNER/.OwnerReceiver" >/dev/null 2>&1; then
+        not_run "Android refused the project's device owner (an account on the emulator, or not a fresh one)"
+        return 0
+    fi
+    adb shell pm grant "$OWNER" android.permission.ACCESS_FINE_LOCATION
+    adb shell cmd location set-location-enabled true >/dev/null 2>&1 || true
+    adb shell svc data disable
+    DATA_OFF=1
+    within 30 wifi_default || fail "Wi-Fi is not the default network with mobile data off"
+    line=$(owner_do wifi-proxy --es host "$HOST" --es port "$base")
+    [[ $line == "wifi-proxy ok "* ]] || fail "the device owner did not set the Wi-Fi network's proxy: $line"
+    WIFI_PROXY_SET=1
+    wifi_again || fail "Wi-Fi did not come back as the default network after its proxy was set"
+    beneath_held() { grep -qE "^ *beneath-proxy ${HOST//./\\.}:$base network " <<<"$(dump beneath-proxy)"; }
+    within 20 beneath_held || fail "the engine was not handed the Wi-Fi network's proxy: $(dump beneath-proxy | grep 'beneath-proxy' || echo none)"
+    beneath_egress -I || fail "the emulator's iptables took no rule"
+    EGRESS_SET=1
+    echo "ok: the Wi-Fi network's own proxy is the recorder at $HOST:$base, the engine holds it, and every other way out is rejected"
+
+    routes_before=$(dump | sed -n "s/^ *flow-route $APP_UID network-proxy //p")
+    adb shell am force-stop "$FIXTURE"
+    fixture "$FIXTURE" get 200 --es url "https://example.com/"
+    through() { [ "$(dump | sed -n "s/^ *flow-route $APP_UID network-proxy //p")" -gt "${routes_before:-0}" ] 2>/dev/null; }
+    within 10 through || fail "the engine counts no flow of the fixture through the network's proxy: $(dump | grep 'flow-route' || echo none)"
+    # Its flows opened to port 443 since the fixture's lab steps, whose destinations were addresses on the lab's network.
+    flows=$(dump | sed -n 's/^ *flow //p' | awk -v uid="$APP_UID" -v lab="$HOST:" '$1 == "tcp" && $4 == uid && $5 == "opened" && $3 ~ /:443$/ && index($3, lab) != 1 { print $3 }' | sort -u)
+    [ -n "$flows" ] || fail "the engine kept no opened flow of the fixture to a public address on port 443"
+    for dest in $flows; do
+        awk -F'\t' -v d="$dest" '$2 == "proxy" && $3 == "CONNECT " d " HTTP/1.1" && $5 == "-" { found = 1 } END { exit !found }' "$WORK/recorder.tsv" &&
+            awk -F'\t' -v d="$dest" '$2 == "proxy-tunnel" && $3 == "TUNNEL " d " open" { found = 1 } END { exit !found }' "$WORK/recorder.tsv" &&
+            break
+        dest=""
+    done
+    [ -n "$dest" ] || fail "the recorder carried no CONNECT with no User-Agent to the fixture's flow ($flows): $(cut -f2,3 "$WORK/recorder.tsv" | tail -8 | tr '\n' ';')"
+    echo "ok: on a network that requires its proxy, a fresh app reaches example.com through it: CONNECT $dest with no User-Agent, the engine's route network-proxy"
+
+    adb shell am force-stop "$FIXTURE"
+    adb logcat -c
+    adb shell am start -W -n "$FIXTURE/$FIXTURE.ProxyActivity" --es action get --es url "http://$HOST:$((base + 2))/direct" >/dev/null
+    for _ in $(seq 1 30); do
+        grep -qx done <<<"$(fixture_log)" && break
+        sleep 1
+    done
+    line=$(fixture_log | grep -E '^get (ok|failed)' | tail -1 || true)
+    [[ $line == "get failed "* ]] || fail "the on-link direct target answered on a network that rejects it: ${line:-no answer}"
+    ! grep -qF "CONNECT $HOST:$((base + 2)) " "$WORK/recorder.tsv" || fail "the engine sent the on-link direct target through the proxy"
+    echo "ok: the on-link direct target $HOST:$((base + 2)) is never sent through the proxy ($line)"
+    beneath_undo
+}
+beneath_row
 
 # No password anywhere the network part writes or Android logs.
 shown="$(dump)
