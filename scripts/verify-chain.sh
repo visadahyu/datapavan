@@ -504,27 +504,44 @@ echo "ok: the live view keeps no destination of the picked app, marks the tool, 
 # it reached; and the tool's own row its place, the address the tool connected to, there only, for its window, never
 # the name only the tool resolved. The run's names and addresses are looked for in every text of the picked app's screen
 # too, so that a place read as something else still fails the check (review c1 of W5's third part, screens, M1).
-# The tool's row in "Now", read on until the place $2 shows or the row ends: network_now stops at the row's bytes, and a
-# tool's card (unit D's lines on its places and its choice) holds its places below the screen, ordered by their bytes,
-# so the place wanted may come after others (on two local runs of 2026-11-27, the tool's connections to three encrypted
-# DNS resolvers showed above the test server's address, and a read that stopped at the first place failed). Up to three
-# more half screens, read with what was read before, as network_now reads its second dump; a row that ended without it
-# fails the caller's check, named.
-tool_now() {
-    local read i dumps=("$1")
-    read=$(network_now "$PKG" "$TOOL" "$1")
-    for i in 1 2 3; do
-        { grep -qxF "place $2" <<<"$read" || ! grep -qx open <<<"$read"; } && break
+# An app's row in "Now", read on until it ends, or with $3 until the place $3 shows: network_now stops at the row's bytes,
+# and a tool's card (unit D's lines on its places and its choice) holds its places below the screen, ordered by their
+# bytes, so the place wanted may come after others (on two local runs of 2026-11-27, the tool's connections to three
+# encrypted DNS resolvers showed above the test server's address, and a read that stopped at the first place failed).
+# A row shows its first five places, and the rest behind its button "Show N more places": on CI run 46052462725 the
+# test server's address was the tool's sixth, below five such resolvers, and no scrolling reached it. Where the row
+# offers the button and the place has not shown, it is tapped once, and the row read again from the list's top, so
+# that the dumps read together are of one list. Up to sixteen steps, the tap or half a screen each, each dump read with
+# those before it, as network_now reads its second dump; a row that ended without the place, or is still open after
+# them, fails the caller's check, named. The dumps are kept in the files $2 and $2.N, then $2.all and $2.all.N.
+now_row() {
+    local app=$1 file=$2 want=${3:-} read i more="" expanded="" dumps=("$2") at=$2
+    read=$(network_now "$PKG" "$app" "$file")
+    for i in $(seq 1 16); do
+        [ -n "$want" ] && grep -qxF "place $want" <<<"$read" && break
+        more=$(sed -n 's/^more-places //p' <<<"$read" | head -1)
+        if [ -n "$want" ] && [ -n "$more" ] && [ -z "$expanded" ]; then
+            expanded=1
+            echo "  note: $app's row in \"Now\" shows its first places only: \"$more\" tapped" >&2
+            tap_text "$more" || break
+            scroll_to_top
+            at=$file.all
+            dump_screen && adb shell cat "$DUMP" >"$at" 2>/dev/null || break
+            dumps=("$at")
+            read=$(python3 -I "$ROOT/scripts/now-screen.py" "${dumps[@]}" "$app") || break
+            continue
+        fi
+        grep -qx open <<<"$read" || break
         swipe_up
         dump_screen || continue
-        adb shell cat "$DUMP" >"$1.$i" 2>/dev/null || continue
-        dumps+=("$1.$i")
-        read=$(python3 -I "$ROOT/scripts/now-screen.py" "${dumps[@]}" "$TOOL") || continue
+        adb shell cat "$DUMP" >"$at.$i" 2>/dev/null || continue
+        dumps+=("$at.$i")
+        read=$(python3 -I "$ROOT/scripts/now-screen.py" "${dumps[@]}" "$app") || continue
     done
     printf '%s\n' "$read"
 }
-chained_screen=$(network_now "$PKG" "$WORKLOAD" "$SCREENS/now.xml")
-tool_screen=$(tool_now "$SCREENS/tool.xml" "$HOST")
+chained_screen=$(now_row "$WORKLOAD" "$SCREENS/now.xml")
+tool_screen=$(now_row "$TOOL" "$SCREENS/tool.xml" "$HOST")
 grep -qx through-tool <<<"$chained_screen" || fail "\"Now\" does not show the picked app as sent through the tool: $(tr '\n' ';' <<<"$chained_screen" | cut -c1-800)"
 ! grep -q '^place ' <<<"$chained_screen" || fail "\"Now\" names a place of the picked app: $(grep '^place ' <<<"$chained_screen")"
 for name in network.test "$HOST"; do
@@ -745,7 +762,7 @@ own_shown_only() {
 }
 within 10 own_shown_only || fail "the tool's own connection, not chained, is not shown there only, for its window: $(tool_places | tr '\n' ';')"
 grep -q " tool=0 through-tool=0 " <<<"$(activity_line "$TOOL_UID")" || fail "the live view marks the tool as chained: $(activity_line "$TOOL_UID")"
-tool_screen=$(tool_now "$SCREENS/tool-unchained.xml" "$HOST")
+tool_screen=$(now_row "$TOOL" "$SCREENS/tool-unchained.xml" "$HOST")
 adb shell input keyevent KEYCODE_BACK
 for line in tool-unchained tool-live-only "place $HOST"; do
     grep -qx "$line" <<<"$tool_screen" || fail "\"Now\" does not show the tool, not chained, as such ($line): $(tr '\n' ';' <<<"$tool_screen" | cut -c1-800)"

@@ -14,7 +14,8 @@ Prints, one a line: `row` or `no-row`; `now STATE` (its words); for each state w
 TEXT` for each reason bytes have no state; `through-tool`, `tool` (the chain's tool), `tool-unchained` (another tool),
 `tool-left-out` (some of a tool's connections no longer shown) and `tool-live-only` (a tool's place shown there only,
 for its window; the proxy record's unit D) where the row says so; `place NAME` for
-each destination shown; `state STATE` for each entry of a history; `off APPS BYTES` for the line on the
+each destination shown; `more-places TEXT` where the row shows only its first places and offers the rest behind a
+button, TEXT the button's words; `state STATE` for each entry of a history; `off APPS BYTES` for the line on the
 window while the screen was off; and `texts` with every text of the screen, joined by ` | `. Sizes are read
 as Android writes them in English (SI units: 1 kB = 1,000 bytes); the isolates around them are dropped.
 """
@@ -97,6 +98,13 @@ def self_test():
     assert "through-tool" in shown and "bytes in-use 22 142" in shown, shown
     # The same row with no place: none read.
     assert not any(line.startswith("place ") for line in read([dump(chained)], "org.example.w"))
+    # A row of more places than it shows first: its button is read with its words, so that the reader can tap it (CI run
+    # 46052462725: the test server's address was the tool's sixth place, behind "Show 1 more place"); none without it.
+    more = read([dump(chained + ["example.org", "name from a DNS answer", "Show 1 more place", "What this view cannot see"])],
+                "org.example.w")
+    assert "more-places Show 1 more place" in more and "open" not in more, more
+    assert "more-places Show 3 more places" in read([dump(chained + ["Show 3 more places"])], "org.example.w")
+    assert not any(line.startswith("more-places ") for line in shown), shown
     # A tool's row (the proxy record's unit D): another tool's, with a place shown there only, and connections no
     # longer shown; the chain's tool says only that it is.
     tool = ["Tool", "org.example.t", "Now: in the background", "A circumvention tool. Datapavan does not send apps through it.",
@@ -195,6 +203,9 @@ def main(paths, package):
             out.append("tool-live-only")
         for match in re.finditer(r"(?:\n|, )([^\n,]+)(?:\n|, )(" + "|".join(NAMED) + ")", "\n" + row):
             out.append(f"place {match.group(1)}")
+        # A row of more places than it shows first ends them with a button for the rest (NowScreen's FIRST_PLACES).
+        for match in re.finditer(r"^(Show [0-9]+ more places?)$", row, re.MULTILINE):
+            out.append(f"more-places {match.group(1)}")
         for match in re.finditer(r"State: ([a-z ]+)", row):
             out.append(f"state {match.group(1).strip()}")
     out.append("texts " + " | ".join(every))
