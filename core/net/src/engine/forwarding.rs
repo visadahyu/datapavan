@@ -48,6 +48,7 @@ use std::pin::Pin;
 use std::sync::Arc;
 use std::time::{Duration, Instant};
 use tokio::io::{AsyncReadExt, AsyncWriteExt};
+use tokio::net::tcp::{ReadHalf, WriteHalf};
 use tokio::net::{TcpSocket, TcpStream};
 use zeroize::Zeroizing;
 
@@ -310,49 +311,8 @@ async fn pump(
     let failed = {
         let (mut from_app, mut to_app) = app.split();
         let (mut from_other, mut to_other) = other.split();
-        let up = async {
-            let mut chunk = Zeroizing::new(vec![0u8; 16 * 1024]);
-            let mut out = Zeroizing::new(Vec::new());
-            loop {
-                let n = match from_app.read(&mut chunk[..]).await {
-                    Ok(0) => break,
-                    Ok(n) => n,
-                    Err(_) => return false,
-                };
-                let Some(framer) = framer.as_mut() else {
-                    if to_other.write_all(&chunk[..n]).await.is_err() {
-                        return false;
-                    }
-                    continue;
-                };
-                out.clear();
-                let fed = framer.feed(&chunk[..n], &mut out);
-                if to_other.write_all(&out).await.is_err() {
-                    return false;
-                }
-                if fed.is_err() {
-                    Counters::add(&shared.counters.beneath.forward_reset, 1);
-                    return false;
-                }
-            }
-            let _ = to_other.shutdown().await;
-            true
-        };
-        let down = async {
-            let mut chunk = vec![0u8; 16 * 1024];
-            loop {
-                let n = match from_other.read(&mut chunk).await {
-                    Ok(0) => break,
-                    Ok(n) => n,
-                    Err(_) => return false,
-                };
-                if to_app.write_all(&chunk[..n]).await.is_err() {
-                    return false;
-                }
-            }
-            let _ = to_app.shutdown().await;
-            true
-        };
+        let up = carry(shared, &mut from_app, &mut to_other, framer.as_mut());
+        let down = carry(shared, &mut from_other, &mut to_app, None);
         tokio::pin!(up, down);
         let (mut up_end, mut down_end) = (None, None);
         loop {
@@ -371,4 +331,42 @@ async fn pump(
     if failed {
         reset(&[&app, &other]);
     }
+}
+
+/// One way of [`pump`]'s connection until it ends: what `from` gives, framed and rewritten by `framer` where there is
+/// one, else as it came, to `to`, and its close passed on; `false` for a failure or a refusal of the framer. One
+/// function for both ways, so that the stage holds one copy of it (the forwarder's size pass): the proxy's answers
+/// pass through a buffer that is wiped too.
+async fn carry(
+    shared: &Shared,
+    from: &mut ReadHalf<'_>,
+    to: &mut WriteHalf<'_>,
+    mut framer: Option<&mut Forward>,
+) -> bool {
+    let mut chunk = Zeroizing::new(vec![0u8; 16 * 1024]);
+    let mut out = Zeroizing::new(Vec::new());
+    loop {
+        let n = match from.read(&mut chunk[..]).await {
+            Ok(0) => break,
+            Ok(n) => n,
+            Err(_) => return false,
+        };
+        let Some(framer) = framer.as_mut() else {
+            if to.write_all(&chunk[..n]).await.is_err() {
+                return false;
+            }
+            continue;
+        };
+        out.clear();
+        let fed = framer.feed(&chunk[..n], &mut out);
+        if to.write_all(&out).await.is_err() {
+            return false;
+        }
+        if fed.is_err() {
+            Counters::add(&shared.counters.beneath.forward_reset, 1);
+            return false;
+        }
+    }
+    let _ = to.shutdown().await;
+    true
 }
