@@ -158,27 +158,25 @@ pub fn status(head: &[u8]) -> Result<u16, Error> {
 }
 
 /// Whether `host`, a host name or an address written out, is in `exclusions`, a proxy's exclusion list of
-/// comma-separated entries, by the rules of the module's comment. Letters compare folded in ASCII where they are read,
-/// so that nothing is folded or copied anew for each entry at each connection (S2's review, note 6).
+/// comma-separated entries, by the rules of the module's comment.
 #[must_use]
 pub fn excluded(host: &str, exclusions: &str) -> bool {
     let host = trimmed(host).trim_end_matches('.');
     let host = host.strip_prefix('[').unwrap_or(host);
-    let host = host.strip_suffix(']').unwrap_or(host).as_bytes();
+    let host = host.strip_suffix(']').unwrap_or(host).to_ascii_lowercase();
     if host.is_empty() {
         return false;
     }
     exclusions.split(',').any(|raw| {
-        let entry = trimmed(raw).trim_end_matches('.').as_bytes();
+        let entry = trimmed(raw).trim_end_matches('.').to_ascii_lowercase();
         if entry.is_empty() {
             false
-        } else if entry.contains(&b'*') {
-            glob(entry, host)
-        } else if entry[0] == b'.' {
-            host.len() >= entry.len()
-                && host[host.len() - entry.len()..].eq_ignore_ascii_case(entry)
+        } else if entry.contains('*') {
+            glob(entry.as_bytes(), host.as_bytes())
+        } else if entry.starts_with('.') {
+            host.ends_with(&entry)
         } else {
-            host.eq_ignore_ascii_case(entry)
+            host == entry
         }
     })
 }
@@ -189,9 +187,8 @@ fn trimmed(text: &str) -> &str {
     text.trim_matches(|c: char| c <= ' ')
 }
 
-/// Whether `pattern`, whose `*` matches any run of bytes, matches the whole of `text`, letters folded in ASCII. The
-/// usual scan with one point to go back to, the last `*`: at most `pattern.len()` times `text.len()` steps, whatever the
-/// bytes.
+/// Whether `pattern`, whose `*` matches any run of bytes, matches the whole of `text`. The usual scan with one point to
+/// go back to, the last `*`: at most `pattern.len()` times `text.len()` steps, whatever the bytes.
 fn glob(pattern: &[u8], text: &[u8]) -> bool {
     let (mut p, mut t) = (0, 0);
     let mut back: Option<(usize, usize)> = None;
@@ -201,7 +198,7 @@ fn glob(pattern: &[u8], text: &[u8]) -> bool {
                 back = Some((p, t));
                 p += 1;
             }
-            Some(&c) if c.eq_ignore_ascii_case(&text[t]) => {
+            Some(&c) if c == text[t] => {
                 p += 1;
                 t += 1;
             }

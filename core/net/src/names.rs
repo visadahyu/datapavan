@@ -407,10 +407,11 @@ impl Names {
         let Some(given) = self.addresses.shared.entries.get_mut(&address) else {
             return;
         };
-        if given.until <= now
-            || compared(&given.name) != compared(name)
-            || given.askers.contains(&uid)
-        {
+        let same = given
+            .name
+            .trim_end_matches('.')
+            .eq_ignore_ascii_case(name.trim_end_matches('.'));
+        if given.until <= now || !same || given.askers.contains(&uid) {
             return;
         }
         given.askers.rotate_left(1);
