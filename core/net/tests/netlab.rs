@@ -9,7 +9,10 @@
 
 mod common;
 
-use common::{ConnectMode, ConnectSettings, Settings, connect_proxy, proxy};
+use common::{
+    ConnectMode, ConnectProxy, ConnectSettings, Got, Settings, connect_proxy, named, origin, proxy,
+    read_response,
+};
 use datapavan_net::engine::{Addresses, Limits};
 use datapavan_net::{
     Beneath, BlockSetting, Chain, Config, Engine, Handover, Platform, Via, packet,
@@ -5872,6 +5875,860 @@ fn a_proxy_that_refuses_addresses_gets_the_flows_own_name() -> Outcome {
             let mut again = app_connect(server).await?;
             assert_eq!(exchange(&mut again, b"names first").await?, b"names first");
             assert_eq!(proxy.requests().get(2), Some(&by_name));
+            Ok(())
+        },
+    )
+}
+
+/// The places of the forwarder's counters in `Engine::counters`: forwarded, by `CONNECT` after all, reset, late, and
+/// sent to the stage by a refusal remembered (the proxy record's forwarder).
+const FORWARDED: usize = 81;
+const FORWARD_RESET: usize = 83;
+const FIRST_WAIT: usize = 84;
+const REMEMBERED: usize = 85;
+
+/// A query for the A record of `name`.
+fn query_for(name: &str) -> Vec<u8> {
+    let mut query = vec![0x12, 0x34, 0x01, 0x00, 0, 1, 0, 0, 0, 0, 0, 0];
+    for label in name.split('.') {
+        query.push(u8::try_from(label.len()).unwrap_or(0));
+        query.extend_from_slice(label.as_bytes());
+    }
+    query.extend_from_slice(&[0, 0, 1, 0, 1]);
+    query
+}
+
+/// The forwarder's lab (F-PLAN, section 9, the network lab): a network that lets out only its own proxy, at `OTHER`, a
+/// proxy as squid's default ([`ConnectMode::Squid`]) that resolves each of `names` to `SERVER`, and the app's own
+/// lookups of them, one after another, answered `SERVER` by the network's resolver, so that Datapavan's own resolvers
+/// gave each name the server's address.
+async fn squid_lab(
+    engine: &Engine,
+    names: &[&str],
+) -> Result<ConnectProxy, Box<dyn std::error::Error>> {
+    squid_lab_knowing(engine, names, &[]).await
+}
+
+/// [`squid_lab`], the proxy knowing besides each of `also` by its address, names the app never looked up.
+async fn squid_lab_knowing(
+    engine: &Engine,
+    names: &[&str],
+    also: &[(&str, Ipv4Addr)],
+) -> Result<ConnectProxy, Box<dyn std::error::Error>> {
+    let known = names
+        .iter()
+        .map(|n| (*n, SERVER))
+        .chain(also.iter().copied());
+    let proxy = connect_proxy(
+        OTHER.into(),
+        ConnectSettings {
+            mode: ConnectMode::Squid,
+            names: known
+                .map(|(n, at)| (n.to_owned(), IpAddr::V4(at)))
+                .collect(),
+            ..ConnectSettings::default()
+        },
+    )
+    .await?;
+    require_proxy(OTHER)?;
+    let_loopback()?;
+    set_beneath(engine, LAB_NETWORK, proxy.address, "")?;
+    resolver(OTHER, SERVER).await?;
+    engine.network_changed(Some(IpAddr::V4(OTHER)), false);
+    let lookup = app_socket().await?;
+    for name in names {
+        lookup
+            .send_to(&query_for(name), (Addresses::COMMON.dns4, 53))
+            .await?;
+        app_receive(&lookup).await?;
+    }
+    Ok(proxy)
+}
+
+/// [`require_proxy`]'s namespace lets its loopback connections through, as no network sees a phone's own loopback: the
+/// forwarder's stage takes a rescued flow over a loopback pair of its own (`engine::forwarding`).
+fn let_loopback() -> Outcome {
+    let output = Command::new("iptables")
+        .args([
+            "-w",
+            "-I",
+            "OUTPUT",
+            "1",
+            "-s",
+            "127.0.0.1",
+            "-d",
+            "127.0.0.1",
+        ])
+        .args(["-j", "ACCEPT"])
+        .output()?;
+    if output.status.success() {
+        return Ok(());
+    }
+    Err(format!("iptables: {}", String::from_utf8_lossy(&output.stderr)).into())
+}
+
+/// `request` written, and the answer read whole: its body.
+async fn fetch(app: &mut TcpStream, request: &[u8]) -> Result<String, Box<dyn std::error::Error>> {
+    app.write_all(request).await?;
+    answer_body(app).await
+}
+
+/// The next answer on `app`, read whole: its body.
+async fn answer_body(app: &mut TcpStream) -> Result<String, Box<dyn std::error::Error>> {
+    let answer = within("an answer through the proxy", read_response(app)).await?;
+    let text = String::from_utf8_lossy(&answer).into_owned();
+    Ok(text
+        .split_once("\r\n\r\n")
+        .map(|(_, body)| body.to_owned())
+        .unwrap_or_default())
+}
+
+/// A request's lines as the lab's proxy records them: `head`'s, without their line ends.
+fn lines_of(head: &str) -> Vec<String> {
+    head.split("\r\n")
+        .take_while(|line| !line.is_empty())
+        .map(str::to_owned)
+        .collect()
+}
+
+/// The requests the proxy got that are not `CONNECT`, each as its lines.
+fn forwarded(proxy: &ConnectProxy) -> Vec<Vec<String>> {
+    proxy
+        .requests()
+        .into_iter()
+        .filter(|r| r.first().is_some_and(|line| !line.starts_with("CONNECT ")))
+        .collect()
+}
+
+/// What the origin got for a request: its line, its `Host`, its other field lines as the proxy wrote them, its body.
+fn got(line: &str, host: &str, fields: &[&str], body: &[u8]) -> Got {
+    let mut all = vec![format!("Host: {host}")];
+    all.extend(fields.iter().map(|f| (*f).to_owned()));
+    Got {
+        line: line.to_owned(),
+        host: host.to_owned(),
+        fields: all,
+        body: body.to_vec(),
+    }
+}
+
+/// The forwarder's network lab, row 1 (F-PLAN, section 9, as the maintainer's decision of 2026-11-27 amends it): plain
+/// HTTP to `SERVER:80` by a name the app looked up, through a proxy that refuses `CONNECT` but to port 443, as squid's
+/// default. The proxy got the `CONNECT` by address and by name, refused both, then the app's request with its line in
+/// absolute form and the app's header lines unchanged, in order, none added; the origin got the origin form and the
+/// same `Host`; the answer reached the app whole; the flow went through the network's proxy, named by its `Host`.
+#[test]
+#[ignore = "needs an unprivileged network namespace; scripts/check.sh rust runs it"]
+fn a_plain_request_whose_connect_the_networks_proxy_refuses_is_forwarded_in_absolute_form()
+-> Outcome {
+    lab(
+        "a_plain_request_whose_connect_the_networks_proxy_refuses_is_forwarded_in_absolute_form",
+        &Limits::default(),
+        |engine| async move {
+            let origin = origin((SERVER, 80).into()).await?;
+            let proxy = squid_lab(&engine, &["example.test"]).await?;
+            let mut app = app_connect(origin.address).await?;
+            let request = "GET /path?query HTTP/1.1\r\nHost: example.test\r\nUser-Agent: lab/1\r\nAccept: */*\r\n\r\n";
+            assert_eq!(
+                fetch(&mut app, request.as_bytes()).await?,
+                named("GET /path?query HTTP/1.1", "example.test", b"")
+            );
+            let mut absolute = lines_of(request);
+            absolute[0] = "GET http://example.test/path?query HTTP/1.1".to_owned();
+            assert_eq!(
+                proxy.requests(),
+                [
+                    connect_lines("198.51.100.9:80"),
+                    connect_lines("example.test:80"),
+                    absolute
+                ]
+            );
+            assert_eq!(
+                origin.got(),
+                [got(
+                    "GET /path?query HTTP/1.1",
+                    "example.test",
+                    &["User-Agent: lab/1", "Accept: */*"],
+                    b""
+                )]
+            );
+            let flow = flow_to(&engine, origin.address, |f| f.via == Via::NetworkProxy).await?;
+            assert_eq!(flow.name.as_deref(), Some("example.test"));
+            assert_eq!(flow.uid, Some(APP));
+            let counters = engine.counters();
+            assert_eq!((counters[FORWARDED], counters[REMEMBERED]), (1, 0));
+            Ok(())
+        },
+    )
+}
+
+/// The forwarder's network lab, row 2: on one kept-alive connection, a request with no body, one with a length and
+/// one chunked (its `Transfer-Encoding: Chunked` written `chunked`, so that no proxy frames it otherwise), one after
+/// another and then pipelined in one write: each reached the origin whole and in order, rewritten at the proxy, and
+/// each answer came back in turn. Then a chunked body with a trailer: the proxy got its head and the chunk before
+/// the last, never the last chunk's line nor the trailer, which a proxy that knows no trailer reads as a request of
+/// its own; the app got a reset, and the origin nothing more.
+#[test]
+#[ignore = "needs an unprivileged network namespace; scripts/check.sh rust runs it"]
+fn kept_alive_requests_are_forwarded_in_turn_and_a_trailer_resets_the_connection() -> Outcome {
+    lab(
+        "kept_alive_requests_are_forwarded_in_turn_and_a_trailer_resets_the_connection",
+        &Limits::default(),
+        |engine| async move {
+            let origin = origin((SERVER, 80).into()).await?;
+            let proxy = squid_lab(&engine, &["example.test"]).await?;
+            let mut app = app_connect(origin.address).await?;
+            let three: [&[u8]; 3] = [
+                b"GET /a HTTP/1.1\r\nHost: example.test\r\n\r\n",
+                b"POST /b HTTP/1.1\r\nHost: example.test\r\nContent-Length: 5\r\n\r\nhello",
+                b"PUT /c HTTP/1.1\r\nHost: example.test\r\nTransfer-Encoding: Chunked\r\n\r\n\
+                  3\r\nabc\r\n2\r\nde\r\n0\r\n\r\n",
+            ];
+            let answers = [
+                named("GET /a HTTP/1.1", "example.test", b""),
+                named("POST /b HTTP/1.1", "example.test", b"hello"),
+                named("PUT /c HTTP/1.1", "example.test", b"abcde"),
+            ];
+            for (request, answer) in three.iter().zip(&answers) {
+                assert_eq!(&fetch(&mut app, request).await?, answer);
+            }
+            app.write_all(&three.concat()).await?;
+            for answer in &answers {
+                assert_eq!(&answer_body(&mut app).await?, answer);
+            }
+            let each = [
+                got("GET /a HTTP/1.1", "example.test", &[], b""),
+                got(
+                    "POST /b HTTP/1.1",
+                    "example.test",
+                    &["Content-Length: 5"],
+                    b"hello",
+                ),
+                got(
+                    "PUT /c HTTP/1.1",
+                    "example.test",
+                    &["Content-Length: 5"],
+                    b"abcde",
+                ),
+            ];
+            assert_eq!(origin.got(), [each.clone(), each].concat());
+            let lines: Vec<Vec<String>> = vec![
+                vec![
+                    "GET http://example.test/a HTTP/1.1".into(),
+                    "Host: example.test".into(),
+                ],
+                vec![
+                    "POST http://example.test/b HTTP/1.1".into(),
+                    "Host: example.test".into(),
+                    "Content-Length: 5".into(),
+                ],
+                vec![
+                    "PUT http://example.test/c HTTP/1.1".into(),
+                    "Host: example.test".into(),
+                    "Transfer-Encoding: chunked".into(),
+                ],
+            ];
+            assert_eq!(forwarded(&proxy), [lines.clone(), lines].concat());
+
+            app.write_all(
+                b"PUT /d HTTP/1.1\r\nHost: example.test\r\nTransfer-Encoding: chunked\r\n\r\n3\r\nxyz\r\n\
+                  0\r\nChecksum: 1f\r\n\r\nGET /e HTTP/1.1\r\nHost: example.test\r\n\r\n",
+            )
+            .await?;
+            let (read, end) = read_to_end_or_error(&mut app).await?;
+            assert_eq!(
+                (read, end),
+                (Vec::new(), Some(io::ErrorKind::ConnectionReset))
+            );
+            tokio::time::sleep(Duration::from_millis(200)).await;
+            let heads = forwarded(&proxy);
+            assert_eq!(heads.len(), 7, "{heads:?}");
+            assert_eq!(heads[6][0], "PUT http://example.test/d HTTP/1.1");
+            let bytes = proxy.forwarded();
+            let last = bytes
+                .windows(6)
+                .rposition(|w| w == b"\r\n\r\n3\r")
+                .ok_or("the last head's first chunk")?;
+            assert_eq!(
+                &bytes[last + 4..],
+                b"3\r\nxyz\r\n",
+                "the last chunk's line and the trailer held"
+            );
+            assert_eq!(origin.got().len(), 6);
+            assert_eq!(engine.counters()[FORWARD_RESET], 1);
+            Ok(())
+        },
+    )
+}
+
+/// The forwarder's network lab, row 3: a port of its own (`http://example.test:8080/`), `OPTIONS *` on the same
+/// connection (`OPTIONS http://example.test:8080`), and HTTP/1.0 without `Host` to port 80, whose authority is the
+/// flow's own address (`GET http://198.51.100.9/ HTTP/1.0`): each forwarded so, and each origin got the origin form.
+#[test]
+#[ignore = "needs an unprivileged network namespace; scripts/check.sh rust runs it"]
+fn a_port_of_its_own_options_star_and_http_1_0_without_host_are_forwarded() -> Outcome {
+    lab(
+        "a_port_of_its_own_options_star_and_http_1_0_without_host_are_forwarded",
+        &Limits::default(),
+        |engine| async move {
+            let other_port = origin((SERVER, 8080).into()).await?;
+            let plain = origin((SERVER, 80).into()).await?;
+            let proxy = squid_lab(&engine, &["example.test"]).await?;
+            let mut app = app_connect(other_port.address).await?;
+            let get = b"GET / HTTP/1.1\r\nHost: example.test:8080\r\n\r\n";
+            assert_eq!(
+                fetch(&mut app, get).await?,
+                named("GET / HTTP/1.1", "example.test:8080", b"")
+            );
+            let options = b"OPTIONS * HTTP/1.1\r\nHost: example.test:8080\r\n\r\n";
+            assert_eq!(
+                fetch(&mut app, options).await?,
+                named("OPTIONS * HTTP/1.1", "example.test:8080", b"")
+            );
+            let mut old = app_connect(plain.address).await?;
+            let http10 = b"GET / HTTP/1.0\r\nUser-Agent: lab/1\r\n\r\n";
+            assert_eq!(
+                fetch(&mut old, http10).await?,
+                named("GET / HTTP/1.0", "198.51.100.9", b"")
+            );
+            assert_eq!(
+                forwarded(&proxy),
+                [
+                    lines_of(
+                        "GET http://example.test:8080/ HTTP/1.1\r\nHost: example.test:8080\r\n"
+                    ),
+                    lines_of(
+                        "OPTIONS http://example.test:8080 HTTP/1.1\r\nHost: example.test:8080\r\n"
+                    ),
+                    lines_of("GET http://198.51.100.9/ HTTP/1.0\r\nUser-Agent: lab/1\r\n"),
+                ]
+            );
+            assert_eq!(
+                other_port.got(),
+                [
+                    got("GET / HTTP/1.1", "example.test:8080", &[], b""),
+                    got("OPTIONS * HTTP/1.1", "example.test:8080", &[], b"")
+                ]
+            );
+            assert_eq!(
+                plain.got(),
+                [got(
+                    "GET / HTTP/1.0",
+                    "198.51.100.9",
+                    &["User-Agent: lab/1"],
+                    b""
+                )]
+            );
+            assert_eq!(engine.counters()[FORWARDED], 2);
+            Ok(())
+        },
+    )
+}
+
+/// A server that speaks first, as the lab's SMTP banner, then echoes what it reads, at `at`; how many connections it
+/// accepted.
+async fn banner_server(at: SocketAddr) -> io::Result<Arc<AtomicU64>> {
+    let listener = TcpListener::bind(at).await?;
+    let accepted = Arc::new(AtomicU64::new(0));
+    let counted = Arc::clone(&accepted);
+    tokio::spawn(async move {
+        while let Ok((mut connection, _)) = listener.accept().await {
+            counted.fetch_add(1, Ordering::SeqCst);
+            tokio::spawn(async move {
+                if connection.write_all(BANNER).await.is_err() {
+                    return;
+                }
+                let mut buffer = [0u8; 2_048];
+                while let Ok(n) = connection.read(&mut buffer).await {
+                    if n == 0 || connection.write_all(&buffer[..n]).await.is_err() {
+                        return;
+                    }
+                }
+            });
+        }
+    });
+    Ok(accepted)
+}
+
+/// The forwarder's network lab, row 4, and the audit's m13 (S2's evidence kept at port 443, the rescue's outcome a row
+/// of its own): through a proxy as squid's default, port 443 goes by S2's `CONNECT`, which it opens, before any byte
+/// of the app's: a server's banner reaches the app whole at once, and a TLS hello reaches the server through the
+/// tunnel. A server that speaks first on a port the proxy refuses is rescued as any flow there: its SYN answered, it
+/// waits for the app's first head with no cut but the flow's `connect_timeout`, and is then reset, recorded refused;
+/// the proxy got the two `CONNECT`s and nothing else, and the server was never reached.
+#[test]
+#[ignore = "needs an unprivileged network namespace; scripts/check.sh rust runs it"]
+fn port_443_goes_by_connect_and_a_server_first_flow_on_a_refused_port_is_reset_at_its_timeout()
+-> Outcome {
+    let limits = Limits {
+        connect_timeout: Duration::from_millis(1_500),
+        ..Limits::default()
+    };
+    lab(
+        "port_443_goes_by_connect_and_a_server_first_flow_on_a_refused_port_is_reset_at_its_timeout",
+        &limits,
+        |engine| async move {
+            let tls = SocketAddr::from((SERVER, 443));
+            let refused = SocketAddr::from((SERVER, 2525));
+            banner_server(tls).await?;
+            let never = banner_server(refused).await?;
+            let proxy = squid_lab(&engine, &["example.test"]).await?;
+            let began = std::time::Instant::now();
+            let mut smtp = app_connect(tls).await?;
+            let mut banner = vec![0u8; BANNER.len()];
+            within(
+                "the banner through the tunnel",
+                smtp.read_exact(&mut banner),
+            )
+            .await?;
+            assert_eq!(banner, BANNER);
+            assert!(
+                began.elapsed() < Duration::from_millis(500),
+                "{:?}",
+                began.elapsed()
+            );
+            let hello = client_hello("example.test");
+            let mut tls_app = app_connect(tls).await?;
+            tls_app.write_all(&hello).await?;
+            let mut heard = vec![0u8; BANNER.len() + hello.len()];
+            within("the hello's echo", tls_app.read_exact(&mut heard)).await?;
+            assert_eq!(&heard[BANNER.len()..], &hello[..]);
+            assert_eq!(proxy.carried(), hello, "the hello through the tunnel");
+
+            let began = std::time::Instant::now();
+            let mut waiting = app_connect(refused).await?;
+            let (read, end) = read_to_end_or_error(&mut waiting).await?;
+            assert_eq!(
+                (read, end),
+                (Vec::new(), Some(io::ErrorKind::ConnectionReset))
+            );
+            assert!(
+                began.elapsed() >= Duration::from_millis(1_200),
+                "{:?}",
+                began.elapsed()
+            );
+            let flow = flow_to(&engine, refused, |f| {
+                f.outcome == datapavan_net::Outcome::Refused
+            })
+            .await?;
+            assert_eq!(flow.uid, Some(APP));
+            assert_eq!(
+                proxy.requests(),
+                [
+                    connect_lines("198.51.100.9:443"),
+                    connect_lines("198.51.100.9:443"),
+                    connect_lines("198.51.100.9:2525"),
+                    connect_lines("example.test:2525"),
+                ]
+            );
+            assert_eq!(never.load(Ordering::SeqCst), 0);
+            let counters = engine.counters();
+            assert_eq!((counters[FORWARDED], counters[FORWARD_RESET]), (0, 1));
+            Ok(())
+        },
+    )
+}
+
+/// A fresh app connection to `to` that the engine opens, whose `request` it then resets with nothing answered.
+async fn reset_after(to: SocketAddr, request: &[u8]) -> Outcome {
+    let mut app = app_connect(to).await?;
+    app.write_all(request).await?;
+    let (read, end) = read_to_end_or_error(&mut app).await?;
+    assert_eq!(
+        (read, end),
+        (Vec::new(), Some(io::ErrorKind::ConnectionReset)),
+        "{}",
+        String::from_utf8_lossy(request)
+    );
+    Ok(())
+}
+
+/// The forwarder's network lab, rows 5 to 8 and the audit's m12, the first heads it does not carry: `Content-Length`
+/// with `Transfer-Encoding`, a `Host` no answer gave the address (a server the proxy knows by it waits), a `Host` port
+/// that is not the flow's, the app's own absolute form, and `Upgrade`. Each flow is opened and reset; the first was
+/// rescued after its two `CONNECT`s, each later one sent to the stage by the refusal remembered and tried by `CONNECT`
+/// after its head, which the proxy refused: the proxy got only `CONNECT`s, by address and by the bound name, and no
+/// server was reached. Then the same framing and a WebSocket handshake in a later head, on connections whose first
+/// request was forwarded and answered: reset, the origin holding only the first requests.
+#[test]
+#[ignore = "needs an unprivileged network namespace; scripts/check.sh rust runs it"]
+fn first_heads_the_forwarder_does_not_carry_go_by_connect_and_later_ones_reset() -> Outcome {
+    lab(
+        "first_heads_the_forwarder_does_not_carry_go_by_connect_and_later_ones_reset",
+        &Limits::default(),
+        |engine| async move {
+            let plain = origin((SERVER, 80).into()).await?;
+            let fake = origin((OTHER, 80).into()).await?;
+            let proxy =
+                squid_lab_knowing(&engine, &["example.test"], &[("popular.example", OTHER)])
+                    .await?;
+            let firsts: [&[u8]; 5] = [
+                b"POST / HTTP/1.1\r\nHost: example.test\r\nContent-Length: 5\r\n\
+                  Transfer-Encoding: chunked\r\n\r\n0\r\n\r\n",
+                b"GET / HTTP/1.1\r\nHost: popular.example\r\n\r\n",
+                b"GET / HTTP/1.1\r\nHost: example.test:8080\r\n\r\n",
+                b"GET http://popular.example/ HTTP/1.1\r\nHost: popular.example\r\n\r\n",
+                b"GET /chat HTTP/1.1\r\nHost: example.test\r\nUpgrade: websocket\r\nConnection: Upgrade\r\n\
+                  Sec-WebSocket-Key: dGhlIHNhbXBsZSBub25jZQ==\r\nSec-WebSocket-Version: 13\r\n\r\n",
+            ];
+            for first in firsts {
+                reset_after(plain.address, first).await?;
+            }
+            let requests = proxy.requests();
+            let by_address = connect_lines("198.51.100.9:80");
+            assert!(
+                requests
+                    .iter()
+                    .all(|r| *r == by_address || *r == connect_lines("example.test:80")),
+                "{requests:?}"
+            );
+            assert_eq!(
+                requests.iter().filter(|r| **r == by_address).count(),
+                5,
+                "{requests:?}"
+            );
+            assert_eq!((plain.connections(), fake.connections()), (0, 0));
+            let counters = engine.counters();
+            assert_eq!(
+                (
+                    counters[FORWARDED],
+                    counters[REMEMBERED],
+                    counters[FORWARD_RESET]
+                ),
+                (0, 4, 5)
+            );
+
+            let first = b"GET /1 HTTP/1.1\r\nHost: example.test\r\n\r\n";
+            let laters: [&[u8]; 2] = [
+                b"POST /2 HTTP/1.1\r\nHost: example.test\r\nContent-Length: 3\r\n\
+                  Transfer-Encoding: chunked\r\n\r\n0\r\n\r\n",
+                b"GET /chat HTTP/1.1\r\nHost: example.test\r\nUpgrade: websocket\r\nConnection: Upgrade\r\n\
+                  Sec-WebSocket-Key: dGhlIHNhbXBsZSBub25jZQ==\r\nSec-WebSocket-Version: 13\r\n\r\n",
+            ];
+            for later in laters {
+                let mut app = app_connect(plain.address).await?;
+                assert_eq!(
+                    fetch(&mut app, first).await?,
+                    named("GET /1 HTTP/1.1", "example.test", b"")
+                );
+                app.write_all(later).await?;
+                let (read, end) = read_to_end_or_error(&mut app).await?;
+                assert_eq!(
+                    (read, end),
+                    (Vec::new(), Some(io::ErrorKind::ConnectionReset))
+                );
+            }
+            let one = got("GET /1 HTTP/1.1", "example.test", &[], b"");
+            assert_eq!(plain.got(), [one.clone(), one]);
+            assert_eq!(forwarded(&proxy).len(), 2);
+            assert_eq!(engine.counters()[FORWARD_RESET], 7);
+            Ok(())
+        },
+    )
+}
+
+/// The WebSocket server's answer to a handshake.
+const SWITCHED: &[u8] =
+    b"HTTP/1.1 101 Switching Protocols\r\nUpgrade: websocket\r\nConnection: Upgrade\r\n\r\n";
+
+/// A WebSocket server at `at`: it reads a handshake's head, answers `101`, then answers each masked frame of up to 125
+/// bytes with the same text unmasked.
+async fn websocket_server(at: SocketAddr) -> io::Result<()> {
+    let listener = TcpListener::bind(at).await?;
+    tokio::spawn(async move {
+        while let Ok((mut connection, _)) = listener.accept().await {
+            tokio::spawn(async move {
+                let mut head = Vec::new();
+                let mut byte = [0u8; 1];
+                while !head.ends_with(b"\r\n\r\n") {
+                    if !matches!(connection.read(&mut byte).await, Ok(1)) {
+                        return;
+                    }
+                    head.push(byte[0]);
+                }
+                if connection.write_all(SWITCHED).await.is_err() {
+                    return;
+                }
+                let mut start = [0u8; 6];
+                while connection.read_exact(&mut start).await.is_ok() {
+                    let mut text = vec![0u8; usize::from(start[1] & 0x7f)];
+                    if connection.read_exact(&mut text).await.is_err() {
+                        return;
+                    }
+                    for (i, b) in text.iter_mut().enumerate() {
+                        *b ^= start[2 + i % 4];
+                    }
+                    let mut frame = vec![0x81, start[1] & 0x7f];
+                    frame.extend_from_slice(&text);
+                    if connection.write_all(&frame).await.is_err() {
+                        return;
+                    }
+                }
+            });
+        }
+    });
+    Ok(())
+}
+
+/// The forwarder's network lab, the proxy that tunnels every port (`ConnectMode::ConnectOnly`, its absolute form
+/// answered `403`): plain HTTP to port 80 and a `ws://` handshake on another port go by S2's `CONNECT`, which it
+/// opens, so nothing is forwarded: the proxy got the two `CONNECT`s by address and nothing else, the origin got the
+/// app's own request in origin form, and frames passed both ways (the plan's row 8, its open proxy).
+#[test]
+#[ignore = "needs an unprivileged network namespace; scripts/check.sh rust runs it"]
+fn where_the_proxy_tunnels_port_80_plain_http_and_websocket_go_by_connect() -> Outcome {
+    lab(
+        "where_the_proxy_tunnels_port_80_plain_http_and_websocket_go_by_connect",
+        &Limits::default(),
+        |engine| async move {
+            let plain = origin((SERVER, 80).into()).await?;
+            let ws = SocketAddr::from((SERVER, 8081));
+            websocket_server(ws).await?;
+            let proxy = connect_proxy(
+                OTHER.into(),
+                ConnectSettings {
+                    mode: ConnectMode::ConnectOnly,
+                    ..ConnectSettings::default()
+                },
+            )
+            .await?;
+            require_proxy(OTHER)?;
+            let_loopback()?;
+            set_beneath(&engine, LAB_NETWORK, proxy.address, "")?;
+            let mut app = app_connect(plain.address).await?;
+            let request = b"GET /p?q HTTP/1.1\r\nHost: example.test\r\n\r\n";
+            assert_eq!(
+                fetch(&mut app, request).await?,
+                named("GET /p?q HTTP/1.1", "example.test", b"")
+            );
+            let mut socket = app_connect(ws).await?;
+            let handshake =
+                b"GET /chat HTTP/1.1\r\nHost: 198.51.100.9:8081\r\nUpgrade: websocket\r\n\
+                Connection: Upgrade\r\nSec-WebSocket-Key: dGhlIHNhbXBsZSBub25jZQ==\r\n\
+                Sec-WebSocket-Version: 13\r\n\r\n";
+            socket.write_all(handshake).await?;
+            let mut switched = vec![0u8; SWITCHED.len()];
+            within("the 101", socket.read_exact(&mut switched)).await?;
+            assert_eq!(switched, SWITCHED);
+            let mask = [1u8, 2, 3, 4];
+            let mut frame = vec![0x81, 0x85];
+            frame.extend_from_slice(&mask);
+            frame.extend(b"hello".iter().enumerate().map(|(i, b)| b ^ mask[i % 4]));
+            step(&mut socket, &frame, b"\x81\x05hello").await?;
+            assert_eq!(
+                proxy.requests(),
+                [
+                    connect_lines("198.51.100.9:80"),
+                    connect_lines("198.51.100.9:8081")
+                ]
+            );
+            assert_eq!(
+                plain.got(),
+                [got("GET /p?q HTTP/1.1", "example.test", &[], b"")]
+            );
+            assert!(holds(&proxy.carried(), request));
+            assert_eq!(engine.counters()[FORWARDED], 0);
+            flow_to(&engine, ws, |f| f.via == Via::NetworkProxy).await?;
+            Ok(())
+        },
+    )
+}
+
+/// The forwarder's network lab, row 9, with the audit's m10: tracker blocking on, a request whose `Host` the table
+/// blocks, on a port whose `CONNECT` the proxy refused, is reset by the tracker gate before any of it passes the stage:
+/// the proxy accepted the stage's own connection and read not one byte of it, and the flow is recorded blocked; in the
+/// same pass a request to a name the table does not block reaches the proxy and its origin.
+#[test]
+#[ignore = "needs an unprivileged network namespace; scripts/check.sh rust runs it"]
+fn with_blocking_on_a_blocked_host_reaches_neither_the_proxy_nor_its_origin() -> Outcome {
+    lab(
+        "with_blocking_on_a_blocked_host_reaches_neither_the_proxy_nor_its_origin",
+        &Limits::default(),
+        |engine| async move {
+            let table = datapavan_net::blocking::Table::parse(
+                "tracker.example\tcom.example:sdk\tcom.example.\tblock\t-\tReceives events\tcode\t\
+                 https://example.com/x\t2026-11-21\n",
+            )
+            .map_err(|e| format!("{e:?}"))?;
+            engine.blocking(BlockSetting {
+                on: true,
+                table: Some(Arc::new(table)),
+                covered: vec![APP],
+                ..BlockSetting::default()
+            });
+            let plain = origin((SERVER, 80).into()).await?;
+            let proxy = squid_lab(&engine, &["tracker.example", "example.test"]).await?;
+            reset_after(
+                plain.address,
+                b"GET /t HTTP/1.1\r\nHost: tracker.example\r\n\r\n",
+            )
+            .await?;
+            flow_to(&engine, plain.address, |f| f.blocked.is_some()).await?;
+            tokio::time::sleep(Duration::from_millis(200)).await;
+            assert_eq!(proxy.empty(), 1, "the stage's connection, read nothing");
+            assert_eq!(forwarded(&proxy), Vec::<Vec<String>>::new());
+            let mut app = app_connect(plain.address).await?;
+            let request = b"GET /e HTTP/1.1\r\nHost: example.test\r\n\r\n";
+            assert_eq!(
+                fetch(&mut app, request).await?,
+                named("GET /e HTTP/1.1", "example.test", b"")
+            );
+            assert_eq!(
+                forwarded(&proxy),
+                [lines_of(
+                    "GET http://example.test/e HTTP/1.1\r\nHost: example.test\r\n"
+                )]
+            );
+            assert_eq!(
+                plain.got(),
+                [got("GET /e HTTP/1.1", "example.test", &[], b"")]
+            );
+            Ok(())
+        },
+    )
+}
+
+/// The audit's M2: a head written 2 s after the connection opened, as `HttpURLConnection`, Chromium and `WebView` may
+/// write late, is awaited with no cut but the flow's `connect_timeout`, forwarded and answered; the late first byte is
+/// counted.
+#[test]
+#[ignore = "needs an unprivileged network namespace; scripts/check.sh rust runs it"]
+fn a_head_written_two_seconds_late_is_forwarded() -> Outcome {
+    lab(
+        "a_head_written_two_seconds_late_is_forwarded",
+        &Limits::default(),
+        |engine| async move {
+            let plain = origin((SERVER, 80).into()).await?;
+            let proxy = squid_lab(&engine, &["example.test"]).await?;
+            let mut app = app_connect(plain.address).await?;
+            tokio::time::sleep(Duration::from_secs(2)).await;
+            let request = b"GET /late HTTP/1.1\r\nHost: example.test\r\n\r\n";
+            assert_eq!(
+                fetch(&mut app, request).await?,
+                named("GET /late HTTP/1.1", "example.test", b"")
+            );
+            assert_eq!(
+                forwarded(&proxy),
+                [lines_of(
+                    "GET http://example.test/late HTTP/1.1\r\nHost: example.test\r\n"
+                )]
+            );
+            let counters = engine.counters();
+            assert_eq!((counters[FORWARDED], counters[FIRST_WAIT]), (1, 1));
+            Ok(())
+        },
+    )
+}
+
+/// The audit's M3: two names Datapavan's own resolvers gave one address, `a.example` then `b.example`, so that the
+/// address's last name is the second. A flow forwarded with `Host: a.example` is recorded under its `Host`, not the
+/// address's last name; one with `Host: b.example`, under that.
+#[test]
+#[ignore = "needs an unprivileged network namespace; scripts/check.sh rust runs it"]
+fn a_forwarded_flow_to_an_address_of_two_names_is_recorded_under_its_host() -> Outcome {
+    lab(
+        "a_forwarded_flow_to_an_address_of_two_names_is_recorded_under_its_host",
+        &Limits::default(),
+        |engine| async move {
+            let plain = origin((SERVER, 80).into()).await?;
+            let proxy = squid_lab(&engine, &["a.example", "b.example"]).await?;
+            for name in ["a.example", "b.example"] {
+                let mut app = app_connect(plain.address).await?;
+                let request = format!("GET / HTTP/1.1\r\nHost: {name}\r\n\r\n");
+                assert_eq!(
+                    fetch(&mut app, request.as_bytes()).await?,
+                    named("GET / HTTP/1.1", name, b"")
+                );
+                let local = app.local_addr()?;
+                let flow = flow_to(&engine, plain.address, |f| f.app == local).await?;
+                assert_eq!(
+                    (flow.name.as_deref(), flow.via),
+                    (Some(name), Via::NetworkProxy)
+                );
+            }
+            assert_eq!(
+                forwarded(&proxy),
+                [
+                    lines_of("GET http://a.example/ HTTP/1.1\r\nHost: a.example\r\n"),
+                    lines_of("GET http://b.example/ HTTP/1.1\r\nHost: b.example\r\n")
+                ]
+            );
+            Ok(())
+        },
+    )
+}
+
+/// The audit's m9: a head of 60 KiB (its cookies), past the relay's 16 KiB and Linux's first receive window, is
+/// forwarded whole: the stage reads the relay's loopback stream as it comes rather than peek at a listener's queue,
+/// so the head never waits for room. The proxy and the origin got its every field.
+#[test]
+#[ignore = "needs an unprivileged network namespace; scripts/check.sh rust runs it"]
+fn a_head_of_sixty_kib_is_forwarded_whole() -> Outcome {
+    lab(
+        "a_head_of_sixty_kib_is_forwarded_whole",
+        &Limits::default(),
+        |engine| async move {
+            let plain = origin((SERVER, 80).into()).await?;
+            let proxy = squid_lab(&engine, &["example.test"]).await?;
+            let cookies: Vec<String> = (0..60)
+                .map(|i| format!("Cookie: c{i:02}={}", "x".repeat(1_010)))
+                .collect();
+            let request = format!(
+                "GET /big HTTP/1.1\r\nHost: example.test\r\n{}\r\n\r\n",
+                cookies.join("\r\n")
+            );
+            assert!(request.len() > 60 * 1_024, "{}", request.len());
+            let mut app = app_connect(plain.address).await?;
+            assert_eq!(
+                fetch(&mut app, request.as_bytes()).await?,
+                named("GET /big HTTP/1.1", "example.test", b"")
+            );
+            let mut lines = vec![
+                "GET http://example.test/big HTTP/1.1".to_owned(),
+                "Host: example.test".to_owned(),
+            ];
+            lines.extend(cookies.iter().cloned());
+            assert_eq!(forwarded(&proxy), [lines]);
+            let fields: Vec<&str> = cookies.iter().map(String::as_str).collect();
+            assert_eq!(
+                plain.got(),
+                [got("GET /big HTTP/1.1", "example.test", &fields, b"")]
+            );
+            Ok(())
+        },
+    )
+}
+
+/// The audit's m1, the tool guard (S2's C1): the chain's tool's own connection, with a head the forwarder could carry
+/// (a bound `Host`, no `Upgrade`), to a port whose `CONNECT` the proxy refuses, keeps S2's way: the `CONNECT` by
+/// address alone, never by name, and its SYN refused as its direct connection was, never opened and reset.
+#[test]
+#[ignore = "needs an unprivileged network namespace; scripts/check.sh rust runs it"]
+fn the_tools_own_flow_is_never_rescued() -> Outcome {
+    lab(
+        "the_tools_own_flow_is_never_rescued",
+        &Limits::default(),
+        |engine| async move {
+            let plain = origin((SERVER, 80).into()).await?;
+            let tool = proxy(Settings::default()).await?;
+            engine.chain(Some(Chain {
+                tool: SECOND_APP,
+                ..lab_chain(tool.address)
+            }));
+            let proxy = squid_lab(&engine, &["example.test"]).await?;
+            let socket = TcpSocket::new_v4()?;
+            socket.bind(SocketAddr::from((
+                Addresses::COMMON.tun4,
+                SECOND_PORTS.start + 9,
+            )))?;
+            let connection = timeout(STEP, socket.connect(plain.address))
+                .await
+                .map_err(|_| "no end to the tool's connection")?;
+            assert!(refused(&connection), "{connection:?}");
+            assert_eq!(proxy.requests(), [connect_lines("198.51.100.9:80")]);
+            assert_eq!(plain.connections(), 0);
+            let counters = engine.counters();
+            assert_eq!((counters[FORWARDED], counters[FORWARD_RESET]), (0, 0));
             Ok(())
         },
     )
