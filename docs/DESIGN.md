@@ -1138,7 +1138,14 @@ with hand mutants, vectors the network part's JVM tests read too, and the emulat
 address that a rooted emulator sends to the proxy lab, so that the first hop is not local. After its review round:
 under strict Private DNS the setting's addresses go with its names, and no chosen app is handed before they are known;
 the engine reads the setting and the local facts again for a chosen app's open flows when either changes; a reinstall
-the network part follows says so too; the rows say why a choice is not offered.
+the network part follows says so too; the rows say why a choice is not offered. Unit S2, on `proxy-s2`, 2026-11-27
+(ADR 0052, decision 11, under the maintainer's decisions of 2026-11-26): a direct app's TCP that cannot connect directly
+goes through the network beneath's own proxy by `CONNECT`, by address and only then by the flow's own name, directly
+first and the proxy first only after three distinct servers failed directly; one settle for the resolver and the
+engine; the switch "Send apps through this proxy" in "Now"; route 3 in the log's version 8. Checked by the engine's
+tests with hand mutants, a fuzz target, nine network-lab tests on a network that lets out only its proxy, tinyproxy
+against the engine's own bytes, and the `proxies` shard's row 7. Plain HTTP through a proxy that refuses `CONNECT` to
+port 80 waits for the forwarder, a condition of release 0.2.0.
 
 Its fix round, on `watch-w8b-fix`, 2026-11-21, after one review round of two reviewers, with the coordinator's
 decisions written into ADR 0052: a SOCKS or `CONNECT` proxy is named only once the server's reply confirms it, and a

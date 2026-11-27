@@ -320,6 +320,19 @@ told no proxy.
      measured.
 7. **Limits:** DoT stays direct, since most proxies refuse a `CONNECT` to port 853 and DoT is not HTTP; a proxy that
    wants a password is refused, and the exchange goes directly.
+8. **One settle for the resolver and the engine** (the proxy record's unit S2, 2026-11-27;
+   [ADR 0052](0052-apps-built-in-proxies.md), decision 11). `settleResolverProxy`, which the resolver already followed,
+   hands the engine the proxy it settled whenever that changed, and again at each start of the engine, whose setting
+   starts empty; a new network and a lost one hand none at once, before any lookup. So the resolver and the engine never
+   disagree on the network's proxy. Only the network's own proxy reaches the engine, never the global one, which gives
+   it none with the reason `global` (`NetworkProxy.forEngine`), since Android already gives the global proxy to every
+   app inside the VPN. On Android 17, a proxy on the local network while the network part lacks the local-network
+   grant leaves both ways (`NetworkProxy.withoutGrant`, by [ADR 0034](0034-network-permissions.md)'s ranges and the
+   network's own prefixes, read at each settle), and none left gives the reason `local-no-grant`. The proxy's
+   addresses join the network's others, which the tunnel's addresses avoid. The resolver's own order, sockets and
+   answers are unchanged; the user's switch "Send apps through this proxy" is the engine's alone. The exclusion list's
+   twin in the engine reads it as `NetworkProxy.excluded` does, both held to one table, and both now trim only the code
+   points up to U+0020 and fold only ASCII letters.
 
 ## Consequences
 

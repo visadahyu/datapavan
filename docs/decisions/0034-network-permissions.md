@@ -111,6 +111,20 @@ not checked.
      through the tunnel. That path is exempt, keeps Private DNS as the phone had it and keeps nothing in Android's
      cache of that network [code; to test]. The encrypted ways reach public servers, not the LAN, so the local-network
      rule does not touch them.
+   - **The network's own proxy** (the proxy record's unit S2, 2026-11-27; [ADR 0052](0052-apps-built-in-proxies.md),
+     decision 11; [ADR 0042](0042-dns-of-apps-that-go-directly.md), "Android's proxy", point 8). The engine's
+     connection to a network's proxy, like the resolver's, is a protected socket of the network part's UID. A proxy in
+     the ranges above while the network part lacks the grant is used by neither (`NetworkProxy.withoutGrant`, the
+     reason `local-no-grant`), and "Now" says so, with a button that asks for the grant. The rule for apps above, once
+     built, checks the app's destination, the public server, never the proxy: the proxy hop is the network part's own,
+     under its own grant. A destination within the network's on-link prefixes never goes through the proxy; a private
+     address on another subnet may, as Android would send it there, and the rule for apps must then be decided for it
+     before the proxy, as for a direct connection. Measured on Android 17's emulator (`dp-api37-16k`): with no VPN,
+     Android let an app that targets 37 and holds no grant reach a Wi-Fi proxy at 10.0.2.2, while it blocked the same
+     app's direct connection to that address, so Android exempts the proxy and this decision does not change; but with
+     the network part's grant revoked and the VPN restarted, the engine's own direct connection to 10.0.2.2 opened, so
+     on that build the network part's protected sockets were not held to the grant, and `local-no-grant` may hold back
+     a proxy the engine could reach. The engine's connection to the proxy itself without the grant was not tried.
    - **Android 16** had an opt-in test mode, switched on over adb and gated by `NEARBY_WIFI_DEVICES`;
      it is deprecated [doc]. The network part does not request that permission. On 10 to 16 the LAN stays open as
      before.

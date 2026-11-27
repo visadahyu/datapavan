@@ -161,6 +161,15 @@ limit.**
 (g) **Coalescing**: a tracker request coalesced onto a `keep` connection (HTTP/2's connection reuse) is not seen.
 **Accepted limit**, frontier research.
 
+(h) **Through the network's own proxy** (the proxy record's unit S2, [ADR 0052](0052-apps-built-in-proxies.md),
+decision 11): blocking decides before the proxy has anything of the app's. A name blocked at its lookup is answered
+empty, and no connection follows; a flow blocked by its address is refused before any upstream, the proxy's included;
+a flow blocked by its hello or its plain request is held as (a) says, so the proxy gets the `CONNECT` by address and
+then an empty tunnel, which is what (c) gives the server on a direct route, a connection and no payload; and a request
+by name never carries a name blocking refuses for the app. Checked in the network lab (a blocked hello reaches neither
+the proxy, which read the `CONNECT` and nothing after, nor the server, and the app gets a reset) and on the emulator
+(the tunnel closed with 0 bytes each way, the flow blocked by its hello under the route through the network's proxy).
+
 ### 5. What is never blocked, or not by default
 
 (a) **Browsers** are left out by default, and the screen says so; the user may include them *(coordinator)*. A browser

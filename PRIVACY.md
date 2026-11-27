@@ -69,7 +69,10 @@ your unlocked phone can see it, as they can see the rest of the app.
   ASSOCIATE` is open, for up to 16 such connections of an app at once; a relay at another address keeps its address. When tracker blocking refused a
   connection, its record says so, with the name of the tracker's software
   package (for example `com.google.firebase:firebase-analytics`), which names a tracker, never a destination, and
-  is kept whatever the switch for your tool says.
+  is kept whatever the switch for your tool says. A connection Datapavan made through your network's own proxy (see
+  "What Datapavan Advanced connects to") is kept as any direct one is, with where it connected and its name, and
+  marked as having gone through that proxy. Its record never keeps the proxy's address, its answer, or why the proxy
+  was used.
 - **Each app's recent traffic, for the "Now" view,** in memory only. It is gone when the firewall stops. Where an
   app's own proxy is (its address, name and network, and for a messenger's proxy the name its connection sent) is
   shown there, in memory only, while the connection is open and for ten minutes after it ends, whatever "Log where
@@ -77,7 +80,9 @@ your unlocked phone can see it, as they can see the rest of the app.
   for the apps that use it, the apps you send through it among them: its servers, its bridges, and the places it
   reaches directly for those apps. Anyone who opens "Now" in that time can see them. Where the app asked the proxy to
   go is shown only
-  while that switch is on, or for an app you chose to log that way. "Now" also shows the proxy set in Android's own settings, while one is set. To tell Telegram's, WhatsApp's and Signal's own connections from their proxies', it
+  while that switch is on, or for an app you chose to log that way. "Now" also shows the proxy set in Android's own settings, while one is set, and whether Datapavan sends apps
+  through your network's own proxy. What Datapavan learns of that proxy, such as whether it now comes first or asked
+  for a password, stays in memory only. To tell Telegram's, WhatsApp's and Signal's own connections from their proxies', it
   also notes in memory, until the firewall stops (and across the tunnel's own restarts, which hand it on): when
   each of them last connected to its maker's network, which counts for ten minutes; the names Telegram and
   WhatsApp looked up through Datapavan, as hashes that cannot be read back, each for an hour; and when Signal last
@@ -86,6 +91,9 @@ your unlocked phone can see it, as they can see the rest of the app.
   app and tracker, and since when.
 - **Your circumvention tool's settings:** whether apps go through it and which ones, the tool's host and port, and
   the password Datapavan made for it, which is encrypted under a key that Android's keystore protects.
+- **"Send apps through this proxy", if you turn it on** (off until you do): for each network's proxy you chose, the
+  kind of network (such as Wi-Fi or mobile) and the proxy's host and port, never the network's name, until you turn
+  it off.
 - **The apps you leave out of the firewall,** which then go to the internet without it: their names, until you take
   them back. A left-out app's requests through Android's PAC proxy, if a PAC file is set, come back into the firewall
   under that proxy's own name, and are shown and recorded there.
@@ -143,6 +151,26 @@ only last from that resolver directly, which shows it your address but no questi
 
 When you send apps through your circumvention tool, their lookups go to the tool, and their other DNS questions go
 through the tool by the same encrypted ways, so the resolver sees the tool's address, not yours.
+
+Where the network you are on names a proxy in its own settings (a Wi-Fi network's, or a mobile network's APN proxy)
+and an app that goes directly cannot connect directly, Datapavan Advanced connects it through that proxy, as Android
+would for apps without Datapavan. That proxy is a setting saved on this phone for that network, set by you, by
+whoever manages the phone, or by someone who had it, and it may be a service outside your network. Datapavan asks it
+to connect to the address and port the app asked for (an HTTP `CONNECT`), with no `User-Agent` or other header that
+names Datapavan or the app, and never with a password. Only once the proxy refuses an address, without asking for a
+password, does Datapavan ask it by a name, and only by the name Datapavan's resolver gave that app for that address,
+never one whose DNS answer carried Encrypted Client Hello (ECH), which is meant to keep the name hidden; once that
+works, it asks that proxy by name first. The proxy then sees where those apps connect, the names of most sites they
+open and what they send unencrypted, as a network would. It never gets an app's UDP, nothing of an app you send
+through your circumvention tool, nothing that goes through a WireGuard configuration, no connection to an address on
+the network you are on itself (such as your router or printer), nothing to an address its settings exclude, and
+nothing to a name they exclude when the app looked that name up through Datapavan. A circumvention tool's own
+connections may go through it by address, never by name. A proxy on the phone itself is never used: it is usually a
+tool's local port, and "Now" says so. On Android 17, a proxy on your local network is used only while Datapavan may
+reach your local network. If you set this proxy up as your own privacy proxy, the switch "Send apps through this
+proxy" under it in "Now" sends the TCP connections of every app that goes directly through it, within the same
+limits, not only where a direct connection fails. Datapavan's own lookups use the same proxy in their own way:
+directly first, and through it, by the server's address, only when they cannot connect directly.
 
 When you add a WireGuard configuration of your VPN provider, Datapavan Advanced connects to that provider's server,
 the one the configuration names, for the apps you send through it; their lookups go to the configuration's DNS

@@ -301,7 +301,10 @@ proxy is: its kind and the facts, not the proxy&rsquo;s address, while that swit
 SOCKS5 proxy&rsquo;s relay at that proxy&rsquo;s own address, while the connection on which the proxy took the app&rsquo;s <code>UDP ASSOCIATE</code> is open, for up to 16 such connections of an app at once; a relay at another address keeps its address. When tracker blocking refused a
 connection, its record says so, with the name of the tracker&rsquo;s software
 package (for example <code>com.google.firebase:firebase-analytics</code>), which names a tracker, never a destination, and
-is kept whatever the switch for your tool says.</li>
+is kept whatever the switch for your tool says. A connection Datapavan made through your network&rsquo;s own proxy (see
+&ldquo;What Datapavan Advanced connects to&rdquo;) is kept as any direct one is, with where it connected and its name, and
+marked as having gone through that proxy. Its record never keeps the proxy&rsquo;s address, its answer, or why the proxy
+was used.</li>
 <li><strong>Each app&rsquo;s recent traffic, for the &ldquo;Now&rdquo; view,</strong> in memory only. It is gone when the firewall stops. Where an
 app&rsquo;s own proxy is (its address, name and network, and for a messenger&rsquo;s proxy the name its connection sent) is
 shown there, in memory only, while the connection is open and for ten minutes after it ends, whatever &ldquo;Log where
@@ -309,7 +312,9 @@ apps connect through your tool, WireGuard or a proxy&rdquo; says. So is where a 
 for the apps that use it, the apps you send through it among them: its servers, its bridges, and the places it
 reaches directly for those apps. Anyone who opens &ldquo;Now&rdquo; in that time can see them. Where the app asked the proxy to
 go is shown only
-while that switch is on, or for an app you chose to log that way. &ldquo;Now&rdquo; also shows the proxy set in Android&rsquo;s own settings, while one is set. To tell Telegram&rsquo;s, WhatsApp&rsquo;s and Signal&rsquo;s own connections from their proxies&rsquo;, it
+while that switch is on, or for an app you chose to log that way. &ldquo;Now&rdquo; also shows the proxy set in Android&rsquo;s own settings, while one is set, and whether Datapavan sends apps
+through your network&rsquo;s own proxy. What Datapavan learns of that proxy, such as whether it now comes first or asked
+for a password, stays in memory only. To tell Telegram&rsquo;s, WhatsApp&rsquo;s and Signal&rsquo;s own connections from their proxies&rsquo;, it
 also notes in memory, until the firewall stops (and across the tunnel&rsquo;s own restarts, which hand it on): when
 each of them last connected to its maker&rsquo;s network, which counts for ten minutes; the names Telegram and
 WhatsApp looked up through Datapavan, as hashes that cannot be read back, each for an hour; and when Signal last
@@ -318,6 +323,9 @@ With tracker blocking on, it also counts in memory how many lookups and connecti
 app and tracker, and since when.</li>
 <li><strong>Your circumvention tool&rsquo;s settings:</strong> whether apps go through it and which ones, the tool&rsquo;s host and port, and
 the password Datapavan made for it, which is encrypted under a key that Android&rsquo;s keystore protects.</li>
+<li><strong>&ldquo;Send apps through this proxy&rdquo;, if you turn it on</strong> (off until you do): for each network&rsquo;s proxy you chose, the
+kind of network (such as Wi-Fi or mobile) and the proxy&rsquo;s host and port, never the network&rsquo;s name, until you turn
+it off.</li>
 <li><strong>The apps you leave out of the firewall,</strong> which then go to the internet without it: their names, until you take
 them back. A left-out app&rsquo;s requests through Android&rsquo;s PAC proxy, if a PAC file is set, come back into the firewall
 under that proxy&rsquo;s own name, and are shown and recorded there.</li>
@@ -370,6 +378,25 @@ any question, first from resolvers that run none of the targets, through your ci
 only last from that resolver directly, which shows it your address but no question.</p>
 <p>When you send apps through your circumvention tool, their lookups go to the tool, and their other DNS questions go
 through the tool by the same encrypted ways, so the resolver sees the tool&rsquo;s address, not yours.</p>
+<p>Where the network you are on names a proxy in its own settings (a Wi-Fi network&rsquo;s, or a mobile network&rsquo;s APN proxy)
+and an app that goes directly cannot connect directly, Datapavan Advanced connects it through that proxy, as Android
+would for apps without Datapavan. That proxy is a setting saved on this phone for that network, set by you, by
+whoever manages the phone, or by someone who had it, and it may be a service outside your network. Datapavan asks it
+to connect to the address and port the app asked for (an HTTP <code>CONNECT</code>), with no <code>User-Agent</code> or other header that
+names Datapavan or the app, and never with a password. Only once the proxy refuses an address, without asking for a
+password, does Datapavan ask it by a name, and only by the name Datapavan&rsquo;s resolver gave that app for that address,
+never one whose DNS answer carried Encrypted Client Hello (ECH), which is meant to keep the name hidden; once that
+works, it asks that proxy by name first. The proxy then sees where those apps connect, the names of most sites they
+open and what they send unencrypted, as a network would. It never gets an app&rsquo;s UDP, nothing of an app you send
+through your circumvention tool, nothing that goes through a WireGuard configuration, no connection to an address on
+the network you are on itself (such as your router or printer), nothing to an address its settings exclude, and
+nothing to a name they exclude when the app looked that name up through Datapavan. A circumvention tool&rsquo;s own
+connections may go through it by address, never by name. A proxy on the phone itself is never used: it is usually a
+tool&rsquo;s local port, and &ldquo;Now&rdquo; says so. On Android 17, a proxy on your local network is used only while Datapavan may
+reach your local network. If you set this proxy up as your own privacy proxy, the switch &ldquo;Send apps through this
+proxy&rdquo; under it in &ldquo;Now&rdquo; sends the TCP connections of every app that goes directly through it, within the same
+limits, not only where a direct connection fails. Datapavan&rsquo;s own lookups use the same proxy in their own way:
+directly first, and through it, by the server&rsquo;s address, only when they cannot connect directly.</p>
 <p>When you add a WireGuard configuration of your VPN provider, Datapavan Advanced connects to that provider&rsquo;s server,
 the one the configuration names, for the apps you send through it; their lookups go to the configuration&rsquo;s DNS
 server through it. While any app goes through a configuration, every app&rsquo;s ping, and traffic Android names no app

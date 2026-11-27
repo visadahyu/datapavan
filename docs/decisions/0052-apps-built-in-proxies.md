@@ -2,9 +2,11 @@
 
 - Status: Accepted, with the proxy record's unit C (2026-11-25), as the maintainer approved its plan on 2026-11-24
   («تایید شد», "approved"), which named this ADR's acceptance in that unit; decision 8 rests on the maintainer's
-  middle way of 2026-11-22 («تایید شد», "approved"). Built on `watch-w8b`, W8 part 2a, 2026-11-20; its fix round on
+  middle way of 2026-11-22 («تایید شد», "approved"); decision 11 on the maintainer's decisions of 2026-11-26 on the
+  proxy record's unit S2 («همه تایید», "all approved"). Built on `watch-w8b`, W8 part 2a, 2026-11-20; its fix round on
   `watch-w8b-fix`, 2026-11-21.
-- Date: 2026-11-20, fix round 2026-11-21; the proxy record's units A to C, 2026-11-24 and 2026-11-25
+- Date: 2026-11-20, fix round 2026-11-21; the proxy record's units A to C, 2026-11-24 and 2026-11-25; unit S2,
+  2026-11-27
 - Decided by: drafted by the builder of W8 part 2a with AI help, under the session's grant (go on by the roadmap at
   the S-tier bar), from a brief audited once before the build; the proxy record's units A to C built with AI help, each
   from a plan audited once, under the maintainer's approvals of 2026-11-22 and 2026-11-24 that decision 8 quotes.
@@ -80,7 +82,8 @@ chaining is, and must follow the same switch.
    - **The global proxy** reaches every app inside the VPN that follows Android's setting.
    - **A network's own proxy** reaches into the tunnel only through apps that were running before the VPN started,
      Google Play services among them, and through the apps the user left out, outside it. Apps that start inside the
-     VPN connect directly. Its address stays in the list, so that those apps' flows are named so.
+     VPN connect directly, and on a network that requires its proxy they reached nothing until the engine carried them
+     through it itself (decision 11, unit S2). Its address stays in the list, so that those apps' flows are named so.
    - **A PAC file** is not a proxy's address: Android reports it as its handler on `localhost`, which is never handed
      to the engine. Most apps connect to the proxies the file names themselves, under their own UIDs. Android's PAC
      handler, `com.android.proxyhandler`, connects for the others, left-out apps included, under its own UID inside the
@@ -362,7 +365,8 @@ chaining is, and must follow the same switch.
    for one app (R3, unit C) changes neither format: a covered flow's record has the shape of one kept with the switch
    on, and no bit says why it was kept, so a searcher learns nothing more from a record; the screens tell which rows
    the choice could cover from the facts both formats already carry and the UIDs the network part knows, by the
-   engine's own vectors (`core/net/testdata/logged-apps.tsv`).
+   engine's own vectors (`core/net/testdata/logged-apps.tsv`). Unit S2 (decision 11) took the log to version 8 and
+   the snapshot to version 7, each in the shape before it: only the route 3 is new, read from those versions on.
    - **"On your local network"** is one rule (`core/net/src/local.rs`, with a table of vectors both sides hold),
      decided where the proxy is named from the network beneath's on-link prefixes, which the network part hands over
      with its transport, and kept whatever the switch says, since it names nothing: link-local; an on-link prefix,
@@ -400,6 +404,92 @@ chaining is, and must follow the same switch.
     - **Records.** No format changes: the relay's flow is an own proxy's flow of kind SOCKS5. Two counters are appended,
       each written as `-` in a release's dump, as the six before them are: the associations tied, and among them the
       replies whose relay named another address or a name.
+11. **The network's own proxy carries direct apps where they cannot connect directly** (the proxy record's unit S2,
+    2026-11-27, after its plan's audit and the maintainer's decisions of 2026-11-26). Decision 4 found that a network's
+    own proxy reaches no app started inside the VPN: on a network that requires its proxy, such an app reached
+    nothing, while the resolver went through the proxy ([ADR 0042](0042-dns-of-apps-that-go-directly.md), "Android's
+    proxy"). The engine now sends a direct app's TCP through that proxy by HTTP `CONNECT` where a direct try fails, as
+    Android would have given the app the proxy without the VPN (`core/net/src/connect.rs`, the protocol, pure;
+    `engine/beneath.rs`, the setting and the ways). The VPN's own link still gets no proxy (`setHttpProxy` is not
+    called), so every app's flow still reaches the engine, tracker blocking still reads it, and chained and tunnelled
+    apps are unchanged.
+    - **Which proxy.** The one the resolver settles, in one settle for both (ADR 0042, "Android's proxy", point 8): the
+      network's own direct proxy (`LinkProperties.httpProxy`), at most two addresses, each with its port. Never
+      Android's global proxy (the reason `global`), which Android already gives every app inside the VPN (the plan
+      audit's M3); never a PAC file (`pac`); never a proxy on the loopback (`loopback`, the maintainer's decision 3), on
+      a link-local address (`link-local`) or on one of the phone's own addresses (`own`); none for a proxy's name the
+      network beneath did not resolve (`unresolved`); and on Android 17 none on the local network while Datapavan lacks
+      the grant (`local-no-grant`, [ADR 0034](0034-network-permissions.md), decision 5). A proxy on the phone at a port
+      that a circumvention tool installed is known to use is named in "Now" as that tool's, with a button to the chain,
+      which is how Datapavan sends apps through a tool.
+    - **Which flows** (`beneath::takes`). Only a direct route's: a chained app's flows go to the tool, and a tunnelled
+      app's into its tunnel, before any of this. Never through the proxy: loopback, link-local, multicast and broadcast
+      destinations; one within the network's on-link prefixes (`OnLink::on_link`), while a private address on another
+      subnet may go through it, as Android would send it; a stand-in and the tunnel's DNS address; the proxy's own
+      addresses and any of Android's setting, so that a proxy is never put in front of a proxy; an IPv6 destination on a
+      network without IPv6 (a `2000::/3` address and an IPv6 default route); and a destination the proxy's exclusion
+      list names, by its address written out or by its name from Android's resolver's answers. UDP never: no HTTP proxy
+      carries it.
+    - **The exclusion list** is read by Android's rules in twins, `connect::excluded` and `NetworkProxy.excluded`, held
+      to one table (`core/net/testdata/proxy-exclusions.tsv`): comma-separated entries, `*` matching any run, a leading
+      `.` taking the subdomains, ASCII letters alone folded, and only the code points up to U+0020 trimmed, alike on
+      both sides, so that the resolver and the engine never send one server two ways. At most 4 KiB of it is kept.
+    - **The order** (the maintainer's decision 1; the plan audit's C2 and M6). Directly first, within
+      `Limits::beneath_direct` (3 s). "No route of that family" (`ENETUNREACH`, `EADDRNOTAVAIL`) is the app's error at
+      once and goes nowhere else; any other failure, a server's own refusal among them, goes on to the proxy. The proxy
+      comes first only once `Limits::beneath_failures` (3) distinct servers failed directly and opened through it
+      within `Limits::beneath_window` (60 s), with no direct success between, so that a hostile proxy that answers
+      `200` to everything never captures a network that lets direct connections through. A direct success ends it at
+      once; after ten minutes one connection, and only one, tries directly first again. The proxy's connect is bounded
+      by the direct share, its answer by `Limits::beneath_answer` (10 s). When both ways fail, the app sees the direct
+      way's own outcome; a direct try that ran out of its share, or a proxy that came first and opened nothing, hands
+      the rest of the connection's 60 s to a direct try.
+    - **"Send apps through this proxy"** (decision 1): a switch under the network's proxy line in "Now", off unless the
+      user turns it on, for a user who set that proxy up as a privacy proxy of their own. It is kept by the network's
+      transport and the proxy's host and port (`ThroughProxy`), not by the network's name, which Android gives no app
+      without the location permission. With it on, the proxy is the only way for every flow `takes` allows; its
+      refusal is a reset, and its `5xx` or its silence an ICMP error.
+    - **The bytes.** `CONNECT <address>:<port> HTTP/1.1`, `Host` and a blank line, as the resolver's `ProxySocket`
+      writes it, an IPv6 address in brackets with no zone. No `User-Agent`, `Proxy-Connection`, `Connection` or
+      `Proxy-Authorization`. The answer is read with `peek` and then exactly what was peeked, up to its head's end
+      within 8 KiB, so that a server that speaks first reaches the app whole; the head is never kept or logged. A `2xx`
+      opens the flow; a `407` is refused, counted and said in "Now", since Android keeps no password for a network's
+      proxy; another `4xx` is refused, and a request by name may follow; a `1xx` or `3xx` is refused with none; a `5xx`
+      is unreachable.
+    - **By name** (the maintainer's decision 2; the plan audit's C1 and M1). Only after the proxy refused the address
+      with a `4xx` other than `407`, on a new connection, and only with the flow's own name: the address's sole name in
+      Android's resolver's answers (`Names::sole`), the one that names the app's flow, never a name whose answer
+      carried an ECH configuration, nor one tracker blocking refuses for the app. Never by name for a circumvention
+      tool's flow (the chain's tool or any tool handed), nor for any flow of an app whose route is the tool or a
+      tunnel, nor for a flow whose app Android did not name, whatever any log switch says. Once a name opened where its
+      address was refused, names come first through that proxy while the setting holds.
+    - **Bound to its network** (the plan audit's m5). Each socket to the proxy goes through `Platform::protect_on`,
+      which protects it and binds it to the network whose handle the setting holds, and refuses, counted, once the
+      network beneath is another: nothing is written then. The proxy's second address is tried first once the first
+      could not be reached. What was learned lives with the setting, behind an `Arc`, so that it crosses to the next
+      engine and survives a new setting of the same proxy.
+    - **The record.** A flow through the proxy is the app's own flow to its destination, named as a direct one is, with
+      the route `Via::NetworkProxy`: route 3 in the log's version 8 and in the live view's snapshot version 7. The
+      proxy's address is not kept per flow, nor why the proxy was taken; "Now" shows the address on its own line. A
+      flow whose destination is hidden keeps route 3 and no destination; the history counts route 3 among the direct
+      flows, and says it went through the network's proxy. Seven counters follow the 73 (tries, opened, refused,
+      password, unreachable, by name, and `protect_on` refused), in a debug build's dump only, beside its line
+      `beneath-proxy ADDRESSES WHY first=direct|proxy names=0|1 password=0|1 always=0|1`.
+    - **"Now"** shows the network's line beside the whole phone's while both are set, since the engine uses the
+      network's proxy whatever the global setting is. Where the engine has the proxy, the line says that an app that
+      cannot connect directly is connected through it, as Android would, and that the proxy then sees where it
+      connects; otherwise why not: a password asked, the local network without the grant (with a button that asks for
+      it), the phone itself, or a known tool's port. A row of "Now" and of the history says when a connection went
+      through the network's proxy.
+    - **Blocking first** ([ADR 0053](0053-tracker-blocking.md), decision 4 (h)): a lookup, an address or a hello that
+      blocking refuses gives the proxy nothing of the app's but, for a hello, the `CONNECT` by address and an empty
+      tunnel.
+    - **Measured** on the emulator (Android 15 with root, 17 without, part of 10; measurements 7, "After the engine's
+      network proxy", against `adcdd7f9`): on a network that lets out only its proxy, an app started inside the VPN
+      that was refused before reached public servers through it, by address, with no `User-Agent`, in 0.3 to 0.6 s; on
+      a network that allows both, the engine went directly and the proxy saw nothing of the fixture unless the switch
+      was on; a `407`, a refusal by address followed by the flow's own name, an exclusion, blocking and a chained app
+      each did as above.
 
 ## Consequences
 
@@ -591,6 +681,42 @@ chaining is, and must follow the same switch.
       apps' places in the 2,048 of all apps.
     - *A plain request held past its window,* of a tool's own `Forward` flow, settles as an empty place of its kind
       (unit A's risk 7, unchanged).
+  - **The network's own proxy** (decision 11, unit S2):
+    - *A PAC file in the network's settings* is not followed: where the network requires it, apps started inside the
+      VPN still reach nothing, and "Now" says that they do not use it.
+    - *A proxy that asks for a password:* the app is refused, since Android keeps no password for a network's proxy and
+      the engine has none to give. Apps reach only what the network lets through directly, and "Now" says so; apps
+      already running, and those left out, still use the proxy themselves.
+    - *A proxy on the loopback* is never used: apps started inside the VPN go directly, and "Now" says so, naming the
+      tool where the port is a known tool's.
+    - *A name only the proxy can resolve.* Without a VPN, an app that follows the proxy looks no name up and hands the
+      proxy the name. Inside Datapavan, its lookup goes to Datapavan's resolver first, and a name that neither the
+      encrypted ways nor the network's resolver answer fails before any connection, as the measurement's lab names did.
+      Public names resolve there, since the resolver reaches its servers through the same proxy. Stand-in answers for
+      such names, as the chain gives, wait for a real network that needs them.
+    - *Plain HTTP through a proxy that refuses `CONNECT` to its port.* Plain HTTP goes by `CONNECT` too, and a proxy
+      that refuses a `CONNECT` to port 80 refuses it: squid's documented default (`http_access deny CONNECT
+      !SSL_ports`, with 443 alone) does; tinyproxy 1.11.2 does only as configured (with `ConnectPort 443` it answers
+      `403 Access violation`, and its Debian configuration, those lines commented out, carries it). Other ports a proxy
+      refuses for `CONNECT` are refused likewise. Forwarding a plain request in absolute form (RFC 9112, 3.2.2), as
+      Android's HTTP clients send it to the proxy without the VPN, is the forwarder: the maintainer approved it on
+      2026-11-27 («بله، تایید», "yes, approved") as a condition of release 0.2.0, with a plan and an audit of its own,
+      after a further pass on the cold paths for room. It is not part of unit S2.
+    - *UDP* never goes through the proxy. On a network that requires it, an app's UDP gets no answer, or an ICMP error
+      where the network rejects, as without Datapavan; browsers fall back from QUIC to TCP, which goes through the
+      proxy, and calls over UDP fail unless their service falls back to TCP. A WireGuard tunnel's UDP fails there too.
+    - *A network that allows both:* apps started inside the VPN go directly while direct connections work, even where
+      the network's owner wants the proxy used, unless the user turns "Send apps through this proxy" on.
+    - *A network that drops* costs each of the first few servers the 3 s direct share before the proxy comes first
+      (measured: 3.6 to 3.9 s for each, then 0.75 to 0.89 s).
+    - *`local-no-grant` may hold back a proxy the engine could reach.* On Android 17's emulator (`dp-api37-16k`), with
+      Datapavan's grant revoked and the VPN restarted, the engine's own direct connection to 10.0.2.2 opened, so ADR
+      0034's premise that Datapavan's protected sockets cannot reach the local network without the grant did not hold
+      for the engine's sockets on that build. The engine's connection to the proxy itself without the grant was not
+      tried. The rule stays as built until a run tries it.
+    - *Not measured:* the switch on Android 15 (that run tapped its words, not the switch); a tunnelled app with a
+      Wi-Fi proxy set; a proxy given by a name only the network's resolver knows; the network that requires its proxy
+      on Android 10, where Wi-Fi did not reconnect after the setting was cleared.
   - The false positives that need a maker's own network (a Telegram CDN data centre beside its ranges, WhatsApp's link
     previews and backups) are checked in the engine's tests and its network lab, not on the emulator, which must reach
     no outside server.
@@ -618,7 +744,25 @@ chaining is, and must follow the same switch.
   1,368,784 on armeabi-v7a, 9,104, 3,280 and 3,520 bytes less, x86_64 32,504 bytes under the gate. In its steps' builds
   (`ndkbuild.sh`, stripped) its last step, one JNI entry per return type, grew arm64-v8a's library by 512 bytes, the
   unwind entries of the functions it adds, within that pass's limit of 1 KiB for arm64; x86_64 shrank at each step and
-  armeabi-v7a with each of the pass's two items.
+  armeabi-v7a with each of the pass's two items. Unit S2 (decision 11), built with the size pass's `ndkbuild.sh` and
+  stripped, against `adcdd7f9` (2,064,472 bytes on x86_64, 1,845,760 on arm64-v8a): x86_64 2,086,088 bytes once the
+  engine sends flows through the proxy (`6119ff5f`), and 2,087,816 with the network part's side and the JNI
+  (`4ed82450`), 23,344 bytes more; arm64-v8a 1,869,616, 23,856 more. That is over the plan's estimate of 7 to 15 KB.
+  `connect::excluded` folds ASCII letters alone, since Unicode's case tables would have cost 9,632 bytes, and the
+  JNI's setting, written out in five places, became one function, which saved about what the network part's side
+  cost. The x86_64 library Gradle builds is then about 2,087,992 bytes: 9,160 under the gate, and 968 above the 8 KiB
+  that the unit's plan set as its stop line. No armeabi-v7a figure is recorded for the unit. The hot set, compared
+  function by function with the size pass's tool against `adcdd7f9`: on x86_64 the packet path moves by offsets only.
+  On arm64-v8a the engine's state had grown 264 bytes ahead of its tunnels' table, past the 4,095 an `add` takes as an
+  immediate, so the proxy's seven counters and the table of names whose answers carried ECH moved behind pointers of
+  their own; then `forward`, `handle`, `send`, the relay's poll, `relayed_receive`, `mapped_receive` and
+  `tunnels::forward` are the same, and the tunnels' `carry` poll keeps its 1,537 instructions, differing only where the
+  linker writes two addresses of one constant as `adrp` and `add` instead of `nop` and `adr`: the unit's code before
+  that constant moved it out of `adr`'s 1 MiB reach, which no layout of the state changes (four of tokio's small
+  functions for the carry task likewise, at the same count). On both ABIs `Shared::learn` differs, its public names'
+  insertion now out of line, shared with the names whose answers carried ECH and called only for an answer with an ECH
+  configuration; and so does `Engine::start_with`'s loop, whose sweep calls hashbrown's `erase` for the names' tables
+  out of line, a third table of that type being there now.
 - **Frontier research, open:** Telegram's fake-TLS hello across versions, told from the device without a JA4 database;
   encapsulated handshakes seen from the device (Xue et al., USENIX Security 2024) for Signal and WhatsApp; and how
   people read "read from the connection" against "inferred", with real users.
@@ -648,6 +792,26 @@ chaining is, and must follow the same switch.
   checks an update, a reinstall the network part follows and one it learns of by the first install time alone, each
   after the hand-over that follows it. Its review round (2026-11-25, two reviewers, the engine and the rest) found no
   critical; its findings are taken in as the sections above say, each with the review's number.
+
+- **The proxy record's unit S2** (2026-11-27, decision 11): in the engine, `core/net/src/connect.rs` (the request, the
+  head's end, the status, the answer and the exclusion list, with no IO; fuzzed by `fuzz_targets/connect.rs`, seeded
+  with squid's, tinyproxy's and nginx's answers written by hand), `engine/beneath.rs` (`Beneath`, `takes`, the order
+  and the ways, `#[cold]`, out of line and boxed, so that a connection's future does not grow by the proxy's state and
+  nothing of it is inlined into the packet path), `engine/tcp.rs` (`upstream` and `open`, `Via::NetworkProxy`),
+  `upstream::protect_on`, and route 3 in `log.rs` and `snapshot.rs`; the JNI's `nativeBeneathProxy` and
+  `nativeBeneathState`, the setting kept beside the chain's. In the network part,
+  `NetworkVpnService.settleResolverProxy` (one settle for the resolver and the engine, and `protectSocket` bound to the
+  network's handle),
+  `dns/NetworkProxy.kt` (`forEngine`, `withoutGrant`, `excluded`), `proxy/ThroughProxy.kt`, `ProxyContext.State`, and
+  the lines and rows of `ui/NowScreen.kt` and `ui/HistoryScreen.kt`, in `strings_untranslated.xml` until ADR 0030's
+  next round. Checked by the engine's unit tests (20 in `beneath.rs`) with hand mutants, the shared vectors of the
+  exclusion list and of the request (`core/net/testdata/connect-requests.tsv`, which the proxy lab also sends
+  tinyproxy 1.11.2 byte for byte), nine network-lab tests through the whole engine with an HTTP `CONNECT` proxy of the
+  lab's own on a network that lets out only it (`scripts/netlab-enter.py --require-proxy`), the measurement on the
+  emulator (`scripts/measure-proxy-settings.sh`), and row 7 of the `proxies` shard (`scripts/verify-proxies.sh`), which
+  CI runs: a device owner sets the Wi-Fi network's proxy to the recorder, everything else is rejected, and a fresh
+  fixture's request to a public name must answer through it, with a `CONNECT` to its address carrying no
+  `User-Agent` and none for the on-link target.
 
 ## Fix round (2026-11-21)
 
