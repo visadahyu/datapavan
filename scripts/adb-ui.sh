@@ -61,7 +61,8 @@ within() {
 #   before the check exits, so a failure that is waited for or handled prints nothing;
 # - every end but a pass (a fail, such a stop, a direct exit, set -u, an arithmetic error, a TERM or an INT) keeps the
 #   evidence of the device's state at that moment (keep_evidence); the check's cleanup runs after it, and the check
-#   exits with the status it had.
+#   exits with the status it had;
+# - the check fails at once, named, if the device's day ends within two hours (check_day_guard).
 check_evidence_on() {
     CHECK_CLEANUP=${1:-}
     CHECK_SCRIPT="$(cd "$(dirname "$0")" && pwd)/$(basename "$0")"
@@ -79,6 +80,28 @@ check_evidence_on() {
     trap 'CHECK_SIGNAL=TERM; exit 143' TERM
     trap 'CHECK_SIGNAL=INT; exit 130' INT
     trap 'check_exit $?' EXIT
+    check_day_guard
+}
+
+# The device's day must not end while the check runs: the connection log files its records by the device's local day,
+# and an app's history opens at it, so a check whose flow crosses the device's midnight cannot be read (the network
+# shard, 2026-11-27, run across local midnight: one record of a connection, not two). The runner and CI boot the
+# emulator in the zone that puts its local time near midday (scripts/emulator-shard.sh zone); a check run on another
+# device fails here, named, rather than falsely later.
+check_day_guard() {
+    local clock left
+    clock=$(adb shell date +%H:%M:%S </dev/null 2>/dev/null | tr -d '\r') || clock=""
+    if ! [[ $clock =~ ^([0-9][0-9]):([0-9][0-9]):([0-9][0-9])$ ]]; then
+        CHECK_FAILED=no-clock
+        echo "CHECK FAILED: $CHECK_SCRIPT: the device's clock could not be read ('$clock')" >&2
+        exit 1
+    fi
+    left=$((86400 - 10#${BASH_REMATCH[1]} * 3600 - 10#${BASH_REMATCH[2]} * 60 - 10#${BASH_REMATCH[3]}))
+    if [ "$left" -lt 7200 ]; then
+        CHECK_FAILED=day-ends
+        echo "CHECK FAILED: $CHECK_SCRIPT: the device's day ends in $((left / 60)) minutes: a run across it cannot be read (it is $clock there; scripts/emulator-shards.sh boots an emulator at its midday)" >&2
+        exit 1
+    fi
 }
 
 # The path $1 of a script as this run prints it: from the repository's root, so that no machine's path appears.

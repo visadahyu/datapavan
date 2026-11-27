@@ -23,7 +23,8 @@
 #
 # The device's day must not end during a shard: the connection log files its records by the device's local day, and
 # the history opens at it. So the emulator is booted in the time zone that puts its local time nearest midday
-# ("zone", read by scripts/emulator-shards.sh and by CI's emulator step), which leaves a shard about eleven hours.
+# ("zone", read by scripts/emulator-shards.sh and by CI's emulator step), which leaves a shard about eleven hours, and
+# each check fails, named, if the device's midnight is less than two hours away (adb-ui.sh's check_day_guard).
 #
 # A shard installs apps, changes settings, sets a PIN and taps: it runs only on an emulator, named by its
 # serial (ANDROID_SERIAL=emulator-NNNN) and saying so itself, never on a phone or on "the only device adb
