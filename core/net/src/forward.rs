@@ -32,6 +32,7 @@
 //! that grows in place frees its old allocation unzeroed (the audit's m3).
 
 use crate::blocking::{HttpHost, http_host_again};
+use std::fmt::Write as _;
 use std::net::{IpAddr, Ipv4Addr, Ipv6Addr, SocketAddr};
 use zeroize::Zeroizing;
 
@@ -320,6 +321,13 @@ fn read(head: &[u8]) -> Result<Head<'_>, Why> {
     })
 }
 
+/// `address.to_canonical()`, out of line: the forwarder compares and writes the flow's address in three places, each
+/// an inlined copy otherwise (the forwarder's size pass).
+#[inline(never)]
+fn canonical(address: IpAddr) -> IpAddr {
+    address.to_canonical()
+}
+
 /// What a `Host` value names, once its port is the flow's: a name, in the form names compare (lower case, no trailing
 /// dot), or `None` for a literal of the flow's own address; and the host the gate's reader must find for it.
 fn authority(host: &[u8], destination: SocketAddr) -> Result<(Option<String>, String), Why> {
@@ -349,10 +357,10 @@ fn authority(host: &[u8], destination: SocketAddr) -> Result<(Option<String>, St
         return Err(Why::Port);
     }
     let text = std::str::from_utf8(name).map_err(|_| Why::Host)?;
-    let own = destination.ip().to_canonical();
+    let own = canonical(destination.ip());
     if host.first() == Some(&b'[') {
         let address: Ipv6Addr = text.parse().map_err(|_| Why::Host)?;
-        return if IpAddr::V6(address).to_canonical() == own {
+        return if canonical(IpAddr::V6(address)) == own {
             Ok((None, text.to_ascii_lowercase()))
         } else {
             Err(Why::Address)
@@ -371,14 +379,20 @@ fn authority(host: &[u8], destination: SocketAddr) -> Result<(Option<String>, St
             Err(Why::Address)
         };
     }
+    // No label empty (no dot first, last or after a dot), each of letters, digits, `-` and `_`: in one pass.
+    let mut after_dot = true;
     let fine = !bare.is_empty()
         && bare.len() <= 253
-        && bare.split('.').all(|label| {
-            !label.is_empty()
-                && label
-                    .bytes()
-                    .all(|b| b.is_ascii_alphanumeric() || b == b'-' || b == b'_')
-        });
+        && bare.bytes().all(|b| {
+            let fine = if b == b'.' {
+                !after_dot
+            } else {
+                b.is_ascii_alphanumeric() || b == b'-' || b == b'_'
+            };
+            after_dot = b == b'.';
+            fine
+        })
+        && !after_dot;
     if !fine {
         return Err(Why::Host);
     }
@@ -468,13 +482,16 @@ pub fn first(
         }
         (Box::<[u8]>::from(host), name)
     } else {
-        let mut written = match destination.ip().to_canonical() {
-            IpAddr::V4(a) => a.to_string(),
-            IpAddr::V6(a) => format!("[{a}]"),
-        };
-        if destination.port() != 80 {
-            written.push(':');
-            written.push_str(&destination.port().to_string());
+        // `SocketAddr`'s own text, `a.b.c.d:port` or `[v6]:port` (no scope or flow label in an address made so), its
+        // `:80` cut: one `Display` the library has, not one per part (the forwarder's size pass).
+        let mut written = String::new();
+        let _ = write!(
+            written,
+            "{}",
+            SocketAddr::new(canonical(destination.ip()), destination.port())
+        );
+        if destination.port() == 80 {
+            written.truncate(written.len() - 3);
         }
         (Box::<[u8]>::from(written.as_bytes()), None)
     };

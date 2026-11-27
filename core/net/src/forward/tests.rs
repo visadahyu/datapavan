@@ -270,6 +270,28 @@ fn a_host_the_gate_cannot_read_is_never_forwarded() {
 }
 
 #[test]
+fn a_head_with_no_host_names_the_flows_own_address_and_port() {
+    for (destination, written) in [
+        ("198.51.100.9:80", "198.51.100.9"),
+        ("198.51.100.9:65535", "198.51.100.9:65535"),
+        ("[2001:db8::9]:80", "[2001:db8::9]"),
+        ("[2001:db8::9]:8080", "[2001:db8::9]:8080"),
+        ("[::ffff:198.51.100.9]:80", "198.51.100.9"),
+        ("[::ffff:198.51.100.9]:81", "198.51.100.9:81"),
+        ("[::1]:1", "[::1]:1"),
+    ] {
+        let destination: SocketAddr = destination.parse().unwrap_or_else(|_| unreachable!());
+        let mut out = Zeroizing::new(Vec::new());
+        assert!(first(b"GET /a HTTP/1.0\r\n\r\n", destination, &mut out).is_ok());
+        assert_eq!(
+            &out[..],
+            format!("GET http://{written}/a HTTP/1.0\r\n\r\n").as_bytes(),
+            "{destination}"
+        );
+    }
+}
+
+#[test]
 fn a_head_ends_within_its_bound_or_is_refused() {
     let destination: SocketAddr = "198.51.100.9:80".parse().unwrap_or_else(|_| unreachable!());
     let mut head = b"GET / HTTP/1.1\r\nHost: example.test\r\nX-Pad: ".to_vec();
