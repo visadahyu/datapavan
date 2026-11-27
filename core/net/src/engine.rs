@@ -592,6 +592,9 @@ pub enum Via {
     Tool,
     /// Through the `WireGuard` configuration of this number (W7, ADR 0035).
     Tunnel(u32),
+    /// Out on the network beneath through that network's own HTTP proxy, by `CONNECT` (the proxy record's unit S2):
+    /// a direct try failed, or the proxy came first. The flow is still the app's to its destination.
+    NetworkProxy,
 }
 
 /// The network a flow's address is in, when the organisation table named the flow (ADR 0036).

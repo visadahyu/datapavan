@@ -55,13 +55,6 @@
 //!
 //! The ways are `#[cold]`, out of line and boxed, so that a connection's future does not grow by the proxy's state,
 //! and nothing of it is inlined into the packet path.
-#![cfg_attr(
-    not(test),
-    expect(
-        dead_code,
-        reason = "tcp::upstream calls the ways from the next commit"
-    )
-)]
 
 use super::chain::Route;
 use super::upstream::{connect_tcp, protect_on};
@@ -298,9 +291,16 @@ impl Order {
         if self.proxy_since.is_some() {
             return;
         }
-        let window = limits.beneath_window;
-        self.failed
-            .retain(|&(at, when)| at != server && now.saturating_sub(when) < window);
+        // The same server again, and those failed outside the window, count no more. A scan with `swap_remove`, not
+        // `Vec::retain`'s generic code: the list holds a few servers, and their order does not matter.
+        let mut i = 0;
+        while let Some(&(at, when)) = self.failed.get(i) {
+            if at == server || now.saturating_sub(when) >= limits.beneath_window {
+                self.failed.swap_remove(i);
+            } else {
+                i += 1;
+            }
+        }
         self.failed.push((server, now));
         if self.failed.len() >= limits.beneath_failures.max(1) {
             self.proxy_since = Some(now);
@@ -672,7 +672,7 @@ async fn head(stream: &mut TcpStream) -> io::Result<Vec<u8>> {
 }
 
 #[cfg(test)]
-mod tests {
+pub(super) mod tests {
     use super::super::clock::{Clock, ManualClock};
     use super::super::tests::shared_with;
     use super::super::{BlockSetting, Chain, Platform, ProxySetting, TunnelSetting};
@@ -681,19 +681,19 @@ mod tests {
     use std::sync::atomic::AtomicUsize;
     use tokio::net::TcpListener;
 
-    const UID: u32 = 10_123;
+    pub(in crate::engine) const UID: u32 = 10_123;
     const OTHER: u32 = 10_124;
     const NETWORK: i64 = 0x6d_0000_0001;
 
     /// Android, as each test needs it: whether a direct socket is protected (no direct try gets past a refusal), how
     /// long that takes (a direct try silent this long), and whether a socket to the proxy is bound to its network.
     #[derive(Default)]
-    struct Lab {
-        refuses: bool,
-        slow: Duration,
-        stale: bool,
-        protects: AtomicUsize,
-        bound: Mutex<Vec<i64>>,
+    pub(in crate::engine) struct Lab {
+        pub(in crate::engine) refuses: bool,
+        pub(in crate::engine) slow: Duration,
+        pub(in crate::engine) stale: bool,
+        pub(in crate::engine) protects: AtomicUsize,
+        pub(in crate::engine) bound: Mutex<Vec<i64>>,
     }
 
     impl Platform for Lab {
@@ -717,7 +717,7 @@ mod tests {
 
     /// How the test proxy answers a request, by its head.
     #[derive(Clone, Copy)]
-    enum Reply {
+    pub(in crate::engine) enum Reply {
         /// These bytes, then an echo of what the tunnel carries.
         Bytes(&'static [u8]),
         /// These bytes in two writes, cut at this byte, a pause between.
@@ -730,33 +730,43 @@ mod tests {
         Closed,
     }
 
+    /// What the test proxy keeps: each request's head, and what the tunnel carried up past it.
+    type Kept = (Arc<Mutex<Vec<String>>>, Arc<Mutex<Vec<u8>>>);
+
     /// A proxy on the loopback that records each request's head and answers as told.
-    struct Proxy {
-        at: SocketAddr,
+    pub(in crate::engine) struct Proxy {
+        pub(in crate::engine) at: SocketAddr,
         heads: Arc<Mutex<Vec<String>>>,
+        /// What the tunnel carried up, past each head.
+        after: Arc<Mutex<Vec<u8>>>,
     }
 
     impl Proxy {
-        async fn new(reply: Reply) -> io::Result<Self> {
+        pub(in crate::engine) async fn new(reply: Reply) -> io::Result<Self> {
             let listener = TcpListener::bind((std::net::Ipv4Addr::LOCALHOST, 0)).await?;
             let at = listener.local_addr()?;
             let heads = Arc::new(Mutex::new(Vec::new()));
-            let kept = Arc::clone(&heads);
+            let after = Arc::new(Mutex::new(Vec::new()));
+            let kept = (Arc::clone(&heads), Arc::clone(&after));
             tokio::spawn(async move {
                 while let Ok((stream, _)) = listener.accept().await {
-                    let heads = Arc::clone(&kept);
-                    tokio::spawn(serve(stream, reply, heads));
+                    let kept = (Arc::clone(&kept.0), Arc::clone(&kept.1));
+                    tokio::spawn(serve(stream, reply, kept));
                 }
             });
-            Ok(Self { at, heads })
+            Ok(Self { at, heads, after })
         }
 
-        fn heads(&self) -> Vec<String> {
+        pub(in crate::engine) fn heads(&self) -> Vec<String> {
             lock(&self.heads).clone()
+        }
+
+        pub(in crate::engine) fn after(&self) -> Vec<u8> {
+            lock(&self.after).clone()
         }
     }
 
-    async fn serve(mut stream: TcpStream, reply: Reply, heads: Arc<Mutex<Vec<String>>>) {
+    async fn serve(mut stream: TcpStream, reply: Reply, (heads, after): Kept) {
         let _ = stream.set_nodelay(true);
         let mut head = Vec::new();
         let mut byte = [0u8; 1];
@@ -794,6 +804,7 @@ mod tests {
         }
         let mut buffer = [0u8; 1_024];
         while let Ok(n) = stream.read(&mut buffer).await {
+            lock(&after).extend_from_slice(&buffer[..n]);
             if n == 0 || stream.write_all(&buffer[..n]).await.is_err() {
                 return;
             }
@@ -844,7 +855,7 @@ mod tests {
         (shared, lab, clock)
     }
 
-    fn engine(lab: Lab, proxy: SocketAddr) -> (Arc<Shared>, Arc<Lab>) {
+    pub(in crate::engine) fn engine(lab: Lab, proxy: SocketAddr) -> (Arc<Shared>, Arc<Lab>) {
         let (shared, lab, _) = engine_clocked(lab, proxy);
         (shared, lab)
     }
@@ -852,16 +863,30 @@ mod tests {
     /// Sets the proxy at `proxy`, its exclusion list `exclusions`: the test proxy is on the loopback, which the
     /// setting itself never keeps, so it is put in place by hand.
     fn set(shared: &Shared, proxy: SocketAddr, exclusions: &str) {
-        let Some(mut beneath) =
-            Beneath::new(NETWORK, &[at("203.0.113.80:3128")], exclusions, true, false)
-        else {
+        set_with(shared, proxy, exclusions, false);
+    }
+
+    /// [`set`], with the user's choice `always`.
+    pub(in crate::engine) fn set_with(
+        shared: &Shared,
+        proxy: SocketAddr,
+        exclusions: &str,
+        always: bool,
+    ) {
+        let Some(mut beneath) = Beneath::new(
+            NETWORK,
+            &[at("203.0.113.80:3128")],
+            exclusions,
+            true,
+            always,
+        ) else {
             unreachable!("a proxy kept")
         };
         beneath.proxies = vec![proxy];
         *lock(&shared.beneath) = Some(Arc::new(beneath));
     }
 
-    fn held(shared: &Shared) -> Arc<Beneath> {
+    pub(in crate::engine) fn held(shared: &Shared) -> Arc<Beneath> {
         lock(&shared.beneath)
             .clone()
             .unwrap_or_else(|| unreachable!("a proxy set"))
@@ -894,7 +919,7 @@ mod tests {
         seven
     }
 
-    const OPENED: &[u8] = b"HTTP/1.1 200 Connection established\r\n\r\n";
+    pub(in crate::engine) const OPENED: &[u8] = b"HTTP/1.1 200 Connection established\r\n\r\n";
 
     /// A case of [`no_name_reaches_the_proxy_where_the_flows_name_is_not_its_own_to_give`]: what it is, what it sets,
     /// and the flow's app.

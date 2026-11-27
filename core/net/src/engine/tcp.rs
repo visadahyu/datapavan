@@ -1,6 +1,7 @@
 //! TCP through the tunnel (ADR 0012): the app's SYN held until its owner and the server are known, the
 //! rewriting to the engine's listener, Android's own stack ending the connection, and the relay.
 
+use super::beneath::{self, Tried};
 use super::blocks::{Gate, Step};
 use super::budget::Place;
 use super::chain::{Route, connect_through};
@@ -398,7 +399,8 @@ async fn open(
     pending: Pending,
 ) {
     let (app, destination) = (held.parsed.source, held.parsed.destination);
-    let Some((uid, upstream, _share, via, tunnel)) = upstream(&shared, app, destination).await
+    let Some((uid, upstream, _share, via, tunnel, proxied)) =
+        upstream(&shared, app, destination).await
     else {
         return refused(&held, &shared, &nat);
     };
@@ -469,7 +471,11 @@ async fn open(
             dns,
             resolver,
             network,
-            via: crate::engine::Via::Direct,
+            via: if proxied {
+                crate::engine::Via::NetworkProxy
+            } else {
+                crate::engine::Via::Direct
+            },
             proxy: None,
             blocked: blocked
                 .and_then(|entry| shared.row_sdk(entry))
@@ -572,32 +578,34 @@ fn rewritten(
 /// if others of the app took places meanwhile, since what has left the phone is never dropped unlogged
 /// (independent review of unit 10, major). Only such connections lift an app above its share, never
 /// past twice it: they began while at most a share's worth waited in all.
+///
+/// While the network beneath names a proxy of its own (the proxy record's unit S2, [`beneath`]), a direct flow it may
+/// carry tries directly first as before, beside Android, and Android's answer is awaited only before the proxy's
+/// steps, which need the app (audit m6): a direct way that answers costs nothing more than one load of the setting.
+/// The last value says whether the flow went through that proxy.
 async fn upstream(
     shared: &Arc<Shared>,
     app: SocketAddr,
     destination: SocketAddr,
-) -> Option<(
-    Option<u32>,
-    io::Result<TcpStream>,
-    Option<Place>,
-    Option<Arc<super::Chain>>,
-    Option<u32>,
-)> {
+) -> Option<Upstreamed> {
     // DNS over TCP to the network part's address goes the way the app's lookups go, once the network part's encrypted
     // resolver is set: at port 53 to the engine's own listener of it, at any other port (853, Android's opportunistic
     // DNS over TLS, among them) refused, so that Android asks on port 53 (W8, part 1, point 9).
     let lookups = shared.resolver.on() && shared.is_tunnel_dns(destination.ip());
     let direct = |uid: Option<u32>| async move {
         if lookups {
-            return if destination.port() == 53 {
+            return Tried::Done(if destination.port() == 53 {
                 connect_lookups(shared, TcpLookups::Encrypted(uid)).await
             } else {
                 Err(io::ErrorKind::ConnectionRefused.into())
-            };
+            });
         }
         match shared.target(destination) {
-            Some(target) => connect_tcp(shared, target).await,
-            None => Err(io::ErrorKind::NetworkUnreachable.into()),
+            Some(target) => match shared.beneath_for(destination) {
+                None => Tried::Done(connect_tcp(shared, target).await),
+                Some(held) => beneath::first(shared, held, target).await,
+            },
+            None => Tried::Done(Err(io::ErrorKind::NetworkUnreachable.into())),
         }
     };
     let crowded = shared.tcp_waiting.load(Ordering::Acquire) > shared.limits.tcp_share;
@@ -618,21 +626,33 @@ async fn upstream(
         let uid = owner(shared, TCP, app, destination).await;
         let share = shared.tcp_shares.take(uid).ok()?;
         if let Some(entry) = blocked_before(shared, uid, destination) {
-            return Some((uid, Err(Blocked::error(entry)), Some(share), None, None));
+            return Some((
+                uid,
+                Err(Blocked::error(entry)),
+                Some(share),
+                None,
+                None,
+                false,
+            ));
         }
-        let (upstream, via) = match shared.route(uid, destination) {
-            Route::Direct => (direct(uid).await, None),
+        let (upstream, via, proxied) = match shared.route(uid, destination) {
+            Route::Direct => {
+                let (upstream, proxied) =
+                    beneath::finish(shared, direct(uid).await, uid, destination).await;
+                (upstream, None, proxied)
+            }
             Route::Tool(chain) if lookups => {
                 let stream = if destination.port() == 53 {
                     connect_lookups(shared, TcpLookups::Tool(Arc::clone(&chain), uid)).await
                 } else {
                     Err(io::ErrorKind::ConnectionRefused.into())
                 };
-                (stream, Some(chain))
+                (stream, Some(chain), false)
             }
             Route::Tool(chain) => (
                 connect_through(shared, &chain, destination).await,
                 Some(chain),
+                false,
             ),
             Route::Tunnel(t) => {
                 return Some((
@@ -641,11 +661,12 @@ async fn upstream(
                     Some(share),
                     None,
                     Some(t),
+                    false,
                 ));
             }
-            Route::Refused => (Err(io::ErrorKind::ConnectionRefused.into()), None),
+            Route::Refused => (Err(io::ErrorKind::ConnectionRefused.into()), None, false),
         };
-        return Some((uid, upstream, Some(share), via, None));
+        return Some((uid, upstream, Some(share), via, None, proxied));
     }
     // The server is asked at once, beside Android. One that answered first leaves nothing waiting.
     let mut direct = std::pin::pin!(direct(None));
@@ -655,14 +676,32 @@ async fn upstream(
         upstream = &mut direct => Ok(upstream),
         uid = &mut asked => Err(uid),
     };
-    match first {
-        Ok(upstream) => Some((asked.await, upstream, None, None, None)),
+    let (uid, tried, share) = match first {
+        // A flow the network's proxy is still to carry waits for its server on: it takes its app's place too.
+        Ok(tried @ Tried::Onward(_)) => {
+            let uid = asked.await;
+            (uid, tried, Some(shared.tcp_shares.force(uid)))
+        }
+        Ok(tried) => (asked.await, tried, None),
         Err(uid) => {
             let share = shared.tcp_shares.force(uid);
-            Some((uid, direct.await, Some(share), None, None))
+            (uid, direct.await, Some(share))
         }
-    }
+    };
+    let (upstream, proxied) = beneath::finish(shared, tried, uid, destination).await;
+    Some((uid, upstream, share, None, None, proxied))
 }
+
+/// What [`upstream`] gives a held SYN: the app, the connection or its error, the place in its app's share, the chain
+/// it went through, the tunnel it goes into, and whether it went through the network's own proxy.
+type Upstreamed = (
+    Option<u32>,
+    io::Result<TcpStream>,
+    Option<Place>,
+    Option<Arc<super::Chain>>,
+    Option<u32>,
+    bool,
+);
 
 /// The row that refuses a connection of `uid` to `destination` before anything leaves (ADR 0053, decision 4): a
 /// stand-in's name, which a chained app's SOCKS request to the tool would carry, or an address an answer the network
@@ -1364,6 +1403,159 @@ mod tests {
         assert_eq!(&got, b"EHLO a\r\n");
         drop((app, server));
         assert_eq!(task.await.ok().flatten(), None);
+        Ok(())
+    }
+
+    /// A held SYN of the app 10.1.10.1:40001 to `destination`, opened as `Loop::tcp` opens it, with a listener said
+    /// to be bound at 40000: the flow kept, and the packet the app was sent back.
+    async fn opened_through(
+        shared: &Arc<Shared>,
+        destination: SocketAddr,
+    ) -> io::Result<(Flow, Vec<u8>)> {
+        let app = SocketAddr::from(([10, 1, 10, 1], 40_001));
+        let Some(mut syn) = packet::tcp_reset(app, destination, 7_000, None) else {
+            unreachable!("a segment")
+        };
+        syn[20 + 13] = SYN;
+        let parsed =
+            packet::parse(&syn).map_err(|_| io::Error::from(io::ErrorKind::InvalidData))?;
+        let nat = Arc::new(Mutex::new(Nat::with_limits(&shared.limits)));
+        let Lookup::New(port) = lock(&nat).lookup(app, destination, true, Instant::now()) else {
+            unreachable!("a new connection")
+        };
+        shared.listener4.bound(40_000);
+        let (engine_end, app_end) = std::os::unix::net::UnixDatagram::pair()?;
+        engine_end.set_nonblocking(true)?;
+        app_end.set_nonblocking(true)?;
+        let tun = Arc::new(Tun::new(std::os::fd::OwnedFd::from(engine_end))?);
+        let tunnel = tokio::net::UnixDatagram::from_std(app_end)?;
+        let Some(waiting) = Waiting::take(shared) else {
+            unreachable!("room to wait")
+        };
+        let held = Held {
+            packet: syn,
+            parsed,
+            port,
+        };
+        let pending: Pending = Arc::new(Mutex::new(crate::map()));
+        open(held, waiting, tun, Arc::clone(shared), nat, pending).await;
+        let mut answer = vec![0u8; 2_048];
+        let n = tokio::time::timeout(Duration::from_secs(2), tunnel.recv(&mut answer)).await??;
+        answer.truncate(n);
+        let flow = lock(&shared.flows)
+            .back()
+            .cloned()
+            .unwrap_or_else(|| unreachable!("a flow kept"));
+        Ok((flow, answer))
+    }
+
+    /// The proxy record's unit S2: a flow the network's own proxy carried is recorded as gone through it, and its SYN
+    /// rewritten to the listener; where the proxy opened nothing, the app sees what the way gave: a reset for the
+    /// proxy's refusal and an ICMP error for its `502` when it is the only way (the user's choice), and otherwise the
+    /// direct way's own outcome.
+    #[tokio::test(flavor = "current_thread")]
+    async fn a_flow_through_the_networks_proxy_is_recorded_so_and_answered_by_its_outcome()
+    -> io::Result<()> {
+        use super::super::Via;
+        use super::super::beneath::tests::{Lab, OPENED, Proxy, Reply, engine, set_with};
+        let destination = SocketAddr::from(([198, 51, 100, 7], 443));
+        let refused: &[u8] = b"HTTP/1.1 403 Forbidden\r\n\r\n";
+        let cannot: &[u8] = b"HTTP/1.1 502 Bad Gateway\r\n\r\n";
+        for (reply, always, outcome, via, protocol) in [
+            (OPENED, false, Outcome::Opened, Via::NetworkProxy, TCP),
+            (refused, true, Outcome::Refused, Via::Direct, TCP),
+            (
+                cannot,
+                true,
+                Outcome::Unreachable,
+                Via::Direct,
+                packet::ICMP,
+            ),
+            (refused, false, Outcome::Failed, Via::Direct, packet::ICMP),
+        ] {
+            let proxy = Proxy::new(Reply::Bytes(reply)).await?;
+            let (shared, _) = engine(
+                Lab {
+                    refuses: true,
+                    ..Lab::default()
+                },
+                proxy.at,
+            );
+            set_with(&shared, proxy.at, "", always);
+            let (flow, answer) = opened_through(&shared, destination).await?;
+            assert_eq!((flow.outcome, flow.via), (outcome, via), "{reply:?}");
+            // The IPv4 header's protocol: an ICMP error is not a packet the engine parses as a flow's.
+            assert_eq!(answer.get(9).copied(), Some(protocol));
+            if protocol == TCP {
+                let parsed = packet::parse(&answer)
+                    .map_err(|_| io::Error::from(io::ErrorKind::InvalidData))?;
+                if outcome == Outcome::Opened {
+                    assert_eq!(
+                        parsed.destination,
+                        SocketAddr::from(([10, 1, 10, 1], 40_000))
+                    );
+                    assert_eq!(packet::tcp_flags(&answer, &parsed), SYN);
+                } else {
+                    assert_eq!(parsed.source, destination);
+                    assert_ne!(packet::tcp_flags(&answer, &parsed) & RST, 0);
+                }
+            }
+            assert_eq!(proxy.heads().len(), 1);
+        }
+        Ok(())
+    }
+
+    /// No byte of a blocked flow's payload reaches the network's proxy either (ADR 0053, decision 4; S2-PLAN, section
+    /// 5): through it, a hello naming a blocked row is held whole and refused, and the proxy read the `CONNECT` and
+    /// nothing after.
+    #[tokio::test(flavor = "current_thread")]
+    async fn a_blocked_hello_through_the_networks_proxy_reaches_it_not() -> io::Result<()> {
+        use super::super::beneath::tests::{Lab, OPENED, Proxy, Reply, UID, engine, held};
+        let proxy = Proxy::new(Reply::Bytes(OPENED)).await?;
+        let (shared, _) = engine(
+            Lab {
+                refuses: true,
+                ..Lab::default()
+            },
+            proxy.at,
+        );
+        shared.set_blocking(super::super::BlockSetting {
+            on: true,
+            table: Some(Arc::new(crate::blocking::tests::table(&[(
+                "tracker.example",
+                "block",
+            )]))),
+            covered: vec![UID],
+            ..super::super::BlockSetting::default()
+        });
+        let destination = SocketAddr::from(([198, 51, 100, 7], 443));
+        let tried = beneath::first(&shared, held(&shared), destination).await;
+        let (stream, through) = beneath::finish(&shared, tried, Some(UID), destination).await;
+        assert!(through);
+        let upstream = Upstream {
+            stream: stream?,
+            opened: Opened {
+                id: 1,
+                port: destination.port(),
+                destination,
+                sniffs: true,
+                dns: DnsUse::None,
+                uid: Some(UID),
+                dns_held_until: Duration::ZERO,
+            },
+            bytes: None,
+        };
+        let listener = TcpListener::bind((std::net::Ipv4Addr::LOCALHOST, 0)).await?;
+        let mut app = TcpStream::connect(listener.local_addr()?).await?;
+        let (app_end, _) = listener.accept().await?;
+        let relaying = Arc::clone(&shared);
+        let task = tokio::spawn(async move { relay(app_end, upstream, &relaying).await });
+        app.write_all(&crate::tls::tests::hello("tracker.example", 16 * 1024))
+            .await?;
+        assert!(task.await.ok().flatten().is_some(), "refused");
+        tokio::time::sleep(Duration::from_millis(50)).await;
+        assert_eq!(proxy.heads().len(), 1);
+        assert_eq!(proxy.after(), Vec::<u8>::new());
         Ok(())
     }
 

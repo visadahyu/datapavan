@@ -25,7 +25,9 @@
 //! are dropped. It is wider than Android's own selector, libcore's, which matches case-sensitively and reads no
 //! leading dot as the subdomains (Chromium does): the safe direction, since more goes directly. CIDR entries, which
 //! Chromium reads, are not read. `*` here matches any run of bytes, where the Kotlin side's regular expression stops
-//! at a line break, which no host holds. Hand-written, with no regular expression crate, for size.
+//! at a line break, which no host holds. Letters are folded in ASCII alone, on both sides, as the table holds: a host
+//! the engine asks about is a DNS name or an address, ASCII both, and Unicode's folding would make the Kelvin sign a
+//! `k`. Hand-written, with no regular expression crate and no Unicode case tables, for size.
 //!
 //! Everything here is pure, with no IO, so that it can be fuzzed with any bytes a proxy can send
 //! (`fuzz_targets/connect.rs`); nothing may panic or read outside the slice.
@@ -147,12 +149,12 @@ pub fn status(head: &[u8]) -> Result<u16, Error> {
 pub fn excluded(host: &str, exclusions: &str) -> bool {
     let host = host.trim().trim_end_matches('.');
     let host = host.strip_prefix('[').unwrap_or(host);
-    let host = host.strip_suffix(']').unwrap_or(host).to_lowercase();
+    let host = host.strip_suffix(']').unwrap_or(host).to_ascii_lowercase();
     if host.is_empty() {
         return false;
     }
     exclusions.split(',').any(|raw| {
-        let entry = raw.trim().trim_end_matches('.').to_lowercase();
+        let entry = raw.trim().trim_end_matches('.').to_ascii_lowercase();
         if entry.is_empty() {
             false
         } else if entry.contains('*') {

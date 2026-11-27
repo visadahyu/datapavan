@@ -1560,7 +1560,7 @@ mod tests {
         );
         let mut text = String::from(
             "# The network part's connection log: one batch of records as the engine writes them\n\
-             # (core/net/src/log.rs, version 7), in hex. Written by the engine's test the_kotlin_sides_fixture_is_what_the_engine_writes\n\
+             # (core/net/src/log.rs, version 8), in hex. Written by the engine's test the_kotlin_sides_fixture_is_what_the_engine_writes\n\
              # (core/net/src/engine/logbook.rs), which fails when the engine writes otherwise; run it with\n\
              # DATAPAVAN_WRITE_FIXTURE=1 to write it anew. Read by LogTest and LogDaysTest. Not edited by hand.\n",
         );

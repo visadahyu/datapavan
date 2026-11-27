@@ -1,8 +1,8 @@
 # The network part's live view: one snapshot as the engine writes it (core/net/src/snapshot.rs,
-# version 5), in hex. Written by the engine's test the_kotlin_sides_snapshot_fixture_is_what_the_engine_writes
+# version 7), in hex. Written by the engine's test the_kotlin_sides_snapshot_fixture_is_what_the_engine_writes
 # (core/net/src/engine/now.rs), which fails when the engine writes otherwise; run it with
 # DATAPAVAN_WRITE_FIXTURE=1 to write it anew. Read by SnapshotTest. Not edited by hand.
-06605e8feba101000002785a8feba101000000a8528feba101000048688eeba1010000a8528feba101000003000000ff
+07605e8feba101000002785a8feba101000000a8528feba101000048688eeba1010000a8528feba101000003000000ff
 ffffff400032000000000000000000000000000000000000000000000000000000000000000000000000000000000000
 000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000
 000000000000000000000000000000000000000000000000000000000000000000000000003200000000000000000000

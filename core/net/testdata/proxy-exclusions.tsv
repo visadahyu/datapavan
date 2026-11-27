@@ -1,8 +1,8 @@
 # The rule of a proxy's exclusion list (the proxy record's unit S2), read by the engine's connect::excluded and by
 # the network part's NetworkProxy.excluded, its twin on the Kotlin side. Columns: the host, a name or an address
 # written out; the exclusion list, comma-separated entries as Android's setting holds them, "-" for none; and
-# whether the host is excluded (1 or 0). An IPv6 host's brackets are dropped, an entry's are not; the last row's
-# entry starts with the Kelvin sign (U+212A), whose lower case is "k" on both sides.
+# whether the host is excluded (1 or 0). An IPv6 host's brackets are dropped, an entry's are not. Only ASCII letters
+# are folded: the last row's entry starts with the Kelvin sign (U+212A), which neither side takes for "k".
 # host	list	excluded
 example.com	example.com	1
 Example.COM	example.com	1
@@ -50,4 +50,5 @@ a+b.example	a+*.example	1
 aab.example	a+*	0
 ab.example	a?.example	0
 ab.example	a?*	0
-k.example	K.example	1
+k.example	K.example	0
+K.EXAMPLE	k.example	1

@@ -164,7 +164,9 @@ impl<'a> Seen<'a> {
             (true, false) => Self::Hidden,
             (true, true) => Self::HiddenDirect(match flow.via {
                 crate::engine::Via::Tunnel(t) => Some(t),
-                crate::engine::Via::Direct | crate::engine::Via::Tool => None,
+                crate::engine::Via::Direct
+                | crate::engine::Via::Tool
+                | crate::engine::Via::NetworkProxy => None,
             }),
             (false, true) => Self::Flow(flow),
             (false, false) => Self::Routed(flow),
@@ -3661,7 +3663,7 @@ mod tests {
         assert_eq!(bytes_of(&snapshot, None)[0][8], [50, 0], "no app");
         let mut text = String::from(
             "# The network part's live view: one snapshot as the engine writes it (core/net/src/snapshot.rs,\n\
-             # version 5), in hex. Written by the engine's test the_kotlin_sides_snapshot_fixture_is_what_the_engine_writes\n\
+             # version 7), in hex. Written by the engine's test the_kotlin_sides_snapshot_fixture_is_what_the_engine_writes\n\
              # (core/net/src/engine/now.rs), which fails when the engine writes otherwise; run it with\n\
              # DATAPAVAN_WRITE_FIXTURE=1 to write it anew. Read by SnapshotTest. Not edited by hand.\n",
         );

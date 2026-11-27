@@ -84,10 +84,6 @@ pub(super) async fn protect(shared: &Arc<Shared>, fd: BorrowedFd<'_>) -> io::Res
 /// (the proxy record's unit S2; [`super::Platform::protect_on`]): refused once the network beneath is another, so that
 /// nothing reaches whatever holds the old proxy's address there. Through a duplicate, as [`protect`]; a function of its
 /// own, so that `protect`'s callers keep their code.
-#[cfg_attr(
-    not(test),
-    expect(dead_code, reason = "tcp::upstream reaches it from the next commit")
-)]
 pub(super) async fn protect_on(
     shared: &Arc<Shared>,
     fd: BorrowedFd<'_>,

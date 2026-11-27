@@ -22,7 +22,7 @@
 //!   owner is, then its name, the DNS name beside it where the two differ, the known resolver and the
 //!   organisation behind its network, each a length byte and UTF-8, and its bytes up and down for each
 //!   window: 6 numbers; then its route, as the log writes it: a byte (0 directly, 1 through the tool, 2
-//!   through a `WireGuard` tunnel) and the tunnel's number (u32, 0 for none); then its proxy, as the log writes it
+//!   through a `WireGuard` tunnel, 3 through the network's own proxy) and the tunnel's number (u32, 0 for none); then its proxy, as the log writes it
 //!   (`log::push_proxy`, a byte 0 for none);
 //! - after each app's destinations, the `WireGuard` tunnel it went through with its destinations left out
 //!   ("Log where these apps connect" off), in a window: its number (u32), 0 for none.
@@ -36,8 +36,9 @@
 //! why; version 3 (W7, part 1) each destination's route and each app's tunnel; version 4 (W8, part 2a, ADR 0052)
 //! each destination's proxy; version 5 (the proxy record's unit A, ADR 0052 decision 9) the flag of a first hop
 //! shown here only; version 6 (the proxy record's unit B) the proxy block of the log's version 7, with its local flag
-//! (its unsure flag is the log's alone: "Now" shows a flow as it is). Both sides ship in one build, so the Kotlin side
-//! reads version 6 only.
+//! (its unsure flag is the log's alone: "Now" shows a flow as it is); version 7 (the proxy record's unit S2) the route 3,
+//! through the network's own proxy, in the same shape. Both sides ship in one build, so the Kotlin side reads version 7
+//! only.
 
 use crate::engine::{Flow, Network};
 use crate::log::{
@@ -46,7 +47,7 @@ use crate::log::{
 use crate::states::{Known, Placed, Screen};
 
 /// The version of the snapshot.
-pub const VERSION: u8 = 6;
+pub const VERSION: u8 = 7;
 
 /// Bytes up and down.
 pub type Ways = [u64; 2];
@@ -317,6 +318,15 @@ mod tests {
         assert_eq!(out[app_flags], 0b100);
         assert_eq!(out[flags], 0b11);
         assert_eq!(out.len(), expected.len());
+        // Version 7 (the proxy record's unit S2): a destination through the network's own proxy has the route 3, in
+        // the same place, before its proxy's byte and the app's tunnel; the layout is the same.
+        let route = expected.len() - 4 - 1 - 5;
+        assert_eq!(out[route..route + 5], [0, 0, 0, 0, 0]);
+        let mut proxied = tool;
+        proxied.apps[0].places[0].flow.via = crate::engine::Via::NetworkProxy;
+        let out = encode(&proxied);
+        assert_eq!(out[route..route + 5], [3, 0, 0, 0, 0]);
+        assert_eq!((out[0], out.len()), (7, expected.len()));
     }
 
     /// An app with no UID, a state not told yet, the tool, nothing known, the screen off: each in its

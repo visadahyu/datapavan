@@ -9,8 +9,8 @@
 //!   owner is, then the name, the resolver and the DNS name where it differs from the name, each a length
 //!   byte and UTF-8, then the state of its app over the segment ([`Placed::code`]): its bytes' seconds', or,
 //!   for a part with no bytes, its end's (ADR 0046, "How it is built"); and last its route: one byte (0
-//!   directly, 1 through the user's tool, 2 through a `WireGuard` tunnel) and the tunnel's number (u32, 0 for
-//!   none); and since version 5 its proxy ([`push_proxy`]): a byte 0 for none; and since version 6 the SDK of the
+//!   directly, 1 through the user's tool, 2 through a `WireGuard` tunnel, 3 through the network's own proxy) and the
+//!   tunnel's number (u32, 0 for none); and since version 5 its proxy ([`push_proxy`]): a byte 0 for none; and since version 6 the SDK of the
 //!   graded table's row that blocked it, a length byte and UTF-8, empty for a flow not blocked.
 //! - lookups an app sent to the network part's own DNS address: version, kind 2, the UID, start and end, their
 //!   count, their packets' bytes up and down on the tunnel, and last the app's state over them, as a segment's.
@@ -27,7 +27,10 @@
 //! 0052) added a segment's proxy after its route, and the code 5 of where a name came from: the destination the
 //! app asked its proxy for. Version 6 (W8, part 3a, ADR 0053) added the outcome 4, a flow tracker blocking refused,
 //! and after the proxy the SDK (its Maven coordinate) of the row that blocked it, which names a tracker, never a
-//! host, so it is kept whatever "Log where these apps connect" says.
+//! host, so it is kept whatever "Log where these apps connect" says. Version 7 (the proxy record's unit B) added a
+//! proxy's local and unsure flags. Version 8 (the proxy record's unit S2) added the route 3, a direct flow the engine
+//! sent through the network's own proxy; the record's shape is version 7's, so that a reader takes route 3 from
+//! version 8 on only.
 
 use std::net::{IpAddr, SocketAddr};
 
@@ -36,8 +39,8 @@ use crate::owners::NetworkKind;
 use crate::proxies::{Asked, Kind};
 use crate::states::Placed;
 
-/// The version of the record format: 7 since the proxy record's unit B, a proxy's local and unsure flags.
-pub const VERSION: u8 = 7;
+/// The version of the record format: 8 since the proxy record's unit S2, the route through the network's own proxy.
+pub const VERSION: u8 = 8;
 
 /// One record of the log.
 #[derive(Clone, Debug, PartialEq, Eq)]
@@ -144,12 +147,13 @@ impl Record {
 }
 
 /// A flow's route, as the log and the live view's snapshot write it: a byte (0 directly, 1 through the
-/// tool, 2 through a tunnel), then the tunnel's number, 0 for none.
+/// tool, 2 through a tunnel, 3 through the network's own proxy), then the tunnel's number, 0 for none.
 pub(crate) fn push_via(out: &mut Vec<u8>, via: Via) {
     let (code, tunnel) = match via {
         Via::Direct => (0, 0),
         Via::Tool => (1, 0),
         Via::Tunnel(t) => (2, t),
+        Via::NetworkProxy => (3, 0),
     };
     out.push(code);
     out.extend_from_slice(&tunnel.to_le_bytes());
@@ -444,6 +448,7 @@ mod tests {
             (Via::Direct, [0, 0, 0, 0, 0]),
             (Via::Tool, [1, 0, 0, 0, 0]),
             (Via::Tunnel(0x0102_0304), [2, 4, 3, 2, 1]),
+            (Via::NetworkProxy, [3, 0, 0, 0, 0]),
         ] {
             let segment = Record::Segment {
                 flow: Flow { via, ..flow() },

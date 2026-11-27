@@ -1576,8 +1576,9 @@ pub extern "system" fn Java_org_visadahyu_datapavan_network_Engine_nativeClearAc
     });
 }
 
-/// How many of `flows` went each way, by app: `uid route count` lines, the route `direct`, `tool` or
-/// `tunnel:N`, the UID `-` for flows of no app, in order. No destination.
+/// How many of `flows` went each way, by app: `uid route count` lines, the route `direct`, `tool`,
+/// `tunnel:N` or `network-proxy` (the proxy record's unit S2), the UID `-` for flows of no app, in order. No
+/// destination.
 fn flow_routes(flows: &[Flow]) -> String {
     let mut counts = std::collections::BTreeMap::<(Option<u32>, String), usize>::new();
     for flow in flows {
@@ -1585,6 +1586,7 @@ fn flow_routes(flows: &[Flow]) -> String {
             datapavan_net::Via::Direct => "direct".to_owned(),
             datapavan_net::Via::Tool => "tool".to_owned(),
             datapavan_net::Via::Tunnel(t) => format!("tunnel:{t}"),
+            datapavan_net::Via::NetworkProxy => "network-proxy".to_owned(),
         };
         *counts.entry((flow.uid, route)).or_default() += 1;
     }
@@ -2054,8 +2056,15 @@ mod tests {
             via: datapavan_net::Via::Tool,
             ..organisation.clone()
         };
-        let routes = flow_routes(&[organisation, tunnelled.clone(), tunnelled, unowned]);
-        assert_eq!(routes, "- tool 1\n2000 direct 1\n2000 tunnel:3 2");
+        let proxied = Flow {
+            via: datapavan_net::Via::NetworkProxy,
+            ..organisation.clone()
+        };
+        let routes = flow_routes(&[organisation, tunnelled.clone(), tunnelled, unowned, proxied]);
+        assert_eq!(
+            routes,
+            "- tool 1\n2000 direct 1\n2000 network-proxy 1\n2000 tunnel:3 2"
+        );
         assert!(!routes.contains("93.184"));
     }
 
