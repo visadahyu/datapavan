@@ -1341,7 +1341,7 @@ impl Engine {
         shared.set_blocking(blocking);
         // In place before the thread reads its first packet: a tunnelled app's first SYN never goes directly.
         shared.tunnels.set(&tunnels);
-        if shared.tunnels.any() {
+        if shared.tunnels.any() || shared.beneath_held() {
             shared.uncached_answers.store(true, Ordering::Relaxed);
         }
         // What the engine before held may name chained apps' destinations that the chain set now leaves out.
@@ -1521,7 +1521,7 @@ impl Engine {
     /// 1); one through the same tool, reached the same way, stays. While a chain is on, every answer
     /// of the network part's DNS address reaches the apps with a time to live of 0 (ADR 0038).
     pub fn chain(&self, chain: Option<Chain>) {
-        let on = chain.is_some() || self.shared.tunnels.any();
+        let on = chain.is_some() || self.shared.tunnels.any() || self.shared.beneath_held();
         let tool = chain.as_ref().map(|chain| chain.tool);
         let chain = chain.map(Arc::new);
         let before = std::mem::replace(&mut *lock(&self.shared.chain), chain.clone());
@@ -1562,7 +1562,9 @@ impl Engine {
         self.shared.tunnels.set(setting);
         // As after a chain set anew: a UDP mapping or flow of lookups asks again whether its way still holds.
         self.shared.chains.fetch_add(1, Ordering::Release);
-        let on = self.shared.tunnels.any() || self.shared.chain().is_some();
+        let on = self.shared.tunnels.any()
+            || self.shared.chain().is_some()
+            || self.shared.beneath_held();
         self.shared.uncached_answers.store(on, Ordering::Relaxed);
         lock(&self.shared.direct_answers).clear();
         self.shared.hide_chained();
@@ -1583,9 +1585,15 @@ impl Engine {
     /// Sets the network beneath's own proxy (the proxy record's unit S2), or none: each new direct TCP connection
     /// that a direct try cannot open goes through it from now on, and a connection being opened keeps the setting it
     /// started with. The network part keeps what it hands ([`Beneath::kept`]), so that what was learned crosses to
-    /// the next engine.
+    /// the next engine. While one is held, every answer of the network part's DNS address reaches the apps with a time
+    /// to live of 0, as while a chain is on, so that each app's lookup reaches the engine with its app (S2's review,
+    /// M2: a name goes to that proxy only for an app whose own lookup was given it).
     pub fn beneath(&self, setting: Option<Arc<Beneath>>) {
         *lock(&self.shared.beneath) = setting;
+        let on = self.shared.beneath_held()
+            || self.shared.chain().is_some()
+            || self.shared.tunnels.any();
+        self.shared.uncached_answers.store(on, Ordering::Relaxed);
     }
 
     /// What the engine learned of the network's own proxy now, for the network part's dump and "Now": `None` while

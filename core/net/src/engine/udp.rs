@@ -3228,7 +3228,7 @@ impl Loop {
         }
         if let Some(mut answer) = cached {
             self.shared.answer_blocked(uid, payload, &mut answer);
-            self.shared.looked_up(uid, &answer);
+            self.shared.passed(uid, &answer);
             if let Some(packet) = packet::udp(key.1, key.0, &answer) {
                 self.shared.lookup_answered(uid, packet.len());
                 self.send(&packet).await;
@@ -4999,7 +4999,7 @@ async fn open_lookups(
             }
             if let Some(mut answer) = cached_answer(shared, destination, payload) {
                 shared.answer_blocked(uid, payload, &mut answer);
-                shared.looked_up(uid, &answer);
+                shared.passed(uid, &answer);
                 cached.extend(packet::udp(destination, app, &answer));
                 continue;
             }
@@ -5170,9 +5170,10 @@ async fn answer_resolved(
 ) {
     let (app, destination) = key;
     let answer = super::resolver::answer(&shared, &query, false, uid).await;
-    // A messenger's lookups through the network part count for its hellos (ADR 0052, the fix round's S-M3).
+    // A messenger's lookups through the network part count for its hellos (ADR 0052, the fix round's S-M3), and the
+    // app's for the network's own proxy (S2's review, M2).
     if let Some(answer) = &answer {
-        shared.looked_up(uid, answer);
+        shared.passed(uid, answer);
     }
     if let Some(packet) = answer.and_then(|answer| packet::udp(destination, app, &answer)) {
         shared.lookup_answered(uid, packet.len());
@@ -5352,7 +5353,7 @@ fn relayed(
                     let mut passed = answer.to_vec();
                     shared.answer_blocked(uid, &[], &mut passed);
                     shared.learn(&passed, None);
-                    shared.looked_up(uid, &passed);
+                    shared.passed(uid, &passed);
                     if shared.uncached_answers.load(Ordering::Relaxed) {
                         lock(&shared.direct_answers).insert(answer, shared.clock.since_boot());
                         dns::uncache(&mut passed);

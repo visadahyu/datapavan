@@ -333,6 +333,36 @@ impl Shared {
     }
 }
 
+impl Shared {
+    /// A DNS `answer` the network part passed to the app `uid` from Android's resolver or its own (the encrypted
+    /// resolver, or the answers it keeps): while the network's own proxy is held, each address it gives its question
+    /// notes the app among those whose lookups were given that name ([`crate::names::Names::asked`]), the only apps
+    /// for whose flows the name may go to that proxy (S2's review, M2); and a messenger's lookup counts for its hellos
+    /// ([`Shared::looked_up`]). Not for an app's own resolver's answer, which names nothing in the shared scope.
+    pub(super) fn passed(&self, uid: Option<u32>, answer: &[u8]) {
+        if let Some(uid) = uid
+            && self.beneath_held()
+        {
+            noted(self, uid, answer);
+        }
+        self.looked_up(uid, answer);
+    }
+}
+
+/// [`Shared::passed`]'s note of the app `uid`, out of line: the lookups' paths keep one call.
+#[cold]
+#[inline(never)]
+fn noted(shared: &Shared, uid: u32, answer: &[u8]) {
+    let Some(response) = dns::response(answer) else {
+        return;
+    };
+    let now = Instant::now();
+    let mut names = lock(&shared.names);
+    for &(address, _) in &response.addresses {
+        names.asked(address, &response.question, uid, now);
+    }
+}
+
 /// What a hello does to a flow's names: whether its name names the flow, the DNS name it leaves
 /// beside it, and, for a flow it renames, the mark of the app's own DNS read again.
 struct Renaming {

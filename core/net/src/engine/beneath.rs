@@ -42,8 +42,10 @@
 //! **By address, then by name** (C1, M1, decision 2): the authority is the address the app connected to. A request by
 //! name follows, on a new connection, only after the proxy refused the address with a `4xx` other than `407`, and only
 //! with the flow's own name: the address's sole name in Android's resolver's answers ([`crate::names::Names::sole`]),
-//! the one that names the app's flow, never a name whose answer carried an ECH configuration, nor one tracker blocking
-//! refuses for the app. Never by name for a circumvention tool's flow (the chain's tool or any tool handed), and so for
+//! the one that names the app's flow, and only where the app's own lookup was given it (S2's review, M2), never a name
+//! whose answer carried an ECH configuration, nor one tracker blocking refuses for the app. While the proxy is held,
+//! every answer reaches the apps with a time to live of 0, as while a chain is on, so that Android's resolver, which
+//! keeps one cache for every app of a network, never answers an app's lookup without the engine noting the app. Never by name for a circumvention tool's flow (the chain's tool or any tool handed), and so for
 //! what the tool carries for a chained app, nor for any flow of an app whose route is the tool or a tunnel ("Local
 //! network directly"), nor for a flow whose app Android did not name, whatever any log switch says. Once a name opened
 //! where its address was refused, names come first through that proxy while the setting holds.
@@ -327,6 +329,11 @@ impl Drop for Probe {
 }
 
 impl Shared {
+    /// Whether the network's own proxy is held now.
+    pub(super) fn beneath_held(&self) -> bool {
+        lock(&self.beneath).is_some()
+    }
+
     /// The network's own proxy for a direct flow to `destination`, if one is set and may carry it ([`takes`]): one
     /// load of the setting while none is set.
     pub(super) fn beneath_for(&self, destination: SocketAddr) -> Option<Arc<Beneath>> {
@@ -567,7 +574,7 @@ fn own_name(shared: &Shared, uid: Option<u32>, destination: SocketAddr) -> Optio
     let now = Instant::now();
     let name = {
         let names = lock(&shared.names);
-        let sole = names.sole(address, now)?;
+        let sole = names.sole(address, uid, now)?;
         if names.get(address, Some(uid), now) != Some(sole) || names.is_hidden(sole, Some(uid), now)
         {
             return None;
@@ -931,6 +938,14 @@ pub(super) mod tests {
 
     pub(in crate::engine) const OPENED: &[u8] = b"HTTP/1.1 200 Connection established\r\n\r\n";
 
+    /// A lookup of `name` by the app `uid` through Android's resolver, answered `address`: learned for every app's
+    /// flows, and passed to that app, as the lookups' paths do.
+    fn looked_up(shared: &Shared, uid: u32, name: &str, address: [u8; 4]) {
+        let answer = super::super::tests::dns_answer(name, address);
+        shared.learn(&answer, None);
+        shared.passed(Some(uid), &answer);
+    }
+
     /// A case of [`no_name_reaches_the_proxy_where_the_flows_name_is_not_its_own_to_give`]: what it is, what it sets,
     /// and the flow's app.
     type Case = (&'static str, fn(&Shared), Option<u32>);
@@ -1288,10 +1303,7 @@ pub(super) mod tests {
             },
             proxy.at,
         );
-        shared.learn(
-            &super::super::tests::dns_answer("site.example", [198, 51, 100, 7]),
-            None,
-        );
+        looked_up(&shared, UID, "site.example", [198, 51, 100, 7]);
         let destination = at("198.51.100.7:443");
         let (stream, through) = open(&shared, UID, destination, destination).await;
         assert!(through);
@@ -1326,10 +1338,8 @@ pub(super) mod tests {
     -> io::Result<()> {
         let destination = at("198.51.100.7:443");
         let named = |shared: &Shared, name: &str| {
-            shared.learn(
-                &super::super::tests::dns_answer(name, [198, 51, 100, 7]),
-                None,
-            );
+            looked_up(shared, UID, name, [198, 51, 100, 7]);
+            looked_up(shared, OTHER, name, [198, 51, 100, 7]);
         };
         let cases: [Case; 9] = [
             (
@@ -1405,10 +1415,7 @@ pub(super) mod tests {
             (
                 "two names",
                 |s| {
-                    s.learn(
-                        &super::super::tests::dns_answer("ads.tracker.example", [198, 51, 100, 7]),
-                        None,
-                    );
+                    looked_up(s, UID, "ads.tracker.example", [198, 51, 100, 7]);
                 },
                 Some(UID),
             ),
@@ -1464,6 +1471,101 @@ pub(super) mod tests {
         named(&shared, "site.example");
         let (stream, through) = open(&shared, OTHER, destination, destination).await;
         assert!(stream.is_ok() && through);
+        Ok(())
+    }
+
+    /// S2's review, M2: an address that only another app's lookup named, as a hostile app's own server can answer
+    /// with the address an app carries itself, gets no request by name for the app's flow; once the app's own lookup
+    /// is given that name for the address, its flow goes by name.
+    #[tokio::test(flavor = "current_thread")]
+    async fn another_apps_lookup_never_names_a_flow() -> io::Result<()> {
+        let proxy = Proxy::new(Reply::NamesOnly).await?;
+        let (shared, _) = engine(
+            Lab {
+                refuses: true,
+                ..Lab::default()
+            },
+            proxy.at,
+        );
+        let destination = at("198.51.100.7:443");
+        looked_up(&shared, OTHER, "b.example", [198, 51, 100, 7]);
+        let (stream, through) = open(&shared, UID, destination, destination).await;
+        assert!(stream.is_err() && !through);
+        assert_eq!(
+            proxy.heads(),
+            ["CONNECT 198.51.100.7:443 HTTP/1.1\r\nHost: 198.51.100.7:443\r\n\r\n"],
+            "by address alone"
+        );
+        looked_up(&shared, UID, "b.example", [198, 51, 100, 7]);
+        let (stream, through) = open(&shared, UID, destination, destination).await;
+        assert!(through);
+        echoes(&mut stream?).await?;
+        assert!(proxy.heads()[2].starts_with("CONNECT b.example:443 "));
+        // A lookup passed while no proxy is held notes no app.
+        let (quiet, _) = engine(Lab::default(), proxy.at);
+        *lock(&quiet.beneath) = None;
+        looked_up(&quiet, UID, "c.example", [198, 51, 100, 9]);
+        let now = Instant::now();
+        assert_eq!(
+            lock(&quiet.names).sole(IpAddr::from([198, 51, 100, 9]), UID, now),
+            None
+        );
+        Ok(())
+    }
+
+    /// S2's review, M2: while the network's own proxy is held, every answer of the network part's DNS address reaches
+    /// the apps with a time to live of 0, as while a chain is on, so that Android's resolver answers no app's lookup
+    /// from its cache; set by the engine's setter and at its start, whatever else is set.
+    #[test]
+    fn while_the_networks_proxy_is_held_answers_go_uncached() -> io::Result<()> {
+        let (engine_end, _app) = std::os::unix::net::UnixDatagram::pair()?;
+        engine_end.set_nonblocking(true)?;
+        let config = super::super::Config {
+            mtu: 1_500,
+            keep_flows: 0,
+            addresses: super::super::Addresses::COMMON,
+            limits: Limits::default(),
+        };
+        let setting = || {
+            Beneath::new(NETWORK, &[at("203.0.113.80:3128")], "", (true, true), false).map(Arc::new)
+        };
+        let mut engine = super::super::Engine::start(
+            std::os::fd::OwnedFd::from(engine_end),
+            config,
+            Arc::new(Lab::default()),
+            None,
+        )?;
+        assert!(!engine.answers_uncached());
+        engine.beneath(setting());
+        assert!(engine.answers_uncached(), "held");
+        engine.chain(None);
+        engine.tunnels(&TunnelSetting::default());
+        assert!(engine.answers_uncached(), "held, with no chain nor tunnel");
+        engine.beneath(None);
+        assert!(!engine.answers_uncached(), "none held");
+        engine.stop();
+        let (engine_end, _app) = std::os::unix::net::UnixDatagram::pair()?;
+        engine_end.set_nonblocking(true)?;
+        let mut next = super::super::Engine::start_with(
+            std::os::fd::OwnedFd::from(engine_end),
+            config,
+            Arc::new(Lab::default()),
+            None,
+            (
+                None,
+                Some(super::super::ChainSetting {
+                    chain: None,
+                    uncached_answers: false,
+                    tunnels: TunnelSetting::default(),
+                    dns: None,
+                    proxies: ProxySetting::default(),
+                    blocking: BlockSetting::default(),
+                    beneath: setting(),
+                }),
+            ),
+        )?;
+        assert!(next.answers_uncached(), "held from the start");
+        next.stop();
         Ok(())
     }
 

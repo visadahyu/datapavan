@@ -44,9 +44,11 @@
 //! network's proxy, so that the proxy learns no name ECH would hide. That guard fails closed (S2's review, major 3):
 //! once its table had to push out an entry still live, every name reads as hidden until that entry's own time would
 //! have ended, the latest of those pushed out, so that a day's browsing past [`PUBLIC_CAPACITY`] ECH names never sends
-//! the oldest of them by name. And [`Names::sole`], an address's one name in
-//! Android's resolver's answers while no other name given it is still held (S2's audit, M1): the only name the engine
-//! may send that proxy for a flow, never the last of several apps' lookups of a shared address.
+//! the oldest of them by name. And [`Names::sole`], an address's one name in Android's resolver's answers while no
+//! other name given it is still held (S2's audit, M1), and only for an app whose own lookup was given it (S2's review,
+//! M2): the address's last name keeps the UIDs of the apps whose lookups were given it, the latest
+//! [`ASKERS_PER_NAME`] ([`Names::asked`]), so that the only name the engine may send that proxy for a flow is one the
+//! flow's own app asked for, never one another app's lookup chose for an address the app got some other way.
 
 use std::collections::{HashMap, VecDeque};
 use std::hash::{BuildHasher, Hash, RandomState};
@@ -69,6 +71,10 @@ pub const OWN_PUBLIC_CAPACITY: usize = 64;
 pub const OWN_SCOPES: usize = 32;
 /// The most names given before the last that an address keeps, for [`Names::gave`].
 pub const NAMES_PER_ADDRESS: usize = 8;
+/// The most apps whose lookups were given an address's last name that it keeps, the latest, for [`Names::sole`].
+pub const ASKERS_PER_NAME: usize = 4;
+/// No app, in an empty place of [`ASKERS_PER_NAME`]: `(uid_t) -1`, which Linux never gives a process.
+const NOBODY: u32 = u32::MAX;
 
 /// Whose flows a name may name: every app's, or only the app with this UID.
 pub type Scope = Option<u32>;
@@ -82,6 +88,8 @@ struct Given {
     held_until: Duration,
     /// The names given the address before, as keyed hashes, each until its own answer ends.
     earlier: Vec<(u64, Instant)>,
+    /// The apps whose lookups were given this name for the address, the latest last, [`NOBODY`] in a place not taken.
+    askers: [u32; ASKERS_PER_NAME],
 }
 
 /// The entries of one scope, the oldest first.
@@ -309,6 +317,7 @@ impl Names {
             until: now + keep,
             held_until,
             earlier: Vec::new(),
+            askers: [NOBODY; ASKERS_PER_NAME],
         };
         let hasher = &self.hasher;
         self.addresses.insert(
@@ -330,6 +339,10 @@ impl Names {
                     earlier.retain(|(hash, _)| *hash != own);
                     latest_each(&mut earlier);
                     given.earlier = earlier;
+                    // The same name given again keeps the apps that asked for it; another name has none yet.
+                    if old.until > now && compared(&old.name) == compared(name) {
+                        given.askers = old.askers;
+                    }
                 }
                 given
             },
@@ -387,13 +400,33 @@ impl Names {
                 .any(|until| *until > now)
     }
 
+    /// Notes that the app with `uid` was given `address` by an answer for `name` from Android's resolver or the
+    /// network part's own, where that is the address's last name in their answers, still held; the latest
+    /// [`ASKERS_PER_NAME`] apps are kept.
+    pub fn asked(&mut self, address: IpAddr, name: &str, uid: u32, now: Instant) {
+        let Some(given) = self.addresses.shared.entries.get_mut(&address) else {
+            return;
+        };
+        if given.until <= now
+            || compared(&given.name) != compared(name)
+            || given.askers.contains(&uid)
+        {
+            return;
+        }
+        given.askers.rotate_left(1);
+        given.askers[ASKERS_PER_NAME - 1] = uid;
+    }
+
     /// The one name Android's resolver's answers still give `address`, if no other name given it before is still
-    /// held: the shared scope alone, never an app's own resolver's.
+    /// held, and only where a lookup of the app with `uid` was given it ([`Names::asked`]): the shared scope alone,
+    /// never an app's own resolver's.
     #[must_use]
-    pub fn sole(&self, address: IpAddr, now: Instant) -> Option<&str> {
+    pub fn sole(&self, address: IpAddr, uid: u32, now: Instant) -> Option<&str> {
         let given = self.addresses.shared.entries.get(&address)?;
-        (given.until > now && given.earlier.iter().all(|(_, until)| *until <= now))
-            .then_some(given.name.as_str())
+        (given.until > now
+            && given.askers.contains(&uid)
+            && given.earlier.iter().all(|(_, until)| *until <= now))
+        .then_some(given.name.as_str())
     }
 
     /// Whether `name` is the public name of an ECH configuration still kept for the flows of the app with
@@ -575,28 +608,76 @@ mod tests {
     /// again.
     #[test]
     fn an_address_has_a_sole_name_only_while_no_other_is_held() {
+        const APP: u32 = 10_123;
         let mut names = Names::default();
         let now = Instant::now();
         let a = IpAddr::V4(Ipv4Addr::new(198, 51, 100, 7));
-        assert_eq!(names.sole(a, now), None);
+        assert_eq!(names.sole(a, APP, now), None);
         names.insert(a, Some(10_456), "own.example", 300, (now, BOOT));
-        assert_eq!(names.sole(a, now), None, "an app's own resolver's");
+        names.asked(a, "own.example", APP, now);
+        assert_eq!(names.sole(a, APP, now), None, "an app's own resolver's");
         names.insert(a, None, "bank.example", 300, (now, BOOT));
-        assert_eq!(names.sole(a, now), Some("bank.example"));
+        names.asked(a, "bank.example", APP, now);
+        assert_eq!(names.sole(a, APP, now), Some("bank.example"));
         names.insert(a, None, "BANK.example.", 300, (now, BOOT));
         assert_eq!(
-            names.sole(a, now),
+            names.sole(a, APP, now),
             Some("BANK.example."),
-            "the same name again"
+            "the same name again, its app kept"
         );
         let later = now + Duration::from_secs(60);
         names.insert(a, None, "ads.tracker.example", 300, (later, BOOT));
-        assert_eq!(names.sole(a, later), None, "two names held");
+        names.asked(a, "ads.tracker.example", APP, later);
+        assert_eq!(names.sole(a, APP, later), None, "two names held");
         let after = now + MIN_KEEP + Duration::from_secs(1);
-        assert_eq!(names.sole(a, after), Some("ads.tracker.example"));
+        assert_eq!(names.sole(a, APP, after), Some("ads.tracker.example"));
         assert_eq!(
-            names.sole(a, later + MIN_KEEP + Duration::from_secs(1)),
+            names.sole(a, APP, later + MIN_KEEP + Duration::from_secs(1)),
             None
+        );
+    }
+
+    /// S2's review, M2: an address's sole name is the app's only where that app's own lookup was given it. Another
+    /// app's lookup of a name for the address names nothing for the first; a lookup of another name, or of one no
+    /// longer the address's last, notes no app; another name given the address starts with no app; the latest
+    /// [`ASKERS_PER_NAME`] apps are kept.
+    #[test]
+    fn a_sole_name_is_an_apps_only_where_its_own_lookup_was_given_it() {
+        let (first, other) = (10_123, 10_456);
+        let mut names = Names::default();
+        let now = Instant::now();
+        let a = IpAddr::V4(Ipv4Addr::new(198, 51, 100, 7));
+        names.insert(a, None, "b.example", 300, (now, BOOT));
+        names.asked(a, "b.example", other, now);
+        assert_eq!(names.sole(a, first, now), None, "another app's lookup");
+        assert_eq!(names.sole(a, other, now), Some("b.example"));
+        names.asked(a, "a.example", first, now);
+        assert_eq!(names.sole(a, first, now), None, "not the address's name");
+        names.asked(a, "B.Example.", first, now);
+        assert_eq!(names.sole(a, first, now), Some("b.example"));
+        names.asked(
+            IpAddr::V4(Ipv4Addr::new(198, 51, 100, 8)),
+            "b.example",
+            first,
+            now,
+        );
+        assert_eq!(
+            names.sole(IpAddr::V4(Ipv4Addr::new(198, 51, 100, 8)), first, now),
+            None
+        );
+        let ended = now + MIN_KEEP + Duration::from_secs(1);
+        names.insert(a, None, "c.example", 300, (ended, BOOT));
+        assert_eq!(names.sole(a, other, ended), None, "a new name, no app yet");
+        names.asked(a, "c.example", other, ended);
+        assert_eq!(names.sole(a, other, ended), Some("c.example"));
+        let apps = 10_500..10_500 + u32::try_from(ASKERS_PER_NAME).unwrap_or(0);
+        for app in apps.clone() {
+            names.asked(a, "c.example", app, ended);
+        }
+        assert_eq!(names.sole(a, other, ended), None, "the oldest pushed out");
+        assert!(
+            apps.into_iter()
+                .all(|app| names.sole(a, app, ended).is_some())
         );
     }
 
@@ -635,6 +716,7 @@ mod tests {
         let now = Instant::now();
         let a = IpAddr::V4(Ipv4Addr::new(198, 51, 100, 7));
         names.insert(a, None, "site.example", 300, (now, BOOT));
+        names.asked(a, "site.example", 10_123, now);
         names.insert_hidden("site.example", None, 300, now);
         for i in 0..PUBLIC_CAPACITY - 1 {
             names.insert_hidden(&format!("e{i}.example"), None, 300, now);
@@ -643,7 +725,7 @@ mod tests {
         assert!(names.hidden.closed.is_none(), "full, nothing pushed out");
         let later = now + Duration::from_secs(60);
         names.insert_hidden("one-more.example", None, 7_200, later);
-        assert_eq!(names.sole(a, later), Some("site.example"));
+        assert_eq!(names.sole(a, 10_123, later), Some("site.example"));
         assert!(names.is_hidden("site.example", Some(10_123), later));
         assert!(
             names.is_hidden("never-asked.example", None, later),
