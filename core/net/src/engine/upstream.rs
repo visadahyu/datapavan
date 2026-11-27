@@ -80,6 +80,31 @@ pub(super) async fn protect(shared: &Arc<Shared>, fd: BorrowedFd<'_>) -> io::Res
     }
 }
 
+/// Protects a socket to the network beneath's own proxy and binds it to that network, whose handle is `network`
+/// (the proxy record's unit S2; [`super::Platform::protect_on`]): refused once the network beneath is another, so that
+/// nothing reaches whatever holds the old proxy's address there. Through a duplicate, as [`protect`]; a function of its
+/// own, so that `protect`'s callers keep their code.
+#[cfg_attr(
+    not(test),
+    expect(dead_code, reason = "tcp::upstream reaches it from the next commit")
+)]
+pub(super) async fn protect_on(
+    shared: &Arc<Shared>,
+    fd: BorrowedFd<'_>,
+    network: i64,
+) -> io::Result<()> {
+    let platform = Arc::clone(&shared.platform);
+    let owned = fd.try_clone_to_owned()?;
+    if super::on_pool(move || platform.protect_on(owned.as_raw_fd(), network))
+        .await
+        .unwrap_or(false)
+    {
+        Ok(())
+    } else {
+        Err(io::Error::other("protect_on() refused"))
+    }
+}
+
 pub(super) async fn connect_tcp(shared: &Arc<Shared>, target: SocketAddr) -> io::Result<TcpStream> {
     let socket = if target.is_ipv4() {
         TcpSocket::new_v4()?

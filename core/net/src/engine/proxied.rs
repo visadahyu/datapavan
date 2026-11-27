@@ -1817,7 +1817,7 @@ impl Shared {
     /// that Android's resolver gave this address, the shared scope of the names, never an app's own resolver's answer
     /// (audit M5): otherwise an app's own resolver could make its own server read as the proxy in Android's settings.
     /// The setting's hosts are copied out before the names are asked, so that no lock is held under another.
-    fn android_setting(&self, destination: std::net::SocketAddr) -> bool {
+    pub(super) fn android_setting(&self, destination: std::net::SocketAddr) -> bool {
         let address = destination.ip().to_canonical();
         let hosts: Vec<String> = lock(&self.proxies)
             .setting
@@ -5327,7 +5327,7 @@ mod tests {
         let (_, own) = udp_flow(&shared, UID, at([203, 0, 113, 5], 443), false);
         assert!(own.proxy.is_some());
         let counters = shared.counters.snapshot();
-        assert_eq!(counters[super::super::COUNTERS - 2..], [1, 1]);
+        assert_eq!(counters[71..73], [1, 1]);
     }
 
     /// Audit-U m3 and m4: only the associating app's flows are tied, a flow of no app never is, one that comes in from

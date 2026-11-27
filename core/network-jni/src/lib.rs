@@ -110,6 +110,7 @@ fn set_dns(config: Option<Arc<DnsConfig>>) {
         dns: None,
         proxies: ProxySetting::default(),
         blocking: BlockSetting::default(),
+        beneath: None,
     });
     kept.dns.clone_from(&config);
     if let Some(running) = engine().as_ref() {
@@ -126,6 +127,7 @@ fn set_chain(chain: Option<Chain>) -> bool {
     let dns = set.as_ref().and_then(|s| s.dns.clone());
     let proxies = set.as_ref().map(|s| s.proxies.clone()).unwrap_or_default();
     let blocking = set.as_ref().map(|s| s.blocking.clone()).unwrap_or_default();
+    let beneath = set.as_ref().and_then(|s| s.beneath.clone());
     *set = Some(ChainSetting {
         chain: chain.clone(),
         uncached_answers: on,
@@ -133,6 +135,7 @@ fn set_chain(chain: Option<Chain>) -> bool {
         dns,
         proxies,
         blocking,
+        beneath,
     });
     match engine().as_ref() {
         Some(running) => {
@@ -154,6 +157,7 @@ fn set_tunnels(change: impl FnOnce(&mut TunnelSetting)) {
         dns: None,
         proxies: ProxySetting::default(),
         blocking: BlockSetting::default(),
+        beneath: None,
     });
     change(&mut kept.tunnels);
     if let Some(running) = engine().as_ref() {
@@ -177,6 +181,7 @@ fn set_proxies(change: impl FnOnce(&mut ProxySetting)) {
         dns: None,
         proxies: ProxySetting::default(),
         blocking: BlockSetting::default(),
+        beneath: None,
     });
     change(&mut kept.proxies);
     kept.proxies.trackers = trackers;
@@ -199,6 +204,7 @@ fn set_blocking(blocking: BlockSetting) {
         dns: None,
         proxies: ProxySetting::default(),
         blocking: BlockSetting::default(),
+        beneath: None,
     });
     kept.blocking = blocking;
     if let Some(running) = engine().as_ref() {

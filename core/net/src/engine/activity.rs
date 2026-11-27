@@ -2594,6 +2594,7 @@ pub(super) mod tests {
             dns: None,
             proxies: super::super::ProxySetting::default(),
             blocking: super::super::BlockSetting::default(),
+            beneath: None,
         };
         let (mut engine, _app) = start(platform(), Some(handover), Some(setting))?;
         // No destination; and not through the tool, which that flow never went through (review b2, N3).

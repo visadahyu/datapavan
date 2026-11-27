@@ -38,6 +38,12 @@
 //! [`OWN_SCOPES`] apps keep tables of their own: past that, the app whose own resolver answered last the
 //! longest ago loses its tables, and the engine's sweep drops an app's tables once every name in them has
 //! expired (review 3, nit 3). ADR 0044's decision 4 gives the memory this takes.
+//!
+//! Beside them, scoped and bounded as the public names are, the names whose own answers carried an ECH configuration
+//! (the proxy record's unit S2, the maintainer's decision 2 of 2026-11-26): the engine never hands such a name to the
+//! network's proxy, so that the proxy learns no name ECH would hide. And [`Names::sole`], an address's one name in
+//! Android's resolver's answers while no other name given it is still held (S2's audit, M1): the only name the engine
+//! may send that proxy for a flow, never the last of several apps' lookups of a shared address.
 
 use std::collections::{HashMap, VecDeque};
 use std::hash::{BuildHasher, Hash, RandomState};
@@ -188,6 +194,8 @@ impl<K: Hash + Eq + Clone, V> Scoped<K, V> {
 pub struct Names {
     addresses: Scoped<IpAddr, Given>,
     public: Scoped<String, Instant>,
+    /// The names whose answers carried an ECH configuration, until when, scoped as the public names.
+    hidden: Scoped<String, Instant>,
     /// The key of the hashes of the names an address was given before its last, random for each table.
     hasher: RandomState,
 }
@@ -197,6 +205,7 @@ impl Default for Names {
         Self {
             addresses: Scoped::new((CAPACITY, OWN_CAPACITY)),
             public: Scoped::new((PUBLIC_CAPACITY, OWN_PUBLIC_CAPACITY)),
+            hidden: Scoped::new((PUBLIC_CAPACITY, OWN_PUBLIC_CAPACITY)),
             hasher: crate::keys(),
         }
     }
@@ -218,6 +227,19 @@ fn latest_each(earlier: &mut Vec<(u64, Instant)>) {
     }
     earlier.truncate(kept.min(NAMES_PER_ADDRESS));
     earlier.reverse();
+}
+
+/// Keeps `name` in `table` for the flows of `scope`, as long as an address: one function for the public names and the
+/// hidden ones, so that one copy of the table's code serves both.
+fn keep_until(
+    table: &mut Scoped<String, Instant>,
+    name: &str,
+    scope: Scope,
+    ttl: u32,
+    now: Instant,
+) {
+    let keep = Duration::from_secs(u64::from(ttl)).clamp(MIN_KEEP, MAX_KEEP);
+    table.insert(scope, name.to_owned(), now + keep, |until, _| until);
 }
 
 /// A host name as names compare: in lower case, without a trailing dot.
@@ -290,9 +312,30 @@ impl Names {
     /// Remembers that a DNS answer gave an ECH configuration with the public name `name`, for the flows
     /// of `scope`.
     pub fn insert_public(&mut self, name: &str, scope: Scope, ttl: u32, now: Instant) {
-        let keep = Duration::from_secs(u64::from(ttl)).clamp(MIN_KEEP, MAX_KEEP);
-        self.public
-            .insert(scope, name.to_owned(), now + keep, |until, _| until);
+        keep_until(&mut self.public, name, scope, ttl, now);
+    }
+
+    /// Remembers that a DNS answer for `name` carried an ECH configuration, for the flows of `scope`.
+    pub fn insert_hidden(&mut self, name: &str, scope: Scope, ttl: u32, now: Instant) {
+        keep_until(&mut self.hidden, &compared(name), scope, ttl, now);
+    }
+
+    /// Whether an answer for `name` still kept for the flows of the app with `uid`, from its own resolver or from
+    /// Android's, carried an ECH configuration.
+    #[must_use]
+    pub fn is_hidden(&self, name: &str, uid: Option<u32>, now: Instant) -> bool {
+        self.hidden
+            .for_app(&compared(name), uid)
+            .any(|until| *until > now)
+    }
+
+    /// The one name Android's resolver's answers still give `address`, if no other name given it before is still
+    /// held: the shared scope alone, never an app's own resolver's.
+    #[must_use]
+    pub fn sole(&self, address: IpAddr, now: Instant) -> Option<&str> {
+        let given = self.addresses.shared.entries.get(&address)?;
+        (given.until > now && given.earlier.iter().all(|(_, until)| *until <= now))
+            .then_some(given.name.as_str())
     }
 
     /// Whether `name` is the public name of an ECH configuration still kept for the flows of the app with
@@ -337,12 +380,14 @@ impl Names {
     pub fn forget_expired(&mut self, now: Instant) {
         self.addresses.forget(|given| given.until > now);
         self.public.forget(|until| *until > now);
+        self.hidden.forget(|until| *until > now);
     }
 
     /// Forgets everything, as when the user wipes the log.
     pub fn clear(&mut self) {
         self.addresses.clear();
         self.public.clear();
+        self.hidden.clear();
     }
 
     /// How many addresses are kept, of every scope.
@@ -452,6 +497,62 @@ mod tests {
         );
         names.clear();
         assert!(!names.is_public("p1.example", None, now));
+    }
+
+    /// S2's audit, M1: an address's sole name is the one Android's resolver's answers gave it while no other name given
+    /// it is still held; an app's own resolver's names never count, and an earlier name that ended leaves it sole
+    /// again.
+    #[test]
+    fn an_address_has_a_sole_name_only_while_no_other_is_held() {
+        let mut names = Names::default();
+        let now = Instant::now();
+        let a = IpAddr::V4(Ipv4Addr::new(198, 51, 100, 7));
+        assert_eq!(names.sole(a, now), None);
+        names.insert(a, Some(10_456), "own.example", 300, (now, BOOT));
+        assert_eq!(names.sole(a, now), None, "an app's own resolver's");
+        names.insert(a, None, "bank.example", 300, (now, BOOT));
+        assert_eq!(names.sole(a, now), Some("bank.example"));
+        names.insert(a, None, "BANK.example.", 300, (now, BOOT));
+        assert_eq!(
+            names.sole(a, now),
+            Some("BANK.example."),
+            "the same name again"
+        );
+        let later = now + Duration::from_secs(60);
+        names.insert(a, None, "ads.tracker.example", 300, (later, BOOT));
+        assert_eq!(names.sole(a, later), None, "two names held");
+        let after = now + MIN_KEEP + Duration::from_secs(1);
+        assert_eq!(names.sole(a, after), Some("ads.tracker.example"));
+        assert_eq!(
+            names.sole(a, later + MIN_KEEP + Duration::from_secs(1)),
+            None
+        );
+    }
+
+    /// S2, decision 2: a name whose answer carried an ECH configuration is kept as such for a while, scoped as the
+    /// public names are, compared as names compare.
+    #[test]
+    fn a_name_whose_answer_carried_ech_is_known_for_its_scope() {
+        let mut names = Names::default();
+        let now = Instant::now();
+        names.insert_hidden("Site.example.", None, 300, now);
+        names.insert_hidden("mine.example", Some(10_123), 300, now);
+        assert!(names.is_hidden("site.example", Some(10_456), now));
+        assert!(names.is_hidden("site.example", None, now));
+        assert!(names.is_hidden("mine.example", Some(10_123), now));
+        assert!(!names.is_hidden("mine.example", Some(10_456), now));
+        assert!(!names.is_hidden("mine.example", None, now));
+        assert!(
+            !names.is_public("site.example", None, now),
+            "not a public name"
+        );
+        assert!(!names.is_hidden(
+            "site.example",
+            None,
+            now + MIN_KEEP + Duration::from_secs(1)
+        ));
+        names.clear();
+        assert!(!names.is_hidden("site.example", None, now));
     }
 
     /// Review 2 of W5's first part: one app's own resolver can push out only its own names, never

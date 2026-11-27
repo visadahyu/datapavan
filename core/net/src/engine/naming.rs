@@ -315,6 +315,10 @@ impl Shared {
             for &(address, ttl) in &response.addresses {
                 names.insert(address, scope, &response.question, ttl, (now, boot));
             }
+            // The name whose answer carried an ECH configuration never goes to the network's proxy (S2, decision 2).
+            if let Some(&(_, ttl)) = response.public_names.first() {
+                names.insert_hidden(&response.question, scope, ttl, now);
+            }
             for (public, ttl) in response.public_names {
                 names.insert_public(&public, scope, ttl, now);
             }

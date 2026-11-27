@@ -107,6 +107,15 @@ impl OnLink {
         self.transport
     }
 
+    /// Whether `address` is within one of the network's on-link prefixes, rule 2 alone: what the network's own proxy
+    /// never carries (the proxy record's unit S2), while a private address on another subnet may need it, as Android
+    /// would send it there.
+    #[must_use]
+    pub fn on_link(&self, address: IpAddr) -> bool {
+        let address = address.to_canonical();
+        self.prefixes.iter().any(|&(p, l)| within(address, p, l))
+    }
+
     /// Whether `address` is on the user's own network, by the rule above.
     #[must_use]
     pub fn is_local(&self, address: IpAddr) -> bool {
@@ -189,6 +198,28 @@ mod tests {
             rows += 1;
         }
         assert!(rows >= 20, "the table has {rows} rows");
+    }
+
+    /// Rule 2 alone, for the network's own proxy (S2): a private address on another subnet and link-local are not on
+    /// link, an address of the prefix is, an IPv4-mapped one too.
+    #[test]
+    fn on_link_is_the_prefixes_alone() {
+        let on_link = OnLink::new([(IpAddr::from([192, 168, 1, 0]), 24)], Transport::Wifi);
+        assert!(on_link.on_link(IpAddr::from([192, 168, 1, 20])));
+        assert!(
+            on_link.on_link(
+                "::ffff:192.168.1.20"
+                    .parse()
+                    .unwrap_or(IpAddr::from([0, 0, 0, 0]))
+            )
+        );
+        assert!(!on_link.on_link(IpAddr::from([192, 168, 2, 20])));
+        assert!(
+            on_link.is_local(IpAddr::from([192, 168, 2, 20])),
+            "local by rule 3"
+        );
+        assert!(!on_link.on_link(IpAddr::from([169, 254, 1, 1])));
+        assert!(!OnLink::default().on_link(IpAddr::from([192, 168, 1, 20])));
     }
 
     #[test]

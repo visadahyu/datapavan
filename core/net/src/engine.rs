@@ -63,6 +63,7 @@ use crate::tls::Hello;
 use crate::tun::Tun;
 
 mod activity;
+mod beneath;
 mod blocks;
 mod budget;
 mod chain;
@@ -86,6 +87,7 @@ mod udp;
 mod upstream;
 mod whose;
 
+pub use beneath::{Beneath, BeneathState};
 pub use blocks::{BlockSetting, Tally};
 use budget::Budget;
 pub use chain::Chain;
@@ -189,6 +191,18 @@ pub struct Limits {
     /// How long a connection to a server, or a tool's handshake, may take before the app is told the
     /// server is unreachable.
     pub connect_timeout: Duration,
+    /// While the network beneath names a proxy of its own (the proxy record's unit S2): the share of
+    /// `connect_timeout` a direct try has before the proxy is tried, and the most the connection to the proxy
+    /// may take. 3 s holds one lost SYN at a round trip of up to 2 s, since Linux resends the first SYN after 1 s.
+    pub beneath_direct: Duration,
+    /// How long the proxy may take to answer a `CONNECT` once connected (S2). Shorter than squid's own connect
+    /// timeout of a minute: a destination slower than this behind the proxy fails (S2's audit, N4).
+    pub beneath_answer: Duration,
+    /// How many distinct servers must fail directly and then open through the proxy, with no direct success
+    /// between and within `beneath_window`, before the proxy comes first on the network (S2's audit, C2).
+    pub beneath_failures: usize,
+    /// The window of `beneath_failures`.
+    pub beneath_window: Duration,
     /// How long a closed connection's rewriting stays, for the last FIN and ACK packets.
     pub close_linger: Duration,
     /// Stale TCP connections are swept at most this often, and only when packets come anyway: an idle
@@ -321,6 +335,10 @@ impl Default for Limits {
             udp_reask: Duration::from_secs(1),
             udp_contest: Duration::from_secs(5),
             connect_timeout: Duration::from_secs(60),
+            beneath_direct: Duration::from_secs(3),
+            beneath_answer: Duration::from_secs(10),
+            beneath_failures: 3,
+            beneath_window: Duration::from_secs(60),
             close_linger: Duration::from_secs(30),
             sweep_every: Duration::from_secs(60),
             tcp_idle: nat::TCP_IDLE,
@@ -352,6 +370,16 @@ pub trait Platform: Send + Sync + 'static {
 
     /// `VpnService.protect`: keeps one of the engine's sockets out of the tunnel.
     fn protect(&self, fd: RawFd) -> bool;
+
+    /// Keeps one of the engine's sockets out of the tunnel and binds it to the network beneath whose handle
+    /// (`Network.getNetworkHandle`) is `network`, for a connection to that network's own proxy (the proxy record's
+    /// unit S2): false, and the socket left alone, unless `network` is the network beneath now, so that no byte goes
+    /// to whatever holds the old proxy's address on another network. By default `protect`, for platforms that know
+    /// one network.
+    fn protect_on(&self, fd: RawFd, network: i64) -> bool {
+        let _ = network;
+        self.protect(fd)
+    }
 
     /// Hands a batch of records to the network part's connection log ([`crate::log::batch`]).
     fn log(&self, batch: &[u8]);
@@ -609,7 +637,7 @@ pub struct Config {
 }
 
 /// How many counters [`Counters::snapshot`] gives.
-pub const COUNTERS: usize = 73;
+pub const COUNTERS: usize = 80;
 
 /// The counters, in the order of [`Counters::snapshot`].
 #[derive(Debug, Default)]
@@ -687,6 +715,13 @@ pub struct Counters {
     blocking_holds: AtomicU64,
     proxy_associations: AtomicU64,
     proxy_relays_elsewhere: AtomicU64,
+    beneath_tries: AtomicU64,
+    beneath_opened: AtomicU64,
+    beneath_refused: AtomicU64,
+    beneath_password: AtomicU64,
+    beneath_unreachable: AtomicU64,
+    beneath_named: AtomicU64,
+    beneath_stale: AtomicU64,
 }
 
 impl Counters {
@@ -768,7 +803,11 @@ impl Counters {
     /// QUIC, by name or by address), those of them refused by their address alone, and the connections whose first
     /// bytes were held while they read as an unfinished hello or request head; then (the proxy record's unit U) the
     /// `UDP ASSOCIATE`s of apps' own SOCKS5 proxies whose relays are tied, and the replies among them whose relay named
-    /// another address than the proxy's own, which is not tied there. None
+    /// another address than the proxy's own, which is not tied there; then (the proxy record's unit S2) the `CONNECT`s
+    /// the engine sent the network's own proxy, those it answered with a `2xx`, those it refused (any other answer but
+    /// `407` and `5xx`), those that asked for a password (`407`), and those it could not carry (`5xx`); the requests
+    /// among them that named the destination by its name, and the sockets to the proxy that the network part would not
+    /// bind, the network having changed. None
     /// names a destination: they can be read on any phone. New
     /// counters are only ever appended, so that scripts reading a column by its place keep reading the same one.
     #[must_use]
@@ -862,6 +901,13 @@ impl Counters {
             &self.blocking_holds,
             &self.proxy_associations,
             &self.proxy_relays_elsewhere,
+            &self.beneath_tries,
+            &self.beneath_opened,
+            &self.beneath_refused,
+            &self.beneath_password,
+            &self.beneath_unreachable,
+            &self.beneath_named,
+            &self.beneath_stale,
         ]
     }
 }
@@ -886,6 +932,9 @@ pub struct ChainSetting {
     pub proxies: ProxySetting,
     /// Tracker blocking (W8, part 3a), as set last ([`Engine::blocking`]).
     pub blocking: BlockSetting,
+    /// The network beneath's own proxy (the proxy record's unit S2), as set last ([`Engine::beneath`]), with what the
+    /// engines learned of it.
+    pub beneath: Option<Arc<Beneath>>,
 }
 
 /// What an engine hands the next when the tunnel is set up again (ADR 0044, the proposal for decision 5): what
@@ -915,6 +964,8 @@ pub struct Handover {
     direct: proxied::DirectInstants,
     /// Tracker blocking's setting (W8, part 3a); what it counted and tied stays behind.
     blocking: BlockSetting,
+    /// The network beneath's own proxy (S2), with what was learned of it.
+    beneath: Option<Arc<Beneath>>,
     /// The last flow number given: the next engine goes on from it, so that a number names one flow for the whole
     /// run. The segments handed over in `activity`, and the matches by number since unit A of the proxy record (a
     /// segment cut before its naming, a first hop held past its flow), would otherwise mistake an old flow for a new
@@ -1039,6 +1090,9 @@ struct Shared {
     blocks: Mutex<blocks::Blocks>,
     /// How many times blocking was set: a relayed flow decides its row again when this changed.
     blocking_set: AtomicU64,
+    /// The network beneath's own proxy (the proxy record's unit S2): a leaf lock, taken only to clone the `Arc`, once
+    /// for each new TCP connection.
+    beneath: Mutex<Option<Arc<Beneath>>>,
 }
 
 fn lock<T>(mutex: &Mutex<T>) -> MutexGuard<'_, T> {
@@ -1177,6 +1231,7 @@ impl Engine {
             mut proxies,
             direct,
             mut blocking,
+            mut beneath,
             next_id,
             taken_back,
         } = handover.unwrap_or_else(|| Handover {
@@ -1192,6 +1247,7 @@ impl Engine {
             proxies: ProxySetting::default(),
             direct: Vec::new(),
             blocking: BlockSetting::default(),
+            beneath: None,
             next_id: 0,
             taken_back: proxied::TakenBack::default(),
         });
@@ -1203,6 +1259,7 @@ impl Engine {
             dns = setting.dns;
             proxies = setting.proxies;
             blocking = setting.blocking;
+            beneath = setting.beneath;
         }
         let clock = platform.clock();
         // The live view counts from now on; a handed-over view keeps the moment its first engine began.
@@ -1259,6 +1316,7 @@ impl Engine {
             held_back: Mutex::new(proxied::HeldBack::carrying(taken_back)),
             blocks: Mutex::default(),
             blocking_set: AtomicU64::new(0),
+            beneath: Mutex::new(beneath),
         });
         // In place before the thread reads its first packet: no direct app's lookup goes to the network's
         // resolver while the encrypted one is set.
@@ -1381,6 +1439,7 @@ impl Engine {
             proxies,
             direct,
             blocking: shared.blocking(),
+            beneath: lock(&shared.beneath).clone(),
             next_id: shared.next_id.load(Ordering::Relaxed),
             taken_back,
         }
@@ -1507,6 +1566,22 @@ impl Engine {
     /// on, and a relayed flow whose row it blocks now is reset at its next byte.
     pub fn blocking(&self, setting: BlockSetting) {
         self.shared.set_blocking(setting);
+    }
+
+    /// Sets the network beneath's own proxy (the proxy record's unit S2), or none: each new direct TCP connection
+    /// that a direct try cannot open goes through it from now on, and a connection being opened keeps the setting it
+    /// started with. The network part keeps what it hands ([`Beneath::kept`]), so that what was learned crosses to
+    /// the next engine.
+    pub fn beneath(&self, setting: Option<Arc<Beneath>>) {
+        *lock(&self.shared.beneath) = setting;
+    }
+
+    /// What the engine learned of the network's own proxy now, for the network part's dump and "Now": `None` while
+    /// none is set.
+    #[must_use]
+    pub fn beneath_state(&self) -> Option<BeneathState> {
+        let beneath = lock(&self.shared.beneath).clone()?;
+        Some(beneath.state(self.shared.clock.since_boot()))
     }
 
     /// What tracker blocking counted in memory since the engine started or the live view was cleared: each app's
@@ -2123,6 +2198,7 @@ mod tests {
             held_back: Mutex::default(),
             blocks: Mutex::default(),
             blocking_set: AtomicU64::new(0),
+            beneath: Mutex::default(),
         }
     }
 

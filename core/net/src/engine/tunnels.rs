@@ -2191,7 +2191,7 @@ fn getrandom_id(id: &mut [u8; 2]) {
 }
 
 #[cfg(test)]
-mod tests {
+pub(super) mod tests {
     use super::super::tests::shared;
     use super::*;
     use std::sync::atomic::AtomicUsize;
@@ -2237,7 +2237,7 @@ mod tests {
     const KEY: &str = "yAnz5TF+lXXJte14tji3zlMNq+hd2rYUIgJBgB3fBmk=";
     const PEER: &str = "xTIBA5rboUvnH4htodjb6e697QjLERt1NAB4mZqp8Dg=";
 
-    fn configured(id: u32, allowed: &str, local_network: bool) -> Configured {
+    pub(in crate::engine) fn configured(id: u32, allowed: &str, local_network: bool) -> Configured {
         let text = format!(
             "[Interface]\nPrivateKey = {KEY}\nAddress = 10.77.0.2/24\nDNS = 10.77.0.1\n[Peer]\nPublicKey = {PEER}\n\
              AllowedIPs = {allowed}\nEndpoint = 192.0.2.1:51820\n"
