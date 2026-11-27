@@ -413,17 +413,24 @@ The words of the allow and the pause are checked with real users under ADR 0046'
   development machine, through curve25519-dalek's AVX2 backend (once per WireGuard handshake and once per ODoH query,
   for HPKE's key pair), a Diffie-Hellman 40 µs either way; ARM phones take the slower serial path, for which the crate
   gives the table about four times the speed (not measured here); it needs GotaTun to depend on `x25519-dalek` without
-  default features, a reviewed step (ADR 0035). For the engine's builder, after the cold paths' two passes below:
-  hashbrown's maps instantiated per type (113 KB on x86_64), on the packet path, where each change needs a speed
-  measure of its own; tokio's code for each relaying task's type (a kept connection's, an echo's, a tunnel's, about 2 KB
-  each on x86_64), which a boxed task type would share at one indirect call more per poll; and `std`'s backtrace
-  symbolizer (67 KB), which only a nightly `build-std` drops. Boxing the largest futures of the cold paths
-  (`udp::open_udp`'s, 42 KB, and `Engine::start_with`'s, 29 KB) only moves their bytes (the first pass). What the two
-  passes took is gone: of `std`'s `RandomState::new` inlined, 620 bytes are left on x86_64, all in tokio's and
-  GotaTun's own code and in `keys` itself, and the `jni` crate's entry code is one copy per return type. No free setting
-  is left for x86_64: what remains is code and GotaTun's table. Not measured: arm64 and armv7 on a phone, which the
-  settings pass did not touch; the two cold-path passes below change their code, and the second grows arm64-v8a's
-  library by 512 bytes of unwind entries for its JNI entry (stated there).
+  default features, a reviewed step (ADR 0035). For the engine's builder, after the cold paths' three passes below:
+  hashbrown's maps instantiated per type (113 KB on x86_64) and `BTreeMap`'s (64 KB), on the packet path, where each
+  change needs a speed measure of its own; tokio's code for each relaying task's type (a kept connection's, an echo's, a
+  tunnel's, about 2 KB each on x86_64), which a boxed task type would share at one indirect call more per poll;
+  `Shared::give_way`'s selection and `Scope::carried`'s sort (3.4 and 4.1 KB through the shared sort), on the engine's
+  thread and per relayed answer, each waiting for a measure of its own; the `jni` crate's exception machinery (twelve
+  exception matchers of 1.4 to 1.8 KB and the class loader's), which only calling `jni-sys` directly for the upcalls
+  would drop, a change of the bridge with its own review; `opt-level = "z"` for single cold crates (`miniz_oxide` for
+  the packs, `ed25519-compact`, the engine's reader), which only a measure decides, as `z` grew the `jni` crate on
+  x86_64; and `std`'s backtrace symbolizer (67 KB), which only a nightly `build-std` drops. Boxing the largest futures
+  of the cold paths (`udp::open_udp`'s, 42 KB, and `Engine::start_with`'s, 29 KB) only moves their bytes (the first
+  pass). What the passes took is gone: of `std`'s `RandomState::new` inlined, 620 bytes are left on x86_64, all in
+  tokio's and GotaTun's own code and in `keys` itself; the `jni` crate's entry code is one copy per return type and its
+  attach code one copy; `std`'s sort is one copy for the cold paths. A free setting was left for x86_64 after all,
+  crates.io's directory in the panic locations, which the third pass took; what remains is code, GotaTun's table, and
+  `-Zlocation-detail=none`, which gives up every panic's file and line (the third pass). Not measured: arm64 and armv7
+  on a phone, which the settings pass did not touch; the three cold-path passes below change their code, and the second
+  grows arm64-v8a's library by 512 bytes of unwind entries for its JNI entry (stated there).
 - **The cold paths** (2026-11-25, the maintainer's route that day over a review of the gate: room for the proxy record's
   next units, from code that runs once per engine start, per flow opened or question to Android, with no change of
   behaviour and none on the packet path; build settings untouched). *Where the bytes were,* by the size pass's method,
@@ -563,3 +570,94 @@ The words of the allow and the pause are checked with real users under ADR 0046'
   label added in 18.2 and 18.4 ms and removed in 5.56 and 5.62; and, in a measure written for this pass and not kept,
   learning a DNS answer for an address already held 665 and 464 ns in every app's table, by the scan, and 314 and 305 in
   apps' own. Not measured: arm64 and armv7 on a phone.
+- **The cold paths, third pass** (2026-11-27, the same route: room for the proxy record's forwarder, which the
+  maintainer approved on 2026-11-27 with room first, and which plans for 16 KB; the pass aimed at 15 KB on x86_64).
+  *Where the bytes were,* by the passes' method and readers by crate and kind: `std`'s sort built again for each element
+  type the engine's cold paths sort, eight families of 2 to 6 KB on x86_64 (29,659 bytes in 47 functions); the `jni`
+  crate's attach code inlined into each of the bridge's eight calls to Kotlin (10,364 bytes); and the 113 panic
+  locations in crates.io's sources, each naming its file under a 54-byte directory. **Kept, one commit each** (stripped
+  bytes of unstripped builds, `ndkbuild.sh` then `llvm-strip --strip-unneeded`, x86_64 / arm64-v8a / armeabi-v7a):
+  - one copy of `std`'s stable sort for the cold paths, `datapavan_net::sort_by` and `sort`: the indices sorted with one
+    comparator behind an indirect call, then the items moved into that order, each cycle of the permutation walked once;
+    stable, so `sort_by`'s and `sort_by_key`'s results are `std`'s, and for integers and pairs of integers
+    `sort_unstable`'s; for the five reads from Kotlin (the blocked tallies, the apps' answers, the tunnels' states, a
+    configuration's allowed IPs, the resolver's latencies), each now sorting after its lock is let go (the status copies
+    the four lists of latencies under their lock, which every encrypted answer takes, and sorts them after): −10,008 /
+    −7,640 / −8,376;
+  - the proxy setting's three lists and a proxied flow's trackers (`marks`, which every proxied flow's naming calls
+    once, `mark_proxied`, `relay_asked`): −3,776 / −3,584 / −2,464;
+  - a measure of the list of addresses a snapshot looks up (`wanted`, at 2,048 and 4,096 distinct addresses: the view's
+    places are bounded per app, so it can hold more than `PLACES`), and a test that the first snapshot looks up exactly
+    the 64 smallest, each once though two apps went to it. That list built with the shared sort instead (a `Vec` sorted,
+    its duplicates removed, cut at 64) was 6,384 / 5,472 / 3,520 bytes smaller but slower, in turn with the set, 24
+    rounds each with the machine otherwise idle: 136.1 against 140.7 µs at 2,048 addresses and 299.8 against 311.6 at
+    4,096 (+3.4% and +3.9%, rank-sum z +4.9 and +5.0), each median after beyond the before runs' spread, so by the
+    plan's rule it keeps its `BTreeSet` and that step was dropped; the sorts in all −13,784 / −11,224 / −10,840, 28
+    functions of `std`'s sort machinery (19,311 bytes on x86_64) giving way to one sort of `usize` and a small part per
+    caller (6,406 bytes in 20 functions);
+  - one function, `attached`, for the bridge's every attach to the VM, each call to Kotlin handing it its body behind
+    one indirect call and reading its answer from a slot the body writes (`owner`'s an `Option`, so that a lost check
+    leaves no UID, never root's 0): −6,144 / −3,008 / −2,848; `owner` and `protect` run on tokio's blocking pool once
+    per new flow, which includes each DNS query of a direct app, so the indirect call sits beside a JNI transition;
+  - crates.io's sources named `/c/<crate>-<version>/…` in the panic locations, by one more `--remap-path-prefix` in both
+    native tasks, `$CARGO_HOME/registry/src/index.crates.io-1949cf8c6b5b557f=/c` (rustc applies the last remap that
+    matches, so another registry keeps `/cargo/registry/src`): −5,632 / −5,632 / −5,536, x86_64's code unchanged
+    (`.rodata` alone). The directory is cargo's own for crates.io with the pinned toolchain; cargo changed it once (it
+    was `index.crates.io-6f17d22bba15001f`), and `scripts/check.sh android` fails when either native library, the
+    network part's or the audit app's, holds `/cargo/registry/src/index.crates.io-` on any ABI. Only a panic's logged
+    location changes, keeping crate, version, file, line and column; the plan asked the maintainer, and its audit and
+    the coordinator took it as technical (no code, speed or crash evidence changes, one flag undoes it), the maintainer
+    free to undo it.
+
+  **The library, from Gradle's own build and AGP's strip, against `32b5f261` (S2's tree: 2,088,312, 1,868,840 and
+  1,385,696 bytes): 2,062,752 bytes on x86_64, 1,849,040 on arm64-v8a and 1,366,440 on armeabi-v7a, 25,560, 19,800 and
+  19,256 less; x86_64 has 34,400 bytes left** (8,840 before), 18,016 once the forwarder takes its planned 16 KB, 9,824
+  above the 8 KiB stop. Gradle's figure is 176 bytes above the steps' builds on x86_64, 1,160 and 1,096 below on
+  arm64-v8a and 320 to 352 above on armeabi-v7a, before and after alike: each step's figure above is the steps' builds',
+  the totals Gradle's. *Tests,* each with hand mutants run against the crate's unit tests: the shared sort against
+  `std`'s on 12,040 lists of every length to 300 (the permutation applied inverted, the comparator's arguments swapped
+  and no sort of fewer than three items each fail it); each site's sort reversed fails a test that reads its order, six
+  new where none did (the tallies, the tunnels waiting and the answers, the latencies, the setting's lists, a proxied
+  flow's trackers), each passing with `std`'s sort as before; the list to look up with its duplicates kept, removed
+  after the cut, the largest kept or cut before the sort failed the new test and no other (run on the dropped step). The
+  bridge's eight callbacks keep each outcome (Kotlin's answer, a null, the call failing, the detach failing, an
+  exception already pending: the same value or default as before); no host test reaches them, the shards reach their
+  success paths, and the detach's precedence, `owner`'s error path, `dns_changed` and `wants_states` only the review.
+  *The machine code of the packet path* against `32b5f261` (`hotdiff.py`, unstripped x86_64 and arm64-v8a; armeabi-v7a
+  by `llvm-nm` sizes): x86_64's 105 functions and arm64-v8a's 107 the same after the pass, armeabi-v7a's 108 the same
+  size; after the sorts alone, on arm64-v8a `tunnels::carry`'s poll differed by one `nop` and `adr` turned back to
+  `adrp` and `add` for a panic branch's constant (the class S2 named), gone with the attach step. Across the library
+  (`--all`, by class): on x86_64 only the 17 functions that hold the sites and the callbacks change length (four JNI
+  reads' bodies and `carries_everything`'s closure, `swap_proxies`, `marks`, `mark_proxied`, `relay_asked`'s closure,
+  the eight callbacks; `attached` and the sort's functions are new), `Engine::activity` differs only by the name of the
+  set's collect, whose closure moved into `wanted`, and five small functions of `std`, `core`, `jni` and the proxy
+  setting's `clone` by trailing `int3` padding alone; on arm64-v8a the same 17 change length, `Engine::activity` the
+  same way, 33 differ by page loads and their relaxation alone (`adrp`, `add`, `nop`, `adr`, `ldr`) and two by offsets;
+  on armeabi-v7a 84 functions change size, are new or are gone, the same cold set. The remap moves no code on x86_64
+  (all 3,056 functions the same) and on arm64-v8a only page offsets. *The speed,* before (`32b5f261`) and after, in
+  turn, 24 rounds on the development machine pinned to four threads with no emulator running: a packet through WireGuard
+  5.08 and 5.13 µs at 1,280 bytes and 4.60 both at 100, sent directly 4.95 and 5.00 and 4.93 and 4.75, a datagram on the
+  down path 3.97 and 3.96 and 3.79 and 3.77, opening a UDP flow directly 40.6 and 40.0 µs, a lookup 33.5 and 33.7,
+  through WireGuard 18.2 and 18.6, each rank-sum |z| under 0.7; the engine's own release measures, a count 13.5 and 13.6
+  ns, a mark 179.4 both, the live view 1.03 and 1.02 ms, an answer among 4,000 peers 171 and 173 ns (z +2.1, the median
+  after within the before runs' spread and that code the same), 16,384 stand-ins bound to one address added in 5.05 and
+  4.95 ms and removed in 2.69 and 2.43, beside one label added in 19.08 and 19.14 and removed in 6.65 and 6.66; on the
+  Android 15 emulator, built for Android, 16 rounds, a packet through WireGuard 4.70 and 4.65 µs and 3.65 and 3.55,
+  directly 4.15 and 4.13 and 4.00 and 3.90, the down path 2.92 and 2.88 and 2.63 and 2.66, opening directly 34.0 and
+  33.6 µs, a lookup 48.9 and 50.8, through WireGuard 17.6 and 17.8, each |z| under 1.2. A first set of the host's runs,
+  while another agent's emulator ran (load 7 to 30), read the same, and the list's measure the same verdict. The JNI
+  error check on an Advanced debug APK built with `-Pdatapavan.rustRelease=true`, so the release profile's `entry` (pass
+  2's review m2): each type's error thrown and the next call working, as on the debug library. Every emulator shard
+  passed once on this tree's APKs, the network shard alone (115 checks, the release build's check,
+  `verify-network-release.sh`, among them) and the other six side by side, since the attach step changes every call to
+  Kotlin. The pass's android gates found that R8 renamed `protectSocket` in release builds since S2 gave it its network
+  argument (its keep rule named the old signature), so the release library could protect no socket; fixed in its own
+  commit before the remap's. **Not taken:** `Shared::give_way`'s selection (3.4 KB: a sort of up to 65,536 seconds on
+  the engine's thread in place of an O(n) selection) and `Scope::carried`'s sort (4.1 KB, per relayed answer, its poll
+  changed beyond the sort's branch); `opt-level = "z"` for the `jni` crate (+4,136 on x86_64); the `jni` crate's
+  exception machinery, which only calling `jni-sys` directly would drop; `-Zlocation-detail=none`, which the pinned
+  rustc accepts under `RUSTC_BOOTSTRAP=1` without a nightly download and which would take 56,408 bytes more on x86_64
+  (the plan's audit: `.data.rel.ro` −32,664, `.rodata` −13,184, `.text` −9,984), but every panic would lose its file and
+  line, which the crash evidence kept with the unwind tables argues against, and `RUSTC_BOOTSTRAP` is unsupported for a
+  release; `-Zfmt-debug=none` likewise (not measured); `-Zbuild-std` with `panic_immediate_abort`, which needs
+  `rust-src`, a download, and drops every panic's message. Not measured: arm64 and armv7 on a phone.

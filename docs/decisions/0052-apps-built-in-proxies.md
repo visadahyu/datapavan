@@ -826,7 +826,11 @@ chaining is, and must follow the same switch.
   on armeabi-v7a. Its hot set against `99a09d27` is the fix round's, function by function. A `Notify` for the hold's
   wake-up had made it otherwise: with a second caller of its poll's inner part, `Notified::poll` was inlined anew into
   `Tun::send`, `Tun::send_once` and the polls of `mapped`, `own_relayed`, `tunnels::carry` and `echo::carry`, so the
-  hold looks at the setting by the timer instead.
+  hold looks at the setting by the timer instead. The cold paths' third pass (ADR 0053), against `32b5f261`, S2's tree,
+  whose library Gradle builds at 2,088,312 bytes on x86_64, 1,868,840 on arm64-v8a and 1,385,696 on armeabi-v7a (x86_64
+  8,840 under the gate): 2,062,752, 1,849,040 and 1,366,440 bytes, 25,560, 19,800 and 19,256 less, x86_64 34,400 bytes
+  under the gate; its sorts and the bridge's one attach take 19,928, 14,232 and 13,688 bytes of that in its steps'
+  builds, and crates.io's sources named `/c` in the panic locations the rest.
 - **Frontier research, open:** Telegram's fake-TLS hello across versions, told from the device without a JA4 database;
   encapsulated handshakes seen from the device (Xue et al., USENIX Security 2024) for Signal and WhatsApp; and how
   people read "read from the connection" against "inferred", with real users.
