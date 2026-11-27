@@ -55,7 +55,8 @@
 # CONNECT to a public address on port 443 or 80 (its `tunnel` mode), counting the bytes each way. Pass 5 with
 # PASS5_DROP=1 drops what it otherwise rejects, for the cost of the direct share before the proxy, timed over three
 # servers and again once the proxy came first. Pass 3 ends with a Wi-Fi proxy and the global setting together, and on
-# Android 17 and later with the local network grant revoked (`local-no-grant`). PASSES=8, on an emulator that `adb
+# Android 17 and later with the local network grant revoked, where the engine's and the resolver's connections to the
+# proxy are read at the recorder (S2's review, M2; PASSES=9 alone is that part, the short run). PASSES=8, on an emulator that `adb
 # root` takes, is pass 5's network with the unit's rows: the recorder refusing the target's address with 407 (a
 # password) and with 403 (names only), an exclusion list naming a target, tracker blocking with a blocked lookup and a
 # blocked hello through the proxy, a chained app (with CHAIN_SOCKS=host:port:user:password, a SOCKS5 proxy as the
@@ -674,6 +675,76 @@ switch_part() {
     clear_setting wifi-proxy
 }
 
+# Android 17 and later: runs "$@" with Datapavan's local network grant revoked and the VPN started again without it,
+# then gives the grant back. Android ends an app's processes when one of its permissions is revoked.
+without_grant() {
+    say ""
+    adb shell pm revoke "$PKG" android.permission.ACCESS_LOCAL_NETWORK
+    say "  the local network grant revoked: $(local_grant)"
+    within 20 vpn_down || true
+    vpn_start
+    "$@"
+    adb shell pm grant "$PKG" android.permission.ACCESS_LOCAL_NETWORK
+    say "  the grant given back: $(local_grant)"
+}
+# Datapavan's local network grant as Android lists it, read whole before it is searched, so that pipefail never sees
+# grep end the listing early.
+local_grant() {
+    local listing
+    listing=$(adb shell dumpsys package "$PKG" | tr -d '\r')
+    grep -m1 -oE 'android.permission.ACCESS_LOCAL_NETWORK: granted=[a-z]+' <<<"$listing" || echo 'not listed'
+}
+# The recorder's CONNECTs since its line $1 to an address, with no User-Agent, by address and port, and the tunnels
+# opened: the engine's and the resolver's form alike.
+connects_since() {
+    tail -n +"$(($1 + 1))" "$RECORDS" | awk -F'\t' '
+        $2 == "proxy" && $3 ~ /^CONNECT (\[[0-9a-fA-F:.]+\]|[0-9]+\.[0-9]+\.[0-9]+\.[0-9]+):[0-9]+ HTTP/ && $5 == "-" { split($3, w, " "); seen[w[2]]++ }
+        $2 == "proxy-tunnel" && $3 ~ / open$/ { open++ }
+        END { n = 0; for (a in seen) { printf "%s%s x%d", (n++ ? ", " : ""), a, seen[a] } if (!n) printf "none"; printf "; %d tunnels opened", open }'
+}
+# S2's review, M2: without Datapavan's local network grant (run by without_grant), whether the engine's connection to
+# the Wi-Fi network's proxy, which is on the local network (10.0.2.2), reaches it, and the resolver's: the switch "Send
+# apps through this proxy" on, so that the engine sends the public target through the proxy on an open network; then the
+# resolver's proxy first (the dump's debug `dns-proxy-first`), so that its next exchange goes through it. Each is read
+# at the recorder, by a CONNECT to an address with no User-Agent and its tunnel opened: positive evidence, never an
+# absence. A build from before the fix round withholds the proxy here (`local-no-grant`), and so shows no CONNECT.
+no_grant_part() {
+    local from state
+    say ""
+    say "-- VPN $VPN, setting wifi-proxy without the local network grant: the engine's and the resolver's connections to the proxy (set)"
+    mark
+    say "  set: $(set_setting wifi-proxy)"
+    sleep 3
+    since_mark | tee -a "$REPORT"
+    say "  engine: $(beneath_state)"
+    now_lines | tee -a "$REPORT"
+    if through_switch; then
+        sleep 3
+        adb shell input keyevent KEYCODE_HOME
+        say "  the switch tapped on: $(beneath_state)"
+        from=$(wc -l <"$RECORDS")
+        step "get the public name, https, the switch on" fixture_as "$FIXTURE" fresh timed --es url "https://$PUBLIC/"
+        step "get the public name, http, the switch on" fixture_as "$FIXTURE" fresh timed --es url "http://$PUBLIC/"
+        say "  the engine's CONNECTs with no User-Agent: $(connects_since "$from")"
+        through_switch || say "  the switch could not be tapped off"
+        adb shell input keyevent KEYCODE_HOME
+        say "  the switch tapped off: $(beneath_state)"
+    else
+        adb shell input keyevent KEYCODE_HOME
+        say "  \"Now\" shows no switch \"Send apps through this proxy\""
+    fi
+    dump dns-times-clear >/dev/null
+    from=$(wc -l <"$RECORDS")
+    # A new generation first, so that the next exchange opens a connection of its own rather than one held open from
+    # before, which no way of the new order would reach; then the proxy first on it.
+    state=$(dump dns-network-changed dns-proxy-first)
+    say "  $(grep -m1 -oE 'dns-proxy-first .*' <<<"$state" || echo 'dns-proxy-first: no such command (a build before the fix round)')"
+    step "a lookup of a name no cache holds, the resolver's proxy first" fixture_as "$FIXTURE" fresh lookup --es name "r$(date +%s%N).example.com"
+    say "  the resolver's CONNECTs with no User-Agent: $(connects_since "$from")"
+    resolver_evidence "$from"
+    clear_setting wifi-proxy
+}
+
 # Pass 5's order: each public server's first connection timed, then the first two again; the dump's line after each
 # says whether the proxy came first by then (three servers that failed directly and opened through it, with no direct
 # success between). With PASS5_DROP=1 each direct try waits out its share before the proxy. Then a WebView loads the
@@ -799,17 +870,16 @@ for pass in ${PASSES:-1 2 3 4}; do
             # apps through this proxy"; and on Android 17 and later the local network grant revoked.
             measure wifi-and-global set
             switch_part
-            if [ "$SDK_INT" -ge 37 ]; then
-                say ""
-                # Android ends an app's processes when one of its permissions is revoked: the VPN starts again without it.
-                adb shell pm revoke "$PKG" android.permission.ACCESS_LOCAL_NETWORK
-                say "  the local network grant revoked: $(adb shell dumpsys package "$PKG" | tr -d '\r' | grep -m1 -oE 'android.permission.ACCESS_LOCAL_NETWORK: granted=[a-z]+' || echo 'not listed')"
-                within 20 vpn_down || true
-                vpn_start
-                measure wifi-proxy set
-                adb shell pm grant "$PKG" android.permission.ACCESS_LOCAL_NETWORK
-                say "  the grant given back: $(adb shell dumpsys package "$PKG" | tr -d '\r' | grep -m1 -oE 'android.permission.ACCESS_LOCAL_NETWORK: granted=[a-z]+' || echo 'not listed')"
-            fi
+            [ "$SDK_INT" -lt 37 ] || without_grant measure wifi-proxy set
+            [ "$SDK_INT" -lt 37 ] || without_grant no_grant_part
+            vpn_stop
+            ;;
+        9)
+            say ""
+            say "== pass 9: the local network grant revoked, the engine's and the resolver's connections to the Wi-Fi network's proxy (S2's review, M2)"
+            [ "$SDK_INT" -ge 37 ] || { echo "pass 9 needs Android 17 or later" >&2; exit 2; }
+            vpn_start
+            without_grant no_grant_part
             vpn_stop
             ;;
         8)

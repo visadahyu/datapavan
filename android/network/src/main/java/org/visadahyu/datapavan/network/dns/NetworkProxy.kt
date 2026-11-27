@@ -38,12 +38,6 @@ object NetworkProxy {
         LINK_LOCAL("link-local"),
         OWN("own"),
         UNRESOLVED("unresolved"),
-
-        /**
-         * A proxy on the local network while Datapavan lacks Android 17's local-network grant, which would refuse its
-         * connection (the proxy record's unit S2; [withoutGrant]).
-         */
-        LOCAL_NO_GRANT("local-no-grant"),
     }
 
     /** At most this many of a proxy name's addresses are kept; a way through the proxy takes one, the next after one that could not be reached. */
@@ -117,6 +111,7 @@ object NetworkProxy {
      * among it, and Rust's `str::trim` Unicode's, U+0085 among it, so that each alone would read a rare list otherwise
      * than the other.
      */
+    @Suppress("TrimLambda") // Java's trim on purpose, the twin of the engine's `connect::trimmed`, not Kotlin's.
     internal fun trimmed(text: String): String = text.trim { it <= ' ' }
 
     /** [text] with its ASCII letters in lower case, and nothing else changed. */
@@ -128,11 +123,14 @@ object NetworkProxy {
         Regex(entry.split('*').joinToString(".*") { Regex.escape(it) }, RegexOption.DOT_MATCHES_ALL)
 
     /**
-     * Whether Android 17 would refuse the network part's own connection to a proxy at [address] for want of the
+     * Whether Android 17 may refuse the network part's own connection to a proxy at [address] for want of the
      * local-network grant (the proxy record's unit S2, section 6; ADR 0034, decision 5): never with [granted]; else an
      * address within the network's own prefixes ([onLink]), multicast or broadcast; and on Wi-Fi, Ethernet or a network
      * of unknown transport ([transport] 1, 2 or 0, as `Engine.nativeProxies` codes them) also 10/8, 172.16/12,
      * 192.168/16, 100.64/10 and the link-local ranges. On cellular and other networks only their own subnets are local.
+     * Advice for "Now" alone ([Settled.noGrant]): on Android 17's emulator, without the grant, both the engine's and the
+     * resolver's protected sockets reached a proxy on the local network (measurements 7, S2's fix round), so the proxy is
+     * kept for both, and only a phone that refuses them shows it.
      */
     fun withoutGrant(address: InetAddress, transport: Int, onLink: Boolean, granted: Boolean): Boolean {
         if (granted) return false
@@ -147,19 +145,92 @@ object NetworkProxy {
     }
 
     /**
-     * [addresses] less those Android 17 would refuse the network part ([refused], by [withoutGrant]), with [why]; none
-     * left gives [Why.LOCAL_NO_GRANT]. For the resolver's `ProxySocket` and the engine's connections alike, sockets of
-     * the same UID (the proxy record's unit S2, section 6).
+     * What the network beneath gives the engine's proxy (the proxy record's unit S2): its [network] handle, its
+     * [transport] (`Engine.nativeProxies`' codes) and on-link [prefixes], for the switch's key, the place and the grant,
+     * and whether it has IPv6 ([ipv6], by [NetworkProxy.ipv6]). The engine's flag for a network without IPv4 comes beside
+     * [ipv6] here, and in [EngineProxy], once `Engine.nativeBeneathProxy` takes one.
      */
-    fun granted(addresses: List<InetAddress>, why: Why, refused: (InetAddress) -> Boolean): Pair<List<InetAddress>, Why> {
-        if (addresses.isEmpty()) return addresses to why
-        val kept = addresses.filterNot(refused)
-        return kept to if (kept.isEmpty()) Why.LOCAL_NO_GRANT else why
+    data class Facts(val network: Long, val transport: Int, val prefixes: List<Pair<InetAddress, Int>>, val ipv6: Boolean)
+
+    /** The network's own proxy as `Engine.nativeBeneathProxy` takes it (S2). */
+    data class EngineProxy(
+        val network: Long,
+        val proxies: List<InetSocketAddress>,
+        val exclusions: String,
+        val ipv6: Boolean,
+        val always: Boolean,
+    )
+
+    /**
+     * One settle of the proxy, the resolver's and the engine's alike, so that they never disagree (S2's plan, section 2):
+     * the resolver's [addresses] and why it has them or none ([why]); the engine's proxy ([engine], null for none) and
+     * why ([engineWhy]); the key of the switch "Send apps through this proxy" ([key]) and the user's choice ([always]);
+     * whether the engine's proxy is on the local network ([local], for "Now"'s place: by range or within the network's
+     * own prefixes); and whether Datapavan lacks the local-network grant Android 17 may want for it ([noGrant], advice
+     * for "Now" alone).
+     */
+    data class Settled(
+        val addresses: List<InetSocketAddress>,
+        val why: Why,
+        val engine: EngineProxy?,
+        val engineWhy: Why,
+        val key: String?,
+        val always: Boolean,
+        val local: Boolean,
+        val noGrant: Boolean,
+    )
+
+    /**
+     * The settle of [setting], [choose]'s choice for [why], whose host [found] gave those addresses (S2's review, m5): as
+     * a pure function the JVM tests hold. [own] says whether an address is one of the phone's own ([usable]); [facts]
+     * are the network's, null where there is none; [granted] is Android 17's local-network grant; [through] the user's
+     * choice by key ([org.visadahyu.datapavan.network.proxy.ThroughProxy]). The engine takes the network's own proxy
+     * alone ([forEngine]); the grant only sets [Settled.noGrant], whatever it says of an address.
+     */
+    fun settle(
+        setting: Setting?,
+        found: List<InetAddress>,
+        why: Why,
+        own: (InetAddress) -> Boolean,
+        facts: Facts?,
+        granted: Boolean,
+        through: (String) -> Boolean,
+    ): Settled {
+        if (setting == null) return Settled(emptyList(), why, null, why, null, always = false, local = false, noGrant = false)
+        val (kept, because) = usable(found.filterNot(::zoned), why, own)
+        val addresses = kept.map { InetSocketAddress(it, setting.port) }
+        val (engine, engineWhy) = forEngine(addresses, why, because)
+        // No network beneath: the engine has nowhere to bind a socket to the proxy.
+        if (facts == null) {
+            return Settled(addresses, because, null, if (engineWhy == Why.NETWORK) Why.NONE else engineWhy, null, false, false, false)
+        }
+        // The switch is the network's own proxy's alone, never the global one's.
+        val key = org.visadahyu.datapavan.network.proxy.ThroughProxy.key(facts.transport, setting.host, setting.port)
+            .takeIf { why == Why.NETWORK }
+        val always = key != null && through(key)
+        fun onLink(address: InetAddress) = facts.prefixes.any { (prefix, length) ->
+            org.visadahyu.datapavan.network.TunnelAddresses.sameSubnet(address, prefix, length)
+        }
+        val proxy = engine.takeIf { it.isNotEmpty() }?.let {
+            EngineProxy(facts.network, it, setting.exclusions.joinToString(","), facts.ipv6, always)
+        }
+        return Settled(
+            addresses, because, proxy, engineWhy, key, always,
+            local = engine.any { org.visadahyu.datapavan.network.activity.ProxyFacts.isLocal(it.address) || onLink(it.address) },
+            noGrant = engine.any { withoutGrant(it.address, facts.transport, onLink(it.address), granted) },
+        )
     }
 
     /**
+     * Whether a socket to the network's own proxy, which the engine asked for on the network of [handle], is bound to the
+     * network beneath, whose handle is [current] (null for none): only while it is that network (audit m5), so that the
+     * engine writes nothing to whatever holds the old proxy's address on another network.
+     */
+    fun bindsOn(current: Long?, handle: Long): Boolean = handle != 0L && current == handle
+
+    /**
      * The engine's proxy (the proxy record's unit S2) from the resolver's settle, which [chosen] ([choose]'s reason) and
-     * [settled] (the reason after [usable] and [granted]) describe: its [addresses] only for the network's own proxy,
+     * [settled] (the reason after [usable]) describe: its [addresses] only for the network's own proxy,
      * never Android's global one ([Why.GLOBAL], audit M3), which would carry apps that ignore it further than Android
      * does; else none, with the reason the dump's `beneath-proxy` line gives.
      */
@@ -296,6 +367,28 @@ class ResolverProxy(
 
         private const val NEVER = Long.MIN_VALUE
     }
+}
+
+/**
+ * The network's own proxy as last handed to the engine (the proxy record's unit S2), and when to hand it (S2's review,
+ * m5), as a class the JVM tests hold: at a settle or a change of network only when it is another ([settle]), and at
+ * each engine's start whatever it is ([start]), since the engines' setting starts empty after a stop (audit m7). [hand]
+ * is `Engine.nativeBeneathProxy`'s call. Not thread-safe: the caller holds its lock.
+ */
+class BeneathHand(private val hand: (NetworkProxy.EngineProxy?) -> Unit) {
+    /** The proxy handed last, or null for none. */
+    var handed: NetworkProxy.EngineProxy? = null
+        private set
+
+    /** Hands [next], unless it is the one handed last. */
+    fun settle(next: NetworkProxy.EngineProxy?) {
+        if (next == handed) return
+        handed = next
+        hand(next)
+    }
+
+    /** Hands the one handed last again, to an engine that starts with none. */
+    fun start() = hand(handed)
 }
 
 /**

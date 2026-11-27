@@ -177,11 +177,20 @@ class NetworkVpnService : VpnService() {
     private val resolverProxyLock = Any()
 
     /**
-     * The network beneath's own proxy as last handed to the engine (the proxy record's unit S2), or null for none, under
+     * The network beneath's own proxy as last handed to the engine (the proxy record's unit S2), under
      * [resolverProxyLock]: [settleResolverProxy] hands it whenever it changes, [startEngine] again at each start (audit
      * m7), and a new network or none hands none at once.
      */
-    private var beneathHanded: BeneathProxy? = null
+    private val beneathHand = org.visadahyu.datapavan.network.dns.BeneathHand { next ->
+        // The engine's `ipv4` flag goes beside `ipv6` here once the call takes one (the engine's fix round of S2).
+        Engine.nativeBeneathProxy(
+            next?.network ?: 0,
+            org.visadahyu.datapavan.network.dns.NetworkProxy.engineAddresses(next?.proxies.orEmpty()),
+            next?.exclusions.orEmpty(),
+            next?.ipv6 == true,
+            next?.always == true,
+        )
+    }
 
     /** Why the engine has the proxy it has, or none, for the debug dump's `beneath-proxy` line. */
     @Volatile
@@ -245,7 +254,7 @@ class NetworkVpnService : VpnService() {
                 current = network
                 networkGeneration++
                 // The engine's proxy goes with the network before, before any lookup for this one (S2).
-                handBeneath(null)
+                synchronized(resolverProxyLock) { beneathHand.settle(null) }
                 // The new network's proxy before the first client of its generation is built (the resolver's audit, M5).
                 recomputeResolverProxy()
                 exchanger.networkChanged()
@@ -292,7 +301,7 @@ class NetworkVpnService : VpnService() {
             // In the same order as onAvailable's.
             current = null
             networkGeneration++
-            handBeneath(null)
+            synchronized(resolverProxyLock) { beneathHand.settle(null) }
             recomputeResolverProxy()
             exchanger.networkChanged()
             // The lost network's prefixes go with it (audit-B 1).
@@ -736,6 +745,11 @@ class NetworkVpnService : VpnService() {
                     toolsReadChosen = found.chosen
                     toolsRead = true
                     applyProxies()
+                    // A proxy on the phone at a tool's known port is named in "Now" once the tools are read (S2, m4).
+                    if (found.ports != toolPorts) {
+                        toolPorts = found.ports
+                        if (beneathWhy == org.visadahyu.datapavan.network.dns.NetworkProxy.Why.LOOPBACK) recomputeResolverProxy()
+                    }
                 }
             }
         } catch (e: java.util.concurrent.RejectedExecutionException) {
@@ -802,7 +816,7 @@ class NetworkVpnService : VpnService() {
         // What the engine's proxy needs of the network (S2): its handle, its transport and on-link prefixes for the
         // local-network grant, and whether it has IPv6 (audit C2).
         val (prefixes, transport) = prefixesOf(network)
-        val facts = BeneathFacts(
+        val facts = org.visadahyu.datapavan.network.dns.NetworkProxy.Facts(
             network.networkHandle, transport, prefixes,
             org.visadahyu.datapavan.network.dns.NetworkProxy.ipv6(
                 properties.linkAddresses.map { it.address },
@@ -831,9 +845,9 @@ class NetworkVpnService : VpnService() {
 
     /**
      * Keeps the proxy [recomputeResolverProxy] read, unless a newer recompute or another network came since, for the
-     * resolver and the engine alike, so that they never disagree (S2's plan, section 2): the engine takes the network's
-     * own proxy alone ([org.visadahyu.datapavan.network.dns.NetworkProxy.forEngine]), with [facts] of its network, and
-     * neither takes an address Android 17 would refuse for want of the local-network grant (section 6).
+     * resolver and the engine alike, so that they never disagree (S2's plan, section 2), by
+     * [org.visadahyu.datapavan.network.dns.NetworkProxy.settle]: the engine takes the network's own proxy alone, with
+     * [facts] of its network; Android 17's local-network grant is only advice in "Now" (S2's review, M2).
      */
     private fun settleResolverProxy(
         asked: Int,
@@ -842,67 +856,50 @@ class NetworkVpnService : VpnService() {
         found: List<java.net.InetAddress>,
         why: org.visadahyu.datapavan.network.dns.NetworkProxy.Why,
         own: Set<java.net.InetAddress> = emptySet(),
-        facts: BeneathFacts? = null,
+        facts: org.visadahyu.datapavan.network.dns.NetworkProxy.Facts? = null,
     ) {
         // Read at each settle: the grant may come or go while the tunnel runs (section 6).
         val granted = localNetworkGranted()
+        val through = org.visadahyu.datapavan.network.proxy.ThroughProxy.of(this)
         val changed = synchronized(resolverProxyLock) {
             if (asked != resolverProxyAsked || generation != networkGeneration) return
             // The tunnel's own addresses as they are now, and every interface's (a hotspot's, USB tethering's, Wi-Fi
             // Direct's), beside the networks' link addresses read with the proxy.
             val tunnel = addresses.all.mapNotNull { org.visadahyu.datapavan.network.dns.Exchanger.numeric(it) }.toSet()
             val phone = if (setting == null) emptySet() else org.visadahyu.datapavan.network.dns.NetworkProxy.phoneAddresses()
-            val (usable, because) = if (setting == null) {
-                emptyList<java.net.InetAddress>() to why
-            } else {
-                val (kept, reason) = org.visadahyu.datapavan.network.dns.NetworkProxy.usable(found.filterNot(org.visadahyu.datapavan.network.dns.NetworkProxy::zoned), why) {
-                    it in own || it in tunnel || it in phone
-                }
-                org.visadahyu.datapavan.network.dns.NetworkProxy.granted(kept, reason) { address ->
-                    facts != null && org.visadahyu.datapavan.network.dns.NetworkProxy.withoutGrant(
-                        address, facts.transport, facts.prefixes.any { (p, length) -> TunnelAddresses.sameSubnet(address, p, length) }, granted,
-                    )
-                }
-            }
-            val next = if (setting != null && usable.isNotEmpty()) {
+            val settled = org.visadahyu.datapavan.network.dns.NetworkProxy.settle(
+                setting, found, why, { it in own || it in tunnel || it in phone }, facts, granted, through::on,
+            )
+            val next = if (setting != null && settled.addresses.isNotEmpty()) {
                 org.visadahyu.datapavan.network.dns.ResolverProxy(
                     generation,
                     setting,
-                    usable.map { java.net.InetSocketAddress(it, setting.port) },
+                    settled.addresses,
                     global = why == org.visadahyu.datapavan.network.dns.NetworkProxy.Why.GLOBAL,
                 )
             } else {
                 null
             }
-            resolverProxyWhy = if (next == null && setting != null && usable.isEmpty()) because else why
-            val (engine, engineWhy) = org.visadahyu.datapavan.network.dns.NetworkProxy.forEngine(next?.addresses.orEmpty(), why, resolverProxyWhy)
-            beneathWhy = engineWhy
+            resolverProxyWhy = settled.why
+            beneathWhy = settled.engineWhy
             val ours = if (why == org.visadahyu.datapavan.network.dns.NetworkProxy.Why.NETWORK) found else emptyList()
             if (ours != beneathFound) {
                 beneathFound = ours
                 // A proxy at one of the tunnel's own addresses moves the tunnel to its other set, as a gateway there does.
                 main.post { if ((forced ?: TunnelAddresses.choose(networksBeneath())) !== addresses) setUpAgain() }
             }
-            val key = if (setting != null && facts != null) {
-                org.visadahyu.datapavan.network.proxy.ThroughProxy.key(facts.transport, setting.host, setting.port)
+            beneathHand.settle(settled.engine)
+            // For "Now"'s line (S2): a proxy on the phone itself at a port that a circumvention tool installed is known to
+            // use (decision 3), which the chain carries apps through instead, from the tools this run read.
+            val tool = if (settled.engineWhy == org.visadahyu.datapavan.network.dns.NetworkProxy.Why.LOOPBACK && setting != null) {
+                toolPorts[setting.port]
             } else {
                 null
             }
-            val always = key != null && org.visadahyu.datapavan.network.proxy.ThroughProxy.of(this).on(key)
-            handBeneath(
-                if (setting == null || facts == null || engine.isEmpty()) {
-                    null
-                } else {
-                    BeneathProxy(facts.network, engine, setting.exclusions.joinToString(","), facts.ipv6, always)
-                },
-            )
-            // For "Now"'s line (S2): a proxy on the local network, and a proxy on the phone itself at a port that a
-            // circumvention tool installed is known to use (decision 3), which the chain carries apps through instead.
-            val local = engineWhy == org.visadahyu.datapavan.network.dns.NetworkProxy.Why.LOCAL_NO_GRANT ||
-                engine.any { org.visadahyu.datapavan.network.activity.ProxyFacts.isLocal(it.address) }
-            val tool = if (engineWhy == org.visadahyu.datapavan.network.dns.NetworkProxy.Why.LOOPBACK && setting != null) toolAt(setting.port) else null
             org.visadahyu.datapavan.network.proxy.ProxyContext.publishBeneath(
-                org.visadahyu.datapavan.network.proxy.ProxyContext.Beneath(engineWhy, key, always, local, tool),
+                org.visadahyu.datapavan.network.proxy.ProxyContext.Beneath(
+                    settled.engineWhy, settled.key, settled.always, settled.local, tool, settled.noGrant,
+                ),
             )
             val held = resolverProxy
             // The same proxy, its addresses in whatever order, of the same setting, keeps what it learned of which way
@@ -919,48 +916,12 @@ class NetworkVpnService : VpnService() {
     }
 
     /**
-     * The name of a circumvention tool installed that the tools' table knows to listen at [port] on the phone (W6's
-     * table; the proxy record's unit S2, decision 3), or null: a port is only a hint, so "Now" says no more than that.
+     * The circumvention tools installed by the port the tools' table knows each to listen at on the phone (W6's table;
+     * the proxy record's unit S2, decision 3), as [refreshTools] last read them in this run: a port is only a hint, so
+     * "Now" says no more than that. Read off the settle's lock (S2's review, m4).
      */
-    private fun toolAt(port: Int): String? {
-        val installed = org.visadahyu.datapavan.network.proxy.ProxyContext.state.value.tools.values.toSet()
-        return try {
-            org.visadahyu.datapavan.network.chain.Tools.table(this)
-                .firstOrNull { tool -> tool.name in installed && tool.listeners.any { it.port == port } }?.name
-        } catch (e: IOException) {
-            null
-        }
-    }
-
-    /** The network's own proxy as `Engine.nativeBeneathProxy` takes it (S2). */
-    private data class BeneathProxy(
-        val network: Long,
-        val proxies: List<InetSocketAddress>,
-        val exclusions: String,
-        val ipv6: Boolean,
-        val always: Boolean,
-    )
-
-    /** What the engine's proxy needs of the network beneath (S2): its handle, transport, on-link prefixes and IPv6. */
-    private class BeneathFacts(val network: Long, val transport: Int, val prefixes: List<Pair<InetAddress, Int>>, val ipv6: Boolean)
-
-    /**
-     * Hands [next] to the engine (`Engine.nativeBeneathProxy`, S2), or none, unless it is what was handed last; [force]
-     * at each start, since the engines' setting starts empty after a stop.
-     */
-    private fun handBeneath(next: BeneathProxy?, force: Boolean = false) {
-        synchronized(resolverProxyLock) {
-            if (!force && next == beneathHanded) return
-            beneathHanded = next
-            Engine.nativeBeneathProxy(
-                next?.network ?: 0,
-                org.visadahyu.datapavan.network.dns.NetworkProxy.engineAddresses(next?.proxies.orEmpty()),
-                next?.exclusions.orEmpty(),
-                next?.ipv6 == true,
-                next?.always == true,
-            )
-        }
-    }
+    @Volatile
+    private var toolPorts: Map<Int, String> = emptyMap()
 
     /**
      * Whether Android lets the network part reach the local network (ADR 0034, decision 5): always before Android 17,
@@ -1557,7 +1518,7 @@ class NetworkVpnService : VpnService() {
         org.visadahyu.datapavan.network.dns.DnsSettings.apply(this)
         // The network's own proxy as last settled, for an engine whose setting starts empty (S2, audit m7); the settle
         // after it hands a newer one.
-        handBeneath(synchronized(resolverProxyLock) { beneathHanded }, force = true)
+        synchronized(resolverProxyLock) { beneathHand.start() }
         recomputeResolverProxy()
         exchanger.warm()
         suffixes.known
@@ -1703,8 +1664,10 @@ class NetworkVpnService : VpnService() {
      * which binds the same socket.
      */
     private fun protectOn(fd: Int, network: Long): Boolean {
-        val beneath = current ?: return false
-        if (beneath.networkHandle != network || !protect(fd)) return false
+        val beneath = current
+        if (beneath == null || !org.visadahyu.datapavan.network.dns.NetworkProxy.bindsOn(beneath.networkHandle, network) || !protect(fd)) {
+            return false
+        }
         return try {
             ParcelFileDescriptor.fromFd(fd).use { beneath.bindSocket(it.fileDescriptor) }
             true
@@ -2236,12 +2199,16 @@ class NetworkVpnService : VpnService() {
      * otherwise why it follows none ([org.visadahyu.datapavan.network.dns.NetworkProxy.Why]); and which way comes
      * first, `direct-first`, `proxy-first`, `direct-only` for the global proxy while the network lets the resolver
      * connect directly ([org.visadahyu.datapavan.network.dns.DirectReach]), or `-`.
-     * `beneath-proxy` prints `beneath-proxy ADDRESSES WHY first=direct|proxy names=0|1 password=0|1 always=0|1`: the
-     * network's own proxy as the engine has it (the proxy record's unit S2), its `address:port`s comma-separated or
-     * `none`; `network`, or why it has none, as `dns-proxy`'s reasons with `global` (Android's global proxy, never the
-     * engine's) and `local-no-grant`; whether the proxy comes first, whether names do, whether it asked for a password,
-     * all as the running engine learned them, and the user's choice "Send apps through this proxy". It names no
-     * credential.
+     * `dns-proxy-first` has the resolver's proxy come first, as after the proxy answered where a direct try gave none
+     * ([org.visadahyu.datapavan.network.dns.ResolverProxy.answeredBy]), and prints `dns-proxy-first ADDRESS` or
+     * `dns-proxy-first none`: for the measurement of Android 17's local-network grant on an emulator whose direct
+     * connections cannot be refused (S2's review, M2).
+     * `beneath-proxy` prints `beneath-proxy ADDRESSES WHY first=direct|proxy names=0|1 password=0|1 always=0|1
+     * no-grant=0|1`: the network's own proxy as the engine has it (the proxy record's unit S2), its `address:port`s
+     * comma-separated or `none`; `network`, or why it has none, as `dns-proxy`'s reasons with `global` (Android's global
+     * proxy, never the engine's); whether the proxy comes first, whether names do, whether it asked for a password, all
+     * as the running engine learned them; the user's choice "Send apps through this proxy"; and whether "Now" advises
+     * the local-network grant for it. It names no credential.
      */
     private fun debugDns(args: List<String>, writer: PrintWriter) {
         fun after(command: String, n: Int) = args.indexOf(command).takeIf { it >= 0 }?.let { args.drop(it + 1).take(n) }
@@ -2276,12 +2243,19 @@ class NetworkVpnService : VpnService() {
             writer.println("dns-proxy ${route?.generation ?: networkGeneration} ${route?.toString() ?: "none"} ${why.word} $first")
         }
         if ("beneath-proxy" in args) {
-            val (handed, why) = synchronized(resolverProxyLock) { beneathHanded to beneathWhy }
+            val (handed, why) = synchronized(resolverProxyLock) { beneathHand.handed to beneathWhy }
             val state = Engine.nativeBeneathState().toIntOrNull() ?: 0
             writer.println(
                 "beneath-proxy ${handed?.proxies?.joinToString(",") { org.visadahyu.datapavan.network.activity.ProxyFacts.hostPort(it.address.hostAddress.orEmpty(), it.port) } ?: "none"} ${why.word} first=${if (state and 1 != 0) "proxy" else "direct"} " +
-                    "names=${state shr 1 and 1} password=${state shr 2 and 1} always=${if (handed?.always == true) 1 else 0}",
+                    "names=${state shr 1 and 1} password=${state shr 2 and 1} always=${if (handed?.always == true) 1 else 0} " +
+                    "no-grant=${if (org.visadahyu.datapavan.network.proxy.ProxyContext.state.value.beneath.noGrant) 1 else 0}",
             )
+        }
+        if ("dns-proxy-first" in args) {
+            val route = synchronized(resolverProxyLock) { resolverProxy }
+            val via = route?.proxy()
+            if (route != null && via != null) route.answeredBy(via, closure = route.takeIf { it.global }?.let { exchanger.closure(it.generation) })
+            writer.println("dns-proxy-first ${via?.let { "${it.address.hostAddress}:${it.port}" } ?: "none"}")
         }
         var changed = "dns-apply" in args
         after("dns-strict", 1)?.let {

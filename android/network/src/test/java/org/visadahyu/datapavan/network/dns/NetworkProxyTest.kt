@@ -333,12 +333,12 @@ class NetworkProxyTest {
     }
 
     /**
-     * S2, section 6: Android 17 refuses the network part a proxy on the local network without its grant: on Wi-Fi,
+     * S2, section 6: Android 17 may refuse the network part a proxy on the local network without its grant: on Wi-Fi,
      * Ethernet or an unknown transport the private, shared and link-local ranges and the network's own prefixes; on
      * cellular only the network's own prefixes; multicast and broadcast anywhere; nothing with the grant.
      */
     @Test
-    fun aLocalProxyWithoutTheGrantIsRefused() {
+    fun aLocalProxyWithoutTheGrantMayBeRefused() {
         for (transport in listOf(0, 1, 2)) {
             for (local in listOf("10.0.0.5", "172.16.0.1", "172.31.255.255", "192.168.1.20", "100.64.0.1", "100.127.255.255", "169.254.1.1", "fe80::1")) {
                 assertTrue("$local on $transport", NetworkProxy.withoutGrant(address(local), transport, onLink = false, granted = false))
@@ -357,20 +357,12 @@ class NetworkProxyTest {
     }
 
     /**
-     * S2: the addresses Android 17 would refuse leave, the others stay, and none left says why; the engine takes the
-     * network's own proxy alone, never the global one (audit M3): global only gives none, with its reason, both set the
-     * network's, and a network's proxy without a usable address none, with the settle's reason.
+     * S2: the engine takes the network's own proxy alone, never the global one (audit M3): global only gives none, with
+     * its reason, both set the network's, and a network's proxy without a usable address none, with the settle's reason.
      */
     @Test
-    fun theEngineTakesTheNetworksOwnProxyAloneAndNoAddressRefusedForTheGrant() {
-        val local = address("192.168.1.5")
+    fun theEngineTakesTheNetworksOwnProxyAlone() {
         val public = address("203.0.113.7")
-        val refused = { a: InetAddress -> a == local }
-        assertEquals(listOf(public) to NetworkProxy.Why.NETWORK, NetworkProxy.granted(listOf(local, public), NetworkProxy.Why.NETWORK, refused))
-        assertEquals(emptyList<InetAddress>() to NetworkProxy.Why.LOCAL_NO_GRANT, NetworkProxy.granted(listOf(local), NetworkProxy.Why.NETWORK, refused))
-        assertEquals(emptyList<InetAddress>() to NetworkProxy.Why.LOOPBACK, NetworkProxy.granted(emptyList(), NetworkProxy.Why.LOOPBACK, refused))
-        assertEquals("local-no-grant", NetworkProxy.Why.LOCAL_NO_GRANT.word)
-
         val at = listOf(InetSocketAddress(public, 3128))
         val network = NetworkProxy.Setting("proxy.corp.example", 3128, false, emptyList())
         val global = NetworkProxy.Setting("203.0.113.9", 8080, false, emptyList())
@@ -381,8 +373,126 @@ class NetworkProxyTest {
         val (chosen, why) = NetworkProxy.choose(network, global)
         assertEquals(network, chosen)
         assertEquals(at to NetworkProxy.Why.NETWORK, NetworkProxy.forEngine(at, why, why))
-        assertEquals(emptyList<InetSocketAddress>() to NetworkProxy.Why.LOCAL_NO_GRANT, NetworkProxy.forEngine(emptyList(), why, NetworkProxy.Why.LOCAL_NO_GRANT))
+        assertEquals(emptyList<InetSocketAddress>() to NetworkProxy.Why.UNRESOLVED, NetworkProxy.forEngine(emptyList(), why, NetworkProxy.Why.UNRESOLVED))
         assertEquals(emptyList<InetSocketAddress>() to NetworkProxy.Why.PAC, NetworkProxy.forEngine(emptyList(), NetworkProxy.Why.PAC, NetworkProxy.Why.PAC))
+    }
+
+    /**
+     * S2's review, m5, M2 and m9: the settle as one pure function, for the resolver and the engine alike. The engine is
+     * handed the network's own proxy with the network's handle, its exclusions, IPv6 and the user's choice, which the key
+     * of the network's own transport finds; Android 17's grant never takes an address from either, and only says, as
+     * advice, where a proxy is on the local network without it; the place is local by range or within the network's own
+     * prefixes; a proxy with no usable address gives the engine none, with the reason and the switch kept.
+     */
+    @Test
+    fun theSettleHandsBothTheProxyAndTheGrantIsOnlyAdvice() {
+        val local = address("192.168.1.5")
+        val public = address("203.0.113.7")
+        val setting = NetworkProxy.Setting("Proxy.Corp.example", 3128, false, listOf("*.corp.example", "10.*"))
+        val wifi = NetworkProxy.Facts(42, 1, listOf(address("192.168.1.0") to 24), ipv6 = true)
+        val key = "1 proxy.corp.example 3128"
+        val on = { k: String -> k == key }
+        val off = { _: String -> false }
+        fun settle(
+            found: List<InetAddress>,
+            facts: NetworkProxy.Facts? = wifi,
+            granted: Boolean = false,
+            through: (String) -> Boolean = on,
+            own: (InetAddress) -> Boolean = { false },
+            chosen: NetworkProxy.Setting? = setting,
+            why: NetworkProxy.Why = NetworkProxy.Why.NETWORK,
+        ) = NetworkProxy.settle(chosen, found, why, own, facts, granted, through)
+
+        val both = listOf(InetSocketAddress(local, 3128), InetSocketAddress(public, 3128))
+        val withoutGrant = settle(listOf(local, public))
+        assertEquals(both, withoutGrant.addresses)
+        assertEquals(NetworkProxy.Why.NETWORK, withoutGrant.why)
+        assertEquals(NetworkProxy.EngineProxy(42, both, "*.corp.example,10.*", ipv6 = true, always = true), withoutGrant.engine)
+        assertEquals(NetworkProxy.Why.NETWORK, withoutGrant.engineWhy)
+        assertEquals(key, withoutGrant.key)
+        assertTrue(withoutGrant.always)
+        assertTrue(withoutGrant.local)
+        assertTrue("advice without the grant", withoutGrant.noGrant)
+        // The grant changes the advice alone (M2).
+        val granted = settle(listOf(local, public), granted = true)
+        assertEquals(withoutGrant.copy(noGrant = false), granted)
+        // A local proxy alone, without the grant, is still handed to both.
+        assertEquals(listOf(InetSocketAddress(local, 3128)), settle(listOf(local)).engine?.proxies)
+        assertEquals(listOf(InetSocketAddress(local, 3128)), settle(listOf(local)).addresses)
+        // The choice off, and the key of the network's own transport (Ethernet), never a fixed one.
+        assertEquals(false, settle(listOf(public), through = off).engine?.always)
+        val ethernet = settle(listOf(public), facts = wifi.copy(transport = 2), through = { it == "2 proxy.corp.example 3128" })
+        assertEquals("2 proxy.corp.example 3128", ethernet.key)
+        assertTrue(ethernet.always)
+        // A public proxy is remote and needs no grant; one on the network's own prefix is local (m9), and on-link.
+        val remote = settle(listOf(public))
+        assertFalse(remote.local)
+        assertFalse(remote.noGrant)
+        val onLink = settle(listOf(public), facts = wifi.copy(prefixes = listOf(address("203.0.113.0") to 24)))
+        assertTrue(onLink.local)
+        assertTrue(onLink.noGrant)
+        // On cellular, a private range off the network's prefixes needs no grant, and stays local by range.
+        val cellular = settle(listOf(address("10.20.0.5")), facts = wifi.copy(transport = 3, prefixes = emptyList()))
+        assertTrue(cellular.local)
+        assertFalse(cellular.noGrant)
+        // No usable address: the engine has none, the resolver's reason is the engine's, and the switch stays (m2).
+        for ((found, why) in listOf(
+            emptyList<InetAddress>() to NetworkProxy.Why.UNRESOLVED,
+            listOf(address("127.0.0.1")) to NetworkProxy.Why.LOOPBACK,
+            listOf(address("169.254.3.3")) to NetworkProxy.Why.LINK_LOCAL,
+            listOf(public) to NetworkProxy.Why.OWN,
+        )) {
+            val none = settle(found, own = { it == public })
+            assertEquals(why.word, NetworkProxy.Settled(emptyList(), why, null, why, key, true, false, false), none)
+        }
+        // A zoned address is never kept.
+        assertEquals(NetworkProxy.Why.UNRESOLVED, settle(listOf(java.net.Inet6Address.getByAddress(null, address("fe80::1").address, 3))).why)
+        // No network: the resolver keeps the proxy, the engine has nowhere to bind it.
+        val noNetwork = settle(listOf(public), facts = null)
+        assertEquals(listOf(InetSocketAddress(public, 3128)), noNetwork.addresses)
+        assertEquals(NetworkProxy.Settled(noNetwork.addresses, NetworkProxy.Why.NETWORK, null, NetworkProxy.Why.NONE, null, false, false, false), noNetwork)
+        // The global proxy: the resolver's alone; no setting: the reason for both.
+        val global = settle(listOf(public), why = NetworkProxy.Why.GLOBAL)
+        assertEquals(listOf(InetSocketAddress(public, 3128)), global.addresses)
+        assertEquals(null, global.engine)
+        assertEquals(NetworkProxy.Why.GLOBAL, global.engineWhy)
+        assertEquals("no switch for the global proxy", null, global.key)
+        for (why in listOf(NetworkProxy.Why.PAC, NetworkProxy.Why.NONE)) {
+            assertEquals(NetworkProxy.Settled(emptyList(), why, null, why, null, false, false, false), settle(emptyList(), chosen = null, why = why))
+        }
+    }
+
+    /** S2's review, m5: a socket to the proxy is bound only to the network the engine asked for, never to another or none. */
+    @Test
+    fun aSocketToTheProxyIsBoundOnlyToItsNetwork() {
+        assertTrue(NetworkProxy.bindsOn(17, 17))
+        assertFalse(NetworkProxy.bindsOn(18, 17))
+        assertFalse(NetworkProxy.bindsOn(null, 17))
+        assertFalse(NetworkProxy.bindsOn(0, 0))
+    }
+
+    /**
+     * S2's review, m5 (audit m7): the engine is handed the proxy once for each change, none at a new network, and the one
+     * handed last again at each engine's start, whose setting starts empty, even where nothing changed.
+     */
+    @Test
+    fun theProxyIsHandedAtEachChangeAndAtEachStart() {
+        val handed = mutableListOf<NetworkProxy.EngineProxy?>()
+        val hand = BeneathHand { handed += it }
+        val one = NetworkProxy.EngineProxy(1, listOf(InetSocketAddress(address("203.0.113.7"), 3128)), "", ipv6 = false, always = false)
+        hand.start()
+        assertEquals(listOf<NetworkProxy.EngineProxy?>(null), handed)
+        hand.settle(one)
+        hand.settle(one)
+        assertEquals(listOf(null, one), handed)
+        hand.start()
+        assertEquals(listOf(null, one, one), handed)
+        hand.settle(one.copy(always = true))
+        hand.settle(null)
+        hand.settle(null)
+        hand.start()
+        assertEquals(listOf(null, one, one, one.copy(always = true), null, null), handed)
+        assertEquals(null, hand.handed)
     }
 
     /** S2: IPv6 for the engine needs a global unicast address and an IPv6 default route; the addresses as the JNI reads them. */

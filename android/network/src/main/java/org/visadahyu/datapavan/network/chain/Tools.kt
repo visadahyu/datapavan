@@ -144,7 +144,27 @@ object Tools {
      * Both sets of tools on this phone, read once: [tools] ([uids], B6's) and [carriers] (R10's, which it holds), with the
      * chain's tool the reading counted ([chosen], its package, or null while the chain is off), for debug builds' dump.
      */
-    data class Found(val tools: Map<Int, String>, val carriers: Map<Int, String>, val chosen: String? = null)
+    data class Found(
+        val tools: Map<Int, String>,
+        val carriers: Map<Int, String>,
+        val chosen: String? = null,
+        /** The tools of [tools] by the ports the table knows each to listen at on the phone ([portsOf]). */
+        val ports: Map<Int, String> = emptyMap(),
+    )
+
+    /**
+     * The tools of [table] whose names are among [installed], by each port the table knows the tool to listen at, the
+     * first row's where two name a port (the proxy record's unit S2, decision 3): for "Now"'s line of a proxy on the phone
+     * itself, read once with the tools, never at a settle (S2's review, m4).
+     */
+    fun portsOf(table: List<KnownTool>, installed: Set<String>): Map<Int, String> {
+        val ports = LinkedHashMap<Int, String>()
+        for (tool in table) {
+            if (tool.name !in installed) continue
+            for (listener in tool.listeners) ports.putIfAbsent(listener.port, tool.name)
+        }
+        return ports
+    }
 
     /**
      * [uids] and [carriers] on this phone: the table as the build put it in the assets, the keys parsed once for every
@@ -157,6 +177,9 @@ object Tools {
             table(context)
         } catch (e: java.io.IOException) {
             emptyList()
+        } catch (e: RuntimeException) {
+            // A row the parser refuses ends no service (S2's review, m4): only the chain's tool counts then.
+            emptyList()
         }
         val judge: (String) -> SignatureVerdict? = ToolKeys.judge(context) ?: { null }
         val judged = HashMap<String, SignatureVerdict?>()
@@ -167,7 +190,8 @@ object Tools {
         val debuggable = context.applicationInfo.flags and ApplicationInfo.FLAG_DEBUGGABLE != 0
         val test = testTools(testRows(context), debuggable)
         val uidOf = { name: String -> uidOf(context.packageManager, name) }
-        return Found(uids(table, chosen, verdict, test, uidOf), carriers(table, chosen, verdict, test, uidOf), chosen)
+        val tools = uids(table, chosen, verdict, test, uidOf)
+        return Found(tools, carriers(table, chosen, verdict, test, uidOf), chosen, portsOf(table, tools.values.toSet()))
     }
 
     @Suppress("DEPRECATION")

@@ -191,4 +191,28 @@ class ToolsTest {
         Tools.carriers(rows, null, { judged += it; null }, counted, uids::get)
         assertEquals(emptyList<String>(), judged)
     }
+
+    /**
+     * The proxy record's unit S2, decision 3, and its review's m4: the tools installed by the ports the table knows them
+     * to listen at, read once with the tools: a tool not installed names no port, and the first row's name holds a port
+     * two rows share.
+     */
+    @Test
+    fun theInstalledToolsAreFoundByTheirKnownPorts() {
+        fun tool(name: String, vararg ports: Int) = KnownTool(
+            packageName = "org.example.$name",
+            name = name,
+            proxyMode = true,
+            listeners = ports.map { Listener("socks5", "127.0.0.1", it) },
+            auth = null,
+            udp = false,
+            names = true,
+        )
+        val rows = listOf(tool("One", 9050, 8118), tool("Two", 1080, 9050), tool("Three", 10808))
+        assertEquals(mapOf(9050 to "One", 8118 to "One", 1080 to "Two"), Tools.portsOf(rows, setOf("One", "Two")))
+        assertEquals(emptyMap<Int, String>(), Tools.portsOf(rows, emptySet()))
+        // The bundled table: every installed tool's port names a tool of the table.
+        val all = Tools.portsOf(table, table.map { it.name }.toSet())
+        assertTrue(all.values.all { name -> table.any { it.name == name } })
+    }
 }
