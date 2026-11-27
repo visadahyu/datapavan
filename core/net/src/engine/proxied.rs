@@ -234,11 +234,11 @@ impl LoggedApps {
                     && setting.pac_handler != Some(uid)
             })
             .collect();
-        apps.sort_unstable();
+        crate::sort(&mut apps);
         apps.dedup();
         apps.truncate(MAX_LOGGED);
         let mut tools = setting.tools.clone();
-        tools.sort_unstable();
+        crate::sort(&mut tools);
         tools.dedup();
         tools.truncate(MAX_TOOLS);
         let mut tools_kept: Vec<u32> = setting
@@ -247,7 +247,7 @@ impl LoggedApps {
             .copied()
             .filter(|&uid| application(uid) && tools.binary_search(&uid).is_ok())
             .collect();
-        tools_kept.sort_unstable();
+        crate::sort(&mut tools_kept);
         tools_kept.dedup();
         tools_kept.truncate(MAX_LOGGED_TOOLS);
         Self {
@@ -1494,7 +1494,7 @@ impl Shared {
             .flat_map(|(host, port)| table.matches(host, *port))
             .filter_map(|(i, _)| table.trackers().get(i).map(|t| t.id))
             .collect();
-        ids.sort_unstable();
+        crate::sort(&mut ids);
         ids.dedup();
         ids.truncate(MAX_TRACKERS);
         ids
@@ -1511,7 +1511,7 @@ impl Shared {
         let mark = |flow: &mut Flow| {
             if let Some(proxy) = flow.proxy.as_mut() {
                 proxy.trackers.extend(&found);
-                proxy.trackers.sort_unstable();
+                crate::sort(&mut proxy.trackers);
                 proxy.trackers.dedup();
                 proxy.trackers.truncate(MAX_TRACKERS);
             }
@@ -1759,7 +1759,7 @@ impl Shared {
                 return;
             };
             proxy.trackers.extend(&found);
-            proxy.trackers.sort_unstable();
+            crate::sort(&mut proxy.trackers);
             proxy.trackers.dedup();
             proxy.trackers.truncate(MAX_TRACKERS);
             if kept {
@@ -4045,6 +4045,63 @@ mod tests {
         shared.set_proxies(setting);
     }
 
+    /// A proxied flow's trackers stay in order, each once, whatever order their names came in: the marks read on
+    /// several hosts, a name learnt for a confirmed proxy (`mark_proxied`), and a SOCKS5 relay's destinations
+    /// (`relay_asked`) (the cold paths' third pass: their sorts shared, ADR 0053).
+    #[test]
+    fn a_proxied_flows_trackers_stay_in_order_each_once() {
+        let with_three = |shared: &Shared| {
+            let table = crate::trackers::NetworkSignatures::parse(
+                "49\tTracker Co\t\thttps://tracker.example/\t\ttracker\\.example\n\
+                 7\tAlpha Co\t\thttps://alpha.example/\t\talpha\\.example\n\
+                 300\tBeta Co\t\thttps://beta.example/\t\tbeta\\.example\n",
+            )
+            .ok()
+            .map(Arc::new);
+            let mut setting = lock(&shared.proxies).setting().clone();
+            setting.trackers = table;
+            shared.set_proxies(setting);
+        };
+        let trackers = |shared: &Shared, id: u64| live(shared, id).proxy.map(|p| p.trackers);
+        let shared = engine(false);
+        with_three(&shared);
+        let hosts: Vec<(String, u16)> = [
+            "x.beta.example",
+            "sdk.tracker.example",
+            "x.alpha.example",
+            "y.beta.example",
+        ]
+        .into_iter()
+        .map(|host| (host.to_owned(), 443))
+        .collect();
+        assert_eq!(shared.marks(&hosts), [7, 49, 300]);
+        learn(&shared, "203.0.113.9", "sdk.tracker.example");
+        let (opened, bytes) = open(&shared, UID, at([203, 0, 113, 9], 443));
+        relay_replied(
+            &shared,
+            opened,
+            &bytes,
+            &[b"CONNECT www.google.com:443 HTTP/1.1\r\n\r\n"],
+            CONNECTED,
+        );
+        assert_eq!(trackers(&shared, opened.id), Some(vec![49]));
+        shared.mark_proxied(opened.id, "x.alpha.example", 443);
+        assert_eq!(trackers(&shared, opened.id), Some(vec![7, 49]));
+        let (shared, _clock) = engine_at(false);
+        with_three(&shared);
+        learn(&shared, "203.0.113.5", "proxy.example.net");
+        let _control = associate_at(
+            &shared,
+            UID,
+            at([203, 0, 113, 5], 1080),
+            &[1, 0, 0, 0, 0, 0x9c, 0x40],
+        );
+        let (relay, _) = udp_flow(&shared, UID, at([203, 0, 113, 5], 40_000), false);
+        shared.relay_asked(&relay, &Target::Name("x.beta.example".into(), 443));
+        shared.relay_asked(&relay, &Target::Name("x.alpha.example".into(), 443));
+        assert_eq!(trackers(&shared, relay.id), Some(vec![7, 300]));
+    }
+
     /// An SDK's `CONNECT` to its own server, which ignores it: the request alone names nothing (the fix
     /// round's S-M1). With no reply, or a refusing one, or another protocol's, the flow keeps its name, its
     /// address and the DNS name its trackers' mark is read on; a hello after it names the flow as its own.
@@ -6080,6 +6137,22 @@ mod tests {
         });
         assert_eq!(set.apps.len(), MAX_LOGGED);
         assert!(set.apps.iter().all(|&uid| application(uid)));
+    }
+
+    /// The set's lists come in order, each UID once, whatever order the network part handed them in: the tools are
+    /// searched (`binary_search`), so a tool kept that was handed out of order is still kept (the cold paths' third
+    /// pass: their sorts shared, ADR 0053).
+    #[test]
+    fn the_choices_lists_come_in_order_each_uid_once() {
+        let set = LoggedApps::of(&ProxySetting {
+            logged: vec![10_030, 10_010, 10_020, 10_010],
+            tools: vec![10_300, 10_100, 10_200, 10_100],
+            logged_tools: vec![10_300, 10_100, 10_300],
+            ..ProxySetting::default()
+        });
+        assert_eq!(*set.apps, [10_010, 10_020, 10_030]);
+        assert_eq!(*set.tools, [10_100, 10_200, 10_300]);
+        assert_eq!(*set.tools_kept, [10_100, 10_300]);
     }
 
     /// Unit C, test 13: the rule matches the vectors the network part's Kotlin side reads too.
