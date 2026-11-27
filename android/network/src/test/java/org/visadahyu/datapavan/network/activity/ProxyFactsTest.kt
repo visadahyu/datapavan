@@ -254,17 +254,18 @@ class ProxyFactsTest {
     }
 
     /**
-     * A release's dump writes the proxies' fifteen counters as "-", in their places, unit U's two and the network's own
-     * proxy's seven (S2) included; a debuggable build's, all (S-m5, review U-engine M2).
+     * A release's dump writes the proxies' twenty-one counters as "-", in their places, unit U's two, the network's
+     * own proxy's eight (S2, its hold's included) and the forwarder's five included; a debuggable build's, all (S-m5,
+     * review U-engine M2).
      */
     @Test
     fun aReleaseDumpLeavesTheProxiesCountersOut() {
-        val counters = LongArray(80) { it.toLong() }
+        val counters = LongArray(86) { it.toLong() }
         val release = ProxyFacts.dumpedCounters(counters, debuggable = false)
-        assertEquals(80, release.size)
+        assertEquals(86, release.size)
         assertEquals(List(6) { "-" }, release.subList(61, 67))
         assertEquals(listOf("67", "68", "69", "70"), release.subList(67, 71))
-        assertEquals(List(9) { "-" }, release.subList(71, 80))
+        assertEquals(List(15) { "-" }, release.subList(71, 86))
         assertEquals("60", release[60])
         assertEquals(counters.map { it.toString() }, ProxyFacts.dumpedCounters(counters, debuggable = true))
     }
