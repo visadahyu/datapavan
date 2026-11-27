@@ -182,11 +182,11 @@ class NetworkVpnService : VpnService() {
      * m7), and a new network or none hands none at once.
      */
     private val beneathHand = org.visadahyu.datapavan.network.dns.BeneathHand { next ->
-        // The engine's `ipv4` flag goes beside `ipv6` here once the call takes one (the engine's fix round of S2).
         Engine.nativeBeneathProxy(
             next?.network ?: 0,
             org.visadahyu.datapavan.network.dns.NetworkProxy.engineAddresses(next?.proxies.orEmpty()),
             next?.exclusions.orEmpty(),
+            next?.ipv4 == true,
             next?.ipv6 == true,
             next?.always == true,
         )
@@ -818,7 +818,12 @@ class NetworkVpnService : VpnService() {
         val (prefixes, transport) = prefixesOf(network)
         val facts = org.visadahyu.datapavan.network.dns.NetworkProxy.Facts(
             network.networkHandle, transport, prefixes,
-            org.visadahyu.datapavan.network.dns.NetworkProxy.ipv6(
+            ipv4 = org.visadahyu.datapavan.network.dns.NetworkProxy.ipv4(
+                properties.linkAddresses.map { it.address },
+                properties.routes.any { it.isDefaultRoute && it.destination.address is java.net.Inet4Address },
+                xlat = (Build.VERSION.SDK_INT >= 30 && properties.nat64Prefix != null) || clatLink(properties.interfaceName),
+            ),
+            ipv6 = org.visadahyu.datapavan.network.dns.NetworkProxy.ipv6(
                 properties.linkAddresses.map { it.address },
                 properties.routes.any { it.isDefaultRoute && it.destination.address is java.net.Inet6Address },
             ),
@@ -918,6 +923,17 @@ class NetworkVpnService : VpnService() {
         // a while is forgotten (S2's review, m3).
         through.seen(key)
         if (changed) exchanger.proxyChanged()
+    }
+
+    /**
+     * Whether Android runs 464XLAT's CLAT for the network of interface [name]: its stacked interface, `v4-` and the
+     * base interface's name, as AOSP's ClatCoordinator names it, exists (S2's review, the engine's M1). For Android 10,
+     * which gives no app the NAT64 prefix; later ones are read by it too.
+     */
+    private fun clatLink(name: String?): Boolean = name != null && try {
+        java.net.NetworkInterface.getByName("v4-$name") != null
+    } catch (e: java.net.SocketException) {
+        false
     }
 
     /**

@@ -147,16 +147,23 @@ object NetworkProxy {
     /**
      * What the network beneath gives the engine's proxy (the proxy record's unit S2): its [network] handle, its
      * [transport] (`Engine.nativeProxies`' codes) and on-link [prefixes], for the switch's key, the place and the grant,
-     * and whether it has IPv6 ([ipv6], by [NetworkProxy.ipv6]). The engine's flag for a network without IPv4 comes beside
-     * [ipv6] here, and in [EngineProxy], once `Engine.nativeBeneathProxy` takes one.
+     * and whether it has IPv4 and IPv6 ([ipv4] by [NetworkProxy.ipv4], [ipv6] by [NetworkProxy.ipv6]), which the engine
+     * reads as the families a destination may go to the proxy in (S2's review, the engine's M1).
      */
-    data class Facts(val network: Long, val transport: Int, val prefixes: List<Pair<InetAddress, Int>>, val ipv6: Boolean)
+    data class Facts(
+        val network: Long,
+        val transport: Int,
+        val prefixes: List<Pair<InetAddress, Int>>,
+        val ipv4: Boolean,
+        val ipv6: Boolean,
+    )
 
     /** The network's own proxy as `Engine.nativeBeneathProxy` takes it (S2). */
     data class EngineProxy(
         val network: Long,
         val proxies: List<InetSocketAddress>,
         val exclusions: String,
+        val ipv4: Boolean,
         val ipv6: Boolean,
         val always: Boolean,
     )
@@ -212,7 +219,7 @@ object NetworkProxy {
             org.visadahyu.datapavan.network.TunnelAddresses.sameSubnet(address, prefix, length)
         }
         val proxy = engine.takeIf { it.isNotEmpty() }?.let {
-            EngineProxy(facts.network, it, setting.exclusions.joinToString(","), facts.ipv6, always)
+            EngineProxy(facts.network, it, setting.exclusions.joinToString(","), facts.ipv4, facts.ipv6, always)
         }
         return Settled(
             addresses, because, proxy, engineWhy, key, always,
@@ -247,6 +254,15 @@ object NetworkProxy {
      */
     fun ipv6(addresses: List<InetAddress>, defaultRoute: Boolean): Boolean =
         defaultRoute && addresses.any { it is Inet6Address && (it.address[0].toInt() and 0xe0) == 0x20 }
+
+    /**
+     * Whether the network beneath has IPv4 for the engine (S2's review, the engine's M1): an IPv4 address of its own
+     * that is neither link-local nor loopback among its [addresses], and an IPv4 default route ([defaultRoute]); or
+     * 464XLAT ([xlat]: a NAT64 prefix, or a stacked CLAT link), whose IPv4 the base link's properties do not list.
+     * Without, an IPv4 destination never goes to its proxy.
+     */
+    fun ipv4(addresses: List<InetAddress>, defaultRoute: Boolean, xlat: Boolean = false): Boolean = xlat ||
+        defaultRoute && addresses.any { it is java.net.Inet4Address && !it.isLinkLocalAddress && !it.isLoopbackAddress }
 
     /** [addresses] as `Engine.nativeBeneathProxy` takes them: one `address port` a line, never a zone. */
     fun engineAddresses(addresses: List<InetSocketAddress>): String =

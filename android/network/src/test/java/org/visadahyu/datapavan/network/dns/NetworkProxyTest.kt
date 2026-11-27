@@ -329,6 +329,10 @@ class NetworkProxyTest {
         }
         assertFalse("the Kelvin sign", NetworkProxy.excluded("k.example", listOf("\u212a.example")))
         assertTrue("U+001F, which Kotlin's trim takes", NetworkProxy.excluded("example.com", listOf("\u001fexample.com")))
+        // The whole list, as the engine now reads it too (no cut at 4 KiB): an entry past 4 KiB still counts.
+        val long = List(400) { "host-$it.example.net" } + "example.com"
+        assertTrue(long.joinToString(",").length > 4096)
+        assertTrue("an entry past 4 KiB", NetworkProxy.excluded("example.com", long))
         assertFalse("U+0085, which Rust's trim takes", NetworkProxy.excluded("example.com", listOf("\u0085example.com")))
     }
 
@@ -389,7 +393,7 @@ class NetworkProxyTest {
         val local = address("192.168.1.5")
         val public = address("203.0.113.7")
         val setting = NetworkProxy.Setting("Proxy.Corp.example", 3128, false, listOf("*.corp.example", "10.*"))
-        val wifi = NetworkProxy.Facts(42, 1, listOf(address("192.168.1.0") to 24), ipv6 = true)
+        val wifi = NetworkProxy.Facts(42, 1, listOf(address("192.168.1.0") to 24), ipv4 = true, ipv6 = true)
         val key = "1 proxy.corp.example 3128"
         val on = { k: String -> k == key }
         val off = { _: String -> false }
@@ -407,7 +411,10 @@ class NetworkProxyTest {
         val withoutGrant = settle(listOf(local, public))
         assertEquals(both, withoutGrant.addresses)
         assertEquals(NetworkProxy.Why.NETWORK, withoutGrant.why)
-        assertEquals(NetworkProxy.EngineProxy(42, both, "*.corp.example,10.*", ipv6 = true, always = true), withoutGrant.engine)
+        assertEquals(NetworkProxy.EngineProxy(42, both, "*.corp.example,10.*", ipv4 = true, ipv6 = true, always = true), withoutGrant.engine)
+        // Each family as the network has it (the engine review's M1).
+        assertEquals(false, settle(listOf(public), facts = wifi.copy(ipv4 = false)).engine?.ipv4)
+        assertEquals(false, settle(listOf(public), facts = wifi.copy(ipv6 = false)).engine?.ipv6)
         assertEquals(NetworkProxy.Why.NETWORK, withoutGrant.engineWhy)
         assertEquals(key, withoutGrant.key)
         assertTrue(withoutGrant.always)
@@ -479,7 +486,7 @@ class NetworkProxyTest {
     fun theProxyIsHandedAtEachChangeAndAtEachStart() {
         val handed = mutableListOf<NetworkProxy.EngineProxy?>()
         val hand = BeneathHand { handed += it }
-        val one = NetworkProxy.EngineProxy(1, listOf(InetSocketAddress(address("203.0.113.7"), 3128)), "", ipv6 = false, always = false)
+        val one = NetworkProxy.EngineProxy(1, listOf(InetSocketAddress(address("203.0.113.7"), 3128)), "", ipv4 = true, ipv6 = false, always = false)
         hand.start()
         assertEquals(listOf<NetworkProxy.EngineProxy?>(null), handed)
         hand.settle(one)
@@ -501,6 +508,14 @@ class NetworkProxyTest {
         assertTrue(NetworkProxy.ipv6(listOf(address("192.168.1.5"), address("2001:db8::5")), defaultRoute = true))
         assertFalse(NetworkProxy.ipv6(listOf(address("2001:db8::5")), defaultRoute = false))
         assertFalse(NetworkProxy.ipv6(listOf(address("fe80::5"), address("fd00::5"), address("192.168.1.5")), defaultRoute = true))
+        // IPv4 needs an address of its own that is not link-local and an IPv4 default route (the engine review's M1).
+        assertTrue(NetworkProxy.ipv4(listOf(address("2001:db8::5"), address("192.168.1.5")), defaultRoute = true))
+        assertTrue(NetworkProxy.ipv4(listOf(address("100.64.3.7")), defaultRoute = true))
+        assertFalse(NetworkProxy.ipv4(listOf(address("192.168.1.5")), defaultRoute = false))
+        assertFalse(NetworkProxy.ipv4(listOf(address("169.254.7.7"), address("2001:db8::5")), defaultRoute = true))
+        assertFalse(NetworkProxy.ipv4(listOf(address("2001:db8::5")), defaultRoute = true))
+        // 464XLAT: an IPv6-only network with a NAT64 prefix or a stacked CLAT link has IPv4 for the engine.
+        assertTrue(NetworkProxy.ipv4(listOf(address("2001:db8::5")), defaultRoute = false, xlat = true))
         assertEquals(
             "192.0.2.8 3128\n2001:db8:0:0:0:0:0:8 8080",
             NetworkProxy.engineAddresses(listOf(InetSocketAddress(address("192.0.2.8"), 3128), InetSocketAddress(address("2001:db8::8"), 8080))),

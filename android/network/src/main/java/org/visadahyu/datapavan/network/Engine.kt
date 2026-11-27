@@ -255,11 +255,12 @@ internal object Engine {
      * The network beneath's own HTTP proxy for the engine (the proxy record's unit S2), or none: the network's handle
      * ([network], `Network.getNetworkHandle`), the proxy's usable socket addresses, one `address port` a line
      * ([proxies]; empty for none), its exclusion list as Android gives it, comma-separated,
-     * whether the network has IPv6, and the user's choice "Send apps through this proxy" ([always]). A direct app's TCP
+     * whether the network has IPv4 and IPv6 ([ipv4], [ipv6]: a destination of a family it has not never goes to the
+     * proxy), and the user's choice "Send apps through this proxy" ([always]). A direct app's TCP
      * that cannot connect directly then goes through it by `CONNECT`, or every one with [always]. Kept for the engines
      * to come, as the chain is; the engine keeps what it learned of a proxy handed again the same.
      */
-    external fun nativeBeneathProxy(network: Long, proxies: String, exclusions: String, ipv6: Boolean, always: Boolean)
+    external fun nativeBeneathProxy(network: Long, proxies: String, exclusions: String, ipv4: Boolean, ipv6: Boolean, always: Boolean)
 
     /**
      * What the running engine learned of the network's own proxy (S2): one digit, 1 where the proxy comes first, plus 2
