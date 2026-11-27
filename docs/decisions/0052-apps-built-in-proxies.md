@@ -418,8 +418,11 @@ chaining is, and must follow the same switch.
       Android's global proxy (the reason `global`), which Android already gives every app inside the VPN (the plan
       audit's M3); never a PAC file (`pac`); never a proxy on the loopback (`loopback`, the maintainer's decision 3), on
       a link-local address (`link-local`) or on one of the phone's own addresses (`own`); none for a proxy's name the
-      network beneath did not resolve (`unresolved`); and on Android 17 none on the local network while Datapavan lacks
-      the grant (`local-no-grant`, [ADR 0034](0034-network-permissions.md), decision 5). A proxy on the phone at a port
+      network beneath did not resolve (`unresolved`). On Android 17 a proxy on the local network is used whether or not
+      Datapavan holds the local-network grant, since the engine's and the resolver's connections to one reached it
+      without the grant when measured ([ADR 0034](0034-network-permissions.md), decision 5); "Now" advises the grant
+      beside it (S2's review, M2). The settle is one pure function, `NetworkProxy.settle`, and the hand-over a class of
+      its own, `BeneathHand`, each held by JVM tests (S2's review, m5). A proxy on the phone at a port
       that a circumvention tool installed is known to use is named in "Now" as that tool's, with a button to the chain,
       which is how Datapavan sends apps through a tool.
     - **Which flows** (`beneath::takes`). Only a direct route's: a chained app's flows go to the tool, and a tunnelled
@@ -448,13 +451,19 @@ chaining is, and must follow the same switch.
       user turns it on, for a user who set that proxy up as a privacy proxy of their own. It is kept by the network's
       transport and the proxy's host and port (`ThroughProxy`), not by the network's name, which Android gives no app
       without the location permission. With it on, the proxy is the only way for every flow `takes` allows; its
-      refusal is a reset, and its `5xx` or its silence an ICMP error.
+      refusal is a reset, and its `5xx` or its silence an ICMP error. It holds only while Datapavan has the proxy (S2's
+      review, m2): each time the phone joins the network, until the settle (for a proxy given by name, until the network
+      beneath resolves it), and while the setting gives no address Datapavan can use, apps go directly, and "Now" says so
+      with the switch still on and still there to turn off. Without the VPN, Android gives apps the setting from their
+      start. Holding new flows while a proxy the user chose is settled would close that gap; it is the maintainer's
+      call, and an engine change. A choice whose setting was not seen at any settle for 90 days is forgotten, with its
+      key (S2's review, m3).
     - **The bytes.** `CONNECT <address>:<port> HTTP/1.1`, `Host` and a blank line, as the resolver's `ProxySocket`
       writes it, an IPv6 address in brackets with no zone. No `User-Agent`, `Proxy-Connection`, `Connection` or
       `Proxy-Authorization`. The answer is read with `peek` and then exactly what was peeked, up to its head's end
       within 8 KiB, so that a server that speaks first reaches the app whole; the head is never kept or logged. A `2xx`
-      opens the flow; a `407` is refused, counted and said in "Now", since Android keeps no password for a network's
-      proxy; another `4xx` is refused, and a request by name may follow; a `1xx` or `3xx` is refused with none; a `5xx`
+      opens the flow; a `407` is refused, counted and said in "Now", in a line of its own after the network's line and
+      its switch, as some connections refused (S2's review, M1), since Android keeps no password for a network's proxy; another `4xx` is refused, and a request by name may follow; a `1xx` or `3xx` is refused with none; a `5xx`
       is unreachable.
     - **By name** (the maintainer's decision 2; the plan audit's C1 and M1). Only after the proxy refused the address
       with a `4xx` other than `407`, on a new connection, and only with the flow's own name: the address's sole name in
@@ -474,13 +483,16 @@ chaining is, and must follow the same switch.
       flow whose destination is hidden keeps route 3 and no destination; the history counts route 3 among the direct
       flows, and says it went through the network's proxy. Seven counters follow the 73 (tries, opened, refused,
       password, unreachable, by name, and `protect_on` refused), in a debug build's dump only, beside its line
-      `beneath-proxy ADDRESSES WHY first=direct|proxy names=0|1 password=0|1 always=0|1`.
+      `beneath-proxy ADDRESSES WHY first=direct|proxy names=0|1 password=0|1 always=0|1 no-grant=0|1`.
     - **"Now"** shows the network's line beside the whole phone's while both are set, since the engine uses the
       network's proxy whatever the global setting is. Where the engine has the proxy, the line says that an app that
       cannot connect directly is connected through it, as Android would, and that the proxy then sees where it
-      connects; otherwise why not: a password asked, the local network without the grant (with a button that asks for
-      it), the phone itself, or a known tool's port. A row of "Now" and of the history says when a connection went
-      through the network's proxy.
+      connects; otherwise why not: the phone itself, or a known tool's port, or no address Datapavan can use. The line
+      and its switch stay whatever the proxy answered: a password asked for, and on Android 17 the local network without
+      the grant (advice, with a button that asks for it), are lines of their own after them (S2's review, M1 and M2). A
+      proxy is on the local network by its range or within the network's own prefixes (m9). A row of "Now" says when a
+      connection went through the network's proxy, and the history says it in the past tense, as the proxy of the
+      network the connection was on (m1).
     - **Blocking first** ([ADR 0053](0053-tracker-blocking.md), decision 4 (h)): a lookup, an address or a hello that
       blocking refuses gives the proxy nothing of the app's but, for a hello, the `CONNECT` by address and an empty
       tunnel.
@@ -684,9 +696,11 @@ chaining is, and must follow the same switch.
   - **The network's own proxy** (decision 11, unit S2):
     - *A PAC file in the network's settings* is not followed: where the network requires it, apps started inside the
       VPN still reach nothing, and "Now" says that they do not use it.
-    - *A proxy that asks for a password:* the app is refused, since Android keeps no password for a network's proxy and
-      the engine has none to give. Apps reach only what the network lets through directly, and "Now" says so; apps
-      already running, and those left out, still use the proxy themselves.
+    - *A proxy that asks for a password:* the connection is refused, since Android keeps no password for a network's
+      proxy and the engine has none to give. A proxy may ask for some destinations only, so "Now" says that some
+      connections were refused, after the network's line and its switch; with the switch on it adds that those
+      connections cannot connect at all, since no direct try is made. Apps already running, and those left out, still
+      use the proxy themselves.
     - *A proxy on the loopback* is never used: apps started inside the VPN go directly, and "Now" says so, naming the
       tool where the port is a known tool's.
     - *A name only the proxy can resolve.* Without a VPN, an app that follows the proxy looks no name up and hands the
@@ -709,11 +723,12 @@ chaining is, and must follow the same switch.
       the network's owner wants the proxy used, unless the user turns "Send apps through this proxy" on.
     - *A network that drops* costs each of the first few servers the 3 s direct share before the proxy comes first
       (measured: 3.6 to 3.9 s for each, then 0.75 to 0.89 s).
-    - *`local-no-grant` may hold back a proxy the engine could reach.* On Android 17's emulator (`dp-api37-16k`), with
-      Datapavan's grant revoked and the VPN restarted, the engine's own direct connection to 10.0.2.2 opened, so ADR
-      0034's premise that Datapavan's protected sockets cannot reach the local network without the grant did not hold
-      for the engine's sockets on that build. The engine's connection to the proxy itself without the grant was not
-      tried. The rule stays as built until a run tries it.
+    - *Android 17's local-network grant.* On Android 17's emulator (`dp-api37-16k`), with Datapavan's grant revoked and
+      the VPN restarted, the engine's connection to the Wi-Fi proxy at 10.0.2.2 and the resolver's both opened (S2's
+      review, M2; measurements 7, its fix round), so neither way withholds a proxy on the local network for want of the
+      grant, and "Now" only advises it. Where another build or maker's Android holds Datapavan's protected sockets to
+      the grant, each try there times out instead: the engine's within the 3 s direct share, the resolver's within
+      1.2 s, and with the switch on the connection fails; "Now"'s advice and its button are the way out.
     - *Not measured:* the switch on Android 15 (that run tapped its words, not the switch); a tunnelled app with a
       Wi-Fi proxy set; a proxy given by a name only the network's resolver knows; the network that requires its proxy
       on Android 10, where Wi-Fi did not reconnect after the setting was cleared.

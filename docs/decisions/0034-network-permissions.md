@@ -113,18 +113,23 @@ not checked.
      rule does not touch them.
    - **The network's own proxy** (the proxy record's unit S2, 2026-11-27; [ADR 0052](0052-apps-built-in-proxies.md),
      decision 11; [ADR 0042](0042-dns-of-apps-that-go-directly.md), "Android's proxy", point 8). The engine's
-     connection to a network's proxy, like the resolver's, is a protected socket of the network part's UID. A proxy in
-     the ranges above while the network part lacks the grant is used by neither (`NetworkProxy.withoutGrant`, the
-     reason `local-no-grant`), and "Now" says so, with a button that asks for the grant. The rule for apps above, once
+     connection to a network's proxy, like the resolver's, is a protected socket of the network part's UID. Both use a
+     proxy in the ranges above whether or not the network part holds the grant, as measured below; "Now" advises the
+     grant beside such a proxy (`NetworkProxy.withoutGrant`), with a button that asks for it, since another build or
+     another maker's Android may hold those sockets to it. There a try would time out: the engine's within its 3 s
+     direct share, the resolver's within its 1.2 s, and with "Send apps through this proxy" on the connection would
+     fail. The rule for apps above, once
      built, checks the app's destination, the public server, never the proxy: the proxy hop is the network part's own,
      under its own grant. A destination within the network's on-link prefixes never goes through the proxy; a private
      address on another subnet may, as Android would send it there, and the rule for apps must then be decided for it
      before the proxy, as for a direct connection. Measured on Android 17's emulator (`dp-api37-16k`): with no VPN,
      Android let an app that targets 37 and holds no grant reach a Wi-Fi proxy at 10.0.2.2, while it blocked the same
-     app's direct connection to that address, so Android exempts the proxy and this decision does not change; but with
-     the network part's grant revoked and the VPN restarted, the engine's own direct connection to 10.0.2.2 opened, so
-     on that build the network part's protected sockets were not held to the grant, and `local-no-grant` may hold back
-     a proxy the engine could reach. The engine's connection to the proxy itself without the grant was not tried.
+     app's direct connection to that address, so Android exempts the proxy and this decision does not change. With the
+     network part's grant revoked and the VPN restarted, the engine's own direct connection to 10.0.2.2 opened, and,
+     in the fix round of S2's review, its connection to the Wi-Fi proxy there and the resolver's did too: the engine's
+     `CONNECT` to example.com's address, its tunnel opened, the page in 0.6 s; the resolver's to its ODoH relay, its
+     answers by ODoH. So on that build the network part's protected sockets are not held to the grant, and neither way
+     withholds the proxy for want of it.
    - **Android 16** had an opt-in test mode, switched on over adb and gated by `NEARBY_WIFI_DEVICES`;
      it is deprecated [doc]. The network part does not request that permission. On 10 to 16 the LAN stays open as
      before.

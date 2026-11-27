@@ -93,7 +93,7 @@ your unlocked phone can see it, as they can see the rest of the app.
   the password Datapavan made for it, which is encrypted under a key that Android's keystore protects.
 - **"Send apps through this proxy", if you turn it on** (off until you do): for each network's proxy you chose, the
   kind of network (such as Wi-Fi or mobile) and the proxy's host and port, never the network's name, until you turn
-  it off.
+  it off, or until Datapavan has not seen that proxy in a network's settings for 90 days.
 - **The apps you leave out of the firewall,** which then go to the internet without it: their names, until you take
   them back. A left-out app's requests through Android's PAC proxy, if a PAC file is set, come back into the firewall
   under that proxy's own name, and are shown and recorded there.
@@ -166,10 +166,13 @@ through your circumvention tool, nothing that goes through a WireGuard configura
 the network you are on itself (such as your router or printer), nothing to an address its settings exclude, and
 nothing to a name they exclude when the app looked that name up through Datapavan. A circumvention tool's own
 connections may go through it by address, never by name. A proxy on the phone itself is never used: it is usually a
-tool's local port, and "Now" says so. On Android 17, a proxy on your local network is used only while Datapavan may
-reach your local network. If you set this proxy up as your own privacy proxy, the switch "Send apps through this
+tool's local port, and "Now" says so. On Android 17, a proxy on your local network is used even while you have not
+allowed Datapavan to reach your local network, since Android let Datapavan reach such a proxy when this was tested;
+"Now" then suggests allowing it, in case apps cannot connect. If you set this proxy up as your own privacy proxy, the switch "Send apps through this
 proxy" under it in "Now" sends the TCP connections of every app that goes directly through it, within the same
-limits, not only where a direct connection fails. Datapavan's own lookups use the same proxy in their own way:
+limits, not only where a direct connection fails. It works only while Datapavan has that proxy's address: each time
+the phone joins the network, for a moment until Datapavan has read it, and whenever no address of it can be used,
+apps connect directly, and "Now" says so. Datapavan's own lookups use the same proxy in their own way:
 directly first, and through it, by the server's address, only when they cannot connect directly.
 
 When you add a WireGuard configuration of your VPN provider, Datapavan Advanced connects to that provider's server,

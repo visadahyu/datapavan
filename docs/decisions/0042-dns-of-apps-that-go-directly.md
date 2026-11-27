@@ -326,9 +326,12 @@ told no proxy.
    starts empty; a new network and a lost one hand none at once, before any lookup. So the resolver and the engine never
    disagree on the network's proxy. Only the network's own proxy reaches the engine, never the global one, which gives
    it none with the reason `global` (`NetworkProxy.forEngine`), since Android already gives the global proxy to every
-   app inside the VPN. On Android 17, a proxy on the local network while the network part lacks the local-network
-   grant leaves both ways (`NetworkProxy.withoutGrant`, by [ADR 0034](0034-network-permissions.md)'s ranges and the
-   network's own prefixes, read at each settle), and none left gives the reason `local-no-grant`. The proxy's
+   app inside the VPN. On Android 17, a proxy on the local network stays for both ways whether or not the network part
+   holds the local-network grant: measured with the grant revoked, the engine's and the resolver's connections to it
+   both opened ([ADR 0034](0034-network-permissions.md), decision 5). The grant is advice in "Now" alone
+   (`NetworkProxy.withoutGrant`, by ADR 0034's ranges and the network's own prefixes, read at each settle). The
+   settle is one pure function, `NetworkProxy.settle`, and the hand-over a class, `BeneathHand`, each held by JVM
+   tests (S2's review, m5). The proxy's
    addresses join the network's others, which the tunnel's addresses avoid. The resolver's own order, sockets and
    answers are unchanged; the user's switch "Send apps through this proxy" is the engine's alone. The exclusion list's
    twin in the engine reads it as `NetworkProxy.excluded` does, both held to one table, and both now trim only the code
