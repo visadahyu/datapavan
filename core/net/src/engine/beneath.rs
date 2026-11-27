@@ -244,14 +244,17 @@ impl Beneath {
     /// Whether the proxy refused a `CONNECT` to `port` while this setting holds: a flow the forwarder may carry goes to
     /// it at once ([`forwarding`]; the maintainer's decision of 2026-11-27).
     pub(super) fn refuses(&self, port: u16) -> bool {
-        lock(&self.order).refused.contains(&port)
+        let order = lock(&self.order);
+        order.refused[..order.refused_count].contains(&port)
     }
 
     /// The proxy refused a `CONNECT` to `port`: remembered, up to [`REFUSED_PORTS`] ports.
     fn refused(&self, port: u16) {
         let mut order = lock(&self.order);
-        if !order.refused.contains(&port) && order.refused.len() < REFUSED_PORTS {
-            order.refused.push(port);
+        let count = order.refused_count;
+        if !order.refused[..count].contains(&port) && count < REFUSED_PORTS {
+            order.refused[count] = port;
+            order.refused_count = count + 1;
         }
     }
 
@@ -305,8 +308,11 @@ struct Order {
     /// Which of the proxy's addresses is tried now, turned when one cannot be reached.
     next: usize,
     /// The ports whose `CONNECT` the proxy refused (a `4xx` other than `407`), at most [`REFUSED_PORTS`]: later flows
-    /// the forwarder may carry go to it at once ([`Beneath::refuses`]).
-    refused: Vec<u16>,
+    /// the forwarder may carry go to it at once ([`Beneath::refuses`]); the first `refused_count`. A list of its own
+    /// size, so that `Order` holds no second `Vec` to clone and drop (the forwarder's size pass).
+    refused: [u16; REFUSED_PORTS],
+    /// How many of `refused` are ports.
+    refused_count: usize,
 }
 
 /// How a flow begins.
