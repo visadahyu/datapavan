@@ -112,7 +112,8 @@ fixture_service_off() {
     ! grep -q "Enabled services:{.*$FIXTURE/" <<<"$services"
 }
 within 20 fixture_service_off || fail "Android still reported the fixture's accessibility service on 20 s after it was turned off"
-adb shell input keyevent KEYCODE_BACK
+# Android's settings are another app's activity: the plan is back once Datapavan's is resumed with the focus.
+back_to "$DATAPAVAN/$DATAPAVAN.MainActivity" || fail "back from Android's settings, the plan did not return"
 expect "Changed: Accessibility service removed"
 tap "Finish"
 expect "$NAME: Accessibility service removed"
@@ -135,7 +136,10 @@ scroll_to_top
 expect "Something you changed through the plan has come back"
 tap "Journal"
 expect "Has come back since: Accessibility service removed"
+# The journal and the overview are screens of one activity: the overview is back once its navigation bar shows, which
+# only the top level has.
 adb shell input keyevent KEYCODE_BACK
+within 10 has_id nav-summary || fail "back from the journal, the overview did not return"
 
 # Medium: the fixture's other reasons join its card, and USB debugging is a card of its own.
 scroll_to_top
@@ -159,6 +163,7 @@ expect "Nothing to do at this level now."
 tap "Open the plan"
 expect "Nothing to do at this level."
 adb shell input keyevent KEYCODE_BACK
+within 10 has_id nav-summary || fail "back from the plan, the overview did not return"
 
 scroll_to_top
 tap "Journal"

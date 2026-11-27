@@ -239,10 +239,14 @@ keep_evidence() {
 # left running. A dialog for one of our own processes, or for one that cannot be named, stays on screen,
 # so that the check waiting for the app fails and shows it. The resource id and the window title are the
 # same in every language.
+#
+# Each dump removes the last one first and counts only if it wrote a file: AOSP's uiautomator that "could not get idle
+# state" exits 0 and writes nothing, and every helper would then read the screen before (2026-11-27, the audit of the
+# checks' robustness, H3).
 dump_screen() {
     local screen owner button
     for _ in 1 2 3; do
-        adb shell uiautomator dump "$DUMP" >/dev/null 2>&1 || return 1
+        fresh_dump || return 1
         screen=$(adb shell cat "$DUMP" 2>/dev/null) || return 1
         case $screen in
             *'resource-id="android:id/aerr_wait"'*) ;;
@@ -259,7 +263,12 @@ dump_screen() {
         tap_dumped_id "android:id/aerr_$button" || return 0
         sleep 1
     done
-    adb shell uiautomator dump "$DUMP" >/dev/null 2>&1
+    fresh_dump
+}
+
+# A new dump of the screen in $DUMP, the last one removed first: true only when the new one was written.
+fresh_dump() {
+    adb shell "rm -f $DUMP; uiautomator dump $DUMP >/dev/null 2>&1; [ -s $DUMP ]" </dev/null >/dev/null 2>&1
 }
 
 # The attributes of the package $1's window, as Android's window manager lists them: from "mAttrs={" to
@@ -356,10 +365,11 @@ text_bounds() {
 
 # Taps the centre of the first element whose text is exactly $1, scrolling to it first. A list can
 # still be moving after a swipe, and a tap would then hit another row, so it taps only once the
-# element is in the same place in two dumps a second apart.
+# element is in the same place in two dumps a second apart. When it gives up, it says why on stderr: the text not
+# found from the list's top down, or found but not in one place (H4 of the audit of the checks' robustness).
 tap_text() {
     local text=$1
-    scroll_to "$text" || return 1
+    scroll_to "$text" || { echo "tap_text: no \"$text\" on the screen, from the list's top down" >&2; return 1; }
     local bounds previous=""
     for _ in 1 2 3 4 5; do
         bounds=$(text_bounds "$text")
@@ -368,7 +378,10 @@ tap_text() {
         sleep 1
         dump_screen || true
     done
-    [ -n "$bounds" ] && [ "$bounds" = "$previous" ] || return 1
+    if [ -z "$bounds" ] || [ "$bounds" != "$previous" ]; then
+        echo "tap_text: \"$text\" did not stay in one place over 5 dumps a second apart (at ${bounds:-nowhere}, before ${previous:-nowhere})" >&2
+        return 1
+    fi
     set -- $bounds
     # An element at the bottom edge lies under the gesture bar, which takes the tap: move it up first.
     local height
@@ -378,10 +391,40 @@ tap_text() {
         sleep 1
         dump_screen || true
         bounds=$(text_bounds "$text")
-        [ -n "$bounds" ] || return 1
+        [ -n "$bounds" ] || { echo "tap_text: \"$text\" went from the screen when it was moved up from the bottom edge" >&2; return 1; }
         set -- $bounds
     fi
     adb shell input tap $(( ($1 + $3) / 2 )) $(( ($2 + $4) / 2 ))
+}
+
+# The activity resumed on top and the window with the focus, as "package/class" each on a line of its own, the class
+# in full, from Android's activity manager (on Android 15 its dump holds both).
+resumed_and_focused() {
+    local dump line name
+    dump=$(adb shell dumpsys activity activities </dev/null 2>/dev/null | tr -d '\r') || return 1
+    for line in topResumedActivity=ActivityRecord mCurrentFocus=Window; do
+        name=$(sed -n "/$line{/{s/.*$line{[^ ]* [^ ]* \([^ }]*\).*/\1/p;q}" <<<"$dump")
+        case $name in */.*) name="${name%%/*}/${name%%/*}${name#*/}" ;; esac
+        echo "${name:-none}"
+    done
+}
+
+# Presses Back and waits up to $2 seconds (default 10) until the activity $1, "package/class" with the class in full,
+# is the one resumed on top and its window has the focus. A screen in another activity is known so, not by a text:
+# a text depends on the list's place and the language, and the screen being closed can still show one (run 3 of the
+# network shard, 2026-11-27, H1 and H2). Inside one activity a screen's own text or id stays the marker. Says on stderr
+# what was on top instead.
+back_to() {
+    local want=$1 deadline=$((SECONDS + ${2:-10})) now=""
+    adb shell input keyevent KEYCODE_BACK </dev/null
+    while :; do
+        now=$(resumed_and_focused) || now=""
+        [ "$now" = "$want"$'\n'"$want" ] && return 0
+        [ "$SECONDS" -lt "$deadline" ] || break
+        sleep 1
+    done
+    echo "back_to: after Back, resumed and focused: $(paste -sd ' ' - <<<"${now:-nothing read}"), not $want" >&2
+    return 1
 }
 
 # Taps the centre of the first element whose content description is exactly $1: icons have no text.

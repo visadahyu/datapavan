@@ -291,8 +291,10 @@ within 15 screen_has "History of" || fail "a rotation back closed the app's hist
 adb shell input keyevent KEYCODE_BACK
 within 10 window_chosen "The last hour" || fail "back from the history, \"Now\" lost the window chosen"
 echo "ok: the history stays open over a rotation, and \"Now\" keeps its window after it"
-# Back on the network screen, its screenshot setting acts on its own window, after "Now" closed (review c1, m1).
-adb shell input keyevent KEYCODE_BACK
+# Back on the network screen, its screenshot setting acts on its own window, after "Now" closed (review c1, m1). The
+# network screen is known by its activity resumed with the focus: a protected window alone is "Now"'s too (run 3 of
+# the network shard on the size pass, 2026-11-27, found no screenshot setting here).
+back_to "$PKG/$NETWORK_SCREEN" || fail "back from \"Now\", the network screen did not return"
 within 10 window_secure "$PKG" || fail "the network screen is not protected from screenshots after \"Now\" closed"
 tap_text "Allow screenshots for one minute" || fail "no screenshot setting on the network screen"
 within 10 window_unprotected "$PKG" || fail "allowing screenshots left the network screen protected after \"Now\" closed"
