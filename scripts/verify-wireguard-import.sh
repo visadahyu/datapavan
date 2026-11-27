@@ -67,7 +67,7 @@ cleanup() {
     "${compose[@]}" stop >/dev/null 2>&1 || true
     rm -rf "$WORK"
 }
-trap cleanup EXIT
+check_evidence_on cleanup
 
 dump() { adb shell dumpsys activity service "$PKG/org.visadahyu.datapavan.network.NetworkVpnService" "$@" | tr -d '\r'; }
 workload_log() { adb logcat -d -s DatapavanWorkload | tr -d '\r' | sed -n 's/.*DatapavanWorkload: //p'; }
@@ -88,6 +88,7 @@ flows_of() {
 # What the screen shows, the isolates around names and addresses dropped.
 screen_text() { dump_screen >/dev/null 2>&1 || true; adb shell cat "$DUMP" 2>/dev/null | LC_ALL=C sed 's/\xe2\x81[\xa6-\xa9]//g'; }
 fail() {
+    check_failed "$*"
     echo "WIREGUARD IMPORT CHECK FAILED: $*" >&2
     echo "The last tap: ${LAST_TAP:-none}; the screen's navigation: $(adb shell cmd overlay list 2>/dev/null | tr -d '\r' | grep -o '\[x\] [^ ]*navbar[^ ]*' | head -1)" >&2
     echo "the network part's store, tunnels and flows' routes:" >&2

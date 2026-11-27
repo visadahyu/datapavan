@@ -53,6 +53,9 @@ HOST=10.0.2.2
 . "$ROOT/scripts/host-ports.sh"
 PASSWORD="$(python3 -I -c 'import secrets;print(secrets.token_urlsafe(15))')"
 WORK="$(mktemp -d)"
+# The screens' dumps, apart from WORK and its password: a failure keeps them (adb-ui.sh's keep_evidence).
+SCREENS=$(mktemp -d)
+CHECK_DUMPS=$SCREENS
 SERVER=""
 
 cleanup() {
@@ -67,9 +70,9 @@ cleanup() {
     adb uninstall "$TOOL" >/dev/null 2>&1 || true
     adb uninstall "$WORKLOAD" >/dev/null 2>&1 || true
     [ -z "$SERVER" ] || kill "$SERVER" 2>/dev/null || true
-    rm -rf "$WORK"
+    rm -rf "$WORK" "$SCREENS"
 }
-trap cleanup EXIT
+check_evidence_on cleanup
 host_server --sentinel "$WORK/sentinel.log" --tool || exit 1
 # The tool's own server, which answers a line (unit D, D9), and the port of the request by a name only the tool resolves.
 OWN_PORT=$((PORT + 4))
@@ -92,6 +95,7 @@ device() {
 ping_from_shell() { device 10 "printf 'GET /ping HTTP/1.1\r\nHost: x\r\nConnection: close\r\n\r\n' | toybox nc -w 6 $1 $PORT"; }
 
 fail() {
+    check_failed "$*"
     echo "CHAIN CHECK FAILED: $*" >&2
     if dump_screen 2>/dev/null; then
         echo "On the screen:" >&2
@@ -514,10 +518,8 @@ tool_now() {
     done
     printf '%s\n' "$read"
 }
-screens=$(mktemp -d)
-chained_screen=$(network_now "$PKG" "$WORKLOAD" "$screens/now.xml")
-tool_screen=$(tool_now "$screens/tool.xml")
-rm -rf "$screens"
+chained_screen=$(network_now "$PKG" "$WORKLOAD" "$SCREENS/now.xml")
+tool_screen=$(tool_now "$SCREENS/tool.xml")
 grep -qx through-tool <<<"$chained_screen" || fail "\"Now\" does not show the picked app as sent through the tool: $(tr '\n' ';' <<<"$chained_screen" | cut -c1-800)"
 ! grep -q '^place ' <<<"$chained_screen" || fail "\"Now\" names a place of the picked app: $(grep '^place ' <<<"$chained_screen")"
 for name in network.test "$HOST"; do
@@ -727,9 +729,7 @@ own_shown_only() {
 }
 within 10 own_shown_only || fail "the tool's own connection, not chained, is not shown there only, for its window: $(tool_places | tr '\n' ';')"
 grep -q " tool=0 through-tool=0 " <<<"$(activity_line "$TOOL_UID")" || fail "the live view marks the tool as chained: $(activity_line "$TOOL_UID")"
-screens=$(mktemp -d)
-tool_screen=$(tool_now "$screens/tool.xml")
-rm -rf "$screens"
+tool_screen=$(tool_now "$SCREENS/tool-unchained.xml")
 adb shell input keyevent KEYCODE_BACK
 for line in tool-unchained tool-live-only "place $HOST"; do
     grep -qx "$line" <<<"$tool_screen" || fail "\"Now\" does not show the tool, not chained, as such ($line): $(tr '\n' ';' <<<"$tool_screen" | cut -c1-800)"

@@ -79,7 +79,7 @@ cleanup() {
     "$LAB" stop >/dev/null 2>&1 || true
     rm -rf "$WORK"
 }
-trap cleanup EXIT
+check_evidence_on cleanup
 
 dump() { adb shell dumpsys activity service "$PKG/org.visadahyu.datapavan.network.NetworkVpnService" "$@" | tr -d '\r'; }
 way() { sed -n 's/^ *dns-way //p' <<<"$(dump)"; }
@@ -115,6 +115,7 @@ asked_target() {
     asked target-a "$1" "$a" || asked target-b "$1" "$b"
 }
 fail() {
+    check_failed "$*"
     echo "DNS CHECK FAILED: $*" >&2
     echo "the network part's DNS state:" >&2
     grep -E '^ *dns-' <<<"$(dump)" >&2 || true

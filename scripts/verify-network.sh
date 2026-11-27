@@ -99,10 +99,11 @@ cleanup() {
     fi
     [ -z "$SERVER" ] || kill "$SERVER" 2>/dev/null || true
 }
-trap cleanup EXIT
+check_evidence_on cleanup
 host_server || exit 1
 
 fail() {
+    check_failed "$*"
     echo "NETWORK CHECK FAILED: $*" >&2
     adb logcat -d -b crash 2>/dev/null | tail -40 >&2 || true
     # A process Android ended leaves no crash: how the network part's last ones ended, with no destination.

@@ -55,11 +55,12 @@ cleanup() {
     fi
     rm -rf "$WORK"
 }
-trap cleanup EXIT
+check_evidence_on cleanup
 
 dump() { adb shell dumpsys activity service "$PKG/org.visadahyu.datapavan.network.NetworkVpnService" "$@" | tr -d '\r'; }
 fixture_log() { adb logcat -d -s DatapavanBlockingFixture | tr -d '\r' | sed -n 's/.*DatapavanBlockingFixture: //p'; }
 fail() {
+    check_failed "$*"
     echo "BLOCKING CHECK FAILED: $*" >&2
     echo "the network part's blocking:" >&2
     dump | grep -E '^ *(blocking|blocked)' >&2 || true

@@ -51,9 +51,10 @@ cleanup() {
     fi
     adb shell rm -f "$DUMP" >/dev/null 2>&1 || true
 }
-trap cleanup EXIT
+check_evidence_on cleanup
 
 fail() {
+    check_failed "$*"
     echo "VERIFY FAILED: $*" >&2
     # What was on screen, in the log and as files that CI keeps with the screenshots.
     local out="$ROOT/build/screenshots"

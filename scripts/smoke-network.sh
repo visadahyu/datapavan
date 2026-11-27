@@ -20,8 +20,10 @@ NETWORK_SCREEN=org.visadahyu.datapavan.network.MainActivity
 RES="$ROOT/android/network/src/main/res"
 # shellcheck source=scripts/adb-ui.sh
 . "$ROOT/scripts/adb-ui.sh"
+check_evidence_on
 
 fail() {
+    check_failed "$*"
     echo "NETWORK SMOKE FAILED: $*" >&2
     adb logcat -d -b crash 2>/dev/null | tail -40 >&2 || true
     mkdir -p "$ROOT/build/screenshots"

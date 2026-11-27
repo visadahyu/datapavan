@@ -55,7 +55,7 @@ restore() {
     else adb shell wm density reset >/dev/null 2>&1 || true; fi
     adb shell rm -f "$DUMP" >/dev/null 2>&1 || true
 }
-trap restore EXIT
+check_evidence_on restore
 # From the default text size and weight, also after a run that was stopped in its large pass.
 adb shell settings put system font_scale 1.0
 adb shell settings put secure font_weight_adjustment 0
@@ -122,7 +122,13 @@ now_screens() {
     # shellcheck source=scripts/host-ports.sh
     . "$ROOT/scripts/host-ports.sh"
     host_server || exit 1
-    trap 'adb shell dumpsys activity service "$PKG/org.visadahyu.datapavan.network.NetworkVpnService" log-retention 0 >/dev/null 2>&1 || true; adb shell appops set "$PKG" GET_USAGE_STATS default >/dev/null 2>&1 || true; kill "$SERVER" 2>/dev/null || true; restore' EXIT
+    now_restore() {
+        adb shell dumpsys activity service "$PKG/org.visadahyu.datapavan.network.NetworkVpnService" log-retention 0 >/dev/null 2>&1 || true
+        adb shell appops set "$PKG" GET_USAGE_STATS default >/dev/null 2>&1 || true
+        kill "$SERVER" 2>/dev/null || true
+        restore
+    }
+    CHECK_CLEANUP=now_restore
     allow_vpn "$PKG" || { echo "SCREENSHOTS FAILED: no VPN consent for $PKG" >&2; exit 1; }
     adb shell appops set "$PKG" GET_USAGE_STATS allow
     for mode in light dark; do

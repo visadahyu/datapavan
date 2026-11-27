@@ -16,8 +16,10 @@ APK="${1:-$ROOT/android/app/build/outputs/apk/debug/app-debug.apk}"
 PKG=org.visadahyu.datapavan
 # shellcheck source=scripts/adb-ui.sh
 . "$ROOT/scripts/adb-ui.sh"
+check_evidence_on
 
 fail() {
+    check_failed "$*"
     echo "SMOKE FAILED: $*" >&2
     adb logcat -d -b crash 2>/dev/null | tail -40 >&2 || true
     # What was on screen, in the log and as a file that CI keeps with the screenshots.

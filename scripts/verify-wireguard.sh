@@ -63,7 +63,7 @@ cleanup() {
     "${compose[@]}" stop >/dev/null 2>&1 || true
     rm -rf "$WORK"
 }
-trap cleanup EXIT
+check_evidence_on cleanup
 
 dump() { adb shell dumpsys activity service "$PKG/org.visadahyu.datapavan.network.NetworkVpnService" "$@" | tr -d '\r'; }
 workload_log() { adb logcat -d -s DatapavanWorkload | tr -d '\r' | sed -n 's/.*DatapavanWorkload: //p'; }
@@ -83,6 +83,7 @@ flows_of() {
     echo "${count:-0}"
 }
 fail() {
+    check_failed "$*"
     echo "WIREGUARD CHECK FAILED: $*" >&2
     echo "the network part's tunnels and flows' routes:" >&2
     grep -E '^ *(tunnel|flow-route) ' <<<"$(dump)" >&2 || true

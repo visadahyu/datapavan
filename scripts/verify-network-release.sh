@@ -39,7 +39,7 @@ cleanup() {
     [ -z "$SERVER" ] || kill "$SERVER" 2>/dev/null || true
     rm -rf "$WORK"
 }
-trap cleanup EXIT
+check_evidence_on cleanup
 host_server || exit 1
 
 # What a tap on "Turn on" met, when the tunnel did not come up (CI, 2026-11-11 and 12: no crash, and the
@@ -56,6 +56,7 @@ what_happened() {
 }
 
 fail() {
+    check_failed "$*"
     echo "RELEASE CHECK FAILED: $*" >&2
     what_happened >&2
     adb logcat -d -b crash 2>/dev/null | tail -40 >&2 || true

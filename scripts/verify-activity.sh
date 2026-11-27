@@ -49,6 +49,8 @@ HOST=10.0.2.2
 
 SERVER=""
 SCREENS=$(mktemp -d)
+# Its dumps of the screens, which a failure keeps (adb-ui.sh's keep_evidence).
+CHECK_DUMPS=$SCREENS
 # The screen's rotation as found, put back at the end: the history's check turns the screen.
 ROTATION=$(adb shell settings get system accelerometer_rotation | tr -d '\r')
 cleanup() {
@@ -61,10 +63,11 @@ cleanup() {
     adb shell am force-stop "$PKG" >/dev/null 2>&1 || true
     [ -z "$SERVER" ] || kill "$SERVER" 2>/dev/null || true
 }
-trap cleanup EXIT
+check_evidence_on cleanup
 host_server || exit 1
 
 fail() {
+    check_failed "$*"
     echo "ACTIVITY CHECK FAILED: $*" >&2
     adb logcat -d -b crash 2>/dev/null | tail -40 >&2 || true
     exit 1

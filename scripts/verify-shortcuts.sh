@@ -14,9 +14,11 @@ PKG=org.visadahyu.datapavan
 # shellcheck source=scripts/adb-ui.sh
 . "$ROOT/scripts/adb-ui.sh"
 
-trap 'adb shell rm -f "$DUMP" >/dev/null 2>&1 || true' EXIT
+cleanup() { adb shell rm -f "$DUMP" >/dev/null 2>&1 || true; }
+check_evidence_on cleanup
 
 fail() {
+    check_failed "$*"
     echo "VERIFY FAILED: $*" >&2
     local out="$ROOT/build/screenshots"
     mkdir -p "$out"

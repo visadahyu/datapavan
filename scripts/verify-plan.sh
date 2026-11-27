@@ -33,9 +33,10 @@ cleanup() {
     adb shell run-as "$DATAPAVAN" rm -f files/journal.txt >/dev/null 2>&1 || true
     adb shell rm -f "$DUMP" >/dev/null 2>&1 || true
 }
-trap cleanup EXIT
+check_evidence_on cleanup
 
 fail() {
+    check_failed "$*"
     echo "VERIFY FAILED: $*" >&2
     local out="$ROOT/build/screenshots"
     mkdir -p "$out"

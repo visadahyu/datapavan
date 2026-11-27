@@ -86,12 +86,13 @@ cleanup() {
     "${compose[@]}" stop >/dev/null 2>&1 || true
     rm -rf "$WORK"
 }
-trap cleanup EXIT
+check_evidence_on cleanup
 
 dump() { adb shell dumpsys activity service "$PKG/org.visadahyu.datapavan.network.NetworkVpnService" "$@" | tr -d '\r'; }
 fixture_log() { adb logcat -d -s DatapavanProxyFixture | tr -d '\r' | sed -n 's/.*DatapavanProxyFixture: //p'; }
 proxies() { dump | sed -n 's/^ *flow-proxy //p'; }
 fail() {
+    check_failed "$*"
     echo "PROXIES CHECK FAILED: $*" >&2
     echo "the network part's proxied flows:" >&2
     proxies >&2 || true

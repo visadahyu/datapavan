@@ -50,6 +50,161 @@ within() {
     done
 }
 
+# The evidence of a failure (docs/ci-flakes.md, "What a failed check keeps"). An emulator check of the shards opts in by
+# calling check_evidence_on CLEANUP where it set "trap CLEANUP EXIT" before. Nothing of it runs when this file is
+# sourced, so the scripts that only source these helpers (the Google Play readers, the measures, the labs) keep their
+# own shell as it was. From that call on:
+# - a stop under set -e that no fail reached prints "CHECK STOPPED: <script>:<line>: <command> (exit n)" and the call
+#   stack, once, at the command that stopped the check (the network shard's first run on 2026-11-26 ended with no word).
+#   With set -E, bash runs the ERR trap also inside $(...), <<<, a pipeline or ( ... ), and inside a condition's
+#   subshells, where nothing stops: the trap returns at once unless it runs in the check's own shell, with errexit on,
+#   before the check exits, so a failure that is waited for or handled prints nothing;
+# - every end but a pass (a fail, such a stop, a direct exit, set -u, an arithmetic error, a TERM or an INT) keeps the
+#   evidence of the device's state at that moment (keep_evidence); the check's cleanup runs after it, and the check
+#   exits with the status it had.
+check_evidence_on() {
+    CHECK_CLEANUP=${1:-}
+    CHECK_SCRIPT="$(cd "$(dirname "$0")" && pwd)/$(basename "$0")"
+    CHECK_SCRIPT=${CHECK_SCRIPT#"${ROOT:-}/"}
+    CHECK_BEGAN=$SECONDS
+    # What it keeps, it keeps on an emulator only, which holds nothing of anyone's: on a phone, the log, the windows and
+    # the screen hold other apps' data.
+    CHECK_EVIDENCE=""
+    if is_emulator; then CHECK_EVIDENCE=1; fi
+    # The device's clock at the start, for the log's lines since then; toybox's date has whole seconds.
+    CHECK_SINCE=$(adb shell date +%s </dev/null 2>/dev/null | tr -d '\r') || CHECK_SINCE=""
+    [[ $CHECK_SINCE =~ ^[0-9]+$ ]] || CHECK_SINCE=""
+    set -E
+    trap 'check_stopped $? "$LINENO" "$BASH_COMMAND"' ERR
+    trap 'CHECK_SIGNAL=TERM; exit 143' TERM
+    trap 'CHECK_SIGNAL=INT; exit 130' INT
+    trap 'check_exit $?' EXIT
+}
+
+# The path $1 of a script as this run prints it: from the repository's root, so that no machine's path appears.
+check_where() {
+    case $1 in
+        "$0") printf '%s\n' "${CHECK_SCRIPT:-$1}" ;;
+        "${ROOT:-/nowhere}"/*) printf '%s\n' "${1#"$ROOT/"}" ;;
+        *) printf '%s\n' "$1" ;;
+    esac
+}
+
+# The ERR trap: says where a stop under set -e happened, with its status $1, line $2 and command $3, and the functions
+# it was in. Only in the check's own shell, with errexit on, before it exits; it does not exit itself.
+check_stopped() {
+    [ "$BASHPID" = "$$" ] && [[ $- == *e* ]] && [ -z "${CHECK_EXITING:-}" ] || return 0
+    local i
+    CHECK_STOP="$(check_where "${BASH_SOURCE[1]}"):$2: $3 (exit $1)"
+    echo "CHECK STOPPED: $CHECK_STOP" >&2
+    for ((i = 1; i < ${#FUNCNAME[@]} - 1; i++)); do
+        echo "  in ${FUNCNAME[i]}, called at $(check_where "${BASH_SOURCE[i + 1]}"):${BASH_LINENO[i]}" >&2
+    done
+}
+
+# Called first by a check's fail with its message: the evidence's label (the message's first words) and where the
+# check failed.
+check_failed() {
+    CHECK_FAILED_MESSAGE=$*
+    CHECK_FAILED_AT="$(check_where "${BASH_SOURCE[2]:-$0}"):${BASH_LINENO[1]:-?}"
+    CHECK_FAILED=$(printf '%s' "$*" | tr 'A-Z' 'a-z' | tr -cs 'a-z0-9' '-' | cut -c1-40 | sed 's/^-*//; s/-*$//') || CHECK_FAILED=""
+    CHECK_FAILED=${CHECK_FAILED:-failed}
+}
+
+# The EXIT trap, with the check's status $1: keeps the evidence of anything but a pass, then runs the check's cleanup
+# (CHECK_CLEANUP, which a check whose cleanup grows on the way sets anew), then exits with that status.
+check_exit() {
+    local status=$1
+    CHECK_EXITING=1
+    [ -z "${CHECK_SIGNAL:-}" ] || [ "$status" != 0 ] || status=143
+    if [ "$status" != 0 ]; then
+        # A second signal while the evidence is kept does not cut it short: its 25 s are bounded.
+        trap 'CHECK_SIGNAL=${CHECK_SIGNAL:-TERM}' TERM
+        trap 'CHECK_SIGNAL=${CHECK_SIGNAL:-INT}' INT
+        keep_evidence "${CHECK_FAILED:-${CHECK_SIGNAL:-stopped}}" "$status" || true
+        trap 'exit 143' TERM
+        trap 'exit 130' INT
+    fi
+    if [ -n "${CHECK_CLEANUP:-}" ]; then "$CHECK_CLEANUP"; fi
+    exit "$status"
+}
+
+# adb with its arguments, given at most $1 seconds and no more than is left of keep_evidence's time.
+evidence_adb() {
+    local most=$1 left=$((CHECK_KEEP_UNTIL - SECONDS))
+    shift
+    [ "$left" -gt 0 ] || return 1
+    if [ "$left" -lt "$most" ]; then most=$left; fi
+    timeout -k 1 "$most" adb "$@" </dev/null 2>/dev/null
+}
+
+# Keeps the evidence of the check's failure, labelled $1, with its status $2, in $EVIDENCE_DIR/<script>-<n>-<label>/:
+# what ended it and where (what.txt); the check's last screen dump and a fresh one; a screencap (black where a protected
+# window is on top, which shows that too); the task stack with the resumed activity, and the windows with the focus
+# (focus.txt holds their lines); the network part's own dump, when Advanced is installed; the log since the check began,
+# with the events buffer, which records each activity resumed and finished; the device's memory and last crashes
+# (device_story); and the check's own folder of screen dumps, if it named one in CHECK_DUMPS, its dumps only. Only on an
+# emulator, only with EVIDENCE_DIR set (scripts/emulator-shard.sh sets it), at most five failures of a script in one
+# folder, gzipped, about 2 MB at most. It never stops the check: it runs as "|| true", once, with nothing piped into
+# grep -q, and each adb call is bounded, the whole within 25 s, so that it ends inside the 30 s the runner gives a
+# shard it stopped before it kills it.
+keep_evidence() {
+    [ -z "${CHECK_KEEPING:-}" ] || return 0
+    CHECK_KEEPING=1
+    [ -n "${CHECK_EVIDENCE:-}" ] && [ -n "${EVIDENCE_DIR:-}" ] || return 0
+    local label=$1 status=$2 name dir n file advanced=org.visadahyu.datapavan.advanced
+    CHECK_KEEP_UNTIL=$((SECONDS + 25))
+    name=$(basename "${CHECK_SCRIPT:-$0}")
+    mkdir -p "$EVIDENCE_DIR" || return 0
+    n=$(find "$EVIDENCE_DIR" -mindepth 1 -maxdepth 1 -type d -name "$name-*" | wc -l)
+    if [ "$n" -ge 5 ]; then
+        echo "evidence: five failures of $name are kept in $(check_where "$EVIDENCE_DIR") already; not this one" >&2
+        return 0
+    fi
+    dir="$EVIDENCE_DIR/$name-$((n + 1))-$label"
+    mkdir -p "$dir" || return 0
+    {
+        echo "check: ${CHECK_SCRIPT:-$0}"
+        echo "end: $label, exit $status${CHECK_SIGNAL:+, after a $CHECK_SIGNAL}"
+        [ -z "${CHECK_FAILED_MESSAGE:-}" ] || echo "failed: $CHECK_FAILED_MESSAGE"
+        [ -z "${CHECK_FAILED_AT:-}" ] || echo "failed at: $CHECK_FAILED_AT"
+        [ -z "${CHECK_STOP:-}" ] || echo "stopped at: $CHECK_STOP"
+        echo "the check ran: $((SECONDS - ${CHECK_BEGAN:-0})) s"
+        echo "this computer's time: $(date -u '+%F %T UTC')"
+    } >"$dir/what.txt" 2>/dev/null
+    if [ -n "${CHECK_DUMPS:-}" ] && [ -d "$CHECK_DUMPS" ]; then
+        mkdir -p "$dir/dumps"
+        for file in "$CHECK_DUMPS"/*.xml*; do
+            [ -f "$file" ] && cp "$file" "$dir/dumps/"
+        done
+    fi
+    # The screen first, as it was at the end, then how Android holds it.
+    evidence_adb 5 exec-out cat "$DUMP" >"$dir/last-dump.xml"
+    evidence_adb 8 exec-out screencap -p >"$dir/screen.png"
+    evidence_adb 10 shell "rm -f /sdcard/datapavan-evidence.xml; uiautomator dump /sdcard/datapavan-evidence.xml" >/dev/null &&
+        evidence_adb 5 exec-out cat /sdcard/datapavan-evidence.xml >"$dir/screen.xml"
+    evidence_adb 3 shell rm -f /sdcard/datapavan-evidence.xml
+    evidence_adb 6 shell dumpsys activity activities | tr -d '\r' >"$dir/activities.txt"
+    evidence_adb 6 shell dumpsys window windows | tr -d '\r' >"$dir/windows.txt"
+    grep -hE 'topResumedActivity=|ResumedActivity:|mCurrentFocus=|mFocusedApp=|mFocusedWindow=' \
+        "$dir/activities.txt" "$dir/windows.txt" >"$dir/focus.txt"
+    evidence_adb 8 logcat -d -b main,system,crash,events ${CHECK_SINCE:+-T "$CHECK_SINCE.000"} | tail -c 6000000 >"$dir/logcat.txt"
+    if evidence_adb 5 shell pm path "$advanced" | grep '^package:' >/dev/null; then
+        evidence_adb 6 shell dumpsys activity service "$advanced/org.visadahyu.datapavan.network.NetworkVpnService" |
+            tr -d '\r' >"$dir/network.txt"
+    fi
+    {
+        echo "device: ${ANDROID_SERIAL:-the only one}, adb says $(evidence_adb 3 get-state || echo nothing)"
+        echo "its time: $(evidence_adb 3 shell date | tr -d '\r'), up $(evidence_adb 3 shell cat /proc/uptime | cut -d' ' -f1) s"
+        if [ $((CHECK_KEEP_UNTIL - SECONDS)) -gt 1 ]; then
+            timeout -k 1 $((CHECK_KEEP_UNTIL - SECONDS)) bash -c "$(declare -f is_emulator device_story); device_story" </dev/null
+        fi
+    } >"$dir/device.txt" 2>&1
+    find "$dir" -mindepth 1 -empty -delete
+    find "$dir" -type f ! -name '*.png' ! -name what.txt ! -name focus.txt ! -name device.txt -exec gzip -9 {} +
+    echo "evidence kept: $(check_where "$dir")/ ($(du -sk "$dir" | cut -f1) kB: $(cd "$dir" && find . -type f | sed 's|^\./||' | sort | paste -sd ' ' -))" >&2
+}
+
 # Reads the screen into $DUMP. On a slow emulator Android can put an "isn't responding" dialog over
 # anything: on CI the launcher hangs behind the app in about half the runs. For another app's process
 # that says nothing about ours, so the dialog is answered and the screen read again. Wait only closes

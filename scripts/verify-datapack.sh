@@ -32,9 +32,10 @@ cleanup() {
     adb shell rm -f "$DUMP" >/dev/null 2>&1 || true
     rm -rf "$WORK"
 }
-trap cleanup EXIT
+check_evidence_on cleanup
 
 fail() {
+    check_failed "$*"
     echo "VERIFY FAILED: $*" >&2
     local out="$ROOT/build/screenshots"
     mkdir -p "$out"
