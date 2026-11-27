@@ -1736,7 +1736,11 @@ limit with its reason here.
 - **The emulator's step showed nothing** (the coordinator's run on Android 15): it passed with the 48th counter at
   0 before and after, since the workload app resolved the second name after its first send, so that the first answer
   came back before the second stand-in waited, which unit 9 also passed. It now resolves both names first, sends the
-  two requests back to back, and the step requires the 48th counter to grow by one at least.
+  two requests back to back, and the step requires the 48th counter to grow by one at least. Back to back was not
+  enough: the engine makes a new mapping's stand-ins in whatever order its tasks run, and on CI on 2026-11-27 the
+  first answer came back before the second request had left the engine. So the test tool's STUN server now holds its
+  answers until both requests have come, at most 5 s, and the step fails, named, when its first hold had only one
+  (commit `57050467`).
 - **Tests, each shown to fail once without its fix.** In `quic.rs`: GCM's test cases 1 to 4 through the library (3
   and 4 from review B); RFC 9001 A.2 to A.4 and RFC 9369 A.2 to A.4 sealed byte for byte, read and told (RFC 9001
   A.3 from review B); a hello whose tag fails names no flow (it failed with the reader before this round); a
