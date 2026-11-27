@@ -5,7 +5,7 @@
 # verifyApkRelease (build.gradle.kts) fails if any of them is missing from the APK's code.
 -keepclassmembers class org.visadahyu.datapavan.network.NetworkVpnService {
     public int ownerUid(int, byte[], int, byte[], int);
-    public boolean protectSocket(int);
+    public boolean protectSocket(int, long);
     public void logRecords(byte[]);
     public void statesWanted();
     public java.lang.String resolveEndpoint(java.lang.String);
