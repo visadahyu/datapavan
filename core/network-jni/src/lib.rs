@@ -1495,13 +1495,14 @@ pub extern "system" fn Java_org_visadahyu_datapavan_network_Engine_nativeBlockin
     });
 }
 
-/// `Engine.nativeBeneathProxy(network, proxies, exclusions, ipv6, always)`: the network beneath's own proxy (the proxy
-/// record's unit S2), handed whenever the network part settles it and at each start: the network's handle, the proxy's
-/// socket addresses, one `address port` a line, its exclusion list as Android gives it, comma-separated, whether the
-/// network has IPv6, and the user's choice "Send apps through this proxy". No line that parses gives none. Kept for
-/// the engines to come, as the chain is.
+/// `Engine.nativeBeneathProxy(network, proxies, exclusions, ipv4, ipv6, always)`: the network beneath's own proxy (the
+/// proxy record's unit S2), handed whenever the network part settles it and at each start: the network's handle, the
+/// proxy's socket addresses, one `address port` a line, its exclusion list as Android gives it, comma-separated,
+/// whether the network has IPv4 and whether it has IPv6 (S2's review, major 1: an IPv4 destination on a network without
+/// IPv4 never goes through the proxy), and the user's choice "Send apps through this proxy". No line that parses gives
+/// none. Kept for the engines to come, as the chain is.
 // SAFETY: exported under the JNI name of the Kotlin method `external fun nativeBeneathProxy(network: Long, proxies:
-// String, exclusions: String, ipv6: Boolean, always: Boolean)`.
+// String, exclusions: String, ipv4: Boolean, ipv6: Boolean, always: Boolean)`.
 #[unsafe(no_mangle)]
 pub extern "system" fn Java_org_visadahyu_datapavan_network_Engine_nativeBeneathProxy<'caller>(
     unowned_env: EnvUnowned<'caller>,
@@ -1509,6 +1510,7 @@ pub extern "system" fn Java_org_visadahyu_datapavan_network_Engine_nativeBeneath
     network: jlong,
     proxies: JString<'caller>,
     exclusions: JString<'caller>,
+    ipv4: jboolean,
     ipv6: jboolean,
     always: jboolean,
 ) {
@@ -1526,7 +1528,7 @@ pub extern "system" fn Java_org_visadahyu_datapavan_network_Engine_nativeBeneath
             network,
             &proxies,
             &exclusions,
-            ipv6,
+            (ipv4, ipv6),
             always,
         ));
         Ok(())
@@ -2244,7 +2246,7 @@ mod tests {
                 7,
                 &[SocketAddr::from(([192, 0, 2, 8], 3128))],
                 "",
-                false,
+                (true, false),
                 false,
             )
         };

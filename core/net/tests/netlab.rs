@@ -5309,11 +5309,11 @@ const BENEATH_NAMED: usize = 78;
 const BENEATH_STALE: usize = 79;
 
 /// The network's own proxy at `proxy`, of the network whose handle is `network`, with the exclusion list
-/// `exclusions`, as the network part hands it ([`Beneath`]); no IPv6, and not the user's choice to send every
-/// direct app through it.
+/// `exclusions`, as the network part hands it ([`Beneath`]); IPv4 and no IPv6, and not the user's choice to send
+/// every direct app through it.
 fn set_beneath(engine: &Engine, network: i64, proxy: SocketAddr, exclusions: &str) -> Outcome {
-    let setting =
-        Beneath::new(network, &[proxy], exclusions, false, false).ok_or("no usable proxy")?;
+    let setting = Beneath::new(network, &[proxy], exclusions, (true, false), false)
+        .ok_or("no usable proxy")?;
     engine.beneath(Some(Arc::new(setting)));
     Ok(())
 }
@@ -5322,6 +5322,32 @@ fn set_beneath(engine: &Engine, network: i64, proxy: SocketAddr, exclusions: &st
 /// (scripts/netlab-enter.py's `--require-proxy`).
 fn require_proxy(proxy: Ipv4Addr) -> Outcome {
     change_lab(&["--require-proxy", &proxy.to_string()], Stdio::null())
+}
+
+/// [`require_proxy`], the namespace's other connections rejected `with` (iptables' `--reject-with`) rather than by the
+/// script's reset: `icmp-host-unreachable`, which Linux reports as `EHOSTUNREACH`, or `icmp-net-unreachable`, as
+/// `ENETUNREACH` (S2's review, major 1).
+fn require_proxy_rejecting(proxy: Ipv4Addr, with: &str) -> Outcome {
+    require_proxy(proxy)?;
+    if with == "tcp-reset" {
+        return Ok(());
+    }
+    let rule = |action: &str, with: &str| -> Outcome {
+        let output = Command::new("iptables")
+            .args(["-w", action, "OUTPUT", "-p", "tcp", "--syn", "-j", "REJECT"])
+            .args(["--reject-with", with])
+            .output()?;
+        if output.status.success() {
+            return Ok(());
+        }
+        Err(format!(
+            "iptables {action} {with}: {}",
+            String::from_utf8_lossy(&output.stderr)
+        )
+        .into())
+    };
+    rule("-D", "tcp-reset")?;
+    rule("-A", with)
 }
 
 /// An app's connection to `to` as it ends, open or the error the app sees, within [`STEP`].
@@ -5410,42 +5436,70 @@ fn connect_lines(authority: &str) -> Vec<String> {
 /// proxy, a direct app's connection, refused directly, goes through that proxy by `CONNECT` and works. The proxy read
 /// `CONNECT 198.51.100.9:<port> HTTP/1.1` and `Host` alone: the app's own destination, by address, and nothing that
 /// names the engine. The kept flow is the app's to the server, through the network's proxy, and the log writes its
-/// route 3.
+/// route 3. The network rejects with a reset here, and with ICMP in the two tests after it.
 #[test]
 #[ignore = "needs an unprivileged network namespace; scripts/check.sh rust runs it"]
 fn on_a_network_that_requires_its_proxy_a_direct_app_goes_through_it() -> Outcome {
-    lab(
+    through_a_required_proxy(
         "on_a_network_that_requires_its_proxy_a_direct_app_goes_through_it",
-        &Limits::default(),
-        |engine| async move {
-            let proxy = connect_proxy(OTHER.into(), ConnectSettings::default()).await?;
-            require_proxy(OTHER)?;
-            set_beneath(&engine, LAB_NETWORK, proxy.address, "")?;
-            let server = echo_server().await?;
-            let before = LOGGED.lock().map_err(|e| e.to_string())?.len();
-            let mut app = app_connect(server).await?;
-            assert_eq!(
-                exchange(&mut app, b"through the network's proxy").await?,
-                b"through the network's proxy"
-            );
-            assert_eq!(
-                proxy.requests(),
-                [connect_lines(&format!("{SERVER}:{}", server.port()))]
-            );
-            let flow = flow_to(&engine, server, |f| f.via == Via::NetworkProxy).await?;
-            assert_eq!(flow.uid, Some(APP));
-            let counters = engine.counters();
-            assert_eq!((counters[BENEATH_TRIES], counters[BENEATH_OPENED]), (1, 1));
-            drop(app);
-            let since = logged_since(&engine, before).await?;
-            assert!(
-                logged_routes(&since).contains(&(server, 3)),
-                "route 3 in the log: {:?}",
-                logged_routes(&since)
-            );
-            Ok(())
-        },
+        "tcp-reset",
     )
+}
+
+/// S2's network lab, 1, on a network that rejects with ICMP "host unreachable" (`EHOSTUNREACH`).
+#[test]
+#[ignore = "needs an unprivileged network namespace; scripts/check.sh rust runs it"]
+fn on_a_network_that_requires_its_proxy_and_answers_host_unreachable_a_direct_app_goes_through_it()
+-> Outcome {
+    through_a_required_proxy(
+        "on_a_network_that_requires_its_proxy_and_answers_host_unreachable_a_direct_app_goes_through_it",
+        "icmp-host-unreachable",
+    )
+}
+
+/// S2's network lab, 1, on a network that rejects with ICMP "network unreachable", as a router with no route out
+/// answers: Linux reports `ENETUNREACH` at once, which the engine once read as a network without IPv4 and never took to
+/// the proxy (S2's review, major 1).
+#[test]
+#[ignore = "needs an unprivileged network namespace; scripts/check.sh rust runs it"]
+fn on_a_network_that_requires_its_proxy_and_answers_net_unreachable_a_direct_app_goes_through_it()
+-> Outcome {
+    through_a_required_proxy(
+        "on_a_network_that_requires_its_proxy_and_answers_net_unreachable_a_direct_app_goes_through_it",
+        "icmp-net-unreachable",
+    )
+}
+
+/// S2's network lab, 1, the test `name`, on a network whose other connections are rejected `with`.
+fn through_a_required_proxy(name: &str, with: &'static str) -> Outcome {
+    lab(name, &Limits::default(), |engine| async move {
+        let proxy = connect_proxy(OTHER.into(), ConnectSettings::default()).await?;
+        require_proxy_rejecting(OTHER, with)?;
+        set_beneath(&engine, LAB_NETWORK, proxy.address, "")?;
+        let server = echo_server().await?;
+        let before = LOGGED.lock().map_err(|e| e.to_string())?.len();
+        let mut app = app_connect(server).await?;
+        assert_eq!(
+            exchange(&mut app, b"through the network's proxy").await?,
+            b"through the network's proxy"
+        );
+        assert_eq!(
+            proxy.requests(),
+            [connect_lines(&format!("{SERVER}:{}", server.port()))]
+        );
+        let flow = flow_to(&engine, server, |f| f.via == Via::NetworkProxy).await?;
+        assert_eq!(flow.uid, Some(APP));
+        let counters = engine.counters();
+        assert_eq!((counters[BENEATH_TRIES], counters[BENEATH_OPENED]), (1, 1));
+        drop(app);
+        let since = logged_since(&engine, before).await?;
+        assert!(
+            logged_routes(&since).contains(&(server, 3)),
+            "route 3 in the log: {:?}",
+            logged_routes(&since)
+        );
+        Ok(())
+    })
 }
 
 /// S2's network lab, 2 (audit C2): on a network that drops direct connections, each to a server in 203.0.113.0/24

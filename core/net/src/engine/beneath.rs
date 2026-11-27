@@ -16,12 +16,16 @@
 //! broadcast; a destination within the network's on-link prefixes ([`crate::local::OnLink::on_link`]), while a private
 //! address on another subnet may need the proxy, as Android would send it there; a stand-in address and the tunnel's
 //! own DNS address, which have paths of their own; the proxy's own addresses and any of Android's setting, so that a
-//! proxy is never put in front of a proxy; an IPv6 destination on a network without IPv6 (audit C2); and a destination
-//! the exclusion list names, by its DNS name from Android's resolver's answers or by its address written out.
+//! proxy is never put in front of a proxy; a destination of a family the network has not, IPv4 or IPv6, as the
+//! setting says (audit C2); and a destination the exclusion list names, by its DNS name from Android's resolver's
+//! answers or by its address written out.
 //!
 //! **The order** (audit C2 and M6, decision 1): directly first, within `Limits::beneath_direct`. "No route of that
-//! family" (`ENETUNREACH`, `EADDRNOTAVAIL`) is the app's own error at once, and goes nowhere else. Any other failure,
-//! a server's own refusal among them, goes on to the proxy, since a network that rejects is the case this is for. The
+//! family" is the app's own error at once, and goes nowhere else: a family the setting says the network has not never
+//! comes here ([`takes`]), and `EADDRNOTAVAIL`, no address of that family, ends here. Any other failure goes on to the
+//! proxy, since a network that rejects is the case this is for: a server's own refusal, and `ENETUNREACH` too, which
+//! Linux gives at once for an ICMP "network unreachable" or "prohibited", as a router with no route out answers and as
+//! a network that lets out only its proxy may reject (S2's review, major 1). The
 //! proxy comes first on the network only once `Limits::beneath_failures` distinct servers failed directly and opened
 //! through the proxy within `Limits::beneath_window`, with no direct success between: a hostile proxy that answers
 //! `200` to everything never captures a network that lets direct connections through, and a network that requires
@@ -92,6 +96,8 @@ pub struct Beneath {
     proxies: Vec<SocketAddr>,
     /// The exclusion list, comma-separated entries, at most [`MAX_EXCLUSIONS`] bytes.
     exclusions: String,
+    /// Whether the network has IPv4: without, an IPv4 destination never goes through the proxy (audit C2).
+    ipv4: bool,
     /// Whether the network has IPv6: without, an IPv6 destination never goes through the proxy (audit C2).
     ipv6: bool,
     /// The user's choice "Send apps through this proxy" for this network (decision 1).
@@ -115,7 +121,8 @@ pub struct BeneathState {
 
 impl Beneath {
     /// The proxy at `proxies`, of the network whose handle is `network`, with its exclusion list `exclusions` (comma
-    /// separated), whether the network has IPv6, and whether the user chose to send every direct app through it.
+    /// separated), whether the network has IPv4 and IPv6, and whether the user chose to send every direct app through
+    /// it.
     /// The addresses kept are at most [`MAX_ADDRESSES`], each once, none on the loopback, link-local, multicast,
     /// broadcast or unspecified, and none of port 0: `None` when none is left.
     #[must_use]
@@ -123,7 +130,7 @@ impl Beneath {
         network: i64,
         proxies: &[SocketAddr],
         exclusions: &str,
-        ipv6: bool,
+        (ipv4, ipv6): (bool, bool),
         always: bool,
     ) -> Option<Self> {
         let mut kept: Vec<SocketAddr> = Vec::new();
@@ -151,6 +158,7 @@ impl Beneath {
             network,
             proxies: kept,
             exclusions: exclusions.to_owned(),
+            ipv4,
             ipv6,
             always,
             order: Mutex::default(),
@@ -166,7 +174,7 @@ impl Beneath {
         let Some(held) = held.filter(|held| held.same(&self)) else {
             return Arc::new(self);
         };
-        if held.always == self.always && held.ipv6 == self.ipv6 {
+        if held.always == self.always && held.ipv4 == self.ipv4 && held.ipv6 == self.ipv6 {
             return Arc::clone(held);
         }
         Arc::new(Self {
@@ -350,7 +358,11 @@ pub(super) fn takes(beneath: &Beneath, address: IpAddr, on_link: bool, name: Opt
     let address = address.to_canonical();
     reachable(address)
         && !on_link
-        && (beneath.ipv6 || address.is_ipv4())
+        && if address.is_ipv4() {
+            beneath.ipv4
+        } else {
+            beneath.ipv6
+        }
         && beneath.proxies.iter().all(|proxy| proxy.ip() != address)
         && !connect::excluded(&address.to_string(), &beneath.exclusions)
         && !name.is_some_and(|name| connect::excluded(name, &beneath.exclusions))
@@ -398,13 +410,11 @@ impl Failure {
     }
 }
 
-/// Whether `error` says the network has no route of the destination's family: an IPv6 try on a network without
-/// IPv6, which goes nowhere else and teaches nothing (audit C2).
+/// Whether `error` says the phone has no address of the destination's family on the network, which goes nowhere else
+/// and teaches nothing (audit C2). Not `ENETUNREACH`: for a flow [`takes`] let through, the network has that family,
+/// and "network unreachable" is the network's rejection (the module's comment).
 fn no_route(error: &io::Error) -> bool {
-    matches!(
-        error.kind(),
-        io::ErrorKind::NetworkUnreachable | io::ErrorKind::AddrNotAvailable
-    )
+    error.kind() == io::ErrorKind::AddrNotAvailable
 }
 
 /// A direct flow's first way to `target` while `beneath` is held: directly first, within `Limits::beneath_direct`,
@@ -877,7 +887,7 @@ pub(super) mod tests {
             NETWORK,
             &[at("203.0.113.80:3128")],
             exclusions,
-            true,
+            (true, true),
             always,
         ) else {
             unreachable!("a proxy kept")
@@ -932,7 +942,7 @@ pub(super) mod tests {
             NETWORK,
             &[at("203.0.113.80:3128")],
             "*.intranet.example, 198.51.100.77,.lan",
-            false,
+            (true, false),
             false,
         ) else {
             unreachable!("a proxy kept")
@@ -964,13 +974,27 @@ pub(super) mod tests {
                 "{address} {name:?}"
             );
         }
-        let Some(with_ipv6) = Beneath::new(NETWORK, &[at("203.0.113.80:3128")], "", true, false)
+        let Some(with_ipv6) =
+            Beneath::new(NETWORK, &[at("203.0.113.80:3128")], "", (true, true), false)
         else {
             unreachable!("a proxy kept")
         };
         assert!(takes(&with_ipv6, ip("2001:db8::7"), false, None));
         assert!(!takes(&with_ipv6, ip("fe80::1"), false, None));
         assert!(!takes(&with_ipv6, ip("ff02::1"), false, None));
+        // A network with IPv6 alone (S2's review, major 1): its IPv4 destinations never go through the proxy.
+        let Some(ipv6_only) = Beneath::new(
+            NETWORK,
+            &[at("[2001:db8::80]:3128")],
+            "",
+            (false, true),
+            false,
+        ) else {
+            unreachable!("a proxy kept")
+        };
+        assert!(!takes(&ipv6_only, ip("198.51.100.7"), false, None));
+        assert!(!takes(&ipv6_only, ip("::ffff:198.51.100.7"), false, None));
+        assert!(takes(&ipv6_only, ip("2001:db8::7"), false, None));
     }
 
     /// The facts the engine reads first: a stand-in, the tunnel's DNS address, Android's setting, an on-link
@@ -1027,7 +1051,7 @@ pub(super) mod tests {
                 at("203.0.113.81:3128"),
             ],
             "a.example",
-            true,
+            (true, true),
             false,
         );
         let Some(first) = first else {
@@ -1038,13 +1062,13 @@ pub(super) mod tests {
             [at("203.0.113.80:3128"), at("[2001:db8::80]:3128")]
         );
         assert!(
-            Beneath::new(NETWORK, &[at("127.0.0.1:8080")], "", true, false).is_none(),
+            Beneath::new(NETWORK, &[at("127.0.0.1:8080")], "", (true, true), false).is_none(),
             "decision 3"
         );
         lock(&first.order).names_first = true;
         let held = first.kept(None);
         let again = |proxies: &[SocketAddr], exclusions: &str, network: i64, always: bool| {
-            Beneath::new(network, proxies, exclusions, true, always)
+            Beneath::new(network, proxies, exclusions, (true, true), always)
                 .unwrap_or_else(|| unreachable!("a proxy kept"))
                 .kept(Some(&held))
         };
@@ -1062,6 +1086,17 @@ pub(super) mod tests {
             true,
         );
         assert!(!Arc::ptr_eq(&chosen, &held));
+        let without_ipv4 = Beneath::new(
+            NETWORK,
+            &[at("203.0.113.80:3128"), at("[2001:db8::80]:3128")],
+            "a.example",
+            (false, true),
+            false,
+        )
+        .unwrap_or_else(|| unreachable!("a proxy kept"))
+        .kept(Some(&held));
+        assert!(!Arc::ptr_eq(&without_ipv4, &held) && !without_ipv4.ipv4);
+        assert!(without_ipv4.state(Duration::ZERO).names_first);
         assert_eq!(
             chosen.state(Duration::ZERO),
             BeneathState {
@@ -1088,8 +1123,13 @@ pub(super) mod tests {
             assert!(!other.state(Duration::ZERO).names_first);
         }
         let long = format!("{},last.example", "x.example,".repeat(500));
-        let Some(cut) = Beneath::new(NETWORK, &[at("203.0.113.80:3128")], &long, true, false)
-        else {
+        let Some(cut) = Beneath::new(
+            NETWORK,
+            &[at("203.0.113.80:3128")],
+            &long,
+            (true, true),
+            false,
+        ) else {
             unreachable!("a proxy kept")
         };
         assert!(cut.exclusions.len() <= MAX_EXCLUSIONS && cut.exclusions.ends_with("x.example"));
@@ -1602,7 +1642,8 @@ pub(super) mod tests {
     async fn with_the_users_choice_the_proxy_is_the_only_way() -> io::Result<()> {
         let proxy = Proxy::new(Reply::Bytes(b"HTTP/1.1 403 Forbidden\r\n\r\n")).await?;
         let (shared, lab) = engine(Lab::default(), proxy.at);
-        let Some(mut beneath) = Beneath::new(NETWORK, &[at("203.0.113.80:3128")], "", true, true)
+        let Some(mut beneath) =
+            Beneath::new(NETWORK, &[at("203.0.113.80:3128")], "", (true, true), true)
         else {
             unreachable!("a proxy kept")
         };
@@ -1620,34 +1661,33 @@ pub(super) mod tests {
         Ok(())
     }
 
-    /// C2 through the sockets: a direct try the kernel answers with "network unreachable" (as Linux answers a TCP
-    /// connection to a multicast address) is the app's own error at once; the proxy reads nothing, and nothing is
-    /// learned.
+    /// S2's review, major 1: a direct try the kernel answers with "network unreachable" at once (as Linux answers an
+    /// ICMP net unreachable, and a TCP connection to a multicast address) is the network's rejection where the setting
+    /// says it has that family: it goes on to the proxy, which opens it, as after a reset.
     #[tokio::test(flavor = "current_thread")]
-    async fn a_direct_try_with_no_route_sends_the_proxy_nothing() -> io::Result<()> {
+    async fn a_direct_try_the_network_answers_unreachable_goes_through_the_proxy() -> io::Result<()>
+    {
         let proxy = Proxy::new(Reply::Bytes(OPENED)).await?;
         let (shared, _) = engine(Lab::default(), proxy.at);
-        for _ in 0..3 {
-            let (stream, through) =
-                open(&shared, UID, at("198.51.100.7:443"), at("224.0.0.1:443")).await;
-            assert_eq!(
-                stream.err().map(|e| e.kind()),
-                Some(io::ErrorKind::NetworkUnreachable)
-            );
-            assert!(!through);
-        }
-        tokio::time::sleep(Duration::from_millis(50)).await;
-        assert_eq!(proxy.heads(), Vec::<String>::new());
-        assert_eq!(counters(&shared), [0; 7]);
+        let destination = at("198.51.100.7:443");
+        let (stream, through) = open(&shared, UID, destination, at("224.0.0.1:443")).await;
+        assert!(through);
+        echoes(&mut stream?).await?;
+        assert_eq!(
+            proxy.heads(),
+            ["CONNECT 198.51.100.7:443 HTTP/1.1\r\nHost: 198.51.100.7:443\r\n\r\n"]
+        );
+        assert_eq!(counters(&shared), [1, 1, 0, 0, 0, 0, 0]);
         Ok(())
     }
 
-    /// No route of the destination's family is the app's own error at once, and never goes to the proxy (C2).
+    /// No address of the destination's family is the app's own error at once, and never goes to the proxy (C2); "network
+    /// unreachable" goes on (S2's review, major 1).
     #[test]
     fn no_route_of_that_family_goes_nowhere_else() {
-        assert!(no_route(&io::ErrorKind::NetworkUnreachable.into()));
         assert!(no_route(&io::ErrorKind::AddrNotAvailable.into()));
         for kind in [
+            io::ErrorKind::NetworkUnreachable,
             io::ErrorKind::ConnectionRefused,
             io::ErrorKind::HostUnreachable,
             io::ErrorKind::TimedOut,
@@ -1664,7 +1704,7 @@ pub(super) mod tests {
             NETWORK,
             &[at("203.0.113.80:3128"), at("203.0.113.81:3128")],
             "",
-            true,
+            (true, true),
             false,
         ) else {
             unreachable!("a proxy kept")
