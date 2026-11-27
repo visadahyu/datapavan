@@ -5371,6 +5371,14 @@ fn refused(connection: &io::Result<TcpStream>) -> bool {
 /// (`datapavan_net::log`): a count (u32), then each record after its length (u16); a segment is read to its route,
 /// past its fixed fields, its address, its network and its three texts.
 fn logged_routes(logged: &[u8]) -> Vec<(SocketAddr, u8)> {
+    logged_segments(logged)
+        .into_iter()
+        .map(|(to, _, route)| (to, route))
+        .collect()
+}
+
+/// The destination, three texts and route of each flow segment in `logged`, as [`logged_routes`] reads them.
+fn logged_segments(logged: &[u8]) -> Vec<(SocketAddr, [String; 3], u8)> {
     let mut routes = Vec::new();
     let mut rest = logged;
     while let Some((count, records)) = rest.split_first_chunk::<4>() {
@@ -5384,8 +5392,8 @@ fn logged_routes(logged: &[u8]) -> Vec<(SocketAddr, u8)> {
                 return routes;
             };
             rest = &after[length..];
-            if let Some(route) = segment_route(record) {
-                routes.push(route);
+            if let Some(segment) = segment_route(record) {
+                routes.push(segment);
             }
         }
     }
@@ -5394,7 +5402,7 @@ fn logged_routes(logged: &[u8]) -> Vec<(SocketAddr, u8)> {
 
 /// A flow segment's destination and route: past the version, kind 1, the flow's number, the UID, start, end, four
 /// counts of bytes and six bytes of codes; then the address, the network, three texts and the state.
-fn segment_route(record: &[u8]) -> Option<(SocketAddr, u8)> {
+fn segment_route(record: &[u8]) -> Option<(SocketAddr, [String; 3], u8)> {
     if record.get(1) != Some(&1) {
         return None;
     }
@@ -5408,10 +5416,13 @@ fn segment_route(record: &[u8]) -> Option<(SocketAddr, u8)> {
     at += 1 + length;
     let port = u16::from_le_bytes(record.get(at..at + 2)?.try_into().ok()?);
     at += 2 + 4 + 1;
-    for _ in 0..3 {
-        at += 1 + usize::from(*record.get(at)?);
+    let mut texts: [String; 3] = Default::default();
+    for text in &mut texts {
+        let length = usize::from(*record.get(at)?);
+        *text = String::from_utf8_lossy(record.get(at + 1..at + 1 + length)?).into_owned();
+        at += 1 + length;
     }
-    Some((SocketAddr::new(ip, port), *record.get(at + 1)?))
+    Some((SocketAddr::new(ip, port), texts, *record.get(at + 1)?))
 }
 
 /// A lookup of `example.test` by the app, answered `SERVER` by the network's resolver at `OTHER`, so that the
@@ -6729,6 +6740,103 @@ fn the_tools_own_flow_is_never_rescued() -> Outcome {
             assert_eq!(plain.connections(), 0);
             let counters = engine.counters();
             assert_eq!((counters[FORWARDED], counters[FORWARD_RESET]), (0, 0));
+            Ok(())
+        },
+    )
+}
+
+/// The forwarder's record (F-PLAN, sections 6 and 7; the audit's M3; the plan's row 1's log): two names Datapavan's own
+/// resolvers gave the server's address, `example.test` then `other.example`, so that the address's last name is the
+/// second; two requests with paths and queries on one forwarded connection, its `Host` the first name. The flow is
+/// recorded under that `Host`, through the network's proxy, live and kept; the log's segments are of version 8 as
+/// before, route 3, with that name; and no path or query of either request is anywhere in the flows kept, the log's
+/// bytes or the live view's snapshot.
+#[test]
+#[ignore = "needs an unprivileged network namespace; scripts/check.sh rust runs it"]
+fn a_forwarded_flow_is_recorded_under_its_host_through_the_proxy_with_no_path_anywhere() -> Outcome
+{
+    lab(
+        "a_forwarded_flow_is_recorded_under_its_host_through_the_proxy_with_no_path_anywhere",
+        &Limits::default(),
+        |engine| async move {
+            let plain = origin((SERVER, 80).into()).await?;
+            let proxy = squid_lab(&engine, &["example.test", "other.example"]).await?;
+            let before = LOGGED.lock().map_err(|e| e.to_string())?.len();
+            let mut app = app_connect(plain.address).await?;
+            let one = b"GET /private/path?token=q1secret HTTP/1.1\r\nHost: example.test\r\n\r\n";
+            let two = b"POST /second/step?code=q2secret HTTP/1.1\r\nHost: example.test\r\nContent-Length: 2\r\n\r\nok";
+            assert_eq!(
+                fetch(&mut app, one).await?,
+                named(
+                    "GET /private/path?token=q1secret HTTP/1.1",
+                    "example.test",
+                    b""
+                )
+            );
+            assert_eq!(
+                fetch(&mut app, two).await?,
+                named(
+                    "POST /second/step?code=q2secret HTTP/1.1",
+                    "example.test",
+                    b"ok"
+                )
+            );
+            assert_eq!(forwarded(&proxy).len(), 2);
+            let flow = flow_to(&engine, plain.address, |f| f.via == Via::NetworkProxy).await?;
+            assert_eq!(
+                (flow.name.as_deref(), flow.uid, flow.outcome),
+                (
+                    Some("example.test"),
+                    Some(APP),
+                    datapavan_net::Outcome::Opened
+                )
+            );
+            // The live view holds a destination once its seconds are placed by the apps' states, which this lab does
+            // not tell; its snapshot is read for the paths all the same, before the flow ends and after.
+            let live = engine.activity();
+            drop(app);
+            let since = logged_since(&engine, before).await?;
+            assert_eq!(datapavan_net::log::VERSION, 8);
+            assert!(
+                logged_routes(&since).contains(&(plain.address, 3)),
+                "route 3 in the log: {:?}",
+                logged_routes(&since)
+            );
+            let segments: Vec<_> = logged_segments(&since)
+                .into_iter()
+                .filter(|(to, _, _)| *to == plain.address)
+                .collect();
+            assert_ne!(segments.len(), 0, "no segment to the origin");
+            for (_, texts, route) in &segments {
+                assert_eq!(
+                    (texts[0].as_str(), *route),
+                    ("example.test", 3),
+                    "{segments:?}"
+                );
+            }
+            let kept = format!("{:?}", engine.flows());
+            for text in [
+                &since[..],
+                &live[..],
+                &engine.activity()[..],
+                kept.as_bytes(),
+            ] {
+                for secret in [
+                    &b"/private"[..],
+                    b"path",
+                    b"token",
+                    b"q1secret",
+                    b"/second",
+                    b"code=",
+                    b"q2secret",
+                ] {
+                    assert!(
+                        !holds(text, secret),
+                        "{:?} in the record",
+                        String::from_utf8_lossy(secret)
+                    );
+                }
+            }
             Ok(())
         },
     )
