@@ -27,7 +27,10 @@
 //! Chromium reads, are not read. `*` here matches any run of bytes, where the Kotlin side's regular expression stops
 //! at a line break, which no host holds. Letters are folded in ASCII alone, on both sides, as the table holds: a host
 //! the engine asks about is a DNS name or an address, ASCII both, and Unicode's folding would make the Kelvin sign a
-//! `k`. Hand-written, with no regular expression crate and no Unicode case tables, for size.
+//! `k`. The host and each entry are trimmed of the code points up to U+0020 alone, the controls and the space, on both
+//! sides, as Java's `String.trim` does: Rust's `str::trim` takes Unicode's white space (U+0085 and U+00A0 among it)
+//! and Kotlin's `trim` Java's (U+001C to U+001F among it): each alone would read a rare list otherwise than the other.
+//! Hand-written, with no regular expression crate and no Unicode case tables, for size.
 //!
 //! Everything here is pure, with no IO, so that it can be fuzzed with any bytes a proxy can send
 //! (`fuzz_targets/connect.rs`); nothing may panic or read outside the slice.
@@ -147,14 +150,14 @@ pub fn status(head: &[u8]) -> Result<u16, Error> {
 /// comma-separated entries, by the rules of the module's comment.
 #[must_use]
 pub fn excluded(host: &str, exclusions: &str) -> bool {
-    let host = host.trim().trim_end_matches('.');
+    let host = trimmed(host).trim_end_matches('.');
     let host = host.strip_prefix('[').unwrap_or(host);
     let host = host.strip_suffix(']').unwrap_or(host).to_ascii_lowercase();
     if host.is_empty() {
         return false;
     }
     exclusions.split(',').any(|raw| {
-        let entry = raw.trim().trim_end_matches('.').to_ascii_lowercase();
+        let entry = trimmed(raw).trim_end_matches('.').to_ascii_lowercase();
         if entry.is_empty() {
             false
         } else if entry.contains('*') {
@@ -165,6 +168,12 @@ pub fn excluded(host: &str, exclusions: &str) -> bool {
             host == entry
         }
     })
+}
+
+/// `text` without the code points up to U+0020 at either end, the controls and the space, as Java's `String.trim` and
+/// the Kotlin side's `NetworkProxy.trimmed` (the module's comment).
+fn trimmed(text: &str) -> &str {
+    text.trim_matches(|c: char| c <= ' ')
 }
 
 /// Whether `pattern`, whose `*` matches any run of bytes, matches the whole of `text`. The usual scan with one point to
@@ -386,6 +395,28 @@ mod tests {
         }
     }
 
+    /// A cell of the shared table with each `\u{XXXX}` read as that code point, so that the table can name a tab, a
+    /// line break or a control without holding it.
+    fn unescaped(cell: &str) -> String {
+        let mut out = String::new();
+        let mut rest = cell;
+        while let Some(at) = rest.find("\\u{") {
+            out.push_str(&rest[..at]);
+            let after = &rest[at + 3..];
+            let end = after
+                .find('}')
+                .unwrap_or_else(|| unreachable!("an open escape: {cell}"));
+            let code = u32::from_str_radix(&after[..end], 16)
+                .ok()
+                .and_then(char::from_u32)
+                .unwrap_or_else(|| unreachable!("no code point: {cell}"));
+            out.push(code);
+            rest = &after[end + 1..];
+        }
+        out.push_str(rest);
+        out
+    }
+
     /// The table both sides hold (`core/net/testdata/proxy-exclusions.tsv`): the host, the exclusion list (`-` for
     /// none), and whether it is excluded.
     #[test]
@@ -400,7 +431,11 @@ mod tests {
                 unreachable!("a row of three fields: {line}");
             };
             let list = if list == "-" { "" } else { list };
-            assert_eq!(excluded(host, list), expected == "1", "{line}");
+            assert_eq!(
+                excluded(&unescaped(host), &unescaped(list)),
+                expected == "1",
+                "{line}"
+            );
             rows += 1;
         }
         assert!(rows >= 30, "{rows} rows");

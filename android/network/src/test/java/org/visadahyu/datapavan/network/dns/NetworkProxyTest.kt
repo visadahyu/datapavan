@@ -313,19 +313,23 @@ class NetworkProxyTest {
     /**
      * The proxy record's unit S2: the shared vectors (core/net/testdata/proxy-exclusions.tsv), which the engine's
      * `connect::excluded` reads too, so that the resolver and the engine never disagree on an exclusion list; only ASCII
-     * letters fold.
+     * letters fold, and only the code points up to U+0020 are trimmed. A cell's `\u{XXXX}` is that code point.
      */
     @Test
     fun theExclusionListReadsAsTheEnginesDoes() {
         val rows = java.io.File("../../core/net/testdata/proxy-exclusions.tsv").readLines()
             .filter { it.isNotEmpty() && !it.startsWith("#") }
         assertTrue(rows.size >= 40)
+        val escape = Regex("""\\u\{([0-9A-Fa-f]{1,6})\}""")
+        val unescaped = { cell: String -> escape.replace(cell) { String(Character.toChars(it.groupValues[1].toInt(16))) } }
         for (row in rows) {
-            val (host, list, excluded) = row.split('\t')
+            val (host, list, excluded) = row.split('\t').map(unescaped)
             val entries = if (list == "-") emptyList() else list.split(',')
             assertEquals(row, excluded == "1", NetworkProxy.excluded(host, entries))
         }
         assertFalse("the Kelvin sign", NetworkProxy.excluded("k.example", listOf("\u212a.example")))
+        assertTrue("U+001F, which Kotlin's trim takes", NetworkProxy.excluded("example.com", listOf("\u001fexample.com")))
+        assertFalse("U+0085, which Rust's trim takes", NetworkProxy.excluded("example.com", listOf("\u0085example.com")))
     }
 
     /**

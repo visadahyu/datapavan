@@ -2,7 +2,10 @@
 # the network part's NetworkProxy.excluded, its twin on the Kotlin side. Columns: the host, a name or an address
 # written out; the exclusion list, comma-separated entries as Android's setting holds them, "-" for none; and
 # whether the host is excluded (1 or 0). An IPv6 host's brackets are dropped, an entry's are not. Only ASCII letters
-# are folded: the last row's entry starts with the Kelvin sign (U+212A), which neither side takes for "k".
+# are folded: the Kelvin sign's row (U+212A), which neither side takes for "k". The host and each entry are trimmed of
+# the code points up to U+0020 alone, as Java's String.trim: \u{XXXX} in a cell is that code point, read by both sides'
+# tests, so that a row names a tab, a line break or a control without holding it; U+0085, U+00A0 and U+3000, which
+# Rust's or Kotlin's own trim would take, stay.
 # host	list	excluded
 example.com	example.com	1
 Example.COM	example.com	1
@@ -52,3 +55,19 @@ ab.example	a?.example	0
 ab.example	a?*	0
 k.example	K.example	0
 K.EXAMPLE	k.example	1
+example.com	\u{9}example.com\u{9}	1
+example.com	\u{A}example.com\u{D}	1
+example.com	\u{B}\u{C}example.com	1
+example.com	\u{1C}example.com\u{1F}	1
+example.com	foo.example,\u{1D}\u{1E}*.com	1
+example.com	\u{1}example.com\u{0}	1
+\u{1F}example.com\u{9}	example.com	1
+\u{1C}example.com.\u{20}	.com	1
+example.com	\u{85}example.com	0
+example.com	example.com\u{85}	0
+example.com	\u{A0}example.com	0
+example.com	\u{3000}example.com	0
+example.com	\u{2028}example.com	0
+example.com	\u{7F}example.com	0
+\u{85}example.com	example.com	0
+example.com\u{A0}	example.com	0

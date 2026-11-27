@@ -94,13 +94,14 @@ object NetworkProxy {
      * characters, so `*.example.com` takes the subdomains of `example.com` and `10.*` the addresses that start so; a
      * leading `.` takes the subdomains too; any other entry takes that host itself. The engine's `connect::excluded` is
      * its twin, and both read core/net/testdata/proxy-exclusions.tsv (the proxy record's unit S2): only ASCII letters
-     * fold, since a host asked about is a DNS name or an address, so that the Kelvin sign is no `k` on either side.
+     * fold, since a host asked about is a DNS name or an address, so that the Kelvin sign is no `k` on either side; and
+     * only the code points up to U+0020 are trimmed ([trimmed]).
      */
     fun excluded(server: String, exclusions: List<String>): Boolean {
-        val host = folded(server.trim().trimEnd('.').removePrefix("[").removeSuffix("]"))
+        val host = folded(trimmed(server).trimEnd('.').removePrefix("[").removeSuffix("]"))
         if (host.isEmpty()) return false
         return exclusions.any { raw ->
-            val entry = folded(raw.trim().trimEnd('.'))
+            val entry = folded(trimmed(raw).trimEnd('.'))
             when {
                 entry.isEmpty() -> false
                 '*' in entry -> glob(entry).matches(host)
@@ -109,6 +110,14 @@ object NetworkProxy {
             }
         }
     }
+
+    /**
+     * [text] without the code points up to U+0020 at either end, the controls and the space, as Java's `String.trim`
+     * and the engine's `connect::trimmed`: Kotlin's own `trim` takes Java's white space, U+001C to U+001F and U+2028
+     * among it, and Rust's `str::trim` Unicode's, U+0085 among it, so that each alone would read a rare list otherwise
+     * than the other.
+     */
+    internal fun trimmed(text: String): String = text.trim { it <= ' ' }
 
     /** [text] with its ASCII letters in lower case, and nothing else changed. */
     internal fun folded(text: String): String = buildString(text.length) {
