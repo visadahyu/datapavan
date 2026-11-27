@@ -85,8 +85,9 @@ flows_of() {
     count=$(awk -v uid="$1" -v route="$2" '$1 == "flow-route" && $2 == uid && $3 == route { print $4 }' <<<"$(dump)")
     echo "${count:-0}"
 }
-# What the screen shows, the isolates around names and addresses dropped.
-screen_text() { dump_screen >/dev/null 2>&1 || true; adb shell cat "$DUMP" 2>/dev/null | LC_ALL=C sed 's/\xe2\x81[\xa6-\xa9]//g'; }
+# What the screen shows, the isolates around names and addresses dropped; nothing after a dump that wrote nothing, which
+# the caller's own fail then names.
+screen_text() { dump_screen >/dev/null 2>&1 || true; adb shell cat "$DUMP" 2>/dev/null | LC_ALL=C sed 's/\xe2\x81[\xa6-\xa9]//g' || true; }
 fail() {
     check_failed "$*"
     echo "WIREGUARD IMPORT CHECK FAILED: $*" >&2

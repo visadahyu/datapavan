@@ -14,7 +14,9 @@
 #   scripts/emulator-shard.sh <shard>    runs the shard's checks on the device in ANDROID_SERIAL
 #   scripts/emulator-shard.sh <shard>:<check>[,<check>...]
 #                                        runs only those checks of the shard, in the shard's order, as the
-#                                        shard runs them: one check measured alone, as network:verify-activity.sh
+#                                        shard runs them: one check measured alone, as network:verify-activity.sh;
+#                                        a check that relies on an earlier one is named with it, as
+#                                        audit:smoke.sh,verify-plan.sh
 #
 # Each check's time is logged. A check that fails keeps its evidence (scripts/adb-ui.sh's keep_evidence: the screen,
 # the task stack, the windows, the log) in build/emulator-shards/evidence/<run>/<shard>/, the run named by
@@ -24,7 +26,8 @@
 # The device's day must not end during a shard: the connection log files its records by the device's local day, and
 # the history opens at it. So the emulator is booted in the time zone that puts its local time nearest midday
 # ("zone", read by scripts/emulator-shards.sh and by CI's emulator step), which leaves a shard about eleven hours, and
-# each check fails, named, if the device's midnight is less than two hours away (adb-ui.sh's check_day_guard).
+# each check that reads the device's day fails, named, if its midnight is less than two hours away (adb-ui.sh's
+# check_day_guard).
 #
 # A shard installs apps, changes settings, sets a PIN and taps: it runs only on an emulator, named by its
 # serial (ANDROID_SERIAL=emulator-NNNN) and saying so itself, never on a phone or on "the only device adb
@@ -133,11 +136,13 @@ emulator_guard() {
     echo "ok: $serial is an emulator"
 }
 
-# At the shard's end: how long the check that ended it ran, and the evidence this shard kept.
+# At the shard's end: how long the check that ended it ran, and the evidence this shard kept. A TERM or an INT is a
+# failure.
 shard_end() {
     local status=$1
+    [ -z "${SHARD_SIGNAL:-}" ] || [ "$status" != 0 ] || status=143
     if [ "$status" != 0 ] && [ -n "${check:-}" ]; then
-        echo "== $check failed after $((SECONDS - check_began)) s (exit $status)" >&2
+        echo "== $check failed after $((SECONDS - check_began)) s (exit $status${SHARD_SIGNAL:+, stopped by SIG$SHARD_SIGNAL})" >&2
     fi
     if [ -d "$EVIDENCE_DIR" ] && [ -n "$(ls -A "$EVIDENCE_DIR")" ]; then
         echo "== evidence kept in ${EVIDENCE_DIR#"$ROOT/"}/: $(ls "$EVIDENCE_DIR" | paste -sd ' ' -)" >&2
@@ -157,13 +162,17 @@ case "${1:-}" in
             *:*)
                 only=" ${1#*:} "
                 only=${only//,/ }
+                # Each name exactly as the shard has it, as scripts/emulator-shards.sh checks them:
+                # network:verify-network or network:sh would run nothing and pass.
                 for check in $only; do
-                    grep -qw -- "$check" <<<"$checks" || { echo "no check $check in the shard $shard: $checks" >&2; exit 2; }
+                    grep -qxF -- "$check" <<<"$(tr ' ' '\n' <<<"$checks")" ||
+                        { echo "no check $check in the shard $shard; its checks are: $checks" >&2; exit 2; }
                 done
                 kept=""
                 for check in $checks; do
                     case $only in *" $check "*) kept="$kept $check" ;; esac
                 done
+                [ -n "$kept" ] || { echo "no check named after $1; the shard's checks are: $checks" >&2; exit 2; }
                 checks=${kept# }
                 ;;
         esac
@@ -172,6 +181,11 @@ case "${1:-}" in
         export EVIDENCE_DIR
         check=""
         trap 'shard_end $?' EXIT
+        # The runner's TERM at its timeout reaches the check too, in the shard's process group, and the check keeps its
+        # evidence and cleans up (adb-ui.sh's check_exit). Bash runs these traps only once the check has ended, so the
+        # shard waits for it, as long as the runner's timeout -k leaves, and then names it and lists its evidence.
+        trap 'SHARD_SIGNAL=TERM; exit 143' TERM
+        trap 'SHARD_SIGNAL=INT; exit 130' INT
         echo "== Emulator shard $shard on $ANDROID_SERIAL, its time $(adb shell "date '+%H:%M %Z'" </dev/null | tr -d '\r'): $checks"
         for check in $checks; do
             check_began=$SECONDS

@@ -56,7 +56,8 @@ within() {
 # The evidence of a failure (docs/ci-flakes.md, "What a failed check keeps"). An emulator check of the shards opts in by
 # calling check_evidence_on CLEANUP where it set "trap CLEANUP EXIT" before. Nothing of it runs when this file is
 # sourced, so the scripts that only source these helpers (the Google Play readers, the measures, the labs) keep their
-# own shell as it was. From that call on:
+# own shell as it was. The call first waits for the device, at most 60 s, so that whether it is an emulator, and its
+# clock, are read once it answers (several checks, as smoke.sh, wait for it only later). From that call on:
 # - a stop under set -e that no fail reached prints "CHECK STOPPED: <script>:<line>: <command> (exit n)" and the call
 #   stack, once, at the command that stopped the check (the network shard's first run on 2026-11-26 ended with no word).
 #   With set -E, bash runs the ERR trap also inside $(...), <<<, a pipeline or ( ... ), and inside a condition's
@@ -64,13 +65,16 @@ within() {
 #   before the check exits, so a failure that is waited for or handled prints nothing;
 # - every end but a pass (a fail, such a stop, a direct exit, set -u, an arithmetic error, a TERM or an INT) keeps the
 #   evidence of the device's state at that moment (keep_evidence); the check's cleanup runs after it, and the check
-#   exits with the status it had;
-# - the check fails at once, named, if the device's day ends within two hours (check_day_guard).
+#   exits with the status it had.
+# A check that reads the device's day calls check_day_guard right after it.
 check_evidence_on() {
     CHECK_CLEANUP=${1:-}
     CHECK_SCRIPT="$(cd "$(dirname "$0")" && pwd)/$(basename "$0")"
     CHECK_SCRIPT=${CHECK_SCRIPT#"${ROOT:-}/"}
     CHECK_BEGAN=$SECONDS
+    # A device that does not answer within 60 s is left to the check's own wait or failure.
+    timeout 60 adb wait-for-device </dev/null >/dev/null ||
+        echo "adb found no single device to wait for, or it did not answer within 60 s; the check goes on" >&2
     # What it keeps, it keeps on an emulator only, which holds nothing of anyone's: on a phone, the log, the windows and
     # the screen hold other apps' data.
     CHECK_EVIDENCE=""
@@ -83,14 +87,15 @@ check_evidence_on() {
     trap 'CHECK_SIGNAL=TERM; exit 143' TERM
     trap 'CHECK_SIGNAL=INT; exit 130' INT
     trap 'check_exit $?' EXIT
-    check_day_guard
 }
 
 # The device's day must not end while the check runs: the connection log files its records by the device's local day,
 # and an app's history opens at it, so a check whose flow crosses the device's midnight cannot be read (the network
 # shard, 2026-11-27, run across local midnight: one record of a connection, not two). The runner and CI boot the
 # emulator in the zone that puts its local time near midday (scripts/emulator-shard.sh zone); a check run on another
-# device fails here, named, rather than falsely later.
+# device fails here, named, rather than falsely later. Called right after check_evidence_on by the checks that read the
+# device's day (verify-activity.sh, verify-log.sh, verify-chain.sh, verify-proxies.sh: the log's today); the others
+# run at any hour.
 check_day_guard() {
     local clock left
     clock=$(adb shell date +%H:%M:%S </dev/null 2>/dev/null | tr -d '\r') || clock=""
@@ -171,9 +176,9 @@ evidence_adb() {
 # with the events buffer, which records each activity resumed and finished; the device's memory and last crashes
 # (device_story); and the check's own folder of screen dumps, if it named one in CHECK_DUMPS, its dumps only. Only on an
 # emulator, only with EVIDENCE_DIR set (scripts/emulator-shard.sh sets it), at most five failures of a script in one
-# folder, gzipped, about 2 MB at most. It never stops the check: it runs as "|| true", once, with nothing piped into
-# grep -q, and each adb call is bounded, the whole within 25 s, so that it ends inside the 30 s the runner gives a
-# shard it stopped before it kills it.
+# folder, gzipped (the log cut at 6 MB before gzip, a screencap about 1.5 MB, the dumps' folder about 3 MB at worst). It
+# never stops the check: it runs as "|| true", once, with nothing piped into grep -q, and each adb call is bounded, the
+# whole within 25 s, so that it ends inside the 35 s the runner gives a shard it stopped before it kills its group.
 keep_evidence() {
     [ -z "${CHECK_KEEPING:-}" ] || return 0
     CHECK_KEEPING=1

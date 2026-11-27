@@ -87,6 +87,8 @@ cleanup() {
     rm -rf "$WORK"
 }
 check_evidence_on cleanup
+# It reads the connection log of the device's day: that day must not end while it runs.
+check_day_guard
 
 dump() { adb shell dumpsys activity service "$PKG/org.visadahyu.datapavan.network.NetworkVpnService" "$@" | tr -d '\r'; }
 fixture_log() { adb logcat -d -s DatapavanProxyFixture | tr -d '\r' | sed -n 's/.*DatapavanProxyFixture: //p'; }

@@ -46,6 +46,8 @@ cleanup() {
     [ -z "$SERVER" ] || kill "$SERVER" 2>/dev/null || true
 }
 check_evidence_on cleanup
+# It reads the connection log of the device's day: that day must not end while it runs.
+check_day_guard
 host_server || exit 1
 
 fail() {

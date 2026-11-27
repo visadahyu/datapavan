@@ -73,6 +73,8 @@ cleanup() {
     rm -rf "$WORK" "$SCREENS"
 }
 check_evidence_on cleanup
+# It reads the connection log of the device's day: that day must not end while it runs.
+check_day_guard
 host_server --sentinel "$WORK/sentinel.log" --tool || exit 1
 # The tool's own server, which answers a line (unit D, D9), and the port of the request by a name only the tool resolves.
 OWN_PORT=$((PORT + 4))

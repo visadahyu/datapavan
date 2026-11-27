@@ -253,8 +253,10 @@ start_next() {
     fi
     SLOT_SHARD[$i]=$shard
     SLOT_BEGAN[$i]=$SECONDS
-    # Its own process group, pinned to its emulator's threads, and stopped after SHARD_TIMEOUT.
-    EVIDENCE_RUN=$RUN_STAMP ANDROID_SERIAL=$serial setsid taskset -c "${SLOT_CPUS[$i]}" timeout -k 30 "$SHARD_TIMEOUT" \
+    # Its own process group, pinned to its emulator's threads, and stopped after SHARD_TIMEOUT: a TERM to the group, and
+    # a KILL 35 s later, in which the shard waits for its check to keep its evidence and clean up (adb-ui.sh's
+    # check_exit).
+    EVIDENCE_RUN=$RUN_STAMP ANDROID_SERIAL=$serial setsid taskset -c "${SLOT_CPUS[$i]}" timeout -k 35 "$SHARD_TIMEOUT" \
         "$ROOT/scripts/emulator-shard.sh" "$shard" >"$(log_of "$shard")" 2>&1 &
     SLOT_RUN[$i]=$!
     STARTED_PIDS+=("${SLOT_RUN[$i]}")
@@ -269,9 +271,10 @@ while :; do
         if [ -n "${SLOT_RUN[$i]}" ] && ! kill -0 "${SLOT_RUN[$i]}" 2>/dev/null; then
             status=0
             wait "${SLOT_RUN[$i]}" || status=$?
-            # A check the timeout stopped keeps its evidence and runs its cleanup first, within 30 s (adb-ui.sh's
-            # check_exit), after the shard's own process ended: its group is given that long, with its emulator.
-            if [ "$status" = 124 ]; then
+            # A shard the timeout stopped ended once its check had kept its evidence and cleaned up; what is still in
+            # its group is given 35 s more, with its emulator. 137: the check outlasted the 35 s too, and the KILL took
+            # the whole group, timeout included.
+            if [ "$status" = 124 ] || [ "$status" = 137 ]; then
                 for _ in $(seq 1 35); do pgrep -g "${SLOT_RUN[$i]}" >/dev/null || break; sleep 1; done
             fi
             # What the shard left behind in its group, test servers included.
@@ -282,7 +285,10 @@ while :; do
                 echo "ok: ${SLOT_SHARD[$i]}, $took (log: ${log#"$ROOT/"})"
                 passed+=("${SLOT_SHARD[$i]}")
             else
-                [ "$status" != 124 ] || echo "FAILED: ${SLOT_SHARD[$i]} ran past $SHARD_TIMEOUT and was stopped" >&2
+                case $status in
+                    124) echo "FAILED: ${SLOT_SHARD[$i]} ran past $SHARD_TIMEOUT and was stopped" >&2 ;;
+                    137) echo "FAILED: ${SLOT_SHARD[$i]} ran past $SHARD_TIMEOUT, and its check past the 35 s after it: killed" >&2 ;;
+                esac
                 echo "FAILED: ${SLOT_SHARD[$i]}, after $took; its log ends:" >&2
                 tail -15 "$log" | sed 's/^/    /' >&2
                 failed+=("${SLOT_SHARD[$i]}")

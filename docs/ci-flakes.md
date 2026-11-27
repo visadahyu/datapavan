@@ -92,9 +92,10 @@ place of its EXIT trap:
   Advanced is installed, the log since the check began with its events buffer, which records each activity resumed and
   finished, the device's memory and last crashes, and the check's own folder of screen dumps where it names one
   (`verify-activity.sh`, `verify-chain.sh`), its dumps only: never a folder of keys, configurations, log databases or
-  APKs. Each adb call is bounded, the whole within 25 s, inside the 30 s the runner gives a shard it stopped; at most
-  five failures of a script in one folder, gzipped, about 2 MB each. The check's cleanup runs after it, and a passing
-  check keeps nothing.
+  APKs. Each adb call is bounded, the whole within 25 s, inside the 35 s the runner gives a shard it stopped before it
+  kills its group; at most five failures of a script in one folder, gzipped: the log is cut at 6 MB before gzip, a
+  screencap is about 1.5 MB, the folder of screen dumps about 3 MB at worst. The check's cleanup runs after it, and a
+  passing check keeps nothing.
 - Only on an emulator, and only where `EVIDENCE_DIR` is set, which `scripts/emulator-shard.sh` does: a phone's log,
   windows and screen hold other apps' data.
 - `scripts/emulator-shards.sh` names this run's evidence in its summary and each check's time in the shard's log; CI
@@ -105,10 +106,11 @@ so a check whose flow crosses the device's midnight cannot be read (2026-11-27: 
 when the network shard ran across local midnight). The runner and CI's emulator step boot the emulator in the time
 zone that puts its local time nearest midday (`scripts/emulator-shard.sh zone`), which leaves a shard about eleven
 hours. The zone is named, as `Asia/Tokyo`, and has no summer time: the emulator hands its zone to Android in the radio's
-time signal, whose name Android reads only up to a `+` or `-`: `Etc/GMT-5` arrived as `Etc/GMT`. Every check that
-keeps evidence also reads the device's clock when it starts and fails, named, when the device's midnight is less than
-two hours away ("the device's day ends in N minutes: a run across it cannot be read"), so that a check run by hand on
-another emulator or a phone never fails falsely there. No check compares a day or a time taken on this computer with
+time signal, whose name Android reads only up to a `+` or `-`: `Etc/GMT-5` arrived as `Etc/GMT`. The four checks that
+read the connection log's day (`verify-activity.sh`, `verify-log.sh`, `verify-chain.sh`, `verify-proxies.sh`) also read
+the device's clock when they start and fail, named, when its midnight is less than two hours away ("the device's day
+ends in N minutes: a run across it cannot be read"), so that such a check run by hand on another emulator or a phone
+never fails falsely there; the others run at any hour. No check compares a day or a time taken on this computer with
 one of the device: `verify-wireguard-import.sh` formats the picker's time in the device's own zone.
 
 After Back, a check waits for the screen it means: one in another activity by that activity, resumed on top with the
@@ -118,6 +120,8 @@ one first and counts only if it wrote one, and `tap_text` says on stderr why it 
 down, or not in one place.
 
 One check is measured alone with `scripts/emulator-shards.sh <shard>:<check>`, as `network:verify-activity.sh`: it
-runs on an emulator of its own, freshly booted, with the shard's own setup for that check. A failure is never retried
+runs on an emulator of its own, freshly booted, with what the shard's script does for that check itself (the install
+before `screenshots.sh`, the last-line rules of the lab and labels checks); a check that relies on an earlier one of
+its shard is named with it, as `audit:smoke.sh,verify-plan.sh` (`smoke.sh` installs Basic). A failure is never retried
 to pass. Known tap retries that sit against this, left for a later unit: `verify-signed-release.sh`, which taps "Data
 sources" up to five times after Back, and its import's three tries of "Import a data pack".
