@@ -65,7 +65,12 @@
 # an open network, the switch "Send apps through this proxy" turned on through the debug dump (`proxy-through`, since
 # "Now" draws it only once the engine has an address), so that the engine holds a direct app's new flows and fails
 # them where no proxy comes: the request must fail with no flow of the fixture opened, none through the proxy, and the
-# engine's counter 80 (the flows the hold kept waiting) up; then the switch off, and the same request goes directly. On Android 17 and later, each part also has
+# engine's counter 80 (the flows the hold kept waiting) up; then the switch off, and the same request goes directly.
+# PASSES=11, on an emulator that `adb root` takes, is pass 8's network with the forwarder's rows (F-PLAN.md, section 9):
+# the recorder refusing a CONNECT to any port but 443, as squid's default; plain requests to the public target on
+# ports 80 and 8080, a second one to port 80 that the refusal remembered sends with no CONNECT, a WebView, HTTPS by
+# CONNECT as a control, and a blocked plain-HTTP name with blocking on; the recorder logs each forwarded request's line
+# and field names, and the dump's counters 81 to 85 say what the forwarder did. On Android 17 and later, each part also has
 # a copy of the fixture that targets API 37 (M5) fetch the public target and the direct target. SETTINGS names the
 # settings that passes 1 and 3 go through; MEASURE_NAME, a word, starts the output's names, so that two runs (a build
 # before and one after) can go side by side.
@@ -378,7 +383,7 @@ mark() {
 since_mark() {
     kill -0 "$RECORDER" 2>/dev/null || { echo "the recorder stopped" >&2; exit 1; }
     tail -n +"$((RECORDS_BEFORE + 1))" "$RECORDS" |
-        awk -F'\t' '{ printf "    recorder: %s %s | host %s | ua %s\n", $2, $3, $4, substr($5, 1, 100) }'
+        awk -F'\t' '{ printf "    recorder: %s %s | host %s | ua %s%s\n", $2, $3, $4, substr($5, 1, 100), (NF >= 6 ? " | fields " $6 : "") }'
     tail -n +"$((STREAM_BEFORE + 1))" "$STREAM" | tr -d '\r' |
         grep -E 'PacProxy|PacManager|PacService|PacNative|ProxyServer|ProxyService|ProxySelector|pacprocessor|proxyhandler|Error resolving PAC|LOCAL_NETWORK|LocalNetwork|local network|avc: .*(pac|proxy)' |
         grep -vE 'DatapavanProxy|am_|ActivityManager: (Start|Force|Killing)|ActivityTaskManager' | cut -c1-220 | tail -12 | sed 's/^/    android: /' || true
@@ -909,6 +914,37 @@ rows_s2() {
     now_lines | tee -a "$REPORT"
 }
 
+# The forwarder's counters (81 to 85 of the dump's, its fields 82 to 86), in a debug build.
+forward_counts() {
+    dump | sed -n 's/^ *counters //p' | head -1 |
+        awk '{ printf "forwarded %s, by CONNECT after all %s, reset %s, first byte late %s, sent at once by a refusal remembered %s", $82, $83, $84, $85, $86 }'
+}
+
+# Pass 11's rows (the forwarder's, F-PLAN.md, section 9, "The emulator"), on pass 8's network, the recorder refusing
+# CONNECT but to port 443 (its `connect-443` mode), as squid's shipped configuration does.
+rows_forwarder() {
+    local com
+    say ""
+    com=$(addresses_of "$PUBLIC")
+    say "  $PUBLIC $com"
+    say "  engine: $(beneath_state)"
+    say "  the forwarder's counters: $(forward_counts)"
+    step "get http://$PUBLIC/fwd: CONNECT to port 80 refused, the request forwarded in absolute form" fixture_as "$FIXTURE" fresh timed --es url "http://$PUBLIC/fwd"
+    step "get http://$PUBLIC/fwd-again: the refusal remembered, no CONNECT" fixture_as "$FIXTURE" fresh timed --es url "http://$PUBLIC/fwd-again"
+    step "get http://$PUBLIC:8080/fwd: another port, refused, forwarded" fixture_as "$FIXTURE" fresh timed --es url "http://$PUBLIC:8080/fwd"
+    step "webview http://$PUBLIC/webview (S2's audit, m8)" fixture_as "$FIXTURE" fresh webview --es url "http://$PUBLIC/webview"
+    step "control: get https://$PUBLIC/, CONNECT to port 443 carried" fixture_as "$FIXTURE" fresh timed --es url "https://$PUBLIC/"
+    say "  the forwarder's counters: $(forward_counts)"
+    say ""
+    say "-- tracker blocking on: a blocked plain-HTTP name"
+    say "  $(blocking_switch on)"
+    step "get http://tracker.blocklab.home.arpa/fwd, blocked: no request line at the recorder" fixture_as "$FIXTURE" fresh timed --es url "http://tracker.blocklab.home.arpa/fwd"
+    say "  $(blocking_switch off)"
+    step "get http://$PUBLIC/fwd, blocking off" fixture_as "$FIXTURE" fresh timed --es url "http://$PUBLIC/fwd"
+    say "  the forwarder's counters: $(forward_counts)"
+    now_lines | tee -a "$REPORT"
+}
+
 SETTINGS="${SETTINGS:-none wifi-proxy wifi-pac global-setting global-owner global-pac}"
 EXCLUDED=example.org
 UNRESOLVED=proxy.invalid
@@ -959,6 +995,23 @@ for pass in ${PASSES:-1 2 3 4}; do
             vpn_start
             without_grant no_grant_part
             vpn_stop
+            ;;
+        11)
+            say ""
+            say "== pass 11: the forwarder's rows on a network that requires its proxy, the recorder refusing CONNECT but to port 443 as squid's default: the Wi-Fi network's own proxy set, the VPN on, every connection out refused ($EGRESS_END) but to the proxy"
+            adb root >/dev/null 2>&1 || true
+            adb wait-for-device
+            [ "$(adb shell id -u | tr -d '\r')" = 0 ] || { echo "pass 11 needs an emulator that adb root takes" >&2; exit 2; }
+            say "  set before the VPN: $(set_setting wifi-proxy)"
+            vpn_start
+            egress_only_proxy
+            say "  egress: only to $HOST:$PROXY_PORT, the loopback and the VPN's interface"
+            recorder_mode connect-443
+            rows_forwarder
+            recorder_mode tunnel
+            egress_back
+            vpn_stop
+            clear_setting wifi-proxy
             ;;
         8)
             say ""

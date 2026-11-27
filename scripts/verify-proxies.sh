@@ -687,7 +687,9 @@ echo "ok: a reinstall of the chosen app ends its choice by its first install tim
 # fresh fixture's request to a public name (example.com, RFC 2606) must answer through it: the engine counts its flow
 # under `network-proxy`, and the recorder carried a CONNECT to that flow's address with no User-Agent. The recorder's
 # own address, 10.0.2.2, is on-link and rightly never reached through the proxy: the direct target there gets no
-# CONNECT. Where root or the device owner is refused, the row says so and is not run; with PROXYLAB_REQUIRED=1, which CI
+# CONNECT. Then the forwarder (F-PLAN.md, section 9): with the recorder refusing a CONNECT to any port but 443, as
+# squid's shipped configuration does, a fresh fixture's plain request to example.com must reach it in absolute form,
+# after its CONNECTs to port 80 were refused, and the engine must count it forwarded. Where root or the device owner is refused, the row says so and is not run; with PROXYLAB_REQUIRED=1, which CI
 # sets, that fails. Its evidence is the recorder's log, the network part's dump and the device's log, kept on a failure.
 # The row needs this computer's internet (S2's review, m6): the recorder carries the fixture's request to example.com,
 # and the resolver's lookup to the first ODoH pair's relay (data/odoh). A preflight connects to both from here first;
@@ -756,8 +758,9 @@ PY
     openssl req -x509 -newkey ec -pkeyopt ec_paramgen_curve:prime256v1 -nodes -days 1 -subj "/CN=inner.proxylab.test" \
         -keyout "$WORK/recorder-key.pem" -out "$WORK/recorder-cert.pem" >/dev/null 2>&1 || fail "no certificate for the recorder"
     : >"$WORK/recorder.tsv"
+    : >"$WORK/recorder.mode"
     python3 -I "$ROOT/scripts/proxy-measure/recorder.py" "$base" "$WORK/recorder.tsv" "$WORK/recorder-cert.pem" \
-        "$WORK/recorder-key.pem" tunnel >"$WORK/recorder.out" 2>&1 &
+        "$WORK/recorder-key.pem" tunnel "$WORK/recorder.mode" >"$WORK/recorder.out" 2>&1 &
     RECORDER=$!
     recorder_ready() { grep -qx ready "$WORK/recorder.out" 2>/dev/null; }
     within 10 recorder_ready || fail "the recorder did not start: $(cat "$WORK/recorder.out")"
@@ -802,6 +805,24 @@ PY
     done
     [ -n "$dest" ] || fail "the recorder carried no CONNECT with no User-Agent to the fixture's flow ($flows): $(cut -f2,3 "$WORK/recorder.tsv" | tail -8 | tr '\n' ';')"
     echo "ok: on a network that requires its proxy, a fresh app reaches example.com through it: CONNECT $dest with no User-Agent, the engine's route network-proxy"
+
+    # The forwarder (F-PLAN.md, section 9): the recorder now refuses a CONNECT to any port but 443, as squid's shipped
+    # configuration does. A fresh fixture's plain request to example.com must reach it in absolute form, with the
+    # fixture's own field names and none added, after its CONNECTs to port 80 were refused, and the engine must count
+    # it forwarded (counter 81, the dump's field 82).
+    forwarded() { dump | sed -n 's/^ *counters //p' | head -1 | awk '{ print $82 }'; }
+    forwarded_before=$(forwarded)
+    [ -n "$forwarded_before" ] || fail "the dump has no counter 81 (a build before the forwarder)"
+    echo connect-443 >"$WORK/recorder.mode"
+    adb shell am force-stop "$FIXTURE"
+    fixture "$FIXTURE" get 204 --es url "http://example.com/fwd"
+    echo tunnel >"$WORK/recorder.mode"
+    line=$(awk -F'\t' '$2 == "proxy" && $3 == "GET http://example.com/fwd HTTP/1.1" { print $4 " | " $6 }' "$WORK/recorder.tsv" | tail -1)
+    [ -n "$line" ] || fail "the recorder got no plain request in absolute form: $(cut -f2,3 "$WORK/recorder.tsv" | tail -8 | tr '\n' ';')"
+    grep -qE "$(printf '\t')proxy-refused$(printf '\t')REFUSED [^ ]+:80 403 connect-443" "$WORK/recorder.tsv" ||
+        fail "the recorder refused no CONNECT to port 80 before the forwarded request"
+    [ "$(forwarded)" -gt "$forwarded_before" ] || fail "the engine counts no flow forwarded: $(forwarded) after $forwarded_before"
+    echo "ok: behind a proxy that refuses CONNECT to port 80, a fresh app's plain request reaches it in absolute form: host and fields $line"
 
     adb shell am force-stop "$FIXTURE"
     adb logcat -c
