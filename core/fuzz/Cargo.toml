@@ -14,6 +14,9 @@ cargo-fuzz = true
 libfuzzer-sys = "=0.4.13"
 datapavan-engine = { path = "../engine" }
 datapavan-net = { path = "../net" }
+# The forwarder's differential (the audit's m7): hyper's parser, in the fuzz crate only, never in a library.
+httparse = "=1.10.1"
+zeroize = "=1.9.2"
 
 [[bin]]
 name = "attestation"
@@ -168,6 +171,13 @@ bench = false
 [[bin]]
 name = "blocking"
 path = "fuzz_targets/blocking.rs"
+test = false
+doc = false
+bench = false
+
+[[bin]]
+name = "forward"
+path = "fuzz_targets/forward.rs"
 test = false
 doc = false
 bench = false

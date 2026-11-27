@@ -13,6 +13,7 @@ pub mod connect;
 pub mod dns;
 pub mod dnscache;
 pub mod engine;
+pub mod forward;
 pub mod fragments;
 pub mod hpke;
 pub mod hygiene;
