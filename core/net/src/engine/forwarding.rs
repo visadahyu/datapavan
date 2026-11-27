@@ -48,7 +48,7 @@ use std::pin::Pin;
 use std::sync::Arc;
 use std::time::{Duration, Instant};
 use tokio::io::{AsyncReadExt, AsyncWriteExt};
-use tokio::net::{TcpListener, TcpStream};
+use tokio::net::{TcpSocket, TcpStream};
 use zeroize::Zeroizing;
 
 /// How long after its SYN was answered a flow's first byte counts as late: never a cut, only counted (the audit's M2).
@@ -92,9 +92,16 @@ pub(super) fn rescue(
 
 /// A connected loopback TCP pair: the end the relay takes, and the stage's. Of the connections the listener, bound
 /// for that moment only, accepts, only the engine's own is taken.
+///
+/// Both by `TcpSocket`, whose connect the engine's other connections use, as `TcpListener::bind` and
+/// `TcpStream::connect` would make them (mio 1.2's `SO_REUSEADDR` and backlog of 128 for the listener), with no
+/// generic address resolution of their own in the library (the forwarder's size pass).
 async fn pair() -> io::Result<(TcpStream, TcpStream)> {
-    let listener = TcpListener::bind((Ipv4Addr::LOCALHOST, 0)).await?;
-    let relayed = TcpStream::connect(listener.local_addr()?).await?;
+    let socket = TcpSocket::new_v4()?;
+    socket.set_reuseaddr(true)?;
+    socket.bind(SocketAddr::from((Ipv4Addr::LOCALHOST, 0)))?;
+    let listener = socket.listen(128)?;
+    let relayed = TcpSocket::new_v4()?.connect(listener.local_addr()?).await?;
     let own = relayed.local_addr()?;
     for _ in 0..4 {
         let (staged, from) = listener.accept().await?;
