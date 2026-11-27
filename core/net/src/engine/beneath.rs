@@ -1318,7 +1318,8 @@ pub(super) mod tests {
 
     /// C1, M1 and decision 2: no name reaches a proxy that refuses addresses for a tool's flow (handed, or the
     /// chain's with the log switch on), a chained app's, a tunnelled app's local flow, an app Android did not name,
-    /// a name tracker blocking refuses, an address of two names, or a name whose answer carried ECH.
+    /// a name tracker blocking refuses, an address of two names, or a name whose answer carried ECH, its mark still
+    /// held or pushed out of its table.
     #[tokio::test(flavor = "current_thread")]
     #[allow(clippy::too_many_lines)]
     async fn no_name_reaches_the_proxy_where_the_flows_name_is_not_its_own_to_give()
@@ -1330,7 +1331,7 @@ pub(super) mod tests {
                 None,
             );
         };
-        let cases: [Case; 8] = [
+        let cases: [Case; 9] = [
             (
                 "a handed tool",
                 |s| {
@@ -1415,6 +1416,18 @@ pub(super) mod tests {
                 "ECH",
                 |s| {
                     lock(&s.names).insert_hidden("site.example", None, 300, Instant::now());
+                },
+                Some(UID),
+            ),
+            (
+                "ECH, its mark pushed out by as many ECH names as the table holds (S2's review, major 3)",
+                |s| {
+                    let mut table = lock(&s.names);
+                    let now = Instant::now();
+                    table.insert_hidden("site.example", None, 300, now);
+                    for i in 0..crate::names::PUBLIC_CAPACITY {
+                        table.insert_hidden(&format!("e{i}.example"), None, 300, now);
+                    }
                 },
                 Some(UID),
             ),

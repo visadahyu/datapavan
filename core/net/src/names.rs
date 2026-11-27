@@ -41,7 +41,10 @@
 //!
 //! Beside them, scoped and bounded as the public names are, the names whose own answers carried an ECH configuration
 //! (the proxy record's unit S2, the maintainer's decision 2 of 2026-11-26): the engine never hands such a name to the
-//! network's proxy, so that the proxy learns no name ECH would hide. And [`Names::sole`], an address's one name in
+//! network's proxy, so that the proxy learns no name ECH would hide. That guard fails closed (S2's review, major 3):
+//! once its table had to push out an entry still live, every name reads as hidden until that entry's own time would
+//! have ended, the latest of those pushed out, so that a day's browsing past [`PUBLIC_CAPACITY`] ECH names never sends
+//! the oldest of them by name. And [`Names::sole`], an address's one name in
 //! Android's resolver's answers while no other name given it is still held (S2's audit, M1): the only name the engine
 //! may send that proxy for a flow, never the last of several apps' lookups of a shared address.
 
@@ -97,19 +100,23 @@ impl<K, V> Default for Fifo<K, V> {
     }
 }
 
+/// What a table does with each value it pushes out to keep its bound: nothing, or for the hidden names, the latest time
+/// one of them would have lived.
+type Pushed<'a, V> = &'a mut dyn FnMut(V);
+
 impl<K: Hash + Eq + Clone, V> Fifo<K, V> {
-    /// Keeps `value` for `key`, and at most `cap` entries, the oldest going first; the value it replaces.
-    fn insert(&mut self, key: K, value: V, cap: usize) -> Option<V> {
-        let old = self.entries.insert(key.clone(), value);
-        if old.is_none() {
+    /// Keeps `value` for `key`, and at most `cap` entries, the oldest going first, each to `pushed`.
+    fn insert(&mut self, key: K, value: V, cap: usize, pushed: Pushed<'_, V>) {
+        if self.entries.insert(key.clone(), value).is_none() {
             self.order.push_back(key);
         }
         while self.order.len() > cap {
-            if let Some(oldest) = self.order.pop_front() {
-                self.entries.remove(&oldest);
+            if let Some(oldest) = self.order.pop_front()
+                && let Some(value) = self.entries.remove(&oldest)
+            {
+                pushed(value);
             }
         }
-        old
     }
 }
 
@@ -135,11 +142,19 @@ impl<K: Hash + Eq + Clone, V> Scoped<K, V> {
         }
     }
 
-    /// Keeps `value` for `key` in `scope`'s table, made from the value it replaces by `merge`.
-    fn insert(&mut self, scope: Scope, key: K, value: V, merge: impl FnOnce(V, Option<&V>) -> V) {
+    /// Keeps `value` for `key` in `scope`'s table, made from the value it replaces by `merge`; each value pushed out to
+    /// keep the bounds, with an app's whole table, to `pushed`.
+    fn insert(
+        &mut self,
+        scope: Scope,
+        key: K,
+        value: V,
+        merge: impl FnOnce(V, Option<&V>) -> V,
+        pushed: Pushed<'_, V>,
+    ) {
         let Some(uid) = scope else {
             let value = merge(value, self.shared.entries.get(&key));
-            self.shared.insert(key, value, self.caps.0);
+            self.shared.insert(key, value, self.caps.0, pushed);
             return;
         };
         // A table for one more app than may have one: the app written to the longest ago loses its own.
@@ -150,13 +165,14 @@ impl<K: Hash + Eq + Clone, V> Scoped<K, V> {
                 .iter()
                 .min_by_key(|(_, (_, written))| *written)
                 .map(|(uid, _)| *uid)
+            && let Some((table, _)) = self.own.remove(&oldest)
         {
-            self.own.remove(&oldest);
+            table.entries.into_values().for_each(&mut *pushed);
         }
         self.writes += 1;
         let (table, written) = self.own.entry(uid).or_insert_with(|| (Fifo::default(), 0));
         let value = merge(value, table.entries.get(&key));
-        table.insert(key, value, self.caps.1);
+        table.insert(key, value, self.caps.1, pushed);
         *written = self.writes;
     }
 
@@ -194,10 +210,10 @@ impl<K: Hash + Eq + Clone, V> Scoped<K, V> {
 pub struct Names {
     addresses: Scoped<IpAddr, Given>,
     public: Scoped<String, Instant>,
-    /// The names whose answers carried an ECH configuration, until when, scoped as the public names. Behind a pointer
-    /// of its own (S2): inline, its 152 bytes moved the engine's state that follows the names past the reach of an
-    /// arm64 `add` on the packet path.
-    hidden: Box<Scoped<String, Instant>>,
+    /// The names whose answers carried an ECH configuration, until when, scoped as the public names, and when the
+    /// guard that fails closed ends. Behind a pointer of its own (S2): inline, its 152 bytes moved the engine's state
+    /// that follows the names past the reach of an arm64 `add` on the packet path.
+    hidden: Box<Hidden>,
     /// The key of the hashes of the names an address was given before its last, random for each table.
     hasher: RandomState,
 }
@@ -207,8 +223,28 @@ impl Default for Names {
         Self {
             addresses: Scoped::new((CAPACITY, OWN_CAPACITY)),
             public: Scoped::new((PUBLIC_CAPACITY, OWN_PUBLIC_CAPACITY)),
-            hidden: Box::new(Scoped::new((PUBLIC_CAPACITY, OWN_PUBLIC_CAPACITY))),
+            hidden: Box::new(Hidden {
+                table: Scoped::new((PUBLIC_CAPACITY, OWN_PUBLIC_CAPACITY)),
+                closed: None,
+            }),
             hasher: crate::keys(),
+        }
+    }
+}
+
+/// The names whose answers carried an ECH configuration (S2, decision 2), and the latest time one of them pushed out
+/// while still live would have lived: until then, every name reads as one of them (S2's review, major 3).
+#[derive(Debug)]
+struct Hidden {
+    table: Scoped<String, Instant>,
+    closed: Option<Instant>,
+}
+
+impl Hidden {
+    /// Every name reads as hidden until `until`, if that is later than `now` and than the time set before.
+    fn close_until(&mut self, until: Instant, now: Instant) {
+        if until > now && self.closed.is_none_or(|closed| closed < until) {
+            self.closed = Some(until);
         }
     }
 }
@@ -231,17 +267,17 @@ fn latest_each(earlier: &mut Vec<(u64, Instant)>) {
     earlier.reverse();
 }
 
-/// Keeps `name` in `table` for the flows of `scope`, as long as an address: one function for the public names and the
-/// hidden ones, so that one copy of the table's code serves both.
+/// Keeps `name` in `table` for the flows of `scope`, as long as an address, each time it pushes out to `pushed`: one
+/// function for the public names and the hidden ones, so that one copy of the table's code serves both.
 fn keep_until(
     table: &mut Scoped<String, Instant>,
-    name: &str,
-    scope: Scope,
+    (name, scope): (&str, Scope),
     ttl: u32,
     now: Instant,
+    pushed: Pushed<'_, Instant>,
 ) {
     let keep = Duration::from_secs(u64::from(ttl)).clamp(MIN_KEEP, MAX_KEEP);
-    table.insert(scope, name.to_owned(), now + keep, |until, _| until);
+    table.insert(scope, name.to_owned(), now + keep, |until, _| until, pushed);
 }
 
 /// A host name as names compare: in lower case, without a trailing dot.
@@ -275,8 +311,11 @@ impl Names {
             earlier: Vec::new(),
         };
         let hasher = &self.hasher;
-        self.addresses
-            .insert(scope, address, given, |mut given, old| {
+        self.addresses.insert(
+            scope,
+            address,
+            given,
+            |mut given, old| {
                 if let Some(old) = old {
                     let mut earlier: Vec<(u64, Instant)> = old
                         .earlier
@@ -293,7 +332,9 @@ impl Names {
                     given.earlier = earlier;
                 }
                 given
-            });
+            },
+            &mut drop,
+        );
     }
 
     /// Whether an answer still kept for the flows of the app with `uid`, from its own resolver or from
@@ -314,21 +355,36 @@ impl Names {
     /// Remembers that a DNS answer gave an ECH configuration with the public name `name`, for the flows
     /// of `scope`.
     pub fn insert_public(&mut self, name: &str, scope: Scope, ttl: u32, now: Instant) {
-        keep_until(&mut self.public, name, scope, ttl, now);
+        keep_until(&mut self.public, (name, scope), ttl, now, &mut drop);
     }
 
-    /// Remembers that a DNS answer for `name` carried an ECH configuration, for the flows of `scope`.
+    /// Remembers that a DNS answer for `name` carried an ECH configuration, for the flows of `scope`. An entry its table
+    /// pushes out while still live closes the guard until that entry's time ([`Names::is_hidden`]).
     pub fn insert_hidden(&mut self, name: &str, scope: Scope, ttl: u32, now: Instant) {
-        keep_until(&mut self.hidden, &compared(name), scope, ttl, now);
+        let mut latest = None;
+        keep_until(
+            &mut self.hidden.table,
+            (&compared(name), scope),
+            ttl,
+            now,
+            &mut |until| latest = latest.max(Some(until)),
+        );
+        if let Some(until) = latest {
+            self.hidden.close_until(until, now);
+        }
     }
 
     /// Whether an answer for `name` still kept for the flows of the app with `uid`, from its own resolver or from
-    /// Android's, carried an ECH configuration.
+    /// Android's, carried an ECH configuration; and every name while the guard is closed, after its table pushed out an
+    /// entry still live (the module's comment).
     #[must_use]
     pub fn is_hidden(&self, name: &str, uid: Option<u32>, now: Instant) -> bool {
-        self.hidden
-            .for_app(&compared(name), uid)
-            .any(|until| *until > now)
+        self.hidden.closed.is_some_and(|until| until > now)
+            || self
+                .hidden
+                .table
+                .for_app(&compared(name), uid)
+                .any(|until| *until > now)
     }
 
     /// The one name Android's resolver's answers still give `address`, if no other name given it before is still
@@ -382,14 +438,27 @@ impl Names {
     pub fn forget_expired(&mut self, now: Instant) {
         self.addresses.forget(|given| given.until > now);
         self.public.forget(|until| *until > now);
-        self.hidden.forget(|until| *until > now);
+        self.hidden.table.forget(|until| *until > now);
     }
 
-    /// Forgets everything, as when the user wipes the log.
+    /// Forgets everything, as when the user wipes the log: the hidden names' guard closed until the last of them still
+    /// live would have ended, as when its table pushes one out.
     pub fn clear(&mut self) {
         self.addresses.clear();
         self.public.clear();
-        self.hidden.clear();
+        let now = Instant::now();
+        let table = &self.hidden.table;
+        let latest = table
+            .shared
+            .entries
+            .values()
+            .chain(table.own.values().flat_map(|(own, _)| own.entries.values()))
+            .max()
+            .copied();
+        self.hidden.table.clear();
+        if let Some(until) = latest {
+            self.hidden.close_until(until, now);
+        }
     }
 
     /// How many addresses are kept, of every scope.
@@ -548,13 +617,62 @@ mod tests {
             !names.is_public("site.example", None, now),
             "not a public name"
         );
-        assert!(!names.is_hidden(
-            "site.example",
-            None,
-            now + MIN_KEEP + Duration::from_secs(1)
-        ));
+        let after = now + MIN_KEEP + Duration::from_secs(1);
+        assert!(!names.is_hidden("site.example", None, after));
+        // A wipe forgets the names, and closes the guard until the last of them still live would have ended.
         names.clear();
-        assert!(!names.is_hidden("site.example", None, now));
+        assert!(names.is_hidden("other.example", None, now), "closed");
+        assert!(!names.is_hidden("site.example", None, after));
+    }
+
+    /// S2's review, major 3: the guard fails closed. Past [`PUBLIC_CAPACITY`] ECH names, the oldest, still live, is
+    /// pushed out, and every name then reads as hidden until it would have ended, though the address keeps its sole
+    /// name; an entry pushed out once ended closes nothing, and an app's own table, pushed out with its app, closes the
+    /// guard too.
+    #[test]
+    fn the_guard_on_hidden_names_fails_closed_once_it_pushes_a_live_one_out() {
+        let mut names = Names::default();
+        let now = Instant::now();
+        let a = IpAddr::V4(Ipv4Addr::new(198, 51, 100, 7));
+        names.insert(a, None, "site.example", 300, (now, BOOT));
+        names.insert_hidden("site.example", None, 300, now);
+        for i in 0..PUBLIC_CAPACITY - 1 {
+            names.insert_hidden(&format!("e{i}.example"), None, 300, now);
+        }
+        names.insert_hidden("site.example", None, 300, now);
+        assert!(names.hidden.closed.is_none(), "full, nothing pushed out");
+        let later = now + Duration::from_secs(60);
+        names.insert_hidden("one-more.example", None, 7_200, later);
+        assert_eq!(names.sole(a, later), Some("site.example"));
+        assert!(names.is_hidden("site.example", Some(10_123), later));
+        assert!(
+            names.is_hidden("never-asked.example", None, later),
+            "every name"
+        );
+        // Closed until the pushed-out entry's own end, an hour after it came.
+        let ended = now + MIN_KEEP + Duration::from_secs(1);
+        assert!(!names.is_hidden("never-asked.example", None, ended));
+        assert!(names.is_hidden("one-more.example", None, ended));
+        // Past the bound once the oldest have ended: nothing closes.
+        let mut fresh = Names::default();
+        for i in 0..PUBLIC_CAPACITY {
+            fresh.insert_hidden(&format!("e{i}.example"), None, 60, now);
+        }
+        fresh.insert_hidden("new.example", None, 60, ended);
+        assert!(!fresh.is_hidden("e0.example", None, ended));
+        assert!(fresh.hidden.closed.is_none());
+        // An app's own table, pushed out by the app past OWN_SCOPES, closes the guard as well.
+        let mut own = Names::default();
+        for app in 0..=u32::try_from(OWN_SCOPES).unwrap_or(0) {
+            own.insert_hidden("mine.example", Some(10_100 + app), 300, now);
+        }
+        assert!(own.is_hidden("other.example", Some(10_100), now));
+        // And an app's own table past its bound.
+        let mut bound = Names::default();
+        for i in 0..=OWN_PUBLIC_CAPACITY {
+            bound.insert_hidden(&format!("o{i}.example"), Some(10_123), 300, now);
+        }
+        assert!(bound.is_hidden("other.example", Some(10_456), now));
     }
 
     /// Review 2 of W5's first part: one app's own resolver can push out only its own names, never
