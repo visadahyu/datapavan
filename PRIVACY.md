@@ -160,7 +160,16 @@ to connect to the address and port the app asked for (an HTTP `CONNECT`), with n
 names Datapavan or the app, and never with a password. Only once the proxy refuses an address, without asking for a
 password, does Datapavan ask it by a name, and only by the name Datapavan's resolver gave that app for that address,
 never one whose DNS answer carried Encrypted Client Hello (ECH), which is meant to keep the name hidden; once that
-works, it asks that proxy by name first. The proxy then sees where those apps connect, the names of most sites they
+works, it asks that proxy by name first. Many proxies refuse that request for every port but 443 (HTTPS). Where the
+proxy refused it for a port, and only then, Datapavan passes an app's plain HTTP requests on that port to the proxy in
+the form proxies take, with the site's address written into each request's first line, as Android's own HTTP clients
+send them through a proxy without Datapavan; nothing else the app wrote changes but a body's chunked coding, written
+in lower case. To do so it reads each request's first line and fields in memory and keeps nothing of them: the
+connection log, if you keep one, records the connection under the site's name, never its path. It does this only for
+a request that names a site Datapavan's resolver gave that app for that address, or names none, never for one that
+carries a password for the proxy or opens a WebSocket, and never for a site tracker blocking stops; the later requests
+of that connection must name the same site. It remembers, for that proxy, the ports it refused, so that later
+connections there go this way at once. The proxy then sees where those apps connect, the names of most sites they
 open and what they send unencrypted, as a network would. It never gets an app's UDP, nothing of an app you send
 through your circumvention tool, nothing that goes through a WireGuard configuration, no connection to an address on
 the network you are on itself (such as your router or printer), nothing to an address its settings exclude, and

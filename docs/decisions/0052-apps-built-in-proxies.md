@@ -527,6 +527,66 @@ chaining is, and must follow the same switch.
       a network that allows both, the engine went directly and the proxy saw nothing of the fixture unless the switch
       was on; a `407`, a refusal by address followed by the flow's own name, an exclusion, blocking and a chained app
       each did as above.
+12. **Plain HTTP where the network's proxy refuses `CONNECT` to its port: the forwarder** (the proxy record's
+    forwarder, 2026-11-28, after its plan's audit and the maintainer's decisions of 2026-11-27, «بله، تایید», "yes,
+    approved", on the plan, and «بله، اول CONNECT», "yes, CONNECT first", on the audit's M1). squid's shipped
+    configuration refuses a `CONNECT` to every port but 443 (`http_access deny CONNECT !SSL_ports`, measured in the
+    proxy lab), so under decision 11 an app's plain HTTP behind such a proxy got nothing.
+    - **`CONNECT` first.** Every flow through the network's proxy goes as decision 11 says. Only where the proxy refuses
+      the `CONNECT` (a `4xx` other than `407`, by address and then by the flow's own name) is a flow that decision 11
+      may name to the proxy rescued (an app Android named, no circumvention tool, its route direct): its SYN is
+      answered once a connection of the forwarder's own reached the proxy, so that a proxy gone hands the flow back to
+      decision 11's tail; its first request is awaited with no cut but the flow's connection time (the audit's M2:
+      `HttpURLConnection`, Chromium and WebView write late); and it goes to the proxy in absolute form (RFC 9112,
+      3.2.2), as Android's HTTP clients send it to a proxy without the VPN. The refusal is kept per proxy and port (at
+      most 16 ports), so that later flows to that port go to the forwarder at once; such a flow whose first bytes are
+      not a request it can forward goes by `CONNECT` after all. Where the proxy carries `CONNECT` to the port, plain
+      HTTP is tunnelled as before, and the proxy sees only the destination.
+    - **The rewrite** (`core/net/src/forward.rs`, pure): only the request target changes (`GET /p HTTP/1.1` becomes
+      `GET http://<Host>/p HTTP/1.1`, the `Host` value copied; `OPTIONS *` becomes `OPTIONS http://<Host>`, RFC 9112,
+      3.2.4; an HTTP/1.0 request with no `Host` takes the destination's address), and a `Transfer-Encoding` read as
+      `chunked` in another case or with white space is written `chunked`, since tinyproxy 1.11.2 matches it in lower
+      case alone and otherwise sends no body (measured). Nothing is added: no `Via`, no `X-Forwarded-For`. The reader
+      is strict, so that two parsers cannot disagree on where a request ends: CRLF only, one `Host`, one
+      `Content-Length` or one `chunked` coding, never both, chunk sizes with no extension, no trailer (tinyproxy knows
+      none, and a proxy that does not could read one as the next request), field names compared exactly. Refused:
+      `Upgrade` (a WebSocket goes by `CONNECT`, RFC 6455, 4.1), `Proxy-Authorization` (the app's credential is never
+      the network's proxy's), and a `Connection` field that names `Host`, `Content-Length` or `Transfer-Encoding`.
+      `Expect` goes on: squid 6.13 and tinyproxy 1.11.2 each refused early (`403`, `417`, `500`) an `Expect` request
+      whose body held a whole request, and neither read that request (the audit's m6). Every request on a kept-alive
+      connection is framed and rewritten, and must name the first one's `Host`; the proxy's answers and its close pass
+      through unread (tinyproxy answers one request per connection).
+    - **The name** (the audit's M3): the `Host` must be a name Datapavan's own resolvers gave the flow's address, and
+      the flow is then named by it; tracker blocking's verdict is read for it again, and a blocked `Host` is reset and
+      recorded blocked; an excluded `Host` goes directly where the direct way had not failed and the user did not
+      choose the proxy (m16), else it is reset. A first request that cannot be forwarded goes by `CONNECT` where one
+      may still be tried, else it is reset; a later one is reset after the requests before it.
+    - **A stage behind the relay** (the audit's M4, its option a; `core/net/src/engine/forwarding.rs`): the relay's
+      upstream is one end of a loopback TCP pair, and the forwarder's task holds the other end and the connection to
+      the proxy, so the relay, `accept`'s task and the packet loop are decision 11's, and the sniff, the gate and the
+      byte counts see the app's own bytes. Two descriptors and a copy per byte more, for plain HTTP through a refusing
+      proxy only. Every buffer that holds the app's bytes is `Zeroizing` and grows only by replacement (m3).
+    - **The record:** no format change: route 3 in the log's version 8, the flow under its first `Host`, never a path
+      or a query (an end-to-end row of the network lab checks the log, the kept flows and the live view's snapshot).
+      Five debug-only counters follow the 81 (forwarded, by `CONNECT` after all, reset, a first byte later than
+      250 ms, sent at once by a refusal kept), written as `-` in a release's dump.
+    - **Limits:** a server-first protocol on a port whose refusal is kept waits for a request that never comes and is
+      reset at the flow's connection time, though `CONNECT` there might have worked for another name than the one the
+      proxy refused; through both lab proxies `OPTIONS *` reaches the origin as `OPTIONS /`; a `Host` port with leading
+      zeros (`:080`) is refused, though both proxies read it as 80; a WebSocket over `ws://` behind such a proxy fails,
+      as without the VPN.
+    - **Checked** by 131 shared vectors (`core/net/testdata/forward-requests.tsv`, read by forward.rs's tests whole,
+      cut at every byte and byte by byte, and by the proxy lab, which holds what squid and tinyproxy sent the origin
+      for each to two measured columns), a fuzz target compared with httparse, 25 hand mutants each killed, the
+      network lab behind a proxy that behaves as squid's default and one that tunnels every port (95 rows: late
+      writers, two names on one address, a 60 KiB head, a WebSocket after a kept-alive request), the proxy lab (squid
+      6.13 and tinyproxy 1.11.2 as Debian ships them, 139 rows), and the emulator's `proxies` shard, whose row of
+      decision 11 now ends with a plain request behind a proxy that refuses `CONNECT` but to 443.
+    - **Measured** on the emulator (Android 15, `scripts/measure-proxy-settings.sh` pass 11, the recorder refusing
+      `CONNECT` but to 443): `http://example.com/fwd` answered in 407 ms after the `CONNECT` by address and by name
+      were refused, the request reaching the proxy in absolute form with the app's own fields alone
+      (`User-Agent,Host,Connection,Accept-Encoding`); the next request to port 80 in 203 ms with no `CONNECT`; port
+      8080 likewise; a WebView's page; HTTPS by `CONNECT` as before; no first byte later than 250 ms.
 
 ## Consequences
 
@@ -737,10 +797,8 @@ chaining is, and must follow the same switch.
       that refuses a `CONNECT` to port 80 refuses it: squid's documented default (`http_access deny CONNECT
       !SSL_ports`, with 443 alone) does; tinyproxy 1.11.2 does only as configured (with `ConnectPort 443` it answers
       `403 Access violation`, and its Debian configuration, those lines commented out, carries it). Other ports a proxy
-      refuses for `CONNECT` are refused likewise. Forwarding a plain request in absolute form (RFC 9112, 3.2.2), as
-      Android's HTTP clients send it to the proxy without the VPN, is the forwarder: the maintainer approved it on
-      2026-11-27 («بله، تایید», "yes, approved") as a condition of release 0.2.0, with a plan and an audit of its own,
-      after a further pass on the cold paths for room. It is not part of unit S2.
+      refuses for `CONNECT` were refused likewise. Decision 12, the forwarder, now sends such a flow's plain HTTP to
+      the proxy in absolute form (RFC 9112, 3.2.2), as Android's HTTP clients send it to the proxy without the VPN.
     - *UDP* never goes through the proxy. On a network that requires it, an app's UDP gets no answer, or an ICMP error
       where the network rejects, as without Datapavan; browsers fall back from QUIC to TCP, which goes through the
       proxy, and calls over UDP fail unless their service falls back to TCP. A WireGuard tunnel's UDP fails there too.
