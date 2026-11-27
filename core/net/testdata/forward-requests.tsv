@@ -1,16 +1,21 @@
 # The forwarder's vectors (the proxy record's forwarder, F-PLAN, section 9; read by core/net/src/forward/tests.rs and
 # by the proxy lab's check.py). Written by hand from RFC 9112 and the clients' documented forms, never captured.
-# Columns, tab-separated: the way (forward: the bytes to the proxy are the app's, each request line in absolute form;
-# connect: a first head not forwarded, by CONNECT where one may still be tried, else a reset; reset: a later head or
-# a body's framing refused, the connection reset after what came before), why (the reason, as forward::Why names it,
-# or -), the destination the app connected to, the names Datapavan's own resolvers gave it (comma-separated, lower
-# case), the app's bytes, and the bytes to the proxy. Bytes escape \r, \n, \t, \\ and \xNN.
+# Columns, tab-separated: the way (forward: the bytes to the proxy are the app's, each request line in absolute form
+# and each Transfer-Encoding value written chunked; connect: a first head not forwarded, or a first request whose
+# trailer came with its head, by CONNECT where one may still be tried, else a reset; reset: a later head or a body's
+# framing refused, or a trailer read after its head went, the connection reset after what came before), why (the
+# reason, as forward::Why names it, or -), the destination the app connected to, the names Datapavan's own resolvers
+# gave it (comma-separated, lower case), the app's bytes, and the bytes to the proxy. Bytes escape \r, \n, \t, \\
+# and \xNN.
 way	why	destination	names	app	proxy
 forward	-	198.51.100.9:80	example.test	GET /path?query HTTP/1.1\r\nHost: example.test\r\nUser-Agent: okhttp/4.12.0\r\nAccept-Encoding: gzip\r\nConnection: Keep-Alive\r\n\r\n	GET http://example.test/path?query HTTP/1.1\r\nHost: example.test\r\nUser-Agent: okhttp/4.12.0\r\nAccept-Encoding: gzip\r\nConnection: Keep-Alive\r\n\r\n
 forward	-	198.51.100.9:80	example.test	HEAD / HTTP/1.1\r\nHost: example.test\r\n\r\n	HEAD http://example.test/ HTTP/1.1\r\nHost: example.test\r\n\r\n
 forward	-	198.51.100.9:80	example.test	POST /form HTTP/1.1\r\nHost: example.test\r\nContent-Type: application/x-www-form-urlencoded\r\nContent-Length: 7\r\n\r\na=1&b=2	POST http://example.test/form HTTP/1.1\r\nHost: example.test\r\nContent-Type: application/x-www-form-urlencoded\r\nContent-Length: 7\r\n\r\na=1&b=2
-forward	-	198.51.100.9:80	example.test	PUT /up HTTP/1.1\r\nHost: example.test\r\nTransfer-Encoding: chunked\r\n\r\n5\r\nhello\r\nA\r\n0123456789\r\n0\r\nChecksum: 1f\r\n\r\n	PUT http://example.test/up HTTP/1.1\r\nHost: example.test\r\nTransfer-Encoding: chunked\r\n\r\n5\r\nhello\r\nA\r\n0123456789\r\n0\r\nChecksum: 1f\r\n\r\n
-forward	-	198.51.100.9:80	example.test	PATCH /p HTTP/1.1\r\nHost: example.test\r\nTransfer-Encoding:  Chunked \r\n\r\na\r\n0123456789\r\n0\r\n\r\n	PATCH http://example.test/p HTTP/1.1\r\nHost: example.test\r\nTransfer-Encoding:  Chunked \r\n\r\na\r\n0123456789\r\n0\r\n\r\n
+connect	Trailers	198.51.100.9:80	example.test	PUT /up HTTP/1.1\r\nHost: example.test\r\nTransfer-Encoding: chunked\r\n\r\n5\r\nhello\r\nA\r\n0123456789\r\n0\r\nChecksum: 1f\r\n\r\n	
+forward	-	198.51.100.9:80	example.test	PATCH /p HTTP/1.1\r\nHost: example.test\r\nTransfer-Encoding:  Chunked \r\n\r\na\r\n0123456789\r\n0\r\n\r\n	PATCH http://example.test/p HTTP/1.1\r\nHost: example.test\r\nTransfer-Encoding: chunked\r\n\r\na\r\n0123456789\r\n0\r\n\r\n
+forward	-	198.51.100.9:80	example.test	PUT /t HTTP/1.1\r\nHost: example.test\r\nTransfer-Encoding:chunked\r\n\r\n0\r\n\r\n	PUT http://example.test/t HTTP/1.1\r\nHost: example.test\r\nTransfer-Encoding: chunked\r\n\r\n0\r\n\r\n
+forward	-	198.51.100.9:80	example.test	PUT /t HTTP/1.1\r\nHost: example.test\r\ntransfer-encoding:\tCHUNKED\t\r\nX-B: 2\r\n\r\n000\r\n\r\n	PUT http://example.test/t HTTP/1.1\r\nHost: example.test\r\ntransfer-encoding: chunked\r\nX-B: 2\r\n\r\n000\r\n\r\n
+forward	-	198.51.100.9:80	example.test	GET /1 HTTP/1.1\r\nHost: example.test\r\n\r\nPOST /2 HTTP/1.1\r\nHost: example.test\r\nTransfer-Encoding: cHuNkEd  \r\n\r\n2\r\nhi\r\n0\r\n\r\n	GET http://example.test/1 HTTP/1.1\r\nHost: example.test\r\n\r\nPOST http://example.test/2 HTTP/1.1\r\nHost: example.test\r\nTransfer-Encoding: chunked\r\n\r\n2\r\nhi\r\n0\r\n\r\n
 forward	-	198.51.100.9:80	example.test	DELETE /item/7 HTTP/1.1\r\nHost: example.test\r\nContent-Length: 0\r\n\r\n	DELETE http://example.test/item/7 HTTP/1.1\r\nHost: example.test\r\nContent-Length: 0\r\n\r\n
 forward	-	198.51.100.9:80	example.test	OPTIONS /x HTTP/1.1\r\nHost: example.test\r\n\r\n	OPTIONS http://example.test/x HTTP/1.1\r\nHost: example.test\r\n\r\n
 forward	-	198.51.100.9:80	example.test	OPTIONS * HTTP/1.1\r\nHost: example.test\r\n\r\n	OPTIONS http://example.test HTTP/1.1\r\nHost: example.test\r\n\r\n
@@ -121,7 +126,9 @@ reset	Chunk	198.51.100.9:80	example.test	POST /c HTTP/1.1\r\nHost: example.test\
 reset	Chunk	198.51.100.9:80	example.test	POST /c HTTP/1.1\r\nHost: example.test\r\nTransfer-Encoding: chunked\r\n\r\n5\nhello\r\n0\r\n\r\n	POST http://example.test/c HTTP/1.1\r\nHost: example.test\r\nTransfer-Encoding: chunked\r\n\r\n
 reset	Chunk	198.51.100.9:80	example.test	POST /c HTTP/1.1\r\nHost: example.test\r\nTransfer-Encoding: chunked\r\n\r\n5\r\nhelloX\r\n0\r\n\r\n	POST http://example.test/c HTTP/1.1\r\nHost: example.test\r\nTransfer-Encoding: chunked\r\n\r\n5\r\nhello
 reset	Chunk	198.51.100.9:80	example.test	POST /c HTTP/1.1\r\nHost: example.test\r\nTransfer-Encoding: chunked\r\n\r\n\r\n	POST http://example.test/c HTTP/1.1\r\nHost: example.test\r\nTransfer-Encoding: chunked\r\n\r\n
-reset	Meaning	198.51.100.9:80	example.test	POST /c HTTP/1.1\r\nHost: example.test\r\nTransfer-Encoding: chunked\r\n\r\n0\r\nContent-Length: 5\r\n\r\n	POST http://example.test/c HTTP/1.1\r\nHost: example.test\r\nTransfer-Encoding: chunked\r\n\r\n0\r\n
-reset	Field	198.51.100.9:80	example.test	POST /c HTTP/1.1\r\nHost: example.test\r\nTransfer-Encoding: chunked\r\n\r\n0\r\nno colon\r\n\r\n	POST http://example.test/c HTTP/1.1\r\nHost: example.test\r\nTransfer-Encoding: chunked\r\n\r\n0\r\n
+connect	Trailers	198.51.100.9:80	example.test	POST /c HTTP/1.1\r\nHost: example.test\r\nTransfer-Encoding: chunked\r\n\r\n0\r\nContent-Length: 5\r\n\r\n	
+connect	Trailers	198.51.100.9:80	example.test	POST /c HTTP/1.1\r\nHost: example.test\r\nTransfer-Encoding: chunked\r\n\r\n0\r\nno colon\r\n\r\n	
+reset	Trailers	198.51.100.9:80	example.test	GET /1 HTTP/1.1\r\nHost: example.test\r\n\r\nPUT /2 HTTP/1.1\r\nHost: example.test\r\nTransfer-Encoding: chunked\r\n\r\n3\r\nxyz\r\n0\r\nChecksum: 1f\r\n\r\nGET /3 HTTP/1.1\r\nHost: example.test\r\n\r\n	GET http://example.test/1 HTTP/1.1\r\nHost: example.test\r\n\r\nPUT http://example.test/2 HTTP/1.1\r\nHost: example.test\r\nTransfer-Encoding: chunked\r\n\r\n3\r\nxyz\r\n
+reset	Chunk	198.51.100.9:80	example.test	POST /c HTTP/1.1\r\nHost: example.test\r\nTransfer-Encoding: chunked\r\n\r\n0\r\n\rX	POST http://example.test/c HTTP/1.1\r\nHost: example.test\r\nTransfer-Encoding: chunked\r\n\r\n
 connect	Target	198.51.100.9:80	example.test	GET /p@evil.example/ HTTP/1.1\r\nHost: example.test\r\n\r\n	
 connect	Target	198.51.100.9:80	example.test	GET /p\\@evil.example/ HTTP/1.1\r\nHost: example.test\r\n\r\n	

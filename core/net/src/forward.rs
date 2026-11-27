@@ -3,17 +3,22 @@
 //! request's head, the authority, the rewrite of the request line, and the framer of every request on a kept-alive
 //! connection. The engine's stage that uses it is `engine::forwarding`.
 //!
-//! **Only the request target changes.** `GET /p?q HTTP/1.1` becomes `GET http://<Host>/p?q HTTP/1.1`, the `Host` value
-//! copied byte for byte (its optional white space trimmed); `OPTIONS *` becomes `OPTIONS http://<Host>` (RFC 9112,
-//! 3.2.4); an HTTP/1.0 head without `Host` takes the destination address written out. Every other byte, the version,
-//! the field lines and the bodies, goes on as the app wrote it: no `Via`, no `X-Forwarded-For`, nothing added.
+//! **Only the request target changes,** and one value. `GET /p?q HTTP/1.1` becomes `GET http://<Host>/p?q HTTP/1.1`,
+//! the `Host` value copied byte for byte (its optional white space trimmed); `OPTIONS *` becomes `OPTIONS http://<Host>`
+//! (RFC 9112, 3.2.4); an HTTP/1.0 head without `Host` takes the destination address written out. The one value:
+//! `Transfer-Encoding`, which this reader takes as `chunked` in any case and with white space around it, is written
+//! `: chunked` after its name as the app wrote it, so that no proxy frames the body otherwise than this reader does
+//! (tinyproxy 1.11.2 matches `chunked` in lower case only and forwards a `Chunked` head with no body, measured; the
+//! audit's m6). Every other byte, the version, the field lines and the bodies, goes on as the app wrote it: no `Via`,
+//! no `X-Forwarded-For`, nothing added.
 //!
 //! **Strict, so that two parsers cannot disagree** about where a request ends (request smuggling): CRLF only, no
 //! `obs-fold`, no white space before a colon, a token for each field name, no control byte but HTAB in a value; one
 //! `Host` (required in 1.1), one `Content-Length` of 1 to 19 digits or one `Transfer-Encoding` that is exactly
 //! `chunked`, never both, never `Transfer-Encoding` in 1.0, no body on `GET` or `HEAD`; chunk sizes of 1 to 16 hex
-//! digits with no extension, each chunk's data followed by CRLF, trailers read as field lines and none of the framing
-//! or meaning fields among them. Refused too, by exact name: `Upgrade` (a WebSocket goes by `CONNECT`, RFC 6455, 4.1),
+//! digits with no extension, each chunk's data followed by CRLF, and no trailer: a proxy that knows none reads its
+//! bytes as the next request (tinyproxy 1.11.2, measured), so the last chunk's line is held until the CRLF that ends
+//! the body, and a trailer in its place is refused with nothing of that line written. Refused too, by exact name: `Upgrade` (a WebSocket goes by `CONNECT`, RFC 6455, 4.1),
 //! `Proxy-Authorization` (the app's credential is never handed to the network's proxy), and a `Connection` field that
 //! names `Host`, `Content-Length` or `Transfer-Encoding` (the hop-by-hop abuse). `Upgrade-Insecure-Requests` is another
 //! name and goes on. `Expect` goes on too: the proxy lab sent squid 6.13 and tinyproxy 1.11.2 a body holding a whole
@@ -64,6 +69,8 @@ pub enum Why {
     Framing,
     /// A chunk size line, or a chunk's end, not as the grammar says.
     Chunk,
+    /// A trailer field after the last chunk: a proxy that knows no trailer reads it as the next request.
+    Trailers,
     /// `Upgrade`, `Proxy-Authorization`, or a `Connection` field naming `Host` or the framing.
     Meaning,
     /// A head past [`MAX_HEAD`].
@@ -162,6 +169,8 @@ struct Fields<'a> {
     lengths: usize,
     length: u64,
     codings: usize,
+    /// Where the `Transfer-Encoding` line goes on past its colon, and where it ends before its CR.
+    coding: (usize, usize),
 }
 
 /// The field names the reader acts on, compared without case.
@@ -203,10 +212,12 @@ fn known(name: &[u8]) -> Option<Name> {
         .map(|&(_, known)| known)
 }
 
-/// Reads the field lines of `section` (each ending in CRLF, the blank line left out) into `fields`; `trailers` refuses
-/// every field that frames, routes or changes the meaning, which has no place in a trailer.
-fn fields<'a>(section: &'a [u8], fields: &mut Fields<'a>, trailers: bool) -> Result<(), Why> {
+/// Reads the field lines of `section` (each ending in CRLF, the blank line left out), which starts at `at` in its head.
+fn fields(section: &[u8], mut at: usize) -> Result<Fields<'_>, Why> {
+    let mut fields = Fields::default();
     for line in section.split(|&b| b == b'\n') {
+        let start = at;
+        at += line.len() + 1;
         let Some(line) = line.strip_suffix(b"\r") else {
             continue;
         };
@@ -222,8 +233,7 @@ fn fields<'a>(section: &'a [u8], fields: &mut Fields<'a>, trailers: bool) -> Res
             return Err(Why::Field);
         }
         let name = known(name);
-        let framing = matches!(name, Some(Name::Host | Name::Length | Name::Coding));
-        if matches!(name, Some(Name::Upgrade | Name::ProxyAuthorization)) || (trailers && framing) {
+        if matches!(name, Some(Name::Upgrade | Name::ProxyAuthorization)) {
             return Err(Why::Meaning);
         }
         match name {
@@ -250,6 +260,7 @@ fn fields<'a>(section: &'a [u8], fields: &mut Fields<'a>, trailers: bool) -> Res
             }
             Some(Name::Coding) => {
                 fields.codings += 1;
+                fields.coding = (start + colon + 1, start + line.len());
                 if !lower_eq(value, b"chunked") {
                     return Err(Why::Framing);
                 }
@@ -257,7 +268,7 @@ fn fields<'a>(section: &'a [u8], fields: &mut Fields<'a>, trailers: bool) -> Res
             _ => {}
         }
     }
-    Ok(())
+    Ok(fields)
 }
 
 /// A head read: where its target is, its `Host` value, its version's minor digit and its framing.
@@ -268,6 +279,8 @@ struct Head<'a> {
     after_target: usize,
     host: Option<&'a [u8]>,
     body: Body,
+    /// Where the `Transfer-Encoding` value of a chunked body is, its white space with it, to be written anew.
+    coding: Option<(usize, usize)>,
 }
 
 /// Reads `head`, a whole head with its blank line and no bare CR or LF ([`head_end`]).
@@ -298,8 +311,7 @@ fn read(head: &[u8]) -> Result<Head<'_>, Why> {
     {
         return Err(Why::Target);
     }
-    let mut found = Fields::default();
-    fields(&head[line_end + 2..head.len() - 2], &mut found, false)?;
+    let found = fields(&head[line_end + 2..head.len() - 2], line_end + 2)?;
     let body = match (found.lengths, found.codings) {
         (0, 0) => Body::None,
         (1, 0) => Body::Length(found.length),
@@ -320,6 +332,7 @@ fn read(head: &[u8]) -> Result<Head<'_>, Why> {
         after_target: method.len() + 1 + target.len(),
         host,
         body,
+        coding: (body == Body::Chunked).then_some(found.coding),
     })
 }
 
@@ -403,16 +416,22 @@ fn authority(host: &[u8], destination: SocketAddr) -> Result<(Option<String>, St
 }
 
 /// The request line of `head`, read as `read` gave it, rewritten into `out` with `authority`: the method, a space,
-/// `http://`, the authority, the target (none for `*`), then every byte after the target as it came.
+/// `http://`, the authority, the target (none for `*`), then every byte after the target as it came, but a chunked
+/// body's `Transfer-Encoding` value, written ` chunked` (one byte more at most).
 fn rewrite(head: &[u8], read: &Head<'_>, authority: &[u8], out: &mut Zeroizing<Vec<u8>>) {
-    reserve(out, head.len() + authority.len() + 8);
+    reserve(out, head.len() + authority.len() + 9);
     out.extend_from_slice(read.method);
     out.extend_from_slice(b" http://");
     out.extend_from_slice(authority);
     if read.target != b"*" {
         out.extend_from_slice(read.target);
     }
-    out.extend_from_slice(&head[read.after_target..]);
+    let (from, to) = read.coding.unwrap_or((head.len(), head.len()));
+    out.extend_from_slice(&head[read.after_target..from]);
+    if read.coding.is_some() {
+        out.extend_from_slice(b" chunked");
+    }
+    out.extend_from_slice(&head[to..]);
 }
 
 /// Where the framer is in the requests after the first head.
@@ -428,8 +447,9 @@ enum State {
     Data(u64),
     /// The CRLF after a chunk's data: how many of its bytes came.
     DataEnd(u8),
-    /// The trailers after the last chunk, held in `held` behind a CRLF of their own.
-    Trailers,
+    /// The CRLF after the last chunk's line, held with that line in `held`: how many of its bytes came. Anything else
+    /// there is a trailer, refused.
+    Last(u8),
 }
 
 /// A forwarded connection's up direction after its first head: each later head checked and rewritten, each body framed
@@ -439,6 +459,8 @@ pub struct Forward {
     host: Option<Box<[u8]>>,
     state: State,
     held: Zeroizing<Vec<u8>>,
+    /// Whether a later head came: the first request is over.
+    later: bool,
 }
 
 /// A first head that may be forwarded: the framer for the rest of the connection, and the name the engine must still
@@ -504,12 +526,19 @@ pub fn first(
             authority,
             state: after(read.body),
             held: Zeroizing::new(Vec::new()),
+            later: false,
         },
         name,
     })
 }
 
 impl Forward {
+    /// Whether the bytes fed so far are all the first request's: no later head came.
+    #[must_use]
+    pub fn first_request(&self) -> bool {
+        !self.later
+    }
+
     /// The app's next bytes `input`, framed: what goes to the proxy written into `out`, a head only once whole and
     /// checked, a body's bytes as they come.
     ///
@@ -518,35 +547,19 @@ impl Forward {
     pub fn feed(&mut self, mut input: &[u8], out: &mut Zeroizing<Vec<u8>>) -> Result<(), Why> {
         while !input.is_empty() {
             match self.state {
-                State::Head | State::Trailers => {
-                    // The trailers are held behind a CRLF of their own, which counts for nothing.
-                    let bound = MAX_HEAD + if self.state == State::Head { 0 } else { 2 };
+                State::Head => {
                     let before = self.held.len();
-                    let room = (bound + 1).saturating_sub(before).min(input.len());
+                    let room = (MAX_HEAD + 1).saturating_sub(before).min(input.len());
                     put(&mut self.held, &input[..room]);
-                    let ended = if self.state == State::Head {
-                        head_end(&self.held, before)?
-                    } else {
-                        section_end(&self.held, before)?
-                    };
+                    let ended = head_end(&self.held, before)?;
                     match ended {
-                        Some(end) if end <= bound => {}
-                        None if self.held.len() <= bound => return Ok(()),
+                        Some(end) if end <= MAX_HEAD => {}
+                        None if self.held.len() <= MAX_HEAD => return Ok(()),
                         _ => return Err(Why::TooLong),
                     }
                     let end = ended.unwrap_or_default();
                     input = &input[end - before..];
-                    if self.state == State::Head {
-                        self.head(end, out)?;
-                    } else {
-                        // The CRLF put before the trailers is the last chunk line's, written already.
-                        let section = &self.held[2..end];
-                        if section.len() > 2 {
-                            fields(&section[..section.len() - 2], &mut Fields::default(), true)?;
-                        }
-                        put(out, section);
-                        self.state = State::Head;
-                    }
+                    self.head(end, out)?;
                     self.held.clear();
                 }
                 State::Length(left) | State::Data(left) => {
@@ -560,6 +573,20 @@ impl Forward {
                         _ if left == 0 => State::DataEnd(0),
                         _ => State::Data(left),
                     };
+                }
+                State::Last(seen) => {
+                    if input[0] != b"\r\n"[usize::from(seen)] {
+                        return Err(if seen == 0 { Why::Trailers } else { Why::Chunk });
+                    }
+                    put(&mut self.held, &input[..1]);
+                    input = &input[1..];
+                    if seen == 0 {
+                        self.state = State::Last(1);
+                    } else {
+                        put(out, &self.held);
+                        self.held.clear();
+                        self.state = State::Head;
+                    }
                 }
                 State::DataEnd(seen) => {
                     let wanted = if seen == 0 { b'\r' } else { b'\n' };
@@ -580,19 +607,20 @@ impl Forward {
                     let (last, len) = (self.held.last().copied(), self.held.len());
                     match (last, b) {
                         (Some(b'\r'), b'\n') => {
-                            put(out, &self.held);
-                            put(out, b"\n");
                             let digits = &self.held[..self.held.len() - 1];
                             let size = digits.iter().fold(0u64, |n, &d| {
                                 n * 16 + u64::from((d as char).to_digit(16).unwrap_or(0))
                             });
-                            self.held.clear();
-                            self.state = if size == 0 {
-                                put(&mut self.held, b"\r\n");
-                                State::Trailers
+                            put(&mut self.held, b"\n");
+                            if size == 0 {
+                                // Held with the CRLF that must follow it, so that a trailer refused leaves the proxy
+                                // no end of the body to read on from.
+                                self.state = State::Last(0);
                             } else {
-                                State::Data(size)
-                            };
+                                put(out, &self.held);
+                                self.held.clear();
+                                self.state = State::Data(size);
+                            }
                         }
                         (Some(b'\r'), _) => return Err(Why::Chunk),
                         (_, b'\r') if len > 0 => put(&mut self.held, b"\r"),
@@ -614,6 +642,7 @@ impl Forward {
         }
         rewrite(head, &read, &self.authority, out);
         self.state = after(read.body);
+        self.later = true;
         Ok(())
     }
 }

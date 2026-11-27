@@ -80,8 +80,13 @@ fn run(
             });
         match checked {
             Ok(mut f) => {
-                if let Err(why) = f.feed(&held[end..], &mut out) {
-                    return (Way::Reset, Some(why), out.to_vec());
+                match f.feed(&held[end..], &mut out) {
+                    // The first request's trailer with its head: the stage sends the flow as a head it may not carry.
+                    Err(Why::Trailers) if f.first_request() => {
+                        return (Way::Connect, Some(Why::Trailers), Vec::new());
+                    }
+                    Err(why) => return (Way::Reset, Some(why), out.to_vec()),
+                    Ok(()) => {}
                 }
                 forward = Some(f);
             }
@@ -154,19 +159,24 @@ fn every_vector_goes_its_way_whole_cut_at_every_byte_and_byte_by_byte() {
             "line {line}: {}",
             String::from_utf8_lossy(&whole.2)
         );
+        // A first request's trailer read after its head went resets the connection, the head and the chunks before
+        // the last one written: the way of every cut that parts them, as of the bytes fed one by one.
+        let bytes: Vec<usize> = (1..app.len()).collect();
+        let one_by_one = run(&app, destination, &names, &bytes);
+        if whole.0 == Way::Connect && whole.1 == Some(Why::Trailers) {
+            assert_eq!(one_by_one.0, Way::Reset, "line {line}");
+            assert_eq!(one_by_one.1, Some(Why::Trailers), "line {line}");
+            assert!(!one_by_one.2.ends_with(b"0\r\n"), "line {line}");
+        } else {
+            assert_eq!(one_by_one, whole, "line {line}, byte by byte");
+        }
         for cut in 0..=app.len() {
-            assert_eq!(
-                run(&app, destination, &names, &[cut]),
-                whole,
-                "line {line}, cut at {cut}"
+            let piece = run(&app, destination, &names, &[cut]);
+            assert!(
+                piece == whole || piece == one_by_one,
+                "line {line}, cut at {cut}: {piece:?}"
             );
         }
-        let bytes: Vec<usize> = (1..app.len()).collect();
-        assert_eq!(
-            run(&app, destination, &names, &bytes),
-            whole,
-            "line {line}, byte by byte"
-        );
     }
 }
 
@@ -187,7 +197,10 @@ fn only_each_request_line_changes() {
             let mut rest = bytes;
             while let Some(line_end) = rest.windows(2).position(|w| w == b"\r\n") {
                 let (line, after) = rest.split_at(line_end + 2);
-                if !line.starts_with(b"GET ")
+                if line.len() > 18 && lower_eq(&line[..18], b"transfer-encoding:") {
+                    kept.extend_from_slice(&line[..17]);
+                    kept.extend_from_slice(b": chunked\r\n");
+                } else if !line.starts_with(b"GET ")
                     && !line.starts_with(b"POST ")
                     && !line.starts_with(b"PUT ")
                     && !line.starts_with(b"HEAD ")
@@ -329,4 +342,50 @@ fn a_buffer_grows_only_by_replacement() {
     let kept = buffer.as_ptr();
     put(&mut buffer, &[8u8; 100]);
     assert_eq!(buffer.as_ptr(), kept, "room enough: no move");
+}
+
+/// A chunked body's trailer is never forwarded (the proxy lab: tinyproxy 1.11.2 knows none and reads it as the next
+/// request): read after its head went, the connection is refused with the head and the chunks before the last one
+/// written, and the last chunk's line held back, so that no proxy reads an end of the body; with its head, the first
+/// feed refuses it before anything is written. The CRLF that ends a body with no trailer passes it whole.
+#[test]
+fn a_trailer_is_refused_and_the_last_chunk_held_back() {
+    let to = SocketAddr::from(([198, 51, 100, 9], 80));
+    let head = b"PUT /t HTTP/1.1\r\nHost: example.test\r\nTransfer-Encoding: chunked\r\n\r\n";
+    let mut out = Zeroizing::new(Vec::new());
+    let Ok(mut first) = first(head, to, &mut out) else {
+        unreachable!("a head the reader takes");
+    };
+    let mut framer = first.forward;
+    assert_eq!(framer.feed(b"3\r\nabc\r\n0\r", &mut out), Ok(()));
+    assert!(
+        out.ends_with(b"3\r\nabc\r\n"),
+        "{:?}",
+        String::from_utf8_lossy(&out)
+    );
+    let written = out.len();
+    assert_eq!(
+        framer.feed(b"\nX-Sum: 1\r\n\r\n", &mut out),
+        Err(Why::Trailers)
+    );
+    assert_eq!(
+        out.len(),
+        written,
+        "nothing of the last chunk or its trailer"
+    );
+
+    out.clear();
+    first = match super::first(head, to, &mut out) {
+        Ok(first) => first,
+        Err(why) => unreachable!("{why:?}"),
+    };
+    framer = first.forward;
+    let head_only = out.len();
+    assert_eq!(framer.feed(b"0\r\n\r", &mut out), Ok(()));
+    assert_eq!(out.len(), head_only, "the last chunk's line held");
+    assert_eq!(
+        framer.feed(b"\nGET / HTTP/1.1\r\nHost: example.test\r\n\r\n", &mut out),
+        Ok(())
+    );
+    assert!(out[head_only..].starts_with(b"0\r\n\r\nGET http://example.test/ HTTP/1.1\r\n"));
 }

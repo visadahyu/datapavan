@@ -27,7 +27,8 @@
 //!
 //! **What is not forwarded:** on a rescued flow, a reset, its outcome the direct way's where that failed, else
 //! `Refused` (no other way could carry it); on a flow sent here by a refusal remembered, S2's `CONNECT`, and a reset only
-//! if that is refused too; a later head the framer refuses, a reset after the requests before it. An excluded `Host`
+//! if that is refused too; the same for a first request whose trailer came with its head; a later head the framer
+//! refuses, or a trailer once the head went, a reset after the requests before it. An excluded `Host`
 //! goes directly where the direct way had not failed and the user did not choose the proxy, as Android goes for an
 //! excluded host (the audit's m16), else it is reset. A blocked `Host` is reset and recorded blocked.
 //!
@@ -183,7 +184,8 @@ enum Way {
     /// To the proxy: the head rewritten, and what followed it fed to the framer, into `out`; and whether the framer
     /// refused that.
     Forward(Forward, Result<(), Why>),
-    /// No head the forwarder may carry, or its name not bound to the flow's address ([`other_way`]).
+    /// No head the forwarder may carry, its name not bound to the flow's address, or a trailer with it
+    /// ([`other_way`]).
     Connect,
     /// Its `Host` excluded: the flow's row, if it has one ([`other_way`]).
     Directly(Option<u64>),
@@ -208,7 +210,11 @@ fn way(
         return Way::Connect;
     };
     let id = shared.tcp_flow_of(rescue.ends.0, destination);
-    if let Some(name) = &first.name {
+    let forward::First {
+        forward: mut framer,
+        name,
+    } = first;
+    if let Some(name) = &name {
         let bound =
             lock(&shared.names).gave(destination.ip().to_canonical(), None, name, Instant::now());
         if !bound {
@@ -225,13 +231,17 @@ fn way(
             Counters::add(&shared.counters.beneath.forward_reset, 1);
             return Way::Reset;
         }
-        if let Some(id) = id {
-            shared.forwarded_name(id, name);
-        }
+    }
+    let fed = framer.feed(&held[end..], out);
+    // The first request's trailer, come with its head: nothing written yet, so the request goes as a head the
+    // forwarder may not carry, by `CONNECT` where it still may (no proxy reads the trailer as a request of its own).
+    if fed == Err(Why::Trailers) && framer.first_request() {
+        return Way::Connect;
+    }
+    if let (Some(id), Some(name)) = (id, &name) {
+        shared.forwarded_name(id, name);
     }
     Counters::add(&shared.counters.beneath.forwarded, 1);
-    let mut framer = first.forward;
-    let fed = framer.feed(&held[end..], out);
     Way::Forward(framer, fed)
 }
 
