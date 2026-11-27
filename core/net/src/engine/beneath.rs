@@ -424,6 +424,18 @@ fn no_route(error: &io::Error) -> bool {
     error.kind() == io::ErrorKind::AddrNotAvailable
 }
 
+/// What a direct try that ended with `result`, or ran out of its share (`None`), leaves a flow: its end, a stream or
+/// the app's own error where the phone has no address of that family ([`no_route`]); or the error the proxy's steps
+/// start from, and whether it ran out.
+fn direct_end<T>(result: Option<io::Result<T>>) -> Result<io::Result<T>, (io::Error, bool)> {
+    match result {
+        Some(Ok(stream)) => Ok(Ok(stream)),
+        Some(Err(error)) if no_route(&error) => Ok(Err(error)),
+        Some(Err(error)) => Err((error, false)),
+        None => Err((io::ErrorKind::TimedOut.into(), true)),
+    }
+}
+
 /// A direct flow's first way to `target` while `beneath` is held: directly first, within `Limits::beneath_direct`,
 /// unless the proxy comes first. Boxed and out of line (the module's comment).
 #[cold]
@@ -449,18 +461,16 @@ pub(super) fn first(
             Start::Probe => Some(Probe(Arc::clone(&beneath))),
             Start::Direct => None,
         };
-        let direct =
-            match tokio::time::timeout(shared.limits.beneath_direct, connect_tcp(shared, target))
-                .await
-            {
-                Ok(Ok(stream)) => {
-                    lock(&beneath.order).direct_opened();
-                    return Tried::Done(Ok(stream));
-                }
-                Ok(Err(error)) if no_route(&error) => return Tried::Done(Err(error)),
-                Ok(Err(error)) => (error, false),
-                Err(_) => (io::ErrorKind::TimedOut.into(), true),
-            };
+        let tried =
+            tokio::time::timeout(shared.limits.beneath_direct, connect_tcp(shared, target)).await;
+        let direct = match direct_end(tried.ok()) {
+            Ok(Ok(stream)) => {
+                lock(&beneath.order).direct_opened();
+                return Tried::Done(Ok(stream));
+            }
+            Ok(Err(error)) => return Tried::Done(Err(error)),
+            Err(direct) => direct,
+        };
         Tried::Onward(Box::new(Onward {
             beneath,
             target,
@@ -1794,11 +1804,12 @@ pub(super) mod tests {
             (Reply::Silent, [1, 0, 0, 0, 0, 0, 0]),
         ] {
             let proxy = Proxy::new(reply).await?;
-            let (shared, _) = engine(Lab::default(), proxy.at);
+            let (shared, lab) = engine(Lab::default(), proxy.at);
             let closed = closed_port().await?;
             let (stream, through) = open(&shared, UID, closed, closed).await;
             let kind = stream.err().map(|e| e.kind());
             assert_eq!((kind, through), (Some(io::ErrorKind::ConnectionRefused), false));
+            assert_eq!(lab.protects.load(Ordering::SeqCst), 1, "one direct try alone");
             assert_eq!(counters(&shared), counted);
             assert_eq!(held(&shared).state(Duration::ZERO).password, counted[3] == 1);
         }
@@ -2013,6 +2024,30 @@ pub(super) mod tests {
     #[test]
     fn no_route_of_that_family_goes_nowhere_else() {
         assert!(no_route(&io::ErrorKind::AddrNotAvailable.into()));
+        let kind = |end: Result<io::Result<()>, (io::Error, bool)>| match end {
+            Ok(Ok(())) => (None, None),
+            Ok(Err(error)) => (Some(error.kind()), None),
+            Err((error, ran_out)) => (Some(error.kind()), Some(ran_out)),
+        };
+        assert_eq!(kind(direct_end(Some(Ok(())))), (None, None));
+        assert_eq!(
+            kind(direct_end(Some(
+                Err(io::ErrorKind::AddrNotAvailable.into())
+            ))),
+            (Some(io::ErrorKind::AddrNotAvailable), None),
+            "the app's own error, at once"
+        );
+        assert_eq!(
+            kind(direct_end(Some(Err(
+                io::ErrorKind::NetworkUnreachable.into()
+            )))),
+            (Some(io::ErrorKind::NetworkUnreachable), Some(false)),
+            "on to the proxy"
+        );
+        assert_eq!(
+            kind(direct_end::<()>(None)),
+            (Some(io::ErrorKind::TimedOut), Some(true))
+        );
         for kind in [
             io::ErrorKind::NetworkUnreachable,
             io::ErrorKind::ConnectionRefused,
