@@ -83,7 +83,9 @@ pub(super) fn rescue(
             .await
             .map_err(beneath::Failure::error)?;
         let (relayed, staged) = pair().await?;
-        tokio::spawn(stage(Arc::clone(shared), staged, proxy, Box::new(rescue)));
+        // One of the engine's boxed tasks (ADR 0053), though it carries bytes: only a rescued flow's, already copied
+        // once more over loopback, where one indirect call per poll is nothing beside it (the forwarder's size pass).
+        super::spawn_task(stage(Arc::clone(shared), staged, proxy, Box::new(rescue)));
         Ok(relayed)
     })
 }
