@@ -234,7 +234,9 @@ class AndroidProxyTest {
     /**
      * The proxy record's unit S2, decision 1: the choice "Send apps through this proxy" is kept by the proxy setting it
      * was made for, the network's transport, the host as names compare (brackets off, ASCII letters folded) and the port,
-     * so that it never covers another network's proxy or another port.
+     * so that it never covers another kind of network's proxy, or another port; two saved networks of one kind whose
+     * proxies have the same host and port share it. A choice whose setting was not seen for 90 days is forgotten (S2's
+     * review, m3).
      */
     @Test
     fun theChoiceToSendAppsThroughAProxyIsKeptByItsSetting() {
@@ -242,5 +244,13 @@ class AndroidProxyTest {
         assertEquals("2 2001:db8::7 8080", ThroughProxy.key(2, "[2001:db8::7]", 8080))
         assertTrue(ThroughProxy.key(1, "p.example", 3128) != ThroughProxy.key(3, "p.example", 3128))
         assertTrue(ThroughProxy.key(1, "p.example", 3128) != ThroughProxy.key(1, "p.example", 3129))
+        val today = 20_000L
+        assertEquals(
+            setOf("today", "89 days ago"),
+            ThroughProxy.kept(mapOf("today" to today, "89 days ago" to today - 89, "90 days ago" to today - 90, "a year ago" to today - 365), today),
+        )
+        assertEquals(20_419L, ThroughProxy.today(1_764_201_600_000L + 86_399_999L))
+        assertEquals(20_419L, ThroughProxy.today(1_764_201_600_000L))
+        assertEquals(20_418L, ThroughProxy.today(1_764_201_599_999L))
     }
 }

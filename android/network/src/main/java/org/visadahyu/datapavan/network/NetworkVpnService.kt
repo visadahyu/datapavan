@@ -861,6 +861,7 @@ class NetworkVpnService : VpnService() {
         // Read at each settle: the grant may come or go while the tunnel runs (section 6).
         val granted = localNetworkGranted()
         val through = org.visadahyu.datapavan.network.proxy.ThroughProxy.of(this)
+        var key: String? = null
         val changed = synchronized(resolverProxyLock) {
             if (asked != resolverProxyAsked || generation != networkGeneration) return
             // The tunnel's own addresses as they are now, and every interface's (a hotspot's, USB tethering's, Wi-Fi
@@ -889,6 +890,7 @@ class NetworkVpnService : VpnService() {
                 main.post { if ((forced ?: TunnelAddresses.choose(networksBeneath())) !== addresses) setUpAgain() }
             }
             beneathHand.settle(settled.engine)
+            key = settled.key
             // For "Now"'s line (S2): a proxy on the phone itself at a port that a circumvention tool installed is known to
             // use (decision 3), which the chain carries apps through instead, from the tools this run read.
             val tool = if (settled.engineWhy == org.visadahyu.datapavan.network.dns.NetworkProxy.Why.LOOPBACK && setting != null) {
@@ -912,6 +914,9 @@ class NetworkVpnService : VpnService() {
                 true
             }
         }
+        // The switch's choice for the setting found is kept as seen today, and a choice whose setting was not seen for
+        // a while is forgotten (S2's review, m3).
+        through.seen(key)
         if (changed) exchanger.proxyChanged()
     }
 
