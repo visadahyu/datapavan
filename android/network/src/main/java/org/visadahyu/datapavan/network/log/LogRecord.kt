@@ -61,8 +61,8 @@ sealed interface LogRecord {
         override val state: Int = AppState.NOT_TOLD,
         /**
          * Its route (version 4, W7): [VIA_DIRECT], [VIA_TOOL] or [VIA_TUNNEL], and for a tunnel its number,
-         * which the network part gave the configuration; records before version 4, which went directly or through the
-         * tool, say [VIA_UNKNOWN].
+         * which the network part gave the configuration; since version 8 [VIA_NETWORK_PROXY] too; records before
+         * version 4, which went directly or through the tool, say [VIA_UNKNOWN].
          */
         val via: Int = VIA_DIRECT,
         val tunnel: Long = 0,
@@ -191,7 +191,7 @@ sealed interface LogRecord {
 
     companion object {
         /** The version the engine writes. */
-        const val VERSION: Byte = 7
+        const val VERSION: Byte = 8
 
         /** The version of a proxy's flags for local and unsure (bits 5 and 6; the proxy record's unit B). */
         const val VERSION_7: Byte = 7
@@ -215,6 +215,12 @@ sealed interface LogRecord {
         const val VIA_DIRECT = 0
         const val VIA_TOOL = 1
         const val VIA_TUNNEL = 2
+
+        /**
+         * Out on the network beneath through that network's own HTTP proxy (version 8, the proxy record's unit S2): a
+         * direct try failed, or the proxy came first. Still the app's own flow to its destination.
+         */
+        const val VIA_NETWORK_PROXY = 3
 
         /** A segment of a version before 4, which kept no route. */
         const val VIA_UNKNOWN = -1
@@ -279,8 +285,10 @@ sealed interface LogRecord {
                             } else {
                                 val via = b.get().toInt() and 0xff
                                 val tunnel = b.int.toLong() and 0xffffffffL
-                                // A code the engine never writes, or a tunnel number beside no tunnel, is malformed.
-                                if (via > VIA_TUNNEL || (via == VIA_TUNNEL) != (tunnel != 0L)) {
+                                // A code the engine never writes, or a tunnel number beside no tunnel, is malformed; the
+                                // network's own proxy's only from version 8.
+                                val last = if (version > VERSION_7) VIA_NETWORK_PROXY else VIA_TUNNEL
+                                if (via > last || (via == VIA_TUNNEL) != (tunnel != 0L)) {
                                     null
                                 } else {
                                     segment.copy(

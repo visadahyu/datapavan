@@ -74,7 +74,8 @@ object History {
         entry.via == LogRecord.VIA_TUNNEL -> LeftOut.TUNNEL
         tool -> LeftOut.TOOL_SERVERS
         entry.via == LogRecord.VIA_TOOL -> LeftOut.THROUGH_TOOL
-        entry.via == LogRecord.VIA_DIRECT -> LeftOut.DIRECT
+        // A flow through the network's own proxy (S2) is the app's own to its destination, as a direct one (audit m3).
+        entry.via == LogRecord.VIA_DIRECT || entry.via == LogRecord.VIA_NETWORK_PROXY -> LeftOut.DIRECT
         else -> LeftOut.NO_ROUTE
     }
 

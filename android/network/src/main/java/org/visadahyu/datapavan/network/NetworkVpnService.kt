@@ -62,7 +62,10 @@ class NetworkVpnService : VpnService() {
     private val connectivity by lazy { getSystemService(ConnectivityManager::class.java) }
     private val debuggable by lazy { applicationInfo.flags and ApplicationInfo.FLAG_DEBUGGABLE != 0 }
 
-    /** The network beneath that [network] follows; read by [resolveEndpoint] on the engine's resolver thread. */
+    /**
+     * The network beneath that [network] follows; read by [resolveEndpoint] on the engine's resolver thread, and by
+     * [protectOn] on its others.
+     */
     @Volatile
     private var current: Network? = null
 
@@ -173,6 +176,24 @@ class NetworkVpnService : VpnService() {
 
     private val resolverProxyLock = Any()
 
+    /**
+     * The network beneath's own proxy as last handed to the engine (the proxy record's unit S2), or null for none, under
+     * [resolverProxyLock]: [settleResolverProxy] hands it whenever it changes, [startEngine] again at each start (audit
+     * m7), and a new network or none hands none at once.
+     */
+    private var beneathHanded: BeneathProxy? = null
+
+    /** Why the engine has the proxy it has, or none, for the debug dump's `beneath-proxy` line. */
+    @Volatile
+    private var beneathWhy = org.visadahyu.datapavan.network.dns.NetworkProxy.Why.NONE
+
+    /**
+     * The addresses the network's own proxy setting resolved to, on [current], which the tunnel's addresses avoid as they
+     * avoid its gateways (S2's plan, section 2; audit m7).
+     */
+    @Volatile
+    private var beneathFound: List<InetAddress> = emptyList()
+
     /** Raised by each recompute, so that a lookup of the proxy's name that ends after a newer one is dropped. */
     private var resolverProxyAsked = 0
 
@@ -223,6 +244,8 @@ class NetworkVpnService : VpnService() {
                 // (the DoT crash's audit, finding 1).
                 current = network
                 networkGeneration++
+                // The engine's proxy goes with the network before, before any lookup for this one (S2).
+                handBeneath(null)
                 // The new network's proxy before the first client of its generation is built (the resolver's audit, M5).
                 recomputeResolverProxy()
                 exchanger.networkChanged()
@@ -269,6 +292,7 @@ class NetworkVpnService : VpnService() {
             // In the same order as onAvailable's.
             current = null
             networkGeneration++
+            handBeneath(null)
             recomputeResolverProxy()
             exchanger.networkChanged()
             // The lost network's prefixes go with it (audit-B 1).
@@ -306,7 +330,8 @@ class NetworkVpnService : VpnService() {
         val properties = connectivity.getLinkProperties(network) ?: return@mapNotNull null
         TunnelAddresses.Network(
             addresses = properties.linkAddresses.map { it.address to it.prefixLength },
-            others = properties.dnsServers + properties.routes.mapNotNull { it.gateway }.filterNot { it.isAnyLocalAddress },
+            others = properties.dnsServers + properties.routes.mapNotNull { it.gateway }.filterNot { it.isAnyLocalAddress } +
+                if (network == current) beneathFound else emptyList(),
         )
     }
 
@@ -321,7 +346,11 @@ class NetworkVpnService : VpnService() {
             // A tap of the undo or the pause reads nothing again; a setting that changes what is covered reads all.
             ACTION_APPLY_BLOCKING -> if (active) blocking.apply(full = intent.getBooleanExtra(EXTRA_FULL, true))
             // The user's choice for one app changed (the proxy record's unit C): the store as it stands, by UID now.
-            ACTION_APPLY_PROXIES -> if (active) applyProxies()
+            // And the choice "Send apps through this proxy" (S2): the engine's proxy is settled again.
+            ACTION_APPLY_PROXIES -> if (active) {
+                applyProxies()
+                recomputeResolverProxy()
+            }
             // The apps left out are part of the tunnel's own setup: it is set up again. The routes first: an app taken
             // back has its tunnel's or the chain's route in the engine before its packets come into the tunnel again,
             // never going directly; an app left out leaves them, as it leaves the network part (fix round, security
@@ -720,7 +749,14 @@ class NetworkVpnService : VpnService() {
      * gateway (audit-B 1); the engine bounds the lengths again.
      */
     private fun onLinkOf(network: Network?): Pair<String, Int> {
-        network ?: return "" to 0
+        val (prefixes, transport) = prefixesOf(network)
+        return prefixes.map { (address, length) -> "${address.hostAddress?.substringBefore('%')} $length" }.distinct()
+            .joinToString("\n") to transport
+    }
+
+    /** [onLinkOf]'s prefixes as addresses and lengths, with the transport's code. */
+    private fun prefixesOf(network: Network?): Pair<List<Pair<InetAddress, Int>>, Int> {
+        network ?: return emptyList<Pair<InetAddress, Int>>() to 0
         val capabilities = connectivity.getNetworkCapabilities(network)
         val transport = when {
             capabilities == null -> 0
@@ -729,7 +765,7 @@ class NetworkVpnService : VpnService() {
             capabilities.hasTransport(NetworkCapabilities.TRANSPORT_CELLULAR) -> 3
             else -> 4
         }
-        val properties = connectivity.getLinkProperties(network) ?: return "" to transport
+        val properties = connectivity.getLinkProperties(network) ?: return emptyList<Pair<InetAddress, Int>>() to transport
         val prefixes = properties.linkAddresses.map { it.address to it.prefixLength } +
             if (transport == 1 || transport == 2) {
                 properties.routes.filter { !it.hasGateway() && it.destination.prefixLength > 0 }
@@ -737,9 +773,7 @@ class NetworkVpnService : VpnService() {
             } else {
                 emptyList()
             }
-        val lines = prefixes.filter { (_, length) -> length > 0 }
-            .map { (address, length) -> "${address.hostAddress?.substringBefore('%')} $length" }.distinct()
-        return lines.joinToString("\n") to transport
+        return prefixes.filter { (_, length) -> length > 0 } to transport
     }
 
     /**
@@ -763,14 +797,24 @@ class NetworkVpnService : VpnService() {
             org.visadahyu.datapavan.network.dns.NetworkProxy.of(properties.httpProxy),
             org.visadahyu.datapavan.network.dns.NetworkProxy.of(globalProxy()),
         )
-        if (setting == null) return settleResolverProxy(asked, generation, null, emptyList(), why)
+        // What the engine's proxy needs of the network (S2): its handle, its transport and on-link prefixes for the
+        // local-network grant, and whether it has IPv6 (audit C2).
+        val (prefixes, transport) = prefixesOf(network)
+        val facts = BeneathFacts(
+            network.networkHandle, transport, prefixes,
+            org.visadahyu.datapavan.network.dns.NetworkProxy.ipv6(
+                properties.linkAddresses.map { it.address },
+                properties.routes.any { it.isDefaultRoute && it.destination.address is java.net.Inet6Address },
+            ),
+        )
+        if (setting == null) return settleResolverProxy(asked, generation, null, emptyList(), why, facts = facts)
         // The phone's own addresses on every network, beside every interface's read at settle time (the global proxy's
         // review, m2).
         @Suppress("DEPRECATION") // allNetworks: every network's addresses are the phone's own.
         val own = (connectivity.allNetworks.flatMap { connectivity.getLinkProperties(it)?.linkAddresses.orEmpty() } + properties.linkAddresses)
             .map { it.address }.toSet()
         val literal = org.visadahyu.datapavan.network.dns.Exchanger.numeric(org.visadahyu.datapavan.network.dns.NetworkProxy.bare(setting.host))
-        if (literal != null) return settleResolverProxy(asked, generation, setting, listOf(literal), why, own)
+        if (literal != null) return settleResolverProxy(asked, generation, setting, listOf(literal), why, own, facts)
         lookUp {
             val found = try {
                 network.getAllByName(setting.host).toList()
@@ -779,11 +823,16 @@ class NetworkVpnService : VpnService() {
             } catch (e: SecurityException) {
                 emptyList()
             }
-            settleResolverProxy(asked, generation, setting, found, why, own)
+            settleResolverProxy(asked, generation, setting, found, why, own, facts)
         }
     }
 
-    /** Keeps the proxy [recomputeResolverProxy] read, unless a newer recompute or another network came since. */
+    /**
+     * Keeps the proxy [recomputeResolverProxy] read, unless a newer recompute or another network came since, for the
+     * resolver and the engine alike, so that they never disagree (S2's plan, section 2): the engine takes the network's
+     * own proxy alone ([org.visadahyu.datapavan.network.dns.NetworkProxy.forEngine]), with [facts] of its network, and
+     * neither takes an address Android 17 would refuse for want of the local-network grant (section 6).
+     */
     private fun settleResolverProxy(
         asked: Int,
         generation: Int,
@@ -791,7 +840,10 @@ class NetworkVpnService : VpnService() {
         found: List<java.net.InetAddress>,
         why: org.visadahyu.datapavan.network.dns.NetworkProxy.Why,
         own: Set<java.net.InetAddress> = emptySet(),
+        facts: BeneathFacts? = null,
     ) {
+        // Read at each settle: the grant may come or go while the tunnel runs (section 6).
+        val granted = localNetworkGranted()
         val changed = synchronized(resolverProxyLock) {
             if (asked != resolverProxyAsked || generation != networkGeneration) return
             // The tunnel's own addresses as they are now, and every interface's (a hotspot's, USB tethering's, Wi-Fi
@@ -801,8 +853,13 @@ class NetworkVpnService : VpnService() {
             val (usable, because) = if (setting == null) {
                 emptyList<java.net.InetAddress>() to why
             } else {
-                org.visadahyu.datapavan.network.dns.NetworkProxy.usable(found.filterNot(org.visadahyu.datapavan.network.dns.NetworkProxy::zoned), why) {
+                val (kept, reason) = org.visadahyu.datapavan.network.dns.NetworkProxy.usable(found.filterNot(org.visadahyu.datapavan.network.dns.NetworkProxy::zoned), why) {
                     it in own || it in tunnel || it in phone
+                }
+                org.visadahyu.datapavan.network.dns.NetworkProxy.granted(kept, reason) { address ->
+                    facts != null && org.visadahyu.datapavan.network.dns.NetworkProxy.withoutGrant(
+                        address, facts.transport, facts.prefixes.any { (p, length) -> TunnelAddresses.sameSubnet(address, p, length) }, granted,
+                    )
                 }
             }
             val next = if (setting != null && usable.isNotEmpty()) {
@@ -816,6 +873,28 @@ class NetworkVpnService : VpnService() {
                 null
             }
             resolverProxyWhy = if (next == null && setting != null && usable.isEmpty()) because else why
+            val (engine, engineWhy) = org.visadahyu.datapavan.network.dns.NetworkProxy.forEngine(next?.addresses.orEmpty(), why, resolverProxyWhy)
+            beneathWhy = engineWhy
+            val ours = if (why == org.visadahyu.datapavan.network.dns.NetworkProxy.Why.NETWORK) found else emptyList()
+            if (ours != beneathFound) {
+                beneathFound = ours
+                // A proxy at one of the tunnel's own addresses moves the tunnel to its other set, as a gateway there does.
+                main.post { if ((forced ?: TunnelAddresses.choose(networksBeneath())) !== addresses) setUpAgain() }
+            }
+            handBeneath(
+                if (setting == null || facts == null || engine.isEmpty()) {
+                    null
+                } else {
+                    BeneathProxy(
+                        facts.network,
+                        engine,
+                        setting.exclusions.joinToString(","),
+                        facts.ipv6,
+                        org.visadahyu.datapavan.network.proxy.ThroughProxy.of(this)
+                            .on(org.visadahyu.datapavan.network.proxy.ThroughProxy.key(facts.transport, setting.host, setting.port)),
+                    )
+                },
+            )
             val held = resolverProxy
             // The same proxy, its addresses in whatever order, of the same setting, keeps what it learned of which way
             // comes first.
@@ -829,6 +908,43 @@ class NetworkVpnService : VpnService() {
         }
         if (changed) exchanger.proxyChanged()
     }
+
+    /** The network's own proxy as `Engine.nativeBeneathProxy` takes it (S2). */
+    private data class BeneathProxy(
+        val network: Long,
+        val proxies: List<InetSocketAddress>,
+        val exclusions: String,
+        val ipv6: Boolean,
+        val always: Boolean,
+    )
+
+    /** What the engine's proxy needs of the network beneath (S2): its handle, transport, on-link prefixes and IPv6. */
+    private class BeneathFacts(val network: Long, val transport: Int, val prefixes: List<Pair<InetAddress, Int>>, val ipv6: Boolean)
+
+    /**
+     * Hands [next] to the engine (`Engine.nativeBeneathProxy`, S2), or none, unless it is what was handed last; [force]
+     * at each start, since the engines' setting starts empty after a stop.
+     */
+    private fun handBeneath(next: BeneathProxy?, force: Boolean = false) {
+        synchronized(resolverProxyLock) {
+            if (!force && next == beneathHanded) return
+            beneathHanded = next
+            Engine.nativeBeneathProxy(
+                next?.network ?: 0,
+                org.visadahyu.datapavan.network.dns.NetworkProxy.engineAddresses(next?.proxies.orEmpty()),
+                next?.exclusions.orEmpty(),
+                next?.ipv6 == true,
+                next?.always == true,
+            )
+        }
+    }
+
+    /**
+     * Whether Android lets the network part reach the local network (ADR 0034, decision 5): always before Android 17,
+     * and for a target below 37, which holds the grant implicitly; else by `ACCESS_LOCAL_NETWORK`.
+     */
+    private fun localNetworkGranted(): Boolean = Build.VERSION.SDK_INT < 37 || applicationInfo.targetSdkVersion < 37 ||
+        checkSelfPermission(LOCAL_NETWORK) == PackageManager.PERMISSION_GRANTED
 
     /** The receiver of Android's proxy setting's changes, while the tunnel runs. */
     private var proxyChanges: android.content.BroadcastReceiver? = null
@@ -1416,6 +1532,9 @@ class NetworkVpnService : VpnService() {
         // resolver while it is set (W8, part 1). The first exchange's client and roots, and the public suffixes for the
         // network's search domains, are made ready meanwhile (W8's fix round).
         org.visadahyu.datapavan.network.dns.DnsSettings.apply(this)
+        // The network's own proxy as last settled, for an engine whose setting starts empty (S2, audit m7); the settle
+        // after it hands a newer one.
+        handBeneath(synchronized(resolverProxyLock) { beneathHanded }, force = true)
         recomputeResolverProxy()
         exchanger.warm()
         suffixes.known
@@ -1545,9 +1664,31 @@ class NetworkVpnService : VpnService() {
         -1
     }
 
-    /** Called by the engine for each socket of its own, before it connects: keeps it out of the tunnel. */
+    /**
+     * Called by the engine for each socket of its own, before it connects: keeps it out of the tunnel; with a [network]
+     * other than 0, a socket to the network beneath's own proxy, also binds it there ([protectOn]). One call for both, so
+     * that the engine's code for it is there once.
+     */
     @Suppress("unused")
-    fun protectSocket(fd: Int): Boolean = protect(fd)
+    fun protectSocket(fd: Int, network: Long): Boolean = if (network == 0L) protect(fd) else protectOn(fd, network)
+
+    /**
+     * For each socket to the network beneath's own proxy (`Platform::protect_on`, the proxy record's unit S2), before it
+     * connects: keeps it out of the tunnel and binds it to the network beneath, only while that network's handle is
+     * [network]. Otherwise false, the socket left unbound, and the engine writes nothing to whatever holds the old
+     * proxy's address on another network (audit m5). [fd] is the engine's duplicate; the binding goes through one more,
+     * which binds the same socket.
+     */
+    private fun protectOn(fd: Int, network: Long): Boolean {
+        val beneath = current ?: return false
+        if (beneath.networkHandle != network || !protect(fd)) return false
+        return try {
+            ParcelFileDescriptor.fromFd(fd).use { beneath.bindSocket(it.fileDescriptor) }
+            true
+        } catch (e: IOException) {
+            false
+        }
+    }
 
     /**
      * Called by the engine, on a thread of its own, for a WireGuard endpoint's name (W7, the maintainer's answer
@@ -2072,6 +2213,12 @@ class NetworkVpnService : VpnService() {
      * otherwise why it follows none ([org.visadahyu.datapavan.network.dns.NetworkProxy.Why]); and which way comes
      * first, `direct-first`, `proxy-first`, `direct-only` for the global proxy while the network lets the resolver
      * connect directly ([org.visadahyu.datapavan.network.dns.DirectReach]), or `-`.
+     * `beneath-proxy` prints `beneath-proxy ADDRESSES WHY first=direct|proxy names=0|1 password=0|1 always=0|1`: the
+     * network's own proxy as the engine has it (the proxy record's unit S2), its `address:port`s comma-separated or
+     * `none`; `network`, or why it has none, as `dns-proxy`'s reasons with `global` (Android's global proxy, never the
+     * engine's) and `local-no-grant`; whether the proxy comes first, whether names do, whether it asked for a password,
+     * all as the running engine learned them, and the user's choice "Send apps through this proxy". It names no
+     * credential.
      */
     private fun debugDns(args: List<String>, writer: PrintWriter) {
         fun after(command: String, n: Int) = args.indexOf(command).takeIf { it >= 0 }?.let { args.drop(it + 1).take(n) }
@@ -2104,6 +2251,14 @@ class NetworkVpnService : VpnService() {
                 else -> "direct-first"
             }
             writer.println("dns-proxy ${route?.generation ?: networkGeneration} ${route?.toString() ?: "none"} ${why.word} $first")
+        }
+        if ("beneath-proxy" in args) {
+            val (handed, why) = synchronized(resolverProxyLock) { beneathHanded to beneathWhy }
+            val state = Engine.nativeBeneathState().toIntOrNull() ?: 0
+            writer.println(
+                "beneath-proxy ${handed?.proxies?.joinToString(",") { org.visadahyu.datapavan.network.activity.ProxyFacts.hostPort(it.address.hostAddress.orEmpty(), it.port) } ?: "none"} ${why.word} first=${if (state and 1 != 0) "proxy" else "direct"} " +
+                    "names=${state shr 1 and 1} password=${state shr 2 and 1} always=${if (handed?.always == true) 1 else 0}",
+            )
         }
         var changed = "dns-apply" in args
         after("dns-strict", 1)?.let {
@@ -2481,6 +2636,9 @@ class NetworkVpnService : VpnService() {
          * C, `proxy.LoggedApps`), handed to the engine again.
          */
         const val ACTION_APPLY_PROXIES = "org.visadahyu.datapavan.network.APPLY_PROXIES"
+
+        /** Android 17's local-network grant (ADR 0034, decision 5), by name: no constant before API 37. */
+        const val LOCAL_NETWORK = "android.permission.ACCESS_LOCAL_NETWORK"
 
         /** At most so many addresses of Android's setting's names handed under strict Private DNS ([applyProxies]). */
         private const val MAX_SETTING_ADDRESSES = 32

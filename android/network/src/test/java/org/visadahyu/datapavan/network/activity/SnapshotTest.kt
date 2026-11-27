@@ -238,9 +238,13 @@ class SnapshotTest {
         assertEquals(org.visadahyu.datapavan.network.log.LogRecord.VIA_TUNNEL to 5L, destination.via to destination.tunnel)
         assertEquals(listOf(0L, 0L, 9L), snapshot.apps.map { it.throughTunnel })
         assertEquals(0, buffer(fixture).getInt(appTunnel))
-        for (code in listOf(3, 0x80, 0xff)) {
+        for (code in listOf(4, 0x80, 0xff)) {
             assertNull("no such route: $code", Snapshot.parse(fixture.copyOf().also { it[route] = code.toByte() }))
         }
+        // Version 7 (the proxy record's unit S2): through the network's own proxy, with no tunnel's number.
+        val proxied = checkNotNull(Snapshot.parse(fixture.copyOf().also { it[route] = 3 })).apps[0].destinations.single()
+        assertEquals(org.visadahyu.datapavan.network.log.LogRecord.VIA_NETWORK_PROXY to 0L, proxied.via to proxied.tunnel)
+        assertNull("the network's proxy beside a number", Snapshot.parse(fixture.copyOf().also { it[route] = 3; buffer(it).putInt(route + 1, 5) }))
         assertNull("a tunnel of no number", Snapshot.parse(fixture.copyOf().also { it[route] = 2 }))
         assertNull("a number beside no tunnel", Snapshot.parse(fixture.copyOf().also { buffer(it).putInt(route + 1, 5) }))
     }
@@ -284,7 +288,8 @@ class SnapshotTest {
         assertNull("version 3", Snapshot.parse(fixture.copyOf().also { it[0] = 3 }))
         assertNull("version 4", Snapshot.parse(fixture.copyOf().also { it[0] = 4 }))
         assertNull("version 5", Snapshot.parse(fixture.copyOf().also { it[0] = 5 }))
-        assertNull(Snapshot.parse(fixture.copyOf().also { it[0] = 7 }))
+        assertNull("version 6", Snapshot.parse(fixture.copyOf().also { it[0] = 6 }))
+        assertNull(Snapshot.parse(fixture.copyOf().also { it[0] = 8 }))
         assertNull("no engine runs", Snapshot.parse(ByteArray(0)))
     }
 }

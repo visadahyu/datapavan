@@ -310,6 +310,90 @@ class NetworkProxyTest {
         assertEquals("2001:db8::1", NetworkProxy.bare("[2001:db8::1]"))
     }
 
+    /**
+     * The proxy record's unit S2: the shared vectors (core/net/testdata/proxy-exclusions.tsv), which the engine's
+     * `connect::excluded` reads too, so that the resolver and the engine never disagree on an exclusion list; only ASCII
+     * letters fold.
+     */
+    @Test
+    fun theExclusionListReadsAsTheEnginesDoes() {
+        val rows = java.io.File("../../core/net/testdata/proxy-exclusions.tsv").readLines()
+            .filter { it.isNotEmpty() && !it.startsWith("#") }
+        assertTrue(rows.size >= 40)
+        for (row in rows) {
+            val (host, list, excluded) = row.split('\t')
+            val entries = if (list == "-") emptyList() else list.split(',')
+            assertEquals(row, excluded == "1", NetworkProxy.excluded(host, entries))
+        }
+        assertFalse("the Kelvin sign", NetworkProxy.excluded("k.example", listOf("\u212a.example")))
+    }
+
+    /**
+     * S2, section 6: Android 17 refuses the network part a proxy on the local network without its grant: on Wi-Fi,
+     * Ethernet or an unknown transport the private, shared and link-local ranges and the network's own prefixes; on
+     * cellular only the network's own prefixes; multicast and broadcast anywhere; nothing with the grant.
+     */
+    @Test
+    fun aLocalProxyWithoutTheGrantIsRefused() {
+        for (transport in listOf(0, 1, 2)) {
+            for (local in listOf("10.0.0.5", "172.16.0.1", "172.31.255.255", "192.168.1.20", "100.64.0.1", "100.127.255.255", "169.254.1.1", "fe80::1")) {
+                assertTrue("$local on $transport", NetworkProxy.withoutGrant(address(local), transport, onLink = false, granted = false))
+                assertFalse("$local granted", NetworkProxy.withoutGrant(address(local), transport, onLink = false, granted = true))
+            }
+            for (public in listOf("172.15.0.1", "172.32.0.1", "100.63.0.1", "100.128.0.1", "192.169.0.1", "203.0.113.7", "2001:db8::7", "fd00::7")) {
+                assertFalse("$public on $transport", NetworkProxy.withoutGrant(address(public), transport, onLink = false, granted = false))
+            }
+        }
+        assertFalse(NetworkProxy.withoutGrant(address("10.0.0.5"), 3, onLink = false, granted = false))
+        assertTrue(NetworkProxy.withoutGrant(address("10.0.0.5"), 3, onLink = true, granted = false))
+        assertTrue(NetworkProxy.withoutGrant(address("fd00::7"), 1, onLink = true, granted = false))
+        assertTrue(NetworkProxy.withoutGrant(address("224.0.0.1"), 3, onLink = false, granted = false))
+        assertTrue(NetworkProxy.withoutGrant(address("255.255.255.255"), 4, onLink = false, granted = false))
+        assertFalse(NetworkProxy.withoutGrant(address("224.0.0.1"), 3, onLink = true, granted = true))
+    }
+
+    /**
+     * S2: the addresses Android 17 would refuse leave, the others stay, and none left says why; the engine takes the
+     * network's own proxy alone, never the global one (audit M3): global only gives none, with its reason, both set the
+     * network's, and a network's proxy without a usable address none, with the settle's reason.
+     */
+    @Test
+    fun theEngineTakesTheNetworksOwnProxyAloneAndNoAddressRefusedForTheGrant() {
+        val local = address("192.168.1.5")
+        val public = address("203.0.113.7")
+        val refused = { a: InetAddress -> a == local }
+        assertEquals(listOf(public) to NetworkProxy.Why.NETWORK, NetworkProxy.granted(listOf(local, public), NetworkProxy.Why.NETWORK, refused))
+        assertEquals(emptyList<InetAddress>() to NetworkProxy.Why.LOCAL_NO_GRANT, NetworkProxy.granted(listOf(local), NetworkProxy.Why.NETWORK, refused))
+        assertEquals(emptyList<InetAddress>() to NetworkProxy.Why.LOOPBACK, NetworkProxy.granted(emptyList(), NetworkProxy.Why.LOOPBACK, refused))
+        assertEquals("local-no-grant", NetworkProxy.Why.LOCAL_NO_GRANT.word)
+
+        val at = listOf(InetSocketAddress(public, 3128))
+        val network = NetworkProxy.Setting("proxy.corp.example", 3128, false, emptyList())
+        val global = NetworkProxy.Setting("203.0.113.9", 8080, false, emptyList())
+        // Global only: the resolver may follow it; the engine never does.
+        val (_, globalWhy) = NetworkProxy.choose(null, global)
+        assertEquals(emptyList<InetSocketAddress>() to NetworkProxy.Why.GLOBAL, NetworkProxy.forEngine(at, globalWhy, globalWhy))
+        // Both set: the network's.
+        val (chosen, why) = NetworkProxy.choose(network, global)
+        assertEquals(network, chosen)
+        assertEquals(at to NetworkProxy.Why.NETWORK, NetworkProxy.forEngine(at, why, why))
+        assertEquals(emptyList<InetSocketAddress>() to NetworkProxy.Why.LOCAL_NO_GRANT, NetworkProxy.forEngine(emptyList(), why, NetworkProxy.Why.LOCAL_NO_GRANT))
+        assertEquals(emptyList<InetSocketAddress>() to NetworkProxy.Why.PAC, NetworkProxy.forEngine(emptyList(), NetworkProxy.Why.PAC, NetworkProxy.Why.PAC))
+    }
+
+    /** S2: IPv6 for the engine needs a global unicast address and an IPv6 default route; the addresses as the JNI reads them. */
+    @Test
+    fun theNetworksIpv6AndTheEnginesAddressesAreAsTheEngineTakesThem() {
+        assertTrue(NetworkProxy.ipv6(listOf(address("192.168.1.5"), address("2001:db8::5")), defaultRoute = true))
+        assertFalse(NetworkProxy.ipv6(listOf(address("2001:db8::5")), defaultRoute = false))
+        assertFalse(NetworkProxy.ipv6(listOf(address("fe80::5"), address("fd00::5"), address("192.168.1.5")), defaultRoute = true))
+        assertEquals(
+            "192.0.2.8 3128\n2001:db8:0:0:0:0:0:8 8080",
+            NetworkProxy.engineAddresses(listOf(InetSocketAddress(address("192.0.2.8"), 3128), InetSocketAddress(address("2001:db8::8"), 8080))),
+        )
+        assertEquals("", NetworkProxy.engineAddresses(emptyList()))
+    }
+
     @Test
     fun aWayComesFirstOnlyAfterItAnsweredWhereTheOtherGaveNone() {
         val one = InetSocketAddress(address("10.0.0.1"), 3128)

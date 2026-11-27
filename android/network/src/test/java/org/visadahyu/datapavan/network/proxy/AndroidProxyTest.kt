@@ -143,4 +143,17 @@ class AndroidProxyTest {
             assertTrue(values.name, File(values, "strings.xml").takeIf { it.isFile }?.readText()?.contains("\"left_out_body\"") != true)
         }
     }
+
+    /**
+     * The proxy record's unit S2, decision 1: the choice "Send apps through this proxy" is kept by the proxy setting it
+     * was made for, the network's transport, the host as names compare (brackets off, ASCII letters folded) and the port,
+     * so that it never covers another network's proxy or another port.
+     */
+    @Test
+    fun theChoiceToSendAppsThroughAProxyIsKeptByItsSetting() {
+        assertEquals("1 proxy.example 3128", ThroughProxy.key(1, "Proxy.EXAMPLE", 3128))
+        assertEquals("2 2001:db8::7 8080", ThroughProxy.key(2, "[2001:db8::7]", 8080))
+        assertTrue(ThroughProxy.key(1, "p.example", 3128) != ThroughProxy.key(3, "p.example", 3128))
+        assertTrue(ThroughProxy.key(1, "p.example", 3128) != ThroughProxy.key(1, "p.example", 3129))
+    }
 }

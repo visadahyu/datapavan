@@ -99,11 +99,11 @@ fn dns_network() -> MutexGuard<'static, Option<(bool, String)>> {
     DNS_NETWORK.lock().unwrap_or_else(PoisonError::into_inner)
 }
 
-/// Keeps the encrypted resolver's setting for the engines to come, beside the chain, and sets it on the one that
-/// runs, if any (W8, part 1).
-fn set_dns(config: Option<Arc<DnsConfig>>) {
-    let mut set = setting();
-    let kept = set.get_or_insert_with(|| ChainSetting {
+/// The setting kept for the engines to come, made with nothing set where none is kept yet: one function for each
+/// setting's keeping, so that its code is there once.
+#[inline(never)]
+fn kept(set: &mut Option<ChainSetting>) -> &mut ChainSetting {
+    set.get_or_insert_with(|| ChainSetting {
         chain: None,
         uncached_answers: false,
         tunnels: TunnelSetting::default(),
@@ -111,7 +111,14 @@ fn set_dns(config: Option<Arc<DnsConfig>>) {
         proxies: ProxySetting::default(),
         blocking: BlockSetting::default(),
         beneath: None,
-    });
+    })
+}
+
+/// Keeps the encrypted resolver's setting for the engines to come, beside the chain, and sets it on the one that
+/// runs, if any (W8, part 1).
+fn set_dns(config: Option<Arc<DnsConfig>>) {
+    let mut set = setting();
+    let kept = kept(&mut set);
     kept.dns.clone_from(&config);
     if let Some(running) = engine().as_ref() {
         running.dns(config);
@@ -150,15 +157,7 @@ fn set_chain(chain: Option<Chain>) -> bool {
 /// the one that runs, if any.
 fn set_tunnels(change: impl FnOnce(&mut TunnelSetting)) {
     let mut set = setting();
-    let kept = set.get_or_insert_with(|| ChainSetting {
-        chain: None,
-        uncached_answers: false,
-        tunnels: TunnelSetting::default(),
-        dns: None,
-        proxies: ProxySetting::default(),
-        blocking: BlockSetting::default(),
-        beneath: None,
-    });
+    let kept = kept(&mut set);
     change(&mut kept.tunnels);
     if let Some(running) = engine().as_ref() {
         running.tunnels(&kept.tunnels);
@@ -174,15 +173,7 @@ fn set_proxies(change: impl FnOnce(&mut ProxySetting)) {
         .unwrap_or_else(PoisonError::into_inner)
         .clone();
     let mut set = setting();
-    let kept = set.get_or_insert_with(|| ChainSetting {
-        chain: None,
-        uncached_answers: false,
-        tunnels: TunnelSetting::default(),
-        dns: None,
-        proxies: ProxySetting::default(),
-        blocking: BlockSetting::default(),
-        beneath: None,
-    });
+    let kept = kept(&mut set);
     change(&mut kept.proxies);
     kept.proxies.trackers = trackers;
     if let Some(running) = engine().as_ref() {
@@ -197,18 +188,22 @@ static BLOCKING_TABLE: Mutex<Option<Arc<Table>>> = Mutex::new(None);
 /// Keeps blocking's setting for the engines to come, beside the chain, and sets it on the one that runs.
 fn set_blocking(blocking: BlockSetting) {
     let mut set = setting();
-    let kept = set.get_or_insert_with(|| ChainSetting {
-        chain: None,
-        uncached_answers: false,
-        tunnels: TunnelSetting::default(),
-        dns: None,
-        proxies: ProxySetting::default(),
-        blocking: BlockSetting::default(),
-        beneath: None,
-    });
+    let kept = kept(&mut set);
     kept.blocking = blocking;
     if let Some(running) = engine().as_ref() {
         running.blocking(kept.blocking.clone());
+    }
+}
+
+/// Keeps the network beneath's own proxy (the proxy record's unit S2) for the engines to come, beside the chain, with
+/// what was learned of it where it is the same proxy ([`datapavan_net::Beneath::kept`]), and sets it on the one that
+/// runs.
+fn set_beneath(next: Option<datapavan_net::Beneath>) {
+    let mut set = setting();
+    let kept = kept(&mut set);
+    kept.beneath = next.map(|next| next.kept(kept.beneath.as_ref()));
+    if let Some(running) = engine().as_ref() {
+        running.beneath(kept.beneath.clone());
     }
 }
 
@@ -443,6 +438,26 @@ fn octets(ip: IpAddr) -> Vec<u8> {
     }
 }
 
+impl Service {
+    /// Kotlin's `protectSocket(fd, network)`: keeps `fd` out of the tunnel, and for a `network` other than 0 binds it
+    /// to the network beneath whose handle that is, only while it is the network beneath (the proxy record's unit S2).
+    /// One call for both, so that the JNI's code for it is there once.
+    #[inline(never)]
+    fn protect_socket(&self, fd: RawFd, network: i64) -> bool {
+        self.vm
+            .attach_current_thread(|env| -> Result<bool, Error> {
+                env.call_method(
+                    &self.service,
+                    jni_str!("protectSocket"),
+                    jni_sig!("(IJ)Z"),
+                    &[JValue::Int(fd), JValue::Long(network)],
+                )?
+                .z()
+            })
+            .unwrap_or(false)
+    }
+}
+
 impl Platform for Service {
     fn owner(&self, protocol: u8, local: SocketAddr, remote: SocketAddr) -> Option<u32> {
         self.vm
@@ -468,17 +483,13 @@ impl Platform for Service {
     }
 
     fn protect(&self, fd: RawFd) -> bool {
-        self.vm
-            .attach_current_thread(|env| -> Result<bool, Error> {
-                env.call_method(
-                    &self.service,
-                    jni_str!("protectSocket"),
-                    jni_sig!("(I)Z"),
-                    &[JValue::Int(fd)],
-                )?
-                .z()
-            })
-            .unwrap_or(false)
+        self.protect_socket(fd, 0)
+    }
+
+    /// Kotlin's `protectOn` (the proxy record's unit S2): protects `fd` and binds it to the network beneath through a
+    /// duplicate, only while that network's handle is `network`.
+    fn protect_on(&self, fd: RawFd, network: i64) -> bool {
+        self.protect_socket(fd, network)
     }
 
     fn log(&self, batch: &[u8]) {
@@ -1484,6 +1495,67 @@ pub extern "system" fn Java_org_visadahyu_datapavan_network_Engine_nativeBlockin
     });
 }
 
+/// `Engine.nativeBeneathProxy(network, proxies, exclusions, ipv6, always)`: the network beneath's own proxy (the proxy
+/// record's unit S2), handed whenever the network part settles it and at each start: the network's handle, the proxy's
+/// socket addresses, one `address port` a line, its exclusion list as Android gives it, comma-separated, whether the
+/// network has IPv6, and the user's choice "Send apps through this proxy". No line that parses gives none. Kept for
+/// the engines to come, as the chain is.
+// SAFETY: exported under the JNI name of the Kotlin method `external fun nativeBeneathProxy(network: Long, proxies:
+// String, exclusions: String, ipv6: Boolean, always: Boolean)`.
+#[unsafe(no_mangle)]
+pub extern "system" fn Java_org_visadahyu_datapavan_network_Engine_nativeBeneathProxy<'caller>(
+    unowned_env: EnvUnowned<'caller>,
+    _class: JClass<'caller>,
+    network: jlong,
+    proxies: JString<'caller>,
+    exclusions: JString<'caller>,
+    ipv6: jboolean,
+    always: jboolean,
+) {
+    entry(unowned_env, &mut |env| -> Result<_, Error> {
+        let proxies: Vec<SocketAddr> = proxies
+            .try_to_string(env)?
+            .lines()
+            .filter_map(|line| {
+                let (address, port) = line.trim().rsplit_once(' ')?;
+                Some(SocketAddr::new(address.parse().ok()?, port.parse().ok()?))
+            })
+            .collect();
+        let exclusions = exclusions.try_to_string(env)?;
+        set_beneath(datapavan_net::Beneath::new(
+            network,
+            &proxies,
+            &exclusions,
+            ipv6,
+            always,
+        ));
+        Ok(())
+    });
+}
+
+/// `Engine.nativeBeneathState()`: what the running engine learned of the network's own proxy (S2), for the debug
+/// dump's `beneath-proxy` line and "Now": one digit, 1 where the proxy comes first, plus 2 where names come first
+/// through it, plus 4 where it asked for a password (`407`); empty while none is set or no engine runs. A string, so
+/// that it shares the entry the other strings take: as an `Int` it took 768 bytes more of the `x86_64` library.
+// SAFETY: exported under the JNI name of the Kotlin method `external fun nativeBeneathState(): String`.
+#[unsafe(no_mangle)]
+pub extern "system" fn Java_org_visadahyu_datapavan_network_Engine_nativeBeneathState<'caller>(
+    unowned_env: EnvUnowned<'caller>,
+    _class: JClass<'caller>,
+) -> JString<'caller> {
+    entry(unowned_env, &mut |env| -> Result<_, Error> {
+        let state = engine().as_ref().and_then(Engine::beneath_state);
+        let mut digit = [0; 4];
+        let text = state.map_or("", |state| {
+            let bits = u8::from(state.proxy_first)
+                | u8::from(state.names_first) << 1
+                | u8::from(state.password) << 2;
+            char::from(b'0' + bits).encode_utf8(&mut digit)
+        });
+        JString::from_str(env, text)
+    })
+}
+
 /// `Engine.nativeBlocked()`: what tracker blocking counted in memory in the engine that runs, one line per app and
 /// row: `uid<TAB>host<TAB>lookups<TAB>connections<TAB>since`, `since` in milliseconds since 1970; empty when no
 /// engine runs. For "Now", inside the app only (ADR 0046's rule: nothing of it reaches a notification).
@@ -2157,6 +2229,49 @@ mod tests {
             Some(10_807),
             "the chain set before the first start"
         );
+        stop_running();
+    }
+
+    /// The proxy record's unit S2: the network's own proxy set while no engine runs is the next engine's, kept beside a
+    /// chain set after it; the same proxy handed again keeps what was learned of it, and none clears it on the engine
+    /// that runs, whose state then reads as none.
+    #[test]
+    fn the_networks_proxy_is_the_next_engines_and_kept_while_the_same() {
+        let _process = process();
+        stop_running();
+        let proxy = || {
+            datapavan_net::Beneath::new(
+                7,
+                &[SocketAddr::from(([192, 0, 2, 8], 3128))],
+                "",
+                false,
+                false,
+            )
+        };
+        let held = || setting().as_ref().and_then(|set| set.beneath.clone());
+        set_beneath(proxy());
+        let first = held().unwrap_or_else(|| unreachable!("kept while no engine runs"));
+        assert!(!set_chain(Some(a_chain(10_808))), "no engine runs");
+        let mut seen = Vec::new();
+        assert!(start_next(None, |given| started(&mut seen, given)));
+        let given = seen
+            .last()
+            .and_then(Option::as_ref)
+            .and_then(|set| set.beneath.clone());
+        assert!(
+            given.is_some_and(|given| Arc::ptr_eq(&given, &first)),
+            "the next engine's, after a chain"
+        );
+        set_beneath(proxy());
+        assert!(
+            held().is_some_and(|again| Arc::ptr_eq(&again, &first)),
+            "the same proxy"
+        );
+        let state = engine().as_ref().and_then(Engine::beneath_state);
+        assert_eq!(state.map(|state| state.proxy_first), Some(false));
+        set_beneath(None);
+        assert!(held().is_none());
+        assert_eq!(engine().as_ref().and_then(Engine::beneath_state), None);
         stop_running();
     }
 

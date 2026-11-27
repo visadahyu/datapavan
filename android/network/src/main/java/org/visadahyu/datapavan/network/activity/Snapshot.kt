@@ -111,8 +111,12 @@ data class Snapshot(
     )
 
     companion object {
-        /** Version 6 (the proxy record's unit B): the proxy block's flags as the log's version 7 writes them. */
-        const val VERSION: Byte = 6
+        /**
+         * Version 7 (the proxy record's unit S2): a flow's route may be the network's own proxy
+         * (LogRecord.VIA_NETWORK_PROXY), with the shape of version 6 (unit B), whose proxy block's flags are as the log's
+         * version 7 writes them.
+         */
+        const val VERSION: Byte = 7
 
         const val NOTHING_YET = 0
         const val STATES = 1
@@ -216,7 +220,7 @@ data class Snapshot(
             val via = b.get().toInt() and 0xff
             val tunnel = b.int.toLong() and 0xffffffffL
             // A code the engine never writes, or a tunnel number beside no tunnel, is refused.
-            require(via <= org.visadahyu.datapavan.network.log.LogRecord.VIA_TUNNEL)
+            require(via <= org.visadahyu.datapavan.network.log.LogRecord.VIA_NETWORK_PROXY)
             require((via == org.visadahyu.datapavan.network.log.LogRecord.VIA_TUNNEL) == (tunnel != 0L))
             // The proxy block is the log's of version 7 (`log::push_proxy`), its local flag included.
             val proxy = org.visadahyu.datapavan.network.log.LogRecord.Proxy.read(b, org.visadahyu.datapavan.network.log.LogRecord.VERSION_7)

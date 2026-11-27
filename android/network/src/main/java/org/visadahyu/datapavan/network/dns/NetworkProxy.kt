@@ -38,6 +38,12 @@ object NetworkProxy {
         LINK_LOCAL("link-local"),
         OWN("own"),
         UNRESOLVED("unresolved"),
+
+        /**
+         * A proxy on the local network while Datapavan lacks Android 17's local-network grant, which would refuse its
+         * connection (the proxy record's unit S2; [withoutGrant]).
+         */
+        LOCAL_NO_GRANT("local-no-grant"),
     }
 
     /** At most this many of a proxy name's addresses are kept; a way through the proxy takes one, the next after one that could not be reached. */
@@ -84,15 +90,17 @@ object NetworkProxy {
 
     /**
      * Whether [server], a host name or an address, is in [exclusions], by the rules Android gives a proxy's exclusion
-     * list (it becomes the process's `http.nonProxyHosts`): case-insensitive; `*` matches any run of characters, so
-     * `*.example.com` takes the subdomains of `example.com` and `10.*` the addresses that start so; a leading `.` takes
-     * the subdomains too; any other entry takes that host itself.
+     * list (it becomes the process's `http.nonProxyHosts`): ASCII letters in either case; `*` matches any run of
+     * characters, so `*.example.com` takes the subdomains of `example.com` and `10.*` the addresses that start so; a
+     * leading `.` takes the subdomains too; any other entry takes that host itself. The engine's `connect::excluded` is
+     * its twin, and both read core/net/testdata/proxy-exclusions.tsv (the proxy record's unit S2): only ASCII letters
+     * fold, since a host asked about is a DNS name or an address, so that the Kelvin sign is no `k` on either side.
      */
     fun excluded(server: String, exclusions: List<String>): Boolean {
-        val host = server.trim().trimEnd('.').removePrefix("[").removeSuffix("]").lowercase()
+        val host = folded(server.trim().trimEnd('.').removePrefix("[").removeSuffix("]"))
         if (host.isEmpty()) return false
         return exclusions.any { raw ->
-            val entry = raw.trim().trimEnd('.').lowercase()
+            val entry = folded(raw.trim().trimEnd('.'))
             when {
                 entry.isEmpty() -> false
                 '*' in entry -> glob(entry).matches(host)
@@ -102,7 +110,67 @@ object NetworkProxy {
         }
     }
 
-    private fun glob(entry: String): Regex = Regex(entry.split('*').joinToString(".*") { Regex.escape(it) })
+    /** [text] with its ASCII letters in lower case, and nothing else changed. */
+    internal fun folded(text: String): String = buildString(text.length) {
+        for (c in text) append(if (c in 'A'..'Z') c + ('a' - 'A') else c)
+    }
+
+    private fun glob(entry: String): Regex =
+        Regex(entry.split('*').joinToString(".*") { Regex.escape(it) }, RegexOption.DOT_MATCHES_ALL)
+
+    /**
+     * Whether Android 17 would refuse the network part's own connection to a proxy at [address] for want of the
+     * local-network grant (the proxy record's unit S2, section 6; ADR 0034, decision 5): never with [granted]; else an
+     * address within the network's own prefixes ([onLink]), multicast or broadcast; and on Wi-Fi, Ethernet or a network
+     * of unknown transport ([transport] 1, 2 or 0, as `Engine.nativeProxies` codes them) also 10/8, 172.16/12,
+     * 192.168/16, 100.64/10 and the link-local ranges. On cellular and other networks only their own subnets are local.
+     */
+    fun withoutGrant(address: InetAddress, transport: Int, onLink: Boolean, granted: Boolean): Boolean {
+        if (granted) return false
+        val bytes = address.address
+        if (onLink || address.isMulticastAddress || bytes.all { it == 0xff.toByte() }) return true
+        if (transport !in 0..2) return false
+        if (address.isLinkLocalAddress) return true
+        if (bytes.size != 4) return false
+        val (first, second) = bytes[0].toInt() and 0xff to (bytes[1].toInt() and 0xff)
+        return first == 10 || (first == 172 && second in 16..31) || (first == 192 && second == 168) ||
+            (first == 100 && second in 64..127)
+    }
+
+    /**
+     * [addresses] less those Android 17 would refuse the network part ([refused], by [withoutGrant]), with [why]; none
+     * left gives [Why.LOCAL_NO_GRANT]. For the resolver's `ProxySocket` and the engine's connections alike, sockets of
+     * the same UID (the proxy record's unit S2, section 6).
+     */
+    fun granted(addresses: List<InetAddress>, why: Why, refused: (InetAddress) -> Boolean): Pair<List<InetAddress>, Why> {
+        if (addresses.isEmpty()) return addresses to why
+        val kept = addresses.filterNot(refused)
+        return kept to if (kept.isEmpty()) Why.LOCAL_NO_GRANT else why
+    }
+
+    /**
+     * The engine's proxy (the proxy record's unit S2) from the resolver's settle, which [chosen] ([choose]'s reason) and
+     * [settled] (the reason after [usable] and [granted]) describe: its [addresses] only for the network's own proxy,
+     * never Android's global one ([Why.GLOBAL], audit M3), which would carry apps that ignore it further than Android
+     * does; else none, with the reason the dump's `beneath-proxy` line gives.
+     */
+    fun forEngine(addresses: List<InetSocketAddress>, chosen: Why, settled: Why): Pair<List<InetSocketAddress>, Why> = when {
+        chosen == Why.GLOBAL -> emptyList<InetSocketAddress>() to Why.GLOBAL
+        chosen != Why.NETWORK || addresses.isEmpty() -> emptyList<InetSocketAddress>() to settled
+        else -> addresses to Why.NETWORK
+    }
+
+    /**
+     * Whether the network beneath has IPv6 for the engine (the proxy record's unit S2, audit C2): a global unicast address
+     * (2000::/3) among its [addresses] and an IPv6 default route ([defaultRoute]). Without, an IPv6 destination never
+     * goes to its proxy.
+     */
+    fun ipv6(addresses: List<InetAddress>, defaultRoute: Boolean): Boolean =
+        defaultRoute && addresses.any { it is Inet6Address && (it.address[0].toInt() and 0xe0) == 0x20 }
+
+    /** [addresses] as `Engine.nativeBeneathProxy` takes them: one `address port` a line, never a zone. */
+    fun engineAddresses(addresses: List<InetSocketAddress>): String =
+        addresses.joinToString("\n") { "${it.address.hostAddress.orEmpty().substringBefore('%')} ${it.port}" }
 
     /** A host as Android's setting writes it, with an IPv6 literal's brackets taken off. */
     fun bare(host: String): String = host.trim().removePrefix("[").removeSuffix("]")

@@ -109,6 +109,24 @@ class LogTest {
         assertNull("a byte after it", LogRecord.parse(blocked + 0))
     }
 
+    /**
+     * Version 8 (the proxy record's unit S2): route 3, a flow through the network's own proxy, as the engine's
+     * `encodes_a_segments_route_after_its_state` writes it, with no tunnel's number; a record of version 7 with it, or a
+     * route past it, is malformed, and version 7's own routes still read.
+     */
+    @Test
+    fun readsTheNetworksOwnProxysRouteFromVersion8() {
+        val (_, direct) = EngineRecords.records[4]
+        // Its route, then the tunnel's number, no proxy and no blocking row's SDK end it.
+        val via = direct.size - 7
+        assertEquals(LogRecord.VIA_DIRECT, (LogRecord.parse(direct) as LogRecord.Segment).via)
+        val proxied = direct.copyOf().also { it[via] = LogRecord.VIA_NETWORK_PROXY.toByte() }
+        assertEquals(LogRecord.VIA_NETWORK_PROXY to 0L, (LogRecord.parse(proxied) as LogRecord.Segment).let { it.via to it.tunnel })
+        assertNull("route 3 in version 7", LogRecord.parse(proxied.copyOf().also { it[0] = 7 }))
+        assertNull("route 4", LogRecord.parse(direct.copyOf().also { it[via] = 4 }))
+        assertEquals(LogRecord.VIA_DIRECT, (LogRecord.parse(direct.copyOf().also { it[0] = 7 }) as LogRecord.Segment).via)
+    }
+
     /** A version 5 segment, as W8 part 2a wrote it: the engine's, without the blocking row's SDK, which reads as none. */
     @Test
     fun readsAVersion5SegmentWithNoBlockingRow() {

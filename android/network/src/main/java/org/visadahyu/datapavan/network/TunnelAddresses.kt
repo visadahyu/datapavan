@@ -67,7 +67,7 @@ object TunnelAddresses {
     private fun address(text: String): InetAddress = InetAddress.getByName(text)
 
     /** Whether [a] and [b] share their first [prefix] bits; addresses of different families never do. */
-    private fun sameSubnet(a: InetAddress, b: InetAddress, prefix: Int): Boolean {
+    internal fun sameSubnet(a: InetAddress, b: InetAddress, prefix: Int): Boolean {
         if ((a is Inet4Address) != (b is Inet4Address)) return false
         val x = a.address
         val y = b.address
