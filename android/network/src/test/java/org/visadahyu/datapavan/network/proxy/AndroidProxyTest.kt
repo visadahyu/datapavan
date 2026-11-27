@@ -59,32 +59,66 @@ class AndroidProxyTest {
 
     /**
      * S2: the network's own proxy's line says what the engine does with it: carries apps through it where a direct
-     * connection fails, with where it is, or always with the switch on, also beside the whole phone's; asking for a
-     * password; on the local network without the grant; on the phone itself, at a tool's known port or another; else
-     * not used.
+     * connection fails, with where it is, or always with the switch on, also beside the whole phone's; then, in lines of
+     * their own after the line and its switch, a password asked for (S2's review, M1) and the local-network grant as
+     * advice (M2); on the phone itself, at a tool's known port or another; else not used, with the switch where it was
+     * left on (m2).
      */
     @Test
     fun theNetworksProxyLineSaysWhatTheEngineDoesWithIt() {
         val at = listOf(isolateLtr("proxy.example.net:3128"))
         val network = AndroidProxy(network = server)
-        fun line(beneath: ProxyContext.Beneath, password: Boolean = false) = androidProxyLines(network, beneath, password).single()
+        fun lines(beneath: ProxyContext.Beneath, password: Boolean = false) = androidProxyLines(network, beneath, password)
+        fun line(beneath: ProxyContext.Beneath, password: Boolean = false) = lines(beneath, password).single()
+        val through = ProxyLine.Tap.THROUGH
         val used = ProxyContext.Beneath(NetworkProxy.Why.NETWORK, key = "1 proxy.example.net 3128")
-        assertEquals(ProxyLine(R.string.now_proxy_network, args = at, place = R.string.now_proxy_network_remote), line(used))
-        assertEquals(ProxyLine(R.string.now_proxy_network, args = at, place = R.string.proxy_local), line(used.copy(local = true)))
-        assertEquals(R.string.now_proxy_network_always, line(used.copy(always = true)).text)
-        assertEquals(ProxyLine(R.string.now_proxy_network_password), line(used, password = true))
+        assertEquals(ProxyLine(R.string.now_proxy_network, args = at, place = R.string.now_proxy_network_remote, tap = through), line(used))
+        assertEquals(ProxyLine(R.string.now_proxy_network, args = at, place = R.string.proxy_local, tap = through), line(used.copy(local = true)))
+        assertEquals(ProxyLine(R.string.now_proxy_network_always, args = at, place = R.string.now_proxy_network_remote, tap = through), line(used.copy(always = true)))
+        // No key, no switch.
+        assertEquals(null, line(ProxyContext.Beneath(NetworkProxy.Why.NETWORK)).tap)
+        // A password asked for keeps the line and its switch, the switch on or off, and says so after them (M1).
+        assertEquals(
+            listOf(
+                ProxyLine(R.string.now_proxy_network, args = at, place = R.string.now_proxy_network_remote, tap = through),
+                ProxyLine(R.string.now_proxy_network_password),
+            ),
+            lines(used, password = true),
+        )
+        assertEquals(
+            listOf(
+                ProxyLine(R.string.now_proxy_network_always, args = at, place = R.string.now_proxy_network_remote, tap = through),
+                ProxyLine(R.string.now_proxy_network_password_always),
+            ),
+            lines(used.copy(always = true), password = true),
+        )
+        // Without the local-network grant: the proxy used all the same, the grant as advice with its button (M2).
+        assertEquals(
+            listOf(
+                ProxyLine(R.string.now_proxy_network, args = at, place = R.string.proxy_local, tap = through),
+                ProxyLine(R.string.now_proxy_network_password),
+                ProxyLine(R.string.now_proxy_network_no_grant, tap = ProxyLine.Tap.ALLOW_LOCAL),
+            ),
+            lines(used.copy(local = true, noGrant = true), password = true),
+        )
         assertEquals(
             listOf(R.string.now_proxy_global, R.string.now_proxy_network),
             androidProxyLines(AndroidProxy(global = server, network = server), used).map { it.text },
         )
-        assertEquals(ProxyLine(R.string.now_proxy_network_no_grant), line(ProxyContext.Beneath(NetworkProxy.Why.LOCAL_NO_GRANT)))
         assertEquals(ProxyLine(R.string.now_proxy_network_phone, args = at), line(ProxyContext.Beneath(NetworkProxy.Why.LOOPBACK)))
         assertEquals(
-            ProxyLine(R.string.now_proxy_network_tool, args = listOf(isolate("Orbot"))),
+            ProxyLine(R.string.now_proxy_network_tool, args = listOf(isolate("Orbot")), tap = ProxyLine.Tap.CHAIN),
             line(ProxyContext.Beneath(NetworkProxy.Why.LOOPBACK, tool = "Orbot")),
         )
         for (why in listOf(NetworkProxy.Why.UNRESOLVED, NetworkProxy.Why.OWN, NetworkProxy.Why.LINK_LOCAL, NetworkProxy.Why.NONE)) {
             assertEquals(why.word, ProxyLine(R.string.now_proxy_network_unused, args = at), line(ProxyContext.Beneath(why)))
+            // The switch left on where the engine cannot use the proxy: said, and drawn so that it can be turned off (m2).
+            assertEquals(
+                why.word,
+                listOf(ProxyLine(R.string.now_proxy_network_unused, args = at), ProxyLine(R.string.now_proxy_network_unused_on, tap = through)),
+                lines(ProxyContext.Beneath(why, key = "1 proxy.example.net 3128", always = true)),
+            )
+            assertEquals(why.word, 1, lines(ProxyContext.Beneath(why, key = "1 proxy.example.net 3128")).size)
         }
     }
 
@@ -168,10 +202,20 @@ class AndroidProxyTest {
         assertTrue(text("now_proxy_network").contains("Where an app cannot connect directly, Datapavan connects it through this proxy"))
         assertTrue(text("now_proxy_network").endsWith("and the proxy then sees where it connects."))
         assertTrue(text("now_proxy_network_password").contains("which Android does not keep for a network"))
-        assertTrue(text("now_proxy_network_no_grant").endsWith("it cannot connect at all."))
+        // M1: only what was seen, some connections; M2: advice, never that nothing connects.
+        assertTrue(text("now_proxy_network_password").contains("for some connections"))
+        assertTrue(text("now_proxy_network_password_always").startsWith(text("now_proxy_network_password")))
+        assertTrue(text("now_proxy_network_no_grant").endsWith("allow the local network."))
+        assertTrue(!text("now_proxy_network_no_grant").contains("cannot connect at all"))
+        // m1: the history in the past tense, with no "this network".
+        for (name in listOf("history_destination_network_proxy", "history_network_proxy_off")) {
+            assertTrue(name, text(name).startsWith("Went through the proxy of the network it was on"))
+            assertTrue(name, !text(name).contains("this network", ignoreCase = true))
+        }
         assertTrue(text("now_proxy_network_pac").startsWith("This network\\'s settings give a PAC file."))
         val names = listOf("now_proxy_global", "now_proxy_global_pac", "now_proxy_network", "now_proxy_network_pac") +
-            listOf("always", "remote", "unused", "no_grant", "phone", "tool", "password").map { "now_proxy_network_$it" }
+            listOf("always", "remote", "unused", "unused_on", "no_grant", "phone", "tool", "password", "password_always")
+                .map { "now_proxy_network_$it" }
         for (name in names) {
             for (word in listOf("Wi-Fi", "every app", "you set", "your proxy", "chose", "admin", "owner")) {
                 assertTrue("$name: $word", !text(name).contains(word, ignoreCase = true))

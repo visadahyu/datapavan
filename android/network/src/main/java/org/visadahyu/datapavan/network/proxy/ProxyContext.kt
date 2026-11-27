@@ -44,8 +44,9 @@ object ProxyContext {
     /**
      * The network's own proxy as the engine has it (the proxy record's unit S2): [why] it has it
      * ([NetworkProxy.Why.NETWORK]) or none; the key of the user's choice "Send apps through this proxy" ([key],
-     * [ThroughProxy.key]) and the choice ([always]); whether its addresses are on the local network ([local]); and, for
-     * a proxy on the phone itself, the circumvention tool installed whose known port it names ([tool]), if one.
+     * [ThroughProxy.key]) and the choice ([always]); whether its addresses are on the local network ([local]); for a
+     * proxy on the phone itself, the circumvention tool installed whose known port it names ([tool]), if one; and
+     * whether Datapavan lacks the local-network grant that Android 17 may want for it ([noGrant], advice alone).
      */
     data class Beneath(
         val why: NetworkProxy.Why = NetworkProxy.Why.NONE,
@@ -53,6 +54,7 @@ object ProxyContext {
         val always: Boolean = false,
         val local: Boolean = false,
         val tool: String? = null,
+        val noGrant: Boolean = false,
     )
 
     private val held = MutableStateFlow(State())

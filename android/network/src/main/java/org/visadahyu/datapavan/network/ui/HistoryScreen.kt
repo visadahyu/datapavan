@@ -243,6 +243,7 @@ internal fun HistoryScreen(
                                 bytes = bytes,
                                 through = tunnel,
                                 networkProxy = entry.via == org.visadahyu.datapavan.network.log.LogRecord.VIA_NETWORK_PROXY,
+                                past = true,
                                 proxy = proxy?.let { proxyRow(it, past = true, toolName, choice) },
                                 onLogSwitch = onLogSwitch,
                                 onChoice = choose,

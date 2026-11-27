@@ -356,9 +356,9 @@ private fun Facts(view: NowView, snapshot: Snapshot?, onAllowAccess: () -> Unit)
         val beneath = view.proxies.beneath
         for (line in androidProxyLines(view.proxies.android, beneath, view.beneathPassword)) {
             Text(lineText(line), style = MaterialTheme.typography.bodyMedium, modifier = Modifier.testTag("now-android-proxy"))
-            // The network's own proxy's taps (S2), under its line.
-            when (line.text) {
-                R.string.now_proxy_network, R.string.now_proxy_network_always -> beneath.key?.let { key ->
+            // The network's own proxy's taps (S2), under the line [androidProxyLines] gave each.
+            when (line.tap) {
+                ProxyLine.Tap.THROUGH -> beneath.key?.let { key ->
                     Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                         androidx.compose.material3.Switch(
                             checked = beneath.always,
@@ -368,12 +368,13 @@ private fun Facts(view: NowView, snapshot: Snapshot?, onAllowAccess: () -> Unit)
                         Text(stringResource(R.string.now_proxy_send_through), style = MaterialTheme.typography.bodyMedium)
                     }
                 }
-                R.string.now_proxy_network_no_grant -> OutlinedButton(onClick = view.networkProxy.onAllowLocal) {
+                ProxyLine.Tap.ALLOW_LOCAL -> OutlinedButton(onClick = view.networkProxy.onAllowLocal) {
                     Text(stringResource(R.string.now_proxy_allow_local))
                 }
-                R.string.now_proxy_network_tool -> OutlinedButton(onClick = view.networkProxy.onChain) {
+                ProxyLine.Tap.CHAIN -> OutlinedButton(onClick = view.networkProxy.onChain) {
                     Text(stringResource(R.string.now_proxy_open_chain))
                 }
+                null -> Unit
             }
         }
     }
@@ -602,8 +603,12 @@ internal fun Place(
     bytes: String,
     /** The WireGuard configuration it went through, by its name, if one (W7, part 2). */
     through: String? = null,
-    /** Whether it went through the network's own proxy (the proxy record's unit S2). */
+    /**
+     * Whether it went through the network's own proxy (the proxy record's unit S2), and in which words: "Now"'s, or the
+     * history's in the past tense ([past]; S2's review, m1).
+     */
     networkProxy: Boolean = false,
+    past: Boolean = false,
     /** What the row says of the proxy it went through, if one (ADR 0052). */
     proxy: ProxyRow? = null,
     /** Opens the network screen at the switch, for a row that the switch leaves something out of. */
@@ -616,7 +621,12 @@ internal fun Place(
 ) {
     Text(isolateLtr(name), style = MaterialTheme.typography.bodyLarge)
     through?.let { Text(stringResource(R.string.now_destination_tunnel, it), style = MaterialTheme.typography.bodySmall) }
-    if (networkProxy) Text(stringResource(R.string.now_destination_network_proxy), style = MaterialTheme.typography.bodySmall)
+    if (networkProxy) {
+        Text(
+            stringResource(if (past) R.string.history_destination_network_proxy else R.string.now_destination_network_proxy),
+            style = MaterialTheme.typography.bodySmall,
+        )
+    }
     proxy?.let { ProxyLines(it.lines) }
     Text(
         stringResource(
@@ -730,7 +740,15 @@ internal data class ProxyLine(
     val args: List<String> = emptyList(),
     /** A sentence of its own set in after [args], such as the network's proxy's place (the proxy record's unit S2). */
     val place: Int? = null,
-)
+    /** The tap "Now" draws under the line, for the network's own proxy (S2), if one. */
+    val tap: Tap? = null,
+) {
+    /**
+     * The network's own proxy's taps (S2): the switch "Send apps through this proxy", the local-network grant, and the
+     * network screen whose chain sends apps through a tool (decision 3).
+     */
+    enum class Tap { THROUGH, ALLOW_LOCAL, CHAIN }
+}
 
 /**
  * What a destination's row says of its proxy (ADR 0052; fix round of W8 part 2a, screens review M3): the [header]
@@ -933,32 +951,44 @@ internal fun androidProxyLines(
         null -> null
     }
     val network = when (val network = proxy.network) {
-        is AndroidProxy.Setting.Server -> networkProxyLine(at(network), beneath, password)
-        AndroidProxy.Setting.Pac -> ProxyLine(R.string.now_proxy_network_pac).takeIf { global == null }
-        null -> null
+        is AndroidProxy.Setting.Server -> networkProxyLines(at(network), beneath, password)
+        AndroidProxy.Setting.Pac -> listOfNotNull(ProxyLine(R.string.now_proxy_network_pac).takeIf { global == null })
+        null -> emptyList()
     }
-    return listOfNotNull(global, network)
+    return listOfNotNull(global) + network
 }
 
 /**
- * The network's own proxy's line, the proxy at [at] (S2): carried through where a direct connection fails, or always by
- * the user's choice, with its place; asking for a password; on the local network without the grant; on the phone
- * itself, at a tool's known port or another (decision 3); else not used, as before the engine used it.
+ * The network's own proxy's lines, the proxy at [at] (S2), each with its tap: carried through where a direct connection
+ * fails, or always by the user's choice, with its place and the switch, whatever the proxy answered; then, as lines of
+ * their own, that it asked for a password ([password]: some connections were refused, S2's review M1), and that
+ * Datapavan lacks the local-network grant Android 17 may want for it ([ProxyContext.Beneath.noGrant], advice, M2). On
+ * the phone itself, at a tool's known port or another (decision 3). Else not used, as before the engine used it, with
+ * the switch where the user turned it on, since apps then go directly whatever it says (S2's review, m2).
  */
-private fun networkProxyLine(at: String, beneath: ProxyContext.Beneath, password: Boolean): ProxyLine = when (beneath.why) {
-    org.visadahyu.datapavan.network.dns.NetworkProxy.Why.NETWORK -> when {
-        password -> ProxyLine(R.string.now_proxy_network_password)
-        else -> ProxyLine(
-            if (beneath.always) R.string.now_proxy_network_always else R.string.now_proxy_network,
-            args = listOf(at),
-            place = if (beneath.local) R.string.proxy_local else R.string.now_proxy_network_remote,
+private fun networkProxyLines(at: String, beneath: ProxyContext.Beneath, password: Boolean): List<ProxyLine> {
+    val through = ProxyLine.Tap.THROUGH.takeIf { beneath.key != null }
+    return when (beneath.why) {
+        org.visadahyu.datapavan.network.dns.NetworkProxy.Why.NETWORK -> listOfNotNull(
+            ProxyLine(
+                if (beneath.always) R.string.now_proxy_network_always else R.string.now_proxy_network,
+                args = listOf(at),
+                place = if (beneath.local) R.string.proxy_local else R.string.now_proxy_network_remote,
+                tap = through,
+            ),
+            ProxyLine(if (beneath.always) R.string.now_proxy_network_password_always else R.string.now_proxy_network_password)
+                .takeIf { password },
+            ProxyLine(R.string.now_proxy_network_no_grant, tap = ProxyLine.Tap.ALLOW_LOCAL).takeIf { beneath.noGrant },
+        )
+        org.visadahyu.datapavan.network.dns.NetworkProxy.Why.LOOPBACK -> listOf(
+            beneath.tool?.let { ProxyLine(R.string.now_proxy_network_tool, args = listOf(isolate(it)), tap = ProxyLine.Tap.CHAIN) }
+                ?: ProxyLine(R.string.now_proxy_network_phone, args = listOf(at)),
+        )
+        else -> listOfNotNull(
+            ProxyLine(R.string.now_proxy_network_unused, args = listOf(at)),
+            ProxyLine(R.string.now_proxy_network_unused_on, tap = through).takeIf { beneath.always && through != null },
         )
     }
-    org.visadahyu.datapavan.network.dns.NetworkProxy.Why.LOCAL_NO_GRANT -> ProxyLine(R.string.now_proxy_network_no_grant)
-    org.visadahyu.datapavan.network.dns.NetworkProxy.Why.LOOPBACK -> beneath.tool
-        ?.let { ProxyLine(R.string.now_proxy_network_tool, args = listOf(isolate(it))) }
-        ?: ProxyLine(R.string.now_proxy_network_phone, args = listOf(at))
-    else -> ProxyLine(R.string.now_proxy_network_unused, args = listOf(at))
 }
 
 /**

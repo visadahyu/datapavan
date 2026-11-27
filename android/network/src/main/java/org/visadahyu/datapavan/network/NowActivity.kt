@@ -93,8 +93,11 @@ class NowActivity : ComponentActivity() {
         org.visadahyu.datapavan.network.ui.NetworkProxyActions(
             onThrough = { key, on -> org.visadahyu.datapavan.network.proxy.ThroughProxy.of(this).set(key, on) },
             onAllowLocal = {
-                if (!askedLocal) {
-                    askedLocal = true
+                // Android asks again after one refusal, and says so by its rationale; after a second refusal it answers at
+                // once with no dialog, so its own page for Datapavan opens instead. Whether Android was asked once is
+                // kept beyond this screen, which a rotation or a new "Now" makes again (S2's review, m8).
+                if (!nowPrefs.getBoolean(ASKED_LOCAL, false) || shouldShowRequestPermissionRationale(NetworkVpnService.LOCAL_NETWORK)) {
+                    nowPrefs.edit().putBoolean(ASKED_LOCAL, true).apply()
                     askLocal.launch(NetworkVpnService.LOCAL_NETWORK)
                 } else {
                     startActivity(
@@ -106,8 +109,8 @@ class NowActivity : ComponentActivity() {
         )
     }
 
-    /** Whether this screen asked Android for the local-network grant already: after a refusal it may not ask again. */
-    private var askedLocal = false
+    /** The screen's own preferences (S2, m8). */
+    private val nowPrefs by lazy { getSharedPreferences(NOW_PREFS, MODE_PRIVATE) }
 
     /** The grant's answer: the service settles the proxy again, which reads the grant at each settle. */
     private val askLocal = registerForActivityResult(androidx.activity.result.contract.ActivityResultContracts.RequestPermission()) {
@@ -269,7 +272,7 @@ class NowActivity : ComponentActivity() {
             withContext(worker) { loadTables(this@NowActivity) }
             repeatOnLifecycle(Lifecycle.State.STARTED) {
                 // Back from Android's page for Datapavan, where the local-network grant may have been given (S2).
-                if (askedLocal) settleProxyAgain()
+                if (nowPrefs.getBoolean(ASKED_LOCAL, false)) settleProxyAgain()
                 // A history shown when the view left the screen is read again as it comes back.
                 history.value?.takeIf { it.day == null && !it.reading }?.let { showDay(it.index) }
                 while (true) {
@@ -600,6 +603,10 @@ class NowActivity : ComponentActivity() {
 
         /** The one app to show, by package name: the only thing that crosses from the audit's page. */
         const val EXTRA_PACKAGE = "package"
+
+        /** The screen's own preferences: whether Android was asked for the local-network grant once (S2, m8). */
+        private const val NOW_PREFS = "now_screen"
+        private const val ASKED_LOCAL = "asked_local_network"
 
         /** Debug builds: keep the screen unprotected, for screenshots taken by a script. */
         const val EXTRA_SCREENSHOTS = "screenshots_for_tests"
