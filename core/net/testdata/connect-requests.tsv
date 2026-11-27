@@ -1,0 +1,10 @@
+# The requests the engine's connect::request writes (the proxy record's unit S2), byte for byte: connect.rs's unit test
+# writes each target's request and compares it with its row, and the proxy lab's own check (scripts/proxylab/check.py)
+# sends tinyproxy the rows it names, so that a real proxy reads the engine's own bytes. Columns: the target, an address
+# and its port (an IPv6 address in brackets) or a name and its port; the request, with \r and \n written so.
+# target	request
+198.51.100.9:443	CONNECT 198.51.100.9:443 HTTP/1.1\r\nHost: 198.51.100.9:443\r\n\r\n
+[2001:db8::9]:443	CONNECT [2001:db8::9]:443 HTTP/1.1\r\nHost: [2001:db8::9]:443\r\n\r\n
+[::ffff:198.51.100.9]:8080	CONNECT 198.51.100.9:8080 HTTP/1.1\r\nHost: 198.51.100.9:8080\r\n\r\n
+inner.proxylab.test:443	CONNECT inner.proxylab.test:443 HTTP/1.1\r\nHost: inner.proxylab.test:443\r\n\r\n
+inner.proxylab.test:80	CONNECT inner.proxylab.test:80 HTTP/1.1\r\nHost: inner.proxylab.test:80\r\n\r\n

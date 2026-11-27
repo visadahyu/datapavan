@@ -4,7 +4,14 @@ fixture speaks (scripts/proxy-fixture), with the lab's synthetic credentials, an
 a wrong password is refused; mtg accepts a fake-TLS hello made with the lab's secret and refuses one made with
 another. Each step prints PASS or FAIL and its name; the run fails on any FAIL.
 
-    python3 -I check.py HOST PORT_SOCKS PORT_HTTP PORT_OPEN PORT_MTG USER PASSWORD MTG_SECRET
+The network's own proxy (the proxy record's unit S2): tinyproxy, a real proxy, gets the engine's own CONNECT, the
+bytes connect::request writes, from core/net/testdata/connect-requests.tsv, which connect.rs's unit test holds to
+them. Without a password it opens one by name and one by address, the target's address on the lab's network in
+place of the table's documentation address, and carries a hello; it refuses one to port 80 with 403, by the lab's
+ConnectPort 443 (start.sh: tinyproxy's own default, its ConnectPort lines commented out, allows every port); and
+with a password it answers 407, which the engine takes for a proxy that wants one.
+
+    python3 -I check.py HOST PORT_SOCKS PORT_HTTP PORT_OPEN PORT_MTG USER PASSWORD MTG_SECRET TARGET_ADDRESS
 """
 import base64
 import hashlib
@@ -17,6 +24,11 @@ import time
 
 INNER = "inner.proxylab.test"
 COVER_PREFIX = "ee"
+# The engine's own requests, byte for byte (the proxy record's unit S2).
+REQUESTS = os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "..", "core", "net", "testdata",
+                        "connect-requests.tsv")
+# The table's address row, whose address the check replaces with the target's on the lab's network.
+TABLE_ADDRESS = "198.51.100.9"
 
 
 def client_hello(name, session=b"\x00" * 32, random=b"\x07" * 32):
@@ -93,6 +105,34 @@ def http_connect(host, port, user=None, password=None):
     return s if head.startswith(b"HTTP/1.") and b" 200 " in head.split(b"\r\n")[0] else None
 
 
+def engine_request(target):
+    """The request the engine's connect::request writes for target, as the shared table holds it."""
+    with open(REQUESTS, encoding="utf-8") as table:
+        for line in table:
+            if line.startswith("#") or not line.strip():
+                continue
+            name, request = line.rstrip("\n").split("\t")
+            if name == target:
+                return request.replace("\\r", "\r").replace("\\n", "\n").encode()
+    raise SystemExit(f"no request for {target} in {REQUESTS}")
+
+
+def engine_connect(host, port, request):
+    """Sends request as it is, and reads the answer's head to its blank line and no further, as the engine does: the
+    socket and the status code, None for no HTTP answer."""
+    s = connect(host, port)
+    s.sendall(request)
+    head = b""
+    while not head.endswith(b"\r\n\r\n") and not head.endswith(b"\n\n") and len(head) < 8192:
+        chunk = s.recv(1)
+        if not chunk:
+            break
+        head += chunk
+    line = head.split(b"\n")[0]
+    code = int(line[9:12]) if line[:7] == b"HTTP/1." and line[9:12].isdigit() else None
+    return s, code
+
+
 def http_get(host, port, user=None, password=None):
     s = connect(host, port)
     auth = ""
@@ -105,7 +145,7 @@ def http_get(host, port, user=None, password=None):
 
 
 def main(argv):
-    host, socks_port, http_port, open_port, mtg_port, user, password, secret = argv
+    host, socks_port, http_port, open_port, mtg_port, user, password, secret, target = argv
     socks_port, http_port, open_port, mtg_port = map(int, (socks_port, http_port, open_port, mtg_port))
     failed = 0
 
@@ -135,6 +175,19 @@ def main(argv):
     except OSError:
         refused = True
     check("mtg-refuses-another-secret", refused)
+
+    def carries(s, code):
+        return code == 200 and (s.sendall(hello) or read_exactly(s, len(hello))) == hello
+
+    s, code = engine_connect(host, open_port, engine_request(INNER + ":443"))
+    check("tinyproxy-opens-the-engines-connect-by-name", carries(s, code))
+    by_address = engine_request(TABLE_ADDRESS + ":443").replace(TABLE_ADDRESS.encode(), target.encode())
+    s, code = engine_connect(host, open_port, by_address)
+    check("tinyproxy-opens-the-engines-connect-by-address", carries(s, code))
+    _, code = engine_connect(host, open_port, engine_request(INNER + ":80"))
+    check(f"tinyproxy-refuses-the-engines-connect-to-port-80-by-connectport-443 (answered {code})", code == 403)
+    _, code = engine_connect(host, http_port, engine_request(INNER + ":443"))
+    check(f"tinyproxy-with-a-password-answers-407-to-the-engines-connect (answered {code})", code == 407)
     return 1 if failed else 0
 
 

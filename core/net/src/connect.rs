@@ -395,6 +395,35 @@ mod tests {
         }
     }
 
+    /// The requests the engine and the proxy lab both hold (`core/net/testdata/connect-requests.tsv`): each target's
+    /// request, byte for byte, with `\r` and `\n` written so. The proxy lab's own check (`scripts/proxylab/check.py`)
+    /// sends tinyproxy its rows, so that a real proxy reads these very bytes.
+    #[test]
+    fn each_request_is_the_one_the_proxy_lab_sends() {
+        let mut rows = 0;
+        for line in include_str!("../testdata/connect-requests.tsv").lines() {
+            if line.starts_with('#') || line.trim().is_empty() {
+                continue;
+            }
+            let (target, written) = line
+                .split_once('\t')
+                .unwrap_or_else(|| unreachable!("a row of two fields: {line}"));
+            let target = target.parse::<SocketAddr>().map_or_else(
+                |_| {
+                    target
+                        .rsplit_once(':')
+                        .and_then(|(name, port)| Target::name(name, port.parse().ok()?))
+                        .unwrap_or_else(|| unreachable!("a target: {line}"))
+                },
+                Target::Address,
+            );
+            let written = written.replace("\\r", "\r").replace("\\n", "\n");
+            assert_eq!(request(&target), written.as_bytes(), "{line}");
+            rows += 1;
+        }
+        assert!(rows >= 5, "{rows} rows");
+    }
+
     /// A cell of the shared table with each `\u{XXXX}` read as that code point, so that the table can name a tab, a
     /// line break or a control without holding it.
     fn unescaped(cell: &str) -> String {

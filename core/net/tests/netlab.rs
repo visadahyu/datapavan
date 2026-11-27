@@ -9,9 +9,11 @@
 
 mod common;
 
-use common::{Settings, proxy};
+use common::{ConnectMode, ConnectSettings, Settings, connect_proxy, proxy};
 use datapavan_net::engine::{Addresses, Limits};
-use datapavan_net::{Chain, Config, Engine, Handover, Platform, packet};
+use datapavan_net::{
+    Beneath, BlockSetting, Chain, Config, Engine, Handover, Platform, Via, packet,
+};
 use socket2::{Domain, Protocol, Socket, Type};
 use std::collections::{HashMap, HashSet};
 use std::future::Future;
@@ -104,6 +106,12 @@ impl Platform for Lab {
             std::thread::sleep(Duration::from_millis(delay));
         }
         true
+    }
+
+    /// The proxy record's unit S2: a socket to the network's own proxy is bound only to [`LAB_NETWORK`], the network
+    /// beneath, as Android's `Network.bindSocket` fails for a network that is gone.
+    fn protect_on(&self, fd: RawFd, network: i64) -> bool {
+        network == LAB_NETWORK && self.protect(fd)
     }
 
     fn log(&self, batch: &[u8]) {
@@ -5284,6 +5292,512 @@ fn a_tools_own_connections_are_logged_by_the_switch_or_its_choice() -> Outcome {
                 holds(&since, &SERVER.octets()),
                 "the address with the switch on"
             );
+            Ok(())
+        },
+    )
+}
+
+/// The network beneath as the lab's Android knows it, by its handle (`Network.getNetworkHandle`): the only network
+/// [`Lab`]'s `protect_on` binds a socket to (the proxy record's unit S2).
+const LAB_NETWORK: i64 = 0x6c_0000_0001;
+/// The places of the network's own proxy's counters in `Engine::counters` (the proxy record's unit S2).
+const BENEATH_TRIES: usize = 73;
+const BENEATH_OPENED: usize = 74;
+const BENEATH_REFUSED: usize = 75;
+const BENEATH_PASSWORD: usize = 76;
+const BENEATH_NAMED: usize = 78;
+const BENEATH_STALE: usize = 79;
+
+/// The network's own proxy at `proxy`, of the network whose handle is `network`, with the exclusion list
+/// `exclusions`, as the network part hands it ([`Beneath`]); no IPv6, and not the user's choice to send every
+/// direct app through it.
+fn set_beneath(engine: &Engine, network: i64, proxy: SocketAddr, exclusions: &str) -> Outcome {
+    let setting =
+        Beneath::new(network, &[proxy], exclusions, false, false).ok_or("no usable proxy")?;
+    engine.beneath(Some(Arc::new(setting)));
+    Ok(())
+}
+
+/// The namespace lets out only the proxy at `proxy`, as a network that requires its proxy
+/// (scripts/netlab-enter.py's `--require-proxy`).
+fn require_proxy(proxy: Ipv4Addr) -> Outcome {
+    change_lab(&["--require-proxy", &proxy.to_string()], Stdio::null())
+}
+
+/// An app's connection to `to` as it ends, open or the error the app sees, within [`STEP`].
+async fn app_try(to: SocketAddr) -> Result<io::Result<TcpStream>, Box<dyn std::error::Error>> {
+    let socket = TcpSocket::new_v4()?;
+    socket.bind(SocketAddr::from((Addresses::COMMON.tun4, 0)))?;
+    Ok(timeout(STEP, socket.connect(to))
+        .await
+        .map_err(|_| format!("no end to an app's connection to {to}"))?)
+}
+
+/// Whether an app's connection ended refused, as the app sees a reset to its SYN.
+fn refused(connection: &io::Result<TcpStream>) -> bool {
+    matches!(connection, Err(error) if error.kind() == io::ErrorKind::ConnectionRefused)
+}
+
+/// The destination and route of each flow segment in `logged`, batches of the log's records one after another
+/// (`datapavan_net::log`): a count (u32), then each record after its length (u16); a segment is read to its route,
+/// past its fixed fields, its address, its network and its three texts.
+fn logged_routes(logged: &[u8]) -> Vec<(SocketAddr, u8)> {
+    let mut routes = Vec::new();
+    let mut rest = logged;
+    while let Some((count, records)) = rest.split_first_chunk::<4>() {
+        rest = records;
+        for _ in 0..u32::from_le_bytes(*count) {
+            let Some((length, after)) = rest.split_first_chunk::<2>() else {
+                return routes;
+            };
+            let length = usize::from(u16::from_le_bytes(*length));
+            let Some(record) = after.get(..length) else {
+                return routes;
+            };
+            rest = &after[length..];
+            if let Some(route) = segment_route(record) {
+                routes.push(route);
+            }
+        }
+    }
+    routes
+}
+
+/// A flow segment's destination and route: past the version, kind 1, the flow's number, the UID, start, end, four
+/// counts of bytes and six bytes of codes; then the address, the network, three texts and the state.
+fn segment_route(record: &[u8]) -> Option<(SocketAddr, u8)> {
+    if record.get(1) != Some(&1) {
+        return None;
+    }
+    let mut at = 2 + 8 + 4 + 8 + 8 + 4 * 8 + 6;
+    let length = usize::from(*record.get(at)?);
+    let ip = match length {
+        4 => IpAddr::from(<[u8; 4]>::try_from(record.get(at + 1..at + 5)?).ok()?),
+        16 => IpAddr::from(<[u8; 16]>::try_from(record.get(at + 1..at + 17)?).ok()?),
+        _ => return None,
+    };
+    at += 1 + length;
+    let port = u16::from_le_bytes(record.get(at..at + 2)?.try_into().ok()?);
+    at += 2 + 4 + 1;
+    for _ in 0..3 {
+        at += 1 + usize::from(*record.get(at)?);
+    }
+    Some((SocketAddr::new(ip, port), *record.get(at + 1)?))
+}
+
+/// A lookup of `example.test` by the app, answered `SERVER` by the network's resolver at `OTHER`, so that the
+/// engine holds that name for the server, from the app's own lookup.
+async fn name_the_server(engine: &Engine) -> Outcome {
+    resolver(OTHER, SERVER).await?;
+    engine.network_changed(Some(IpAddr::V4(OTHER)), false);
+    let lookup = app_socket().await?;
+    lookup
+        .send_to(&query_example(), (Addresses::COMMON.dns4, 53))
+        .await?;
+    app_receive(&lookup).await?;
+    Ok(())
+}
+
+/// The request line and the one header a request for `authority` carries.
+fn connect_lines(authority: &str) -> Vec<String> {
+    vec![
+        format!("CONNECT {authority} HTTP/1.1"),
+        format!("Host: {authority}"),
+    ]
+}
+
+/// The proxy record's unit S2 (S2-PLAN, section 8, the network lab, 1): on a network that lets out only its own HTTP
+/// proxy, a direct app's connection, refused directly, goes through that proxy by `CONNECT` and works. The proxy read
+/// `CONNECT 198.51.100.9:<port> HTTP/1.1` and `Host` alone: the app's own destination, by address, and nothing that
+/// names the engine. The kept flow is the app's to the server, through the network's proxy, and the log writes its
+/// route 3.
+#[test]
+#[ignore = "needs an unprivileged network namespace; scripts/check.sh rust runs it"]
+fn on_a_network_that_requires_its_proxy_a_direct_app_goes_through_it() -> Outcome {
+    lab(
+        "on_a_network_that_requires_its_proxy_a_direct_app_goes_through_it",
+        &Limits::default(),
+        |engine| async move {
+            let proxy = connect_proxy(OTHER.into(), ConnectSettings::default()).await?;
+            require_proxy(OTHER)?;
+            set_beneath(&engine, LAB_NETWORK, proxy.address, "")?;
+            let server = echo_server().await?;
+            let before = LOGGED.lock().map_err(|e| e.to_string())?.len();
+            let mut app = app_connect(server).await?;
+            assert_eq!(
+                exchange(&mut app, b"through the network's proxy").await?,
+                b"through the network's proxy"
+            );
+            assert_eq!(
+                proxy.requests(),
+                [connect_lines(&format!("{SERVER}:{}", server.port()))]
+            );
+            let flow = flow_to(&engine, server, |f| f.via == Via::NetworkProxy).await?;
+            assert_eq!(flow.uid, Some(APP));
+            let counters = engine.counters();
+            assert_eq!((counters[BENEATH_TRIES], counters[BENEATH_OPENED]), (1, 1));
+            drop(app);
+            let since = logged_since(&engine, before).await?;
+            assert!(
+                logged_routes(&since).contains(&(server, 3)),
+                "route 3 in the log: {:?}",
+                logged_routes(&since)
+            );
+            Ok(())
+        },
+    )
+}
+
+/// S2's network lab, 2 (audit C2): on a network that drops direct connections, each to a server in 203.0.113.0/24
+/// that never answers, a direct app's connection waits `beneath_direct` for its direct try, then goes through the
+/// network's proxy and works. Only after three distinct servers so (`beneath_failures`), with no direct success
+/// between, does the proxy come first, and the next connection goes through it at once. The plan's first connection
+/// alone taught it; the audit's C2 asks for several servers, so that a hostile proxy that answers every request
+/// never captures a network whose direct connections pass.
+#[test]
+#[ignore = "needs an unprivileged network namespace; scripts/check.sh rust runs it"]
+fn on_a_network_that_drops_the_proxy_comes_first_after_three_servers() -> Outcome {
+    let limits = Limits {
+        beneath_direct: Duration::from_millis(400),
+        ..Limits::default()
+    };
+    lab(
+        "on_a_network_that_drops_the_proxy_comes_first_after_three_servers",
+        &limits,
+        |engine| async move {
+            let server = echo_server().await?;
+            let silent: Vec<SocketAddr> = (1..=3)
+                .map(|i| SocketAddr::from((Ipv4Addr::new(203, 0, 113, i), server.port())))
+                .collect();
+            let proxy = connect_proxy(
+                OTHER.into(),
+                ConnectSettings {
+                    remap: silent.iter().map(|&to| (to, server)).collect(),
+                    ..ConnectSettings::default()
+                },
+            )
+            .await?;
+            set_beneath(&engine, LAB_NETWORK, proxy.address, "")?;
+            for (i, &to) in silent.iter().enumerate() {
+                assert_eq!(
+                    engine.beneath_state().map(|s| s.proxy_first),
+                    Some(false),
+                    "before the server {to}"
+                );
+                let began = std::time::Instant::now();
+                let mut app = app_connect(to).await?;
+                assert_eq!(exchange(&mut app, b"dropped").await?, b"dropped");
+                let took = began.elapsed();
+                assert!(
+                    took >= limits.beneath_direct,
+                    "the server {i}, {to}, took {took:?}"
+                );
+                flow_to(&engine, to, |f| f.via == Via::NetworkProxy).await?;
+            }
+            assert_eq!(engine.beneath_state().map(|s| s.proxy_first), Some(true));
+            let began = std::time::Instant::now();
+            let mut app = app_connect(silent[0]).await?;
+            assert_eq!(exchange(&mut app, b"at once").await?, b"at once");
+            let took = began.elapsed();
+            assert!(
+                took < limits.beneath_direct / 2,
+                "the proxy came first, yet it took {took:?}"
+            );
+            assert_eq!(proxy.requests().len(), 4);
+            Ok(())
+        },
+    )
+}
+
+/// S2's network lab, 3: where direct connections pass, a direct app's connection goes directly, and the network's
+/// proxy hears nothing, not even a connection.
+#[test]
+#[ignore = "needs an unprivileged network namespace; scripts/check.sh rust runs it"]
+fn where_direct_connections_pass_the_networks_proxy_hears_nothing() -> Outcome {
+    lab(
+        "where_direct_connections_pass_the_networks_proxy_hears_nothing",
+        &Limits::default(),
+        |engine| async move {
+            let proxy = connect_proxy(OTHER.into(), ConnectSettings::default()).await?;
+            set_beneath(&engine, LAB_NETWORK, proxy.address, "")?;
+            let server = echo_server().await?;
+            let mut app = app_connect(server).await?;
+            assert_eq!(exchange(&mut app, b"directly").await?, b"directly");
+            let flow = flow_to(&engine, server, |f| f.uid.is_some()).await?;
+            assert_eq!(flow.via, Via::Direct);
+            assert_eq!(proxy.connections(), 0);
+            assert_eq!(engine.counters()[BENEATH_TRIES], 0);
+            assert_eq!(engine.beneath_state().map(|s| s.proxy_first), Some(false));
+            Ok(())
+        },
+    )
+}
+
+/// S2's network lab, 4 (ADR 0053, decision 4; S2-PLAN, section 5): with tracker blocking on, a hello naming a blocked
+/// row, through the network's own proxy, reaches neither the proxy nor the server. The proxy read the `CONNECT`, which
+/// opens the way before the app's first byte, and nothing after it; the server read nothing; the app got a reset.
+#[test]
+#[ignore = "needs an unprivileged network namespace; scripts/check.sh rust runs it"]
+fn a_blocked_hello_reaches_neither_the_networks_proxy_nor_the_server() -> Outcome {
+    lab(
+        "a_blocked_hello_reaches_neither_the_networks_proxy_nor_the_server",
+        &Limits::default(),
+        |engine| async move {
+            let table = datapavan_net::blocking::Table::parse(
+                "tracker.example\tcom.example:sdk\tcom.example.\tblock\t-\tReceives events\tcode\t\
+                 https://example.com/x\t2026-11-21\n",
+            )
+            .map_err(|e| format!("{e:?}"))?;
+            engine.blocking(BlockSetting {
+                on: true,
+                table: Some(Arc::new(table)),
+                covered: vec![APP],
+                ..BlockSetting::default()
+            });
+            let proxy = connect_proxy(OTHER.into(), ConnectSettings::default()).await?;
+            require_proxy(OTHER)?;
+            set_beneath(&engine, LAB_NETWORK, proxy.address, "")?;
+            let listener = TcpListener::bind((SERVER, 0)).await?;
+            let at = listener.local_addr()?;
+            let heard = Arc::new(std::sync::Mutex::new(Vec::new()));
+            let kept = Arc::clone(&heard);
+            tokio::spawn(async move {
+                while let Ok((mut connection, _)) = listener.accept().await {
+                    let kept = Arc::clone(&kept);
+                    tokio::spawn(async move {
+                        let mut buffer = [0u8; 4096];
+                        while let Ok(n) = connection.read(&mut buffer).await {
+                            if n == 0 {
+                                return;
+                            }
+                            kept.lock()
+                                .unwrap_or_else(std::sync::PoisonError::into_inner)
+                                .extend_from_slice(&buffer[..n]);
+                        }
+                    });
+                }
+            });
+            let mut app = app_connect(at).await?;
+            app.write_all(&client_hello("tracker.example")).await?;
+            let (read, end) = read_to_end_or_error(&mut app).await?;
+            assert_eq!(
+                (read, end),
+                (Vec::new(), Some(io::ErrorKind::ConnectionReset))
+            );
+            tokio::time::sleep(Duration::from_millis(300)).await;
+            assert_eq!(proxy.requests(), [connect_lines(&at.to_string())]);
+            assert_eq!(
+                proxy.carried(),
+                Vec::<u8>::new(),
+                "the proxy read the hello"
+            );
+            assert_eq!(
+                heard.lock().map_err(|e| e.to_string())?.clone(),
+                Vec::<u8>::new(),
+                "the server read the hello"
+            );
+            flow_to(&engine, at, |f| f.blocked.is_some()).await?;
+            Ok(())
+        },
+    )
+}
+
+/// S2's network lab, 5 (m2): where the network's proxy wants a password (`407`), which Android keeps for no network,
+/// the app is refused, as its direct connection was; the proxy got one request, by address, and none by name after
+/// it; and the engine says the proxy asked for a password.
+#[test]
+#[ignore = "needs an unprivileged network namespace; scripts/check.sh rust runs it"]
+fn a_networks_proxy_that_wants_a_password_leaves_the_app_refused() -> Outcome {
+    lab(
+        "a_networks_proxy_that_wants_a_password_leaves_the_app_refused",
+        &Limits::default(),
+        |engine| async move {
+            let proxy = connect_proxy(
+                OTHER.into(),
+                ConnectSettings {
+                    mode: ConnectMode::Password,
+                    ..ConnectSettings::default()
+                },
+            )
+            .await?;
+            require_proxy(OTHER)?;
+            set_beneath(&engine, LAB_NETWORK, proxy.address, "")?;
+            let server = echo_server().await?;
+            let connection = app_try(server).await?;
+            assert!(refused(&connection), "{connection:?}");
+            assert_eq!(
+                proxy.requests(),
+                [connect_lines(&format!("{SERVER}:{}", server.port()))]
+            );
+            assert_eq!(engine.beneath_state().map(|s| s.password), Some(true));
+            assert_eq!(engine.counters()[BENEATH_PASSWORD], 1);
+            Ok(())
+        },
+    )
+}
+
+/// What the lab's server that speaks first says on each connection, as an SMTP server's banner.
+const BANNER: &[u8] = b"220 lab.example ESMTP\r\n";
+
+/// S2's network lab, 6 (m1): a server that speaks first, through the network's own proxy, which writes the server's
+/// banner with its `200` in one segment: the engine reads the proxy's head and nothing after it, so the banner
+/// reaches the app whole and first, and the exchange goes on.
+#[test]
+#[ignore = "needs an unprivileged network namespace; scripts/check.sh rust runs it"]
+fn a_server_that_speaks_first_is_heard_whole_through_the_networks_proxy() -> Outcome {
+    lab(
+        "a_server_that_speaks_first_is_heard_whole_through_the_networks_proxy",
+        &Limits::default(),
+        |engine| async move {
+            let proxy = connect_proxy(
+                OTHER.into(),
+                ConnectSettings {
+                    first_bytes_with_answer: true,
+                    ..ConnectSettings::default()
+                },
+            )
+            .await?;
+            require_proxy(OTHER)?;
+            set_beneath(&engine, LAB_NETWORK, proxy.address, "")?;
+            let listener = TcpListener::bind((SERVER, 0)).await?;
+            let at = listener.local_addr()?;
+            tokio::spawn(async move {
+                while let Ok((mut connection, _)) = listener.accept().await {
+                    tokio::spawn(async move {
+                        if connection.write_all(BANNER).await.is_err() {
+                            return;
+                        }
+                        let mut buffer = [0u8; 64];
+                        if matches!(connection.read(&mut buffer).await, Ok(n) if n > 0) {
+                            let _ = connection.write_all(b"250 lab.example\r\n").await;
+                        }
+                    });
+                }
+            });
+            let mut app = app_connect(at).await?;
+            let mut banner = vec![0u8; BANNER.len()];
+            within("the server's banner", app.read_exact(&mut banner)).await?;
+            assert_eq!(banner, BANNER);
+            step(&mut app, b"EHLO app.example\r\n", b"250 lab.example\r\n").await?;
+            flow_to(&engine, at, |f| f.via == Via::NetworkProxy).await?;
+            assert_eq!(proxy.requests().len(), 1);
+            Ok(())
+        },
+    )
+}
+
+/// S2's network lab, 7: a server the proxy's exclusion list names, by its DNS name from the app's own lookup, never
+/// goes through the proxy. Before the lookup, its address alone is not excluded and goes through; after it, the
+/// connection goes directly, and on a network that requires its proxy it is refused, as Android's apps would be
+/// without the VPN: the proxy hears nothing more.
+#[test]
+#[ignore = "needs an unprivileged network namespace; scripts/check.sh rust runs it"]
+fn a_name_the_proxys_exclusion_list_names_never_goes_through_it() -> Outcome {
+    lab(
+        "a_name_the_proxys_exclusion_list_names_never_goes_through_it",
+        &Limits::default(),
+        |engine| async move {
+            let proxy = connect_proxy(OTHER.into(), ConnectSettings::default()).await?;
+            require_proxy(OTHER)?;
+            set_beneath(
+                &engine,
+                LAB_NETWORK,
+                proxy.address,
+                "intranet.example, *.TEST.",
+            )?;
+            let server = echo_server().await?;
+            let mut app = app_connect(server).await?;
+            assert_eq!(
+                exchange(&mut app, b"not named yet").await?,
+                b"not named yet"
+            );
+            assert_eq!(proxy.requests().len(), 1);
+
+            name_the_server(&engine).await?;
+            let connection = app_try(server).await?;
+            assert!(refused(&connection), "{connection:?}");
+            assert_eq!(
+                proxy.requests().len(),
+                1,
+                "the excluded name went to the proxy"
+            );
+            assert_eq!(proxy.connections(), 1);
+            Ok(())
+        },
+    )
+}
+
+/// S2's network lab, 8 (m5): a proxy setting whose network handle is not the network beneath now, as after a change
+/// of network the network part has not yet told: the lab's Android refuses to bind a socket to that network, and the
+/// proxy is never contacted, not even a connection; the app is refused, as its direct connection was. Once the
+/// setting names the network beneath, the same proxy carries the app.
+#[test]
+#[ignore = "needs an unprivileged network namespace; scripts/check.sh rust runs it"]
+fn a_stale_network_handle_never_reaches_the_proxy() -> Outcome {
+    lab(
+        "a_stale_network_handle_never_reaches_the_proxy",
+        &Limits::default(),
+        |engine| async move {
+            let proxy = connect_proxy(OTHER.into(), ConnectSettings::default()).await?;
+            require_proxy(OTHER)?;
+            set_beneath(&engine, LAB_NETWORK + 1, proxy.address, "")?;
+            let server = echo_server().await?;
+            let connection = app_try(server).await?;
+            assert!(refused(&connection), "{connection:?}");
+            assert_eq!(proxy.connections(), 0);
+            assert_eq!(engine.counters()[BENEATH_STALE], 1);
+
+            set_beneath(&engine, LAB_NETWORK, proxy.address, "")?;
+            let mut app = app_connect(server).await?;
+            assert_eq!(exchange(&mut app, b"bound").await?, b"bound");
+            assert_eq!(proxy.connections(), 1);
+            Ok(())
+        },
+    )
+}
+
+/// S2's network lab, beside the plan's eight (decision 2): a network's proxy that refuses a request by address
+/// (`403`), as one that filters by name, gets the flow's own name, from the app's own lookup, on a new connection,
+/// and opens it; then names come first through it, and the next connection asks by name at once.
+#[test]
+#[ignore = "needs an unprivileged network namespace; scripts/check.sh rust runs it"]
+fn a_proxy_that_refuses_addresses_gets_the_flows_own_name() -> Outcome {
+    lab(
+        "a_proxy_that_refuses_addresses_gets_the_flows_own_name",
+        &Limits::default(),
+        |engine| async move {
+            let server = echo_server().await?;
+            let proxy = connect_proxy(
+                OTHER.into(),
+                ConnectSettings {
+                    mode: ConnectMode::AddressesRefused,
+                    names: HashMap::from([("example.test".to_owned(), IpAddr::V4(SERVER))]),
+                    ..ConnectSettings::default()
+                },
+            )
+            .await?;
+            require_proxy(OTHER)?;
+            set_beneath(&engine, LAB_NETWORK, proxy.address, "")?;
+            name_the_server(&engine).await?;
+            let mut app = app_connect(server).await?;
+            assert_eq!(exchange(&mut app, b"by name").await?, b"by name");
+            let by_address = connect_lines(&format!("{SERVER}:{}", server.port()));
+            let by_name = connect_lines(&format!("example.test:{}", server.port()));
+            assert_eq!(proxy.requests(), [by_address, by_name.clone()]);
+            assert_eq!(engine.beneath_state().map(|s| s.names_first), Some(true));
+            let counters = engine.counters();
+            assert_eq!(
+                (
+                    counters[BENEATH_REFUSED],
+                    counters[BENEATH_NAMED],
+                    counters[BENEATH_OPENED]
+                ),
+                (1, 1, 1)
+            );
+
+            let mut again = app_connect(server).await?;
+            assert_eq!(exchange(&mut again, b"names first").await?, b"names first");
+            assert_eq!(proxy.requests().get(2), Some(&by_name));
             Ok(())
         },
     )

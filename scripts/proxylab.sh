@@ -6,7 +6,9 @@
 #   scripts/proxylab.sh            the lab's own check from the host (scripts/proxylab/check.py): each proxy takes
 #                                  the fixture's handshakes and carries them to the lab's target, a wrong password is
 #                                  refused, mtg accepts a fake-TLS hello made with the lab's secret and refuses
-#                                  another; then the project stops (stop, not down: nothing restarts it)
+#                                  another, and tinyproxy reads the engine's own CONNECT (the proxy record's unit S2):
+#                                  it opens one, refuses one to port 80 and, with its password, answers 407; then the
+#                                  project stops (stop, not down: nothing restarts it)
 #   scripts/proxylab.sh --serve    only start it, and print its settings, one KEY=value a line, for the emulator check
 #                                  (scripts/verify-proxies.sh), which stops it when it is done
 #
@@ -103,6 +105,10 @@ fi
 
 versions="$("${compose[@]}" exec -T target cat /etc/proxylab-mtg); $("${compose[@]}" exec -T target sh -c 'grep -E "^(microsocks|tinyproxy|socat|python3) " /etc/proxylab-packages | tr "\n" " "')"
 echo "== proxy lab: $versions"
+# The target's address on the lab's own network, for the engine's request by address (check.py). awk reads all of
+# getent's answer, so that no early exit breaks the pipe.
+target_address=$("${compose[@]}" exec -T http-open getent hosts target | awk 'NR == 1 { print $1 }')
+[ -n "$target_address" ] || { echo "the lab's target has no address" >&2; exit 1; }
 python3 -I "$LAB/check.py" 127.0.0.1 "$PROXYLAB_PORT" "$PROXYLAB_PORT_HTTP" "$PROXYLAB_PORT_OPEN" "$PROXYLAB_PORT_MTG" \
-    "$PROXYLAB_USER" "$PROXYLAB_PASSWORD" "$PROXYLAB_MTG_SECRET"
+    "$PROXYLAB_USER" "$PROXYLAB_PASSWORD" "$PROXYLAB_MTG_SECRET" "$target_address"
 echo "== the proxy lab checked"

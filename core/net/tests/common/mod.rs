@@ -1,6 +1,7 @@
 //! A small SOCKS5 proxy for the tests, its bytes read and written by hand from RFC 1928 and RFC 1929
 //! rather than with the client's own encoders, so that a mistake shared by both sides cannot pass
-//! unseen; and echo servers to reach through it.
+//! unseen; an HTTP `CONNECT` proxy beside it, read by hand from RFC 9110 in the same way, as a network's
+//! own proxy answers (the proxy record's unit S2); and echo servers to reach through them.
 #![allow(dead_code)]
 
 use std::collections::HashMap;
@@ -416,4 +417,227 @@ fn client_datagram<'a>(
     };
     let port = u16::from_be_bytes(datagram.get(at..at + 2)?.try_into().ok()?);
     Some((SocketAddr::new(ip, port), name, datagram.get(at + 2..)?))
+}
+
+/// How the test's HTTP `CONNECT` proxy answers a request, as a network's own proxy may (the proxy record's unit S2).
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+pub enum ConnectMode {
+    /// Every request it can carry opened: `200`, then the tunnel.
+    #[default]
+    Open,
+    /// A request by address refused with `403`, as a proxy that filters by name; one by name opened.
+    AddressesRefused,
+    /// Every request answered `407`, as a proxy that wants a password.
+    Password,
+    /// A request to port 80 refused with `403`, as tinyproxy with `ConnectPort 443`; any other opened.
+    Port80Refused,
+    /// No answer at all, the connection held open until the client closes it.
+    Silent,
+}
+
+/// How the test's HTTP `CONNECT` proxy behaves.
+#[derive(Clone, Default)]
+pub struct ConnectSettings {
+    pub mode: ConnectMode,
+    /// The names it resolves, to an address on this computer.
+    pub names: HashMap<String, IpAddr>,
+    /// Where a tunnel to an address goes instead, as a proxy reaches a server the client cannot.
+    pub remap: HashMap<SocketAddr, SocketAddr>,
+    /// Whether it waits a moment for the server's first bytes and writes them with its `200`, in one segment, as a
+    /// proxy may for a server that speaks first.
+    pub first_bytes_with_answer: bool,
+}
+
+/// The test's HTTP `CONNECT` proxy: it listens at an address of its own, connects onward from that same address, so
+/// that a lab can let out only it, and records each request's line and headers.
+pub struct ConnectProxy {
+    pub address: SocketAddr,
+    seen: Arc<ConnectSeen>,
+}
+
+/// What the `CONNECT` proxy saw.
+#[derive(Default)]
+struct ConnectSeen {
+    /// How many connections it accepted, a request read or not.
+    connections: std::sync::atomic::AtomicUsize,
+    /// Each request's lines, the request line first, as they came, without their line ends.
+    requests: Mutex<Vec<Vec<String>>>,
+    /// What its tunnels carried from the client, past each request's head.
+    carried: Mutex<Vec<u8>>,
+}
+
+impl ConnectProxy {
+    /// How many connections it accepted.
+    pub fn connections(&self) -> usize {
+        self.seen
+            .connections
+            .load(std::sync::atomic::Ordering::SeqCst)
+    }
+
+    /// Each request it read: its request line, then its header lines.
+    pub fn requests(&self) -> Vec<Vec<String>> {
+        self.seen
+            .requests
+            .lock()
+            .unwrap_or_else(PoisonError::into_inner)
+            .clone()
+    }
+
+    /// What its tunnels carried from the client.
+    pub fn carried(&self) -> Vec<u8> {
+        self.seen
+            .carried
+            .lock()
+            .unwrap_or_else(PoisonError::into_inner)
+            .clone()
+    }
+}
+
+/// An HTTP `CONNECT` proxy listening at `at`, on a port of its own.
+pub async fn connect_proxy(at: IpAddr, settings: ConnectSettings) -> std::io::Result<ConnectProxy> {
+    let listener = TcpListener::bind((at, 0)).await?;
+    let address = listener.local_addr()?;
+    let seen = Arc::new(ConnectSeen::default());
+    let noted = Arc::clone(&seen);
+    tokio::spawn(async move {
+        while let Ok((client, _)) = listener.accept().await {
+            noted
+                .connections
+                .fetch_add(1, std::sync::atomic::Ordering::SeqCst);
+            let settings = settings.clone();
+            let noted = Arc::clone(&noted);
+            tokio::spawn(async move {
+                let _ = serve_connect(client, at, settings, noted).await;
+            });
+        }
+    });
+    Ok(ConnectProxy { address, seen })
+}
+
+/// The most bytes of a request's head read.
+const CONNECT_HEAD: usize = 8_192;
+
+/// A request's head, read a byte at a time to its blank line, so that nothing after it is taken; `None` if the client
+/// closed first or sent too much.
+async fn connect_head(client: &mut TcpStream) -> std::io::Result<Option<Vec<u8>>> {
+    let mut head = Vec::new();
+    let mut byte = [0u8; 1];
+    while !head.ends_with(b"\r\n\r\n") && !head.ends_with(b"\n\n") {
+        if head.len() == CONNECT_HEAD || client.read(&mut byte).await? == 0 {
+            return Ok(None);
+        }
+        head.push(byte[0]);
+    }
+    Ok(Some(head))
+}
+
+/// The host and port of an authority, `host:port` or `[v6]:port`.
+fn authority(text: &str) -> Option<(String, u16)> {
+    let (host, port) = text.rsplit_once(':')?;
+    let host = host
+        .strip_prefix('[')
+        .and_then(|h| h.strip_suffix(']'))
+        .unwrap_or(host);
+    Some((host.to_owned(), port.parse().ok()?))
+}
+
+async fn serve_connect(
+    mut client: TcpStream,
+    at: IpAddr,
+    settings: ConnectSettings,
+    seen: Arc<ConnectSeen>,
+) -> std::io::Result<()> {
+    let Some(head) = connect_head(&mut client).await? else {
+        return Ok(());
+    };
+    let text = String::from_utf8_lossy(&head).into_owned();
+    let lines: Vec<String> = text
+        .lines()
+        .take_while(|line| !line.is_empty())
+        .map(str::to_owned)
+        .collect();
+    seen.requests
+        .lock()
+        .unwrap_or_else(PoisonError::into_inner)
+        .push(lines.clone());
+    let answer = |status: &str| format!("HTTP/1.1 {status}\r\nContent-Length: 0\r\n\r\n");
+    if settings.mode == ConnectMode::Silent {
+        let mut rest = Vec::new();
+        let _ = client.read_to_end(&mut rest).await;
+        return Ok(());
+    }
+    if settings.mode == ConnectMode::Password {
+        let refusal = "HTTP/1.1 407 Proxy Authentication Required\r\n\
+             Proxy-Authenticate: Basic realm=\"lab\"\r\nContent-Length: 0\r\n\r\n";
+        return client.write_all(refusal.as_bytes()).await;
+    }
+    let target = lines
+        .first()
+        .and_then(|line| line.strip_prefix("CONNECT "))
+        .and_then(|rest| rest.strip_suffix(" HTTP/1.1"))
+        .and_then(authority);
+    let Some((host, port)) = target else {
+        return client.write_all(answer("400 Bad Request").as_bytes()).await;
+    };
+    let by_address = host.parse::<IpAddr>().ok();
+    if (settings.mode == ConnectMode::AddressesRefused && by_address.is_some())
+        || (settings.mode == ConnectMode::Port80Refused && port == 80)
+    {
+        return client.write_all(answer("403 Forbidden").as_bytes()).await;
+    }
+    let Some(ip) = by_address.or_else(|| settings.names.get(&host).copied()) else {
+        return client.write_all(answer("502 Bad Gateway").as_bytes()).await;
+    };
+    let destination = SocketAddr::new(ip, port);
+    let destination = settings
+        .remap
+        .get(&destination)
+        .copied()
+        .unwrap_or(destination);
+    let socket = if at.is_ipv4() {
+        tokio::net::TcpSocket::new_v4()?
+    } else {
+        tokio::net::TcpSocket::new_v6()?
+    };
+    socket.bind(SocketAddr::new(at, 0))?;
+    let Ok(mut server) = socket.connect(destination).await else {
+        return client.write_all(answer("502 Bad Gateway").as_bytes()).await;
+    };
+    let mut opened = b"HTTP/1.1 200 Connection established\r\n\r\n".to_vec();
+    if settings.first_bytes_with_answer {
+        let mut first = [0u8; 2_048];
+        if let Ok(Ok(n)) = tokio::time::timeout(
+            std::time::Duration::from_millis(200),
+            server.read(&mut first),
+        )
+        .await
+        {
+            opened.extend_from_slice(&first[..n]);
+        }
+    }
+    client.write_all(&opened).await?;
+    let (mut from_client, mut to_client) = client.into_split();
+    let (mut from_server, mut to_server) = server.into_split();
+    let up = async move {
+        let mut buffer = [0u8; 4_096];
+        while let Ok(n) = from_client.read(&mut buffer).await {
+            if n == 0 {
+                break;
+            }
+            seen.carried
+                .lock()
+                .unwrap_or_else(PoisonError::into_inner)
+                .extend_from_slice(&buffer[..n]);
+            if to_server.write_all(&buffer[..n]).await.is_err() {
+                break;
+            }
+        }
+        let _ = to_server.shutdown().await;
+    };
+    let down = async move {
+        let _ = tokio::io::copy(&mut from_server, &mut to_client).await;
+        let _ = to_client.shutdown().await;
+    };
+    tokio::join!(up, down);
+    Ok(())
 }

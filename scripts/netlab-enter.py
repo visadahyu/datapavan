@@ -65,11 +65,21 @@
 #   RULE away, and lets the process go on; then it says "listening", says "accepted" for each connection it
 #   accepts, sends each a few bytes, and ends when its standard input closes.
 #
+# - A network that requires its proxy (the proxy record's unit S2): --require-proxy PROXY refuses, with a reset, every
+#   new TCP connection the namespace itself makes, as a network that lets out only its own HTTP proxy; it lets
+#   through those from PROXY, an address of the namespace's own where the test's proxy listens and from which it
+#   connects onward (the engine's connections to the proxy come from it too, as the kernel's source for a local
+#   address is that address), and those from the tunnel's address, the apps' into tun0 and the engine's listener's
+#   answers. A reset, not "unreachable": Linux reports ENETUNREACH for an ICMP net-unreachable, which the engine reads
+#   as a network without that family and never takes to the proxy. It needs iptables in the namespace; without it, it
+#   says so and fails, so that the test fails rather than pass with direct connections open.
+#
 #   netlab-enter.py -- PROGRAM [ARGUMENTS...]
 #   netlab-enter.py --tunnel NAME      (inside the namespace, the new file at standard input)
 #   netlab-enter.py --move FROM TO     (inside the namespace)
 #   netlab-enter.py --marks NETID DEVICE | --marks-move NETID FROM TO | --marks-new-network OLD NEW FROM TO
 #   netlab-enter.py --interloper PID ADDRESS PORT RULE   (inside the namespace)
+#   netlab-enter.py --require-proxy PROXY                (inside the namespace)
 #
 # Everything here is undone when the namespace ends with the test. It changes nothing outside it.
 import fcntl
@@ -261,6 +271,16 @@ def marks_new_network(old_id, new_id, old, new):
     incoming_mark("-D", old_id, old)
 
 
+# A network that lets out only its proxy at PROXY: see the head of this file.
+def require_proxy(proxy):
+    if shutil.which("iptables") is None:
+        sys.exit("netlab: iptables is missing here, so the network cannot require its proxy: this test did not run")
+    socket.inet_aton(proxy)
+    for source in (TUN4, proxy):
+        iptables("-A", "OUTPUT", "-s", source, "-j", "ACCEPT")
+    iptables("-A", "OUTPUT", "-p", "tcp", "--syn", "-j", "REJECT", "--reject-with", "tcp-reset")
+
+
 # Another app on the engine's listener's port: see the head of this file.
 def interloper(pid, address, port, rule):
     pid, port = int(pid), int(port)
@@ -304,10 +324,12 @@ def main():
         return marks_move(*sys.argv[2:])
     if len(sys.argv) == 6 and sys.argv[1] == "--marks-new-network":
         return marks_new_network(*sys.argv[2:])
+    if len(sys.argv) == 3 and sys.argv[1] == "--require-proxy":
+        return require_proxy(sys.argv[2])
     if len(sys.argv) < 3 or sys.argv[1] != "--":
         sys.exit("usage: netlab-enter.py -- PROGRAM [ARGUMENTS...] | --tunnel NAME | --move FROM TO | "
                  "--marks NETID DEVICE | --marks-move NETID FROM TO | --marks-new-network OLD NEW FROM TO | "
-                 "--interloper PID ADDRESS PORT RULE")
+                 "--interloper PID ADDRESS PORT RULE | --require-proxy PROXY")
     program = sys.argv[2:]
 
     ip("link", "set", "lo", "up")
