@@ -8,7 +8,9 @@ package org.visadahyu.datapavan.network
  * Android keeps the VPN network, and updates it in place, only when `allowBypass` and the allowed and
  * disallowed apps are as before, the apps compared as ordered lists (AOSP's
  * `Vpn.updateLinkPropertiesInPlaceIfPossible`, read in review, not measured on a device); the network part never calls
- * `allowBypass`, so only the lists can differ. Otherwise Android connects a new network, with a new netId,
+ * `allowBypass`, nor `setHttpProxy` (the engine carries apps through the network's own proxy itself since the proxy
+ * record's unit S2, ADR 0052 decision 11, so a proxy is no part of the setup), so only the lists can differ. Otherwise
+ * Android connects a new network, with a new netId,
  * before the old one goes, and netd marks the packets that arrive on the tunnel with the network's netId,
  * which the connections the network part's engine accepted keep (`tcp_fwmark_accept`): once the old network goes they
  * route nowhere, and a new engine, whose connections reset at once, is the better end for them.

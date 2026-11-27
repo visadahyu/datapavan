@@ -671,8 +671,10 @@ class NetworkVpnService : VpnService() {
     /**
      * What "Now" says of Android's own proxy settings and the PAC handler (the proxy record's unit B, B5 and B7), only
      * while the tunnel runs: then the process's default network is its own VPN, which has no proxy, so `defaultProxy`
-     * is the whole phone's alone (measurements 7.1, point 1), and the network beneath's is read from its own link.
-     * [pacHandler] is the PAC handler's UID where the caller read it already ([applyProxies]).
+     * is the whole phone's alone (measurements 7.1, point 1), and the network beneath's is read from its own link. That
+     * holds because the VPN's link has no proxy: the network part calls no `setHttpProxy`, since the engine carries direct
+     * apps through the network's own proxy itself (the proxy record's unit S2, ADR 0052 decision 11). [pacHandler] is the
+     * PAC handler's UID where the caller read it already ([applyProxies]).
      */
     private fun publishProxyContext(pacHandler: Int? = org.visadahyu.datapavan.network.proxy.PacHandler.uid(packageManager)) {
         if (!active) return

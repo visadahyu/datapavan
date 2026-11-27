@@ -8,7 +8,9 @@ import org.visadahyu.datapavan.network.dns.NetworkProxy
  * the proxy or PAC file set for the whole phone ([global]: a device owner's, or one set by `adb` or by an app granted
  * `WRITE_SECURE_SETTINGS`, which Android's own Wi-Fi screens never show), and the current network's own ([network], from
  * its link properties). A pure value the JVM tests hold; [of] reads Android's `ProxyInfo` into it. It keeps no PAC
- * file's address: no line shows it.
+ * file's address: no line shows it. The VPN's own link has no proxy: since the proxy record's unit S2 the network part
+ * calls no `VpnService.Builder.setHttpProxy`, and the engine carries direct apps through the network's own proxy itself
+ * (ADR 0052, decision 11), so that [global] is still the whole phone's alone while the tunnel runs.
  */
 data class AndroidProxy(val global: Setting? = null, val network: Setting? = null) {
     /** One of Android's proxy settings: a proxy server at [Server.host] and [Server.port], or a PAC file. */
