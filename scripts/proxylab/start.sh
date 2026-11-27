@@ -22,6 +22,19 @@ case "${1:-}" in
         } >"$conf"
         exec tinyproxy -d -c "$conf"
         ;;
+    http-debian)
+        # tinyproxy as Debian ships it (its ConnectPort lines commented: CONNECT to every port), with one change: the
+        # lab's network allowed beside the loopback.
+        conf=/tmp/tinyproxy.conf
+        { cat /etc/tinyproxy/tinyproxy.conf; echo "Allow 0.0.0.0/0"; } >"$conf"
+        mkdir -p /run/tinyproxy && chown tinyproxy:tinyproxy /run/tinyproxy
+        exec tinyproxy -d -c "$conf"
+        ;;
+    squid)
+        # squid with Debian's shipped configuration (the Dockerfile's one change: the lab's network allowed), in the
+        # foreground, its log on standard error for the lab's logs.
+        exec squid -N -d 1 -f /etc/squid/squid.conf
+        ;;
     mtg)
         # Fake TLS for the cover name in the secret; DNS over HTTPS pointed at nothing, and the lab's network has no
         # way out: mtg reaches no Telegram data centre and no cover site.

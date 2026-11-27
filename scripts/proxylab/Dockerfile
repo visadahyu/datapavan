@@ -1,7 +1,7 @@
 # W8 part 2a's proxy lab (ADR 0052; scripts/proxylab.sh): one image for the lab's SOCKS5 server (microsocks: Dante left
-# Debian with trixie), its HTTP
-# proxies (tinyproxy), its target (target.py, Python's standard library) and its front (socat), chosen by the command
-# each service of compose.yaml runs; and mtg, an MTProto proxy, built from its release at a pinned commit.
+# Debian with trixie), its HTTP proxies (tinyproxy, and squid for the network's own proxy: the proxy record's
+# forwarder), its target (target.py, Python's standard library) and its front (socat), chosen by the command each service of
+# compose.yaml runs; and mtg, an MTProto proxy, built from its release at a pinned commit.
 #
 # Nothing unpinned, as the WireGuard lab's image (spikes/wireguard-core/peer/Dockerfile): Go's and Debian's official
 # images by digest; mtg's module checked against the checksum written here (which Go's checksum database holds too),
@@ -39,11 +39,20 @@ RUN set -eu; \
     for attempt in 1 2 3; do \
         apt-get -o Acquire::Check-Valid-Until=false -o Acquire::Retries=3 update && \
         apt-get -o Acquire::Retries=3 install -y --no-install-recommends \
-            microsocks=1.0.5-1 tinyproxy=1.11.2-1 socat=1.8.0.3-1+deb13u1 python3=3.13.5-1 && break; \
+            microsocks=1.0.5-1 tinyproxy=1.11.2-1 socat=1.8.0.3-1+deb13u1 python3=3.13.5-1 \
+            squid=6.13-2+deb13u4 && break; \
         [ "$attempt" -lt 3 ]; sleep 15; \
     done; \
     rm -rf /var/lib/apt/lists/*; \
     dpkg-query -W -f '${Package} ${Version}\n' | sort >/etc/proxylab-packages
+# squid runs Debian's shipped configuration with one change: the lab's network, which squid.conf's own localnet list
+# holds, allowed by the line Debian's conf.d/debian.conf leaves commented ("only allow localhost ... on new installs").
+# Everything else is Debian's default: CONNECT only to SSL_ports (443), requests only to Safe_ports. A step of its own,
+# after the install, so that scripts/lab-pins.py's simulated install runs nothing that needs squid.
+RUN set -eu; \
+    sed -i 's|^#http_access allow localnet$|http_access allow localnet|' /etc/squid/conf.d/debian.conf; \
+    [ "$(grep -c '^http_access allow localnet$' /etc/squid/conf.d/debian.conf)" = 1 ]; \
+    grep -q '^acl localnet src 172.16.0.0/12' /etc/squid/squid.conf
 COPY --from=mtg /mtg /usr/local/bin/mtg
 COPY --from=mtg /mtg.version /etc/proxylab-mtg
 COPY start.sh target.py /opt/proxylab/

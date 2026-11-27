@@ -7,14 +7,16 @@
 #                                  the fixture's handshakes and carries them to the lab's target, a wrong password is
 #                                  refused, mtg accepts a fake-TLS hello made with the lab's secret and refuses
 #                                  another, and tinyproxy reads the engine's own CONNECT (the proxy record's unit S2):
-#                                  it opens one, refuses one to port 80 and, with its password, answers 407; then the
-#                                  project stops (stop, not down: nothing restarts it)
+#                                  it opens one, refuses one to port 80 and, with its password, answers 407; squid and
+#                                  tinyproxy as Debian ships them read the forwarder's requests in absolute form (the
+#                                  proxy record's forwarder); then the project stops (stop, not down: nothing restarts
+#                                  it)
 #   scripts/proxylab.sh --serve    only start it, and print its settings, one KEY=value a line, for the emulator check
 #                                  (scripts/verify-proxies.sh), which stops it when it is done
 #
 #   PROXYLAB_NO_BUILD=1   the image is built already (CI builds it with its cache): start it as it is
 #
-# Ports: the first of 18080, 18090, ... 18190 where six in a row are free (PROXYLAB_PORT to choose).
+# Ports: the first of 18080, 18090, ... 18190 where nine in a row are free (PROXYLAB_PORT to choose).
 set -euo pipefail
 
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
@@ -30,7 +32,7 @@ elif ! docker info >/dev/null 2>&1; then
 fi
 [ -z "$missing" ] || { echo "$missing" >&2; exit 1; }
 
-# Six free ports in a row on the host, from $PROXYLAB_PORT or the first base that has them.
+# Nine free ports in a row on the host, from $PROXYLAB_PORT or the first base that has them.
 free_base() {
     python3 -I - "${PROXYLAB_PORT:-}" <<'PY'
 import socket, sys
@@ -46,17 +48,18 @@ def free(port):
         s.close()
 bases = [int(sys.argv[1])] if sys.argv[1] else range(18080, 18200, 10)
 for base in bases:
-    if all(free(base + i) for i in range(6)):
+    if all(free(base + i) for i in range(9)):
         print(base)
         break
 else:
-    sys.exit("no six free ports in a row from %s" % sys.argv[1] if sys.argv[1] else "no six free ports from 18080")
+    sys.exit("no nine free ports in a row from %s" % sys.argv[1] if sys.argv[1] else "no nine free ports from 18080")
 PY
 }
 
 base=$(free_base)
 export PROXYLAB_PORT=$base PROXYLAB_PORT_HTTP=$((base + 1)) PROXYLAB_PORT_OPEN=$((base + 2)) \
-    PROXYLAB_PORT_MTG=$((base + 3)) PROXYLAB_PORT_ECHO=$((base + 4)) PROXYLAB_PORT_TLS=$((base + 5))
+    PROXYLAB_PORT_MTG=$((base + 3)) PROXYLAB_PORT_ECHO=$((base + 4)) PROXYLAB_PORT_TLS=$((base + 5)) \
+    PROXYLAB_PORT_SQUID=$((base + 6)) PROXYLAB_PORT_DEBIAN=$((base + 7)) PROXYLAB_PORT_SEEN=$((base + 8))
 # The user name is random too, so that a check can look for it (the fix round's R-m7): "lab" is in too many strings.
 PROXYLAB_USER="user-$(python3 -I -c 'import secrets; print(secrets.token_hex(8))')"
 PROXYLAB_PASSWORD="lab-$(python3 -I -c 'import secrets; print(secrets.token_hex(12))')"
@@ -92,23 +95,26 @@ done
 # The proxies take a moment after their containers start.
 for _ in $(seq 30); do
     python3 -I -c "import socket,sys; [socket.create_connection(('127.0.0.1', p), 1).close() for p in sys.argv[1:]]" \
-        "$PROXYLAB_PORT" "$PROXYLAB_PORT_HTTP" "$PROXYLAB_PORT_OPEN" "$PROXYLAB_PORT_MTG" 2>/dev/null && break
+        "$PROXYLAB_PORT" "$PROXYLAB_PORT_HTTP" "$PROXYLAB_PORT_OPEN" "$PROXYLAB_PORT_MTG" "$PROXYLAB_PORT_SQUID" \
+        "$PROXYLAB_PORT_DEBIAN" "$PROXYLAB_PORT_SEEN" 2>/dev/null && break
     sleep 1
 done
 
 if [ "$MODE" = --serve ]; then
     printf '%s\n' "PROXYLAB_PORT=$PROXYLAB_PORT" "PROXYLAB_PORT_HTTP=$PROXYLAB_PORT_HTTP" "PROXYLAB_PORT_OPEN=$PROXYLAB_PORT_OPEN" \
         "PROXYLAB_PORT_MTG=$PROXYLAB_PORT_MTG" "PROXYLAB_PORT_ECHO=$PROXYLAB_PORT_ECHO" "PROXYLAB_PORT_TLS=$PROXYLAB_PORT_TLS" \
+        "PROXYLAB_PORT_SQUID=$PROXYLAB_PORT_SQUID" "PROXYLAB_PORT_DEBIAN=$PROXYLAB_PORT_DEBIAN" "PROXYLAB_PORT_SEEN=$PROXYLAB_PORT_SEEN" \
         "PROXYLAB_USER=$PROXYLAB_USER" "PROXYLAB_PASSWORD=$PROXYLAB_PASSWORD" "PROXYLAB_MTG_SECRET=$PROXYLAB_MTG_SECRET"
     exit 0
 fi
 
-versions="$("${compose[@]}" exec -T target cat /etc/proxylab-mtg); $("${compose[@]}" exec -T target sh -c 'grep -E "^(microsocks|tinyproxy|socat|python3) " /etc/proxylab-packages | tr "\n" " "')"
+versions="$("${compose[@]}" exec -T target cat /etc/proxylab-mtg); $("${compose[@]}" exec -T target sh -c 'grep -E "^(microsocks|tinyproxy|socat|python3|squid) " /etc/proxylab-packages | tr "\n" " "')"
 echo "== proxy lab: $versions"
 # The target's address on the lab's own network, for the engine's request by address (check.py). awk reads all of
 # getent's answer, so that no early exit breaks the pipe.
 target_address=$("${compose[@]}" exec -T http-open getent hosts target | awk 'NR == 1 { print $1 }')
 [ -n "$target_address" ] || { echo "the lab's target has no address" >&2; exit 1; }
 python3 -I "$LAB/check.py" 127.0.0.1 "$PROXYLAB_PORT" "$PROXYLAB_PORT_HTTP" "$PROXYLAB_PORT_OPEN" "$PROXYLAB_PORT_MTG" \
-    "$PROXYLAB_USER" "$PROXYLAB_PASSWORD" "$PROXYLAB_MTG_SECRET" "$target_address"
+    "$PROXYLAB_USER" "$PROXYLAB_PASSWORD" "$PROXYLAB_MTG_SECRET" "$target_address" \
+    "$PROXYLAB_PORT_SQUID" "$PROXYLAB_PORT_DEBIAN" "$PROXYLAB_PORT_SEEN"
 echo "== the proxy lab checked"

@@ -1,10 +1,11 @@
 # W8 part 2a's proxy lab (ADR 0052; scripts/proxylab.sh): an app's own proxies for the emulator check
 # (scripts/verify-proxies.sh) and the host's own check of them: a SOCKS5 server with a password (microsocks), an HTTP
 # proxy with Basic credentials and one without (tinyproxy), an MTProto proxy with fake TLS (mtg), and the target they
-# carry the fixture to. All of them sit on a network with no way out (internal): nothing the lab carries can reach
-# the internet, and mtg reaches no Telegram data centre. The front alone is also on Compose's default network, and
-# publishes fixed forwards to them on the host's loopback, which an emulator reaches as 10.0.2.2. The scripts stop the
-# project when they are done (stop, not down), and nothing restarts it.
+# carry the fixture to; and for the network's own proxy (the proxy record's forwarder), squid and tinyproxy each as
+# Debian ships them, but for the lab's network allowed. All of them sit on a network with no way out (internal):
+# nothing the lab carries can reach the internet, and mtg reaches no Telegram data centre. The front alone is also on
+# Compose's default network, and publishes fixed forwards to them on the host's loopback, which an emulator reaches as
+# 10.0.2.2. The scripts stop the project when they are done (stop, not down), and nothing restarts it.
 name: datapavan-proxylab
 x-lab: &lab
   image: datapavan-proxylab
@@ -41,13 +42,21 @@ services:
     <<: *lab
     command: [mtg]
     depends_on: [target]
+  squid:
+    <<: *lab
+    command: [squid]
+    depends_on: [target]
+  http-debian:
+    <<: *lab
+    command: [http-debian]
+    depends_on: [target]
   front:
     <<: *lab
     command: [front]
     networks: [lab, edge]
-    depends_on: [socks, http-auth, http-open, mtg, target]
+    depends_on: [socks, http-auth, http-open, mtg, squid, http-debian, target]
     environment:
-      PROXYLAB_FRONT: "1080=socks:1080,8888=http-auth:8888,8889=http-open:8888,3128=mtg:3128,5222=target:5222,443=target:443"
+      PROXYLAB_FRONT: "1080=socks:1080,8888=http-auth:8888,8889=http-open:8888,3128=mtg:3128,5222=target:5222,443=target:443,3130=squid:3128,8890=http-debian:8888,8081=target:8081"
     ports:
       - "127.0.0.1:${PROXYLAB_PORT:-18080}:1080"
       - "127.0.0.1:${PROXYLAB_PORT_HTTP:-18081}:8888"
@@ -55,6 +64,9 @@ services:
       - "127.0.0.1:${PROXYLAB_PORT_MTG:-18083}:3128"
       - "127.0.0.1:${PROXYLAB_PORT_ECHO:-18084}:5222"
       - "127.0.0.1:${PROXYLAB_PORT_TLS:-18085}:443"
+      - "127.0.0.1:${PROXYLAB_PORT_SQUID:-18086}:3130"
+      - "127.0.0.1:${PROXYLAB_PORT_DEBIAN:-18087}:8890"
+      - "127.0.0.1:${PROXYLAB_PORT_SEEN:-18088}:8081"
 networks:
   lab:
     internal: true

@@ -11,7 +11,19 @@ place of the table's documentation address, and carries a hello; it refuses one 
 ConnectPort 443 (start.sh: tinyproxy's own default, its ConnectPort lines commented out, allows every port); and
 with a password it answers 407, which the engine takes for a proxy that wants one.
 
-    python3 -I check.py HOST PORT_SOCKS PORT_HTTP PORT_OPEN PORT_MTG USER PASSWORD MTG_SECRET TARGET_ADDRESS
+Plain HTTP in absolute form (the proxy record's forwarder, used where the network's proxy refuses a CONNECT to that
+port): squid and tinyproxy, each as Debian ships it but for the lab's network allowed, and the lab's two tinyproxies,
+get requests in absolute form, and the target's answer says what each proxy sent it (target.py's X-Lab fields). The
+rows pin what these versions do, as measured on 2026-11-28: squid refuses a CONNECT to port 80 (the forwarder's
+premise) and plain requests to ports outside its Safe_ports; it keeps the client's connection, answers a pipelined
+pair in order, makes the origin's Host from the URL (lower case, no trailing dot, no :80) and sends no Upgrade.
+tinyproxy carries a CONNECT to any port as shipped, keeps the Host as the client wrote it but for :80, sends no
+Upgrade, and serves one request a connection: it closes after the first answer and drops a pipelined second. Neither
+reads a request out of the body of an Expect request it refused early (the forwarder's audit, m6), by the target's
+own record of what it got.
+
+    python3 -I check.py HOST PORT_SOCKS PORT_HTTP PORT_OPEN PORT_MTG USER PASSWORD MTG_SECRET TARGET_ADDRESS \
+        PORT_SQUID PORT_DEBIAN PORT_SEEN
 """
 import base64
 import hashlib
@@ -133,6 +145,70 @@ def engine_connect(host, port, request):
     return s, code
 
 
+def exchange(host, port, data, quiet=1.5):
+    """Sends data as it is and reads until the proxy closes or stays quiet for `quiet` seconds: the answers, each its
+    status code and its fields (names in lower case), in order, and whether the proxy closed."""
+    s = connect(host, port)
+    s.sendall(data)
+    s.settimeout(quiet)
+    got, closed = b"", False
+    while len(got) < 1 << 20:
+        try:
+            chunk = s.recv(65536)
+        except socket.timeout:
+            break
+        if not chunk:
+            closed = True
+            break
+        got += chunk
+    s.close()
+    answers = []
+    while b"\r\n\r\n" in got:
+        head, got = got.split(b"\r\n\r\n", 1)
+        line, *rest = head.decode("latin-1").split("\r\n")
+        code = int(line[9:12]) if line[:7] == "HTTP/1." and line[9:12].isdigit() else None
+        fields = dict((k.strip().lower(), v.strip()) for k, v in (f.split(":", 1) for f in rest if ":" in f))
+        length = 0 if code is None or code < 200 or code in (204, 304) else int(fields.get("content-length", len(got)))
+        got = got[length:]
+        answers.append((code, fields))
+    return answers, closed
+
+
+def plain(path, host=INNER, method="GET", fields="", body=b""):
+    """A request in absolute form, as the forwarder writes one: the URL's authority and Host from host."""
+    length = f"Content-Length: {len(body)}\r\n" if body and "Transfer-Encoding" not in fields else ""
+    return f"{method} http://{host}{path} HTTP/1.1\r\nHost: {host}\r\n{fields}{length}\r\n".encode() + body
+
+
+def lab(answer):
+    """What the target says it got, from one answer's X-Lab fields: the request line, Host, field names, body."""
+    code, fields = answer
+    return code, fields.get("x-lab-line"), fields.get("x-lab-host"), fields.get("x-lab-fields", "").split(","), \
+        fields.get("x-lab-body")
+
+
+def seen(host, port):
+    """Every request the target got so far, by its own record (target.py's port 8081)."""
+    answers = connect(host, port)
+    answers.sendall(b"GET /seen HTTP/1.1\r\nHost: target\r\n\r\n")
+    got = b""
+    while True:
+        chunk = answers.recv(65536)
+        if not chunk:
+            break
+        got += chunk
+    return got.split(b"\r\n\r\n", 1)[1].decode("latin-1")
+
+
+def said(got):
+    """The first answer's request line and Host, as the target says it got them, for a row's name."""
+    return got[0][1:3] if got else "no answer"
+
+
+def body_of(data):
+    return f"{len(data)} {hashlib.sha256(data).hexdigest()}"
+
+
 def http_get(host, port, user=None, password=None):
     s = connect(host, port)
     auth = ""
@@ -145,8 +221,10 @@ def http_get(host, port, user=None, password=None):
 
 
 def main(argv):
-    host, socks_port, http_port, open_port, mtg_port, user, password, secret, target = argv
-    socks_port, http_port, open_port, mtg_port = map(int, (socks_port, http_port, open_port, mtg_port))
+    host, socks_port, http_port, open_port, mtg_port, user, password, secret, target, squid_port, debian_port, \
+        seen_port = argv
+    socks_port, http_port, open_port, mtg_port, squid_port, debian_port, seen_port = map(
+        int, (socks_port, http_port, open_port, mtg_port, squid_port, debian_port, seen_port))
     failed = 0
 
     def check(name, ok):
@@ -188,6 +266,83 @@ def main(argv):
     check(f"tinyproxy-refuses-the-engines-connect-to-port-80-by-connectport-443 (answered {code})", code == 403)
     _, code = engine_connect(host, http_port, engine_request(INNER + ":443"))
     check(f"tinyproxy-with-a-password-answers-407-to-the-engines-connect (answered {code})", code == 407)
+
+    # Plain HTTP in absolute form (the proxy record's forwarder).
+    _, code = engine_connect(host, squid_port, engine_request(INNER + ":80"))
+    check(f"squid-refuses-the-engines-connect-to-port-80 (answered {code})", code == 403)
+    s, code = engine_connect(host, squid_port, engine_request(INNER + ":443"))
+    check("squid-opens-the-engines-connect-to-port-443", carries(s, code))
+    _, code = engine_connect(host, debian_port, engine_request(INNER + ":80"))
+    check(f"shipped-tinyproxy-opens-the-engines-connect-to-port-80 (answered {code})", code == 200)
+
+    proxies = (("squid", squid_port), ("shipped-tinyproxy", debian_port), ("tinyproxy-connectport-443", open_port))
+    hello_body = b"hello"
+    for name, port in proxies:
+        answers, _ = exchange(host, port, plain("/fwd?q=1", fields="User-Agent: lab\r\nAccept: */*\r\n"))
+        got = [lab(a) for a in answers]
+        check(f"{name}-forwards-a-request-in-origin-form ({said(got)})",
+              len(got) == 1 and got[0][:3] == (204, "GET /fwd?q=1 HTTP/1.1", INNER) and "User-Agent" in got[0][3])
+        answers, _ = exchange(host, port, plain("/post", method="POST", body=hello_body))
+        got = [lab(a) for a in answers]
+        check(f"{name}-forwards-a-body-whole", len(got) == 1 and got[0][1] == "POST /post HTTP/1.1"
+              and got[0][4] == body_of(hello_body))
+        chunked = plain("/chunked", method="POST", fields="Transfer-Encoding: chunked\r\n",
+                        body=b"5\r\nhello\r\n0\r\n\r\n")
+        answers, _ = exchange(host, port, chunked)
+        got = [lab(a) for a in answers]
+        check(f"{name}-forwards-a-chunked-body-whole", len(got) == 1 and got[0][4] == body_of(hello_body))
+        upgrade = ("Connection: Upgrade\r\nUpgrade: websocket\r\nSec-WebSocket-Version: 13\r\n"
+                   "Sec-WebSocket-Key: dGhlIHNhbXBsZSBub25jZQ==\r\n")
+        answers, _ = exchange(host, port, plain("/ws", fields=upgrade))
+        got = [lab(a) for a in answers]
+        check(f"{name}-sends-the-origin-no-upgrade-from-a-request-in-absolute-form ({said(got)})",
+              len(got) == 1 and got[0][0] == 204 and "Upgrade" not in got[0][3])
+        answers, _ = exchange(host, port, plain("/uir", fields="Upgrade-Insecure-Requests: 1\r\n"))
+        got = [lab(a) for a in answers]
+        check(f"{name}-forwards-upgrade-insecure-requests", len(got) == 1 and "Upgrade-Insecure-Requests" in got[0][3])
+        answers, _ = exchange(host, port, f"OPTIONS http://{INNER} HTTP/1.1\r\nHost: {INNER}\r\n\r\n".encode())
+        got = [lab(a) for a in answers]
+        check(f"{name}-sends-an-options-request-with-no-path-as-options-slash ({said(got)})",
+              len(got) == 1 and got[0][1] == "OPTIONS / HTTP/1.1")
+        # The Host the origin gets (the forwarder's audit, m4 and m5): squid makes it from the URL; tinyproxy keeps the
+        # client's, but for :80; both read :080 as port 80.
+        for written, squid_host, tinyproxy_host in (
+            ("INNER.ProxyLab.TEST", INNER, "INNER.ProxyLab.TEST"),
+            (INNER + ".", INNER, INNER + "."),
+            (INNER + ":80", INNER, INNER),
+            (INNER + ":080", INNER, INNER),
+        ):
+            answers, _ = exchange(host, port, plain("/host", host=written))
+            got = [lab(a) for a in answers]
+            wanted = squid_host if name == "squid" else tinyproxy_host
+            check(f"{name}-sends-the-origin-host-{wanted}-for-{written}", len(got) == 1 and got[0][2] == wanted)
+        # A pipelined pair, and a second request after the first answer.
+        pair = plain("/pair-1") + plain("/pair-2", method="POST", body=hello_body)
+        answers, closed = exchange(host, port, pair)
+        got = [lab(a) for a in answers]
+        if name == "squid":
+            check("squid-answers-a-pipelined-pair-in-order", [g[1] for g in got] == ["GET /pair-1 HTTP/1.1",
+                  "POST /pair-2 HTTP/1.1"] and got[1][4] == body_of(hello_body) and not closed)
+        else:
+            check(f"{name}-answers-one-request-a-connection-and-closes ({[g[1] for g in got]}, closed {closed})",
+                  [g[1] for g in got] == ["GET /pair-1 HTTP/1.1"] and closed)
+        # An Expect request the proxy refuses early, whose body is a whole request (the forwarder's audit, m6): the
+        # target must never get that request.
+        for expect, port_written in (("100-continue", 81), ("x-lab", 80)):
+            nonce = os.urandom(6).hex()
+            inner = plain(f"/smuggled-{nonce}")
+            answers, _ = exchange(host, port, plain("/expect", host=f"{INNER}:{port_written}", method="POST",
+                                                    fields=f"Expect: {expect}\r\n", body=inner))
+            codes = [a[0] for a in answers]
+            check(f"{name}-reads-no-request-out-of-the-body-of-an-expect-{expect}-to-port-{port_written} "
+                  f"(answered {codes})", f"smuggled-{nonce}" not in seen(host, seen_port))
+    for written in (INNER + ":81", INNER + ":25"):
+        answers, _ = exchange(host, squid_port, plain("/safe-ports", host=written))
+        codes = [a[0] for a in answers]
+        check(f"squid-refuses-a-request-to-{written}-by-safe-ports (answered {codes})", codes == [403])
+    answers, _ = exchange(host, http_port, plain("/auth"))
+    codes = [a[0] for a in answers]
+    check(f"tinyproxy-with-a-password-answers-407-to-a-request-in-absolute-form (answered {codes})", codes == [407])
     return 1 if failed else 0
 
 

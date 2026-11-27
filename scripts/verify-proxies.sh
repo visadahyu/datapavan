@@ -273,7 +273,7 @@ settings=$("$ROOT/scripts/proxylab.sh" --serve 2>"$WORK/lab.err") ||
 while IFS= read -r line; do
     [[ $line == PROXYLAB_*=* ]] && export "${line%%=*}=${line#*=}"
 done <<<"$settings"
-echo "ok: the proxy lab answers on this computer's loopback, ports $PROXYLAB_PORT to $PROXYLAB_PORT_TLS"
+echo "ok: the proxy lab answers on this computer's loopback, ports $PROXYLAB_PORT to $PROXYLAB_PORT_SEEN"
 
 "$ROOT/scripts/proxy-fixture/build.sh" >/dev/null
 adb install -r "$APK" >/dev/null
