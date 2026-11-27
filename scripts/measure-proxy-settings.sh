@@ -304,18 +304,36 @@ pac_state() {
 
 dump() { adb shell dumpsys activity service "$PKG/org.visadahyu.datapavan.network.NetworkVpnService" "$@" | tr -d '\r'; }
 uid_of() { adb shell cmd package list packages -U "$1" | tr -d '\r' | sed -n "s/^package:$1 uid:\([0-9]*\)$/\1/p"; }
+# Android 10 (API 29) lists networks in a dump of another shape, with no OwnerUid, and does not let the shell ask
+# `cmd wifi`: there, the VPN up is a connected VPN network (only Datapavan's on these emulators), and Wi-Fi's state is
+# read from the same dump (the unit S2's run there, once).
 vpn_up() {
     local uid
+    if [ "$SDK_INT" -lt 30 ]; then
+        grep -qE 'ni\{\[type: VPN\[\], state: CONNECTED/CONNECTED' <<<"$(adb shell dumpsys connectivity | tr -d '\r')"
+        return
+    fi
     uid=$(uid_of "$PKG")
     [ -n "$uid" ] && grep -qE "OwnerUid: $uid " <<<"$(adb shell dumpsys connectivity | tr -d '\r')"
 }
 vpn_down() { ! vpn_up; }
-wifi_connected() { adb shell cmd wifi status | tr -d '\r' | grep -q 'Wifi is connected to "AndroidWifi"'; }
+wifi_connected() {
+    if [ "$SDK_INT" -lt 30 ]; then
+        grep -qE 'ni\{\[type: WIFI\[\], state: CONNECTED/CONNECTED.*InterfaceName: wlan0 ' <<<"$(adb shell dumpsys connectivity | tr -d '\r')"
+        return
+    fi
+    adb shell cmd wifi status | tr -d '\r' | grep -q 'Wifi is connected to "AndroidWifi"'
+}
 wifi_default() {
     local dc default
     dc=$(adb shell dumpsys connectivity | tr -d '\r')
     default=$(sed -n 's/^Active default network: //p' <<<"$dc" | head -1)
-    [ -n "$default" ] && grep -qE "network\{$default\} +handle\{[0-9]+\} +ni\{WIFI" <<<"$dc"
+    [ -n "$default" ] || return 1
+    if [ "$SDK_INT" -lt 30 ]; then
+        grep -qE "ni\{\[type: WIFI\[\].* network\{$default\} " <<<"$dc"
+        return
+    fi
+    grep -qE "network\{$default\} +handle\{[0-9]+\} +ni\{WIFI" <<<"$dc"
 }
 # Wi-Fi off and on, so that the saved network's proxy reaches its link (a change alone left the link as it was,
 # dp-api35-ci, 2026-11-24), and back on the network as the default.
