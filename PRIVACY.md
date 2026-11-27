@@ -170,9 +170,11 @@ tool's local port, and "Now" says so. On Android 17, a proxy on your local netwo
 allowed Datapavan to reach your local network, since Android let Datapavan reach such a proxy when this was tested;
 "Now" then suggests allowing it, in case apps cannot connect. If you set this proxy up as your own privacy proxy, the switch "Send apps through this
 proxy" under it in "Now" sends the TCP connections of every app that goes directly through it, within the same
-limits, not only where a direct connection fails. It works only while Datapavan has that proxy's address: each time
-the phone joins the network, for a moment until Datapavan has read it, and whenever no address of it can be used,
-apps connect directly, and "Now" says so. Datapavan's own lookups use the same proxy in their own way:
+limits, not only where a direct connection fails. While it is on, no such connection goes directly: each time the
+phone joins the network, a new connection waits, for up to 3 seconds, until Datapavan has read the proxy's address,
+and then goes through it; when no address of it can be used, or none came in that time, the connection fails, and
+"Now" says so, with the switch there to turn off. Your circumvention tool's own connections, and an app's that goes
+through a WireGuard configuration, do not wait. Datapavan's own lookups use the same proxy in their own way:
 directly first, and through it, by the server's address, only when they cannot connect directly.
 
 When you add a WireGuard configuration of your VPN provider, Datapavan Advanced connects to that provider's server,

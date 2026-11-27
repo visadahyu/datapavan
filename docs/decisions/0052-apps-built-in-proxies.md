@@ -455,13 +455,29 @@ chaining is, and must follow the same switch.
       user turns it on, for a user who set that proxy up as a privacy proxy of their own. It is kept by the network's
       transport and the proxy's host and port (`ThroughProxy`), not by the network's name, which Android gives no app
       without the location permission. With it on, the proxy is the only way for every flow `takes` allows; its
-      refusal is a reset, and its `5xx` or its silence an ICMP error. It holds only while Datapavan has the proxy (S2's
-      review, m2): each time the phone joins the network, until the settle (for a proxy given by name, until the network
-      beneath resolves it), and while the setting gives no address Datapavan can use, apps go directly, and "Now" says so
-      with the switch still on and still there to turn off. Without the VPN, Android gives apps the setting from their
-      start. Holding new flows while a proxy the user chose is settled would close that gap; it is the maintainer's
-      call, and an engine change. A choice whose setting was not seen at any settle for 90 days is forgotten, with its
-      key (S2's review, m3).
+      refusal is a reset, and its `5xx` or its silence an ICMP error. **It never fails open** (S2's review, m2, its
+      S-tier option, taken as decision 1 says it: every direct app's TCP goes through the proxy, as Android would send
+      it): where Datapavan has no address of the proxy yet, or none it can use, the network part hands the engine the
+      switch's hold (`Beneath::holds`: the user's choice and no address) in place of none. It is handed at a new
+      network whose switch is on, before the lookup of a proxy given by name (`BeneathHand.settling`), never none
+      first; at a lost network whose switch was on, as the hold of no network, kept until a network's own settle
+      (`BeneathHand.none`); when the switch is turned on, while the name is looked up; and by the settle while no
+      address can be used (unresolved, link-local, the phone's own), never for a proxy on the phone itself, which the
+      engine never uses (decision 3) and whose line has no switch. A new direct flow that `takes` allows waits, its SYN
+      unanswered, looking at the setting each 25 ms (`HOLD_LOOK`, by tokio's timer: a `Notify` for it changed the
+      packet path's code), until a setting replaces the hold, and goes as that one says: through the proxy that came,
+      directly where none did or the switch went off. It fails as an unreachable network (an ICMP error) once
+      `Limits::beneath_direct` (3 s) passed since the hold began: no longer than the direct try that comes first
+      without the switch, and the app has sent its SYN at most twice (Linux's retransmissions at 1 s and 3 s); a literal
+      proxy settles at once and a name in one lookup, while a setting that cannot come fails each flow at once from
+      then on. A circumvention tool's flows, handed or the chain's, and a tunnelled app's to its local network are not
+      held; chained and tunnelled apps' other flows never reach the network beneath. Nothing changes with the switch
+      off. "Now" then says, in a line of its own with the switch, that the connections it would send through the proxy
+      fail, and how to let them go directly. What stays open is Android's own lag: a flow in the moment between Android
+      moving its default network and its callback reaching the network part goes on the previous setting (the one
+      before's switch holds it; with none before, directly), as an app that follows the setting without the VPN reads
+      it only from Android's broadcast. A choice whose setting was not seen at any settle for 90 days is forgotten, with
+      its key (S2's review, m3).
     - **The bytes.** `CONNECT <address>:<port> HTTP/1.1`, `Host` and a blank line, as the resolver's `ProxySocket`
       writes it, an IPv6 address in brackets with no zone. No `User-Agent`, `Proxy-Connection`, `Connection` or
       `Proxy-Authorization`. The answer is read with `peek` and then exactly what was peeked, up to its head's end
@@ -489,9 +505,10 @@ chaining is, and must follow the same switch.
       the route `Via::NetworkProxy`: route 3 in the log's version 8 and in the live view's snapshot version 7. The
       proxy's address is not kept per flow, nor why the proxy was taken; "Now" shows the address on its own line. A
       flow whose destination is hidden keeps route 3 and no destination; the history counts route 3 among the direct
-      flows, and says it went through the network's proxy. Seven counters follow the 73 (tries, opened, refused,
-      password, unreachable, by name, and `protect_on` refused), in a debug build's dump only, beside its line
-      `beneath-proxy ADDRESSES WHY first=direct|proxy names=0|1 password=0|1 always=0|1 no-grant=0|1`.
+      flows, and says it went through the network's proxy. Eight counters follow the 73 (tries, opened, refused,
+      password, unreachable, by name, `protect_on` refused, and the flows the switch's hold kept waiting), in a debug
+      build's dump only, beside its line `beneath-proxy ADDRESSES WHY first=direct|proxy names=0|1 password=0|1
+      always=0|1 no-grant=0|1`, `hold` in place of the addresses for the switch's hold.
     - **"Now"** shows the network's line beside the whole phone's while both are set, since the engine uses the
       network's proxy whatever the global setting is. Where the engine has the proxy, the line says that an app that
       cannot connect directly is connected through it, as Android would, and that the proxy then sees where it
@@ -803,7 +820,13 @@ chaining is, and must follow the same switch.
   stop says. The hot set against `99a09d27`: `Loop::forward` differs by one call only (`looked_up` becomes `passed`),
   the event loop by offsets on x86_64, and arm64's `tunnels::carry` poll by `adrp` and `add` for a panic path's
   constant; `Shared::learn` and `Names::insert`'s merge differ, as the fix round's names (the askers and the closed
-  ECH guard) need.
+  ECH guard) need. The switch's hold (S2's review, m2; `9cc3a838`), built and stripped the same way: x86_64 2,093,216
+  bytes, arm64-v8a 1,874,632, 2,032 and 1,760 more than the fix round's and 5,080 and 4,632 more than `99a09d27`'s;
+  Gradle's release library is 2,093,392 bytes on x86_64, 3,760 under the gate, 1,873,472 on arm64-v8a and 1,388,336
+  on armeabi-v7a. Its hot set against `99a09d27` is the fix round's, function by function. A `Notify` for the hold's
+  wake-up had made it otherwise: with a second caller of its poll's inner part, `Notified::poll` was inlined anew into
+  `Tun::send`, `Tun::send_once` and the polls of `mapped`, `own_relayed`, `tunnels::carry` and `echo::carry`, so the
+  hold looks at the setting by the timer instead.
 - **Frontier research, open:** Telegram's fake-TLS hello across versions, told from the device without a JA4 database;
   encapsulated handshakes seen from the device (Xue et al., USENIX Security 2024) for Signal and WhatsApp; and how
   people read "read from the connection" against "inferred", with real users.
