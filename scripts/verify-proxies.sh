@@ -815,7 +815,7 @@ PY
         done
         fixture_log | grep -E '^get (ok|failed)' | tail -1 || true
     }
-    local held routes before outcomes
+    local held routes new_routes before outcomes
     held=$(held_count)
     routes=$(routes_through)
     before=$(fixture_flows)
@@ -824,7 +824,10 @@ PY
     outcomes=$(outcomes_since "$before")
     [[ $line == "get failed "* ]] || fail "with the switch on and no proxy to be had, the fixture's request answered: ${line:-no answer}"
     [[ $outcomes == *unreachable=* && $outcomes != *opened=* ]] || fail "the engine's flows of the fixture with the switch's hold: ${outcomes:-none}"
-    [ "$(routes_through)" = "$routes" ] || fail "a flow of the fixture went through the network's proxy, which has no address"
+    # Only the routes kept since the fetch: the engine keeps its latest 512 flows, so an older proxied flow of the
+    # fixture may have left the list meanwhile (the shards of 2026-11-27, beside an app's 490 unreachable flows).
+    new_routes=$(comm -13 <(sort <<<"$routes") <(routes_through | sort))
+    [ -z "$new_routes" ] || fail "a flow of the fixture went through the network's proxy, which has no address: $new_routes"
     [ "$(held_count)" -gt "${held:-0}" ] 2>/dev/null || fail "the engine's counter of the flows the hold kept waiting did not rise: $held -> $(held_count)"
     echo "ok: with the switch on and the network's proxy at proxy.invalid, the request fails ($line), its flows ${outcomes% }, none opened, the hold's counter $held -> $(held_count)"
 
