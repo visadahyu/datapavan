@@ -584,21 +584,25 @@ impl Shared {
     #[cold]
     #[inline(never)]
     pub(super) fn forwarded_name(&self, id: u64, name: &str) {
-        let rename = |flow: &mut Flow| {
-            if matches!(
-                flow.named_by,
-                NamedBy::Dns | NamedBy::Organisation | NamedBy::Unknown
-            ) {
-                flow.name = Some(name.to_owned());
-                flow.named_by = NamedBy::Dns;
-                flow.network = None;
-            }
-        };
         if let Some(live) = lock(&self.live).get_mut(&id) {
-            rename(&mut live.flow);
+            Self::forwarded_as(&mut live.flow, name);
         }
         if let Some(flow) = lock(&self.flows).iter_mut().rev().find(|f| f.id == id) {
-            rename(flow);
+            Self::forwarded_as(flow, name);
+        }
+    }
+
+    /// `flow` named `name`, the `Host` of its first head, where no app's own name or a tool's named it: one function
+    /// for the live flow and the kept one, not a closure inlined at both (the forwarder's size pass).
+    #[inline(never)]
+    fn forwarded_as(flow: &mut Flow, name: &str) {
+        if matches!(
+            flow.named_by,
+            NamedBy::Dns | NamedBy::Organisation | NamedBy::Unknown
+        ) {
+            flow.name = Some(name.to_owned());
+            flow.named_by = NamedBy::Dns;
+            flow.network = None;
         }
     }
 
