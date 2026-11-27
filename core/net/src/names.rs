@@ -194,8 +194,10 @@ impl<K: Hash + Eq + Clone, V> Scoped<K, V> {
 pub struct Names {
     addresses: Scoped<IpAddr, Given>,
     public: Scoped<String, Instant>,
-    /// The names whose answers carried an ECH configuration, until when, scoped as the public names.
-    hidden: Scoped<String, Instant>,
+    /// The names whose answers carried an ECH configuration, until when, scoped as the public names. Behind a pointer
+    /// of its own (S2): inline, its 152 bytes moved the engine's state that follows the names past the reach of an
+    /// arm64 `add` on the packet path.
+    hidden: Box<Scoped<String, Instant>>,
     /// The key of the hashes of the names an address was given before its last, random for each table.
     hasher: RandomState,
 }
@@ -205,7 +207,7 @@ impl Default for Names {
         Self {
             addresses: Scoped::new((CAPACITY, OWN_CAPACITY)),
             public: Scoped::new((PUBLIC_CAPACITY, OWN_PUBLIC_CAPACITY)),
-            hidden: Scoped::new((PUBLIC_CAPACITY, OWN_PUBLIC_CAPACITY)),
+            hidden: Box::new(Scoped::new((PUBLIC_CAPACITY, OWN_PUBLIC_CAPACITY))),
             hasher: crate::keys(),
         }
     }

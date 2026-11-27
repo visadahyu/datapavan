@@ -529,7 +529,7 @@ async fn through(
 ) -> Result<TcpStream, Failure> {
     let names_first = lock(&beneath.order).names_first;
     if names_first && let Some(named) = own_name(shared, uid, destination) {
-        Counters::add(&shared.counters.beneath_named, 1);
+        Counters::add(&shared.counters.beneath.named, 1);
         return ask(shared, beneath, &named, began).await;
     }
     match ask(shared, beneath, &Target::Address(destination), began).await {
@@ -539,7 +539,7 @@ async fn through(
     let Some(named) = own_name(shared, uid, destination) else {
         return Err(Failure::Answered(Answer::Refused));
     };
-    Counters::add(&shared.counters.beneath_named, 1);
+    Counters::add(&shared.counters.beneath.named, 1);
     let opened = ask(shared, beneath, &named, began).await;
     if opened.is_ok() {
         lock(&beneath.order).names_first = true;
@@ -591,7 +591,7 @@ async fn ask(
     }
     .map_err(Failure::Silent)?;
     if let Err(error) = protect_on(shared, socket.as_fd(), beneath.network).await {
-        Counters::add(&shared.counters.beneath_stale, 1);
+        Counters::add(&shared.counters.beneath.stale, 1);
         return Err(Failure::Silent(error));
     }
     socket.set_keepalive(true).map_err(Failure::Silent)?;
@@ -610,7 +610,7 @@ async fn ask(
             }));
         }
     };
-    Counters::add(&shared.counters.beneath_tries, 1);
+    Counters::add(&shared.counters.beneath.tries, 1);
     let status = match tokio::time::timeout(
         limits.beneath_answer.min(left()),
         answer(&mut stream, target),
@@ -623,13 +623,13 @@ async fn ask(
     };
     let answer = Answer::of(status);
     let counter = match answer {
-        Answer::Opened => &shared.counters.beneath_opened,
+        Answer::Opened => &shared.counters.beneath.opened,
         Answer::Password => {
             beneath.password.store(true, Ordering::Relaxed);
-            &shared.counters.beneath_password
+            &shared.counters.beneath.password
         }
-        Answer::Unreachable => &shared.counters.beneath_unreachable,
-        Answer::Refused | Answer::Unexpected => &shared.counters.beneath_refused,
+        Answer::Unreachable => &shared.counters.beneath.unreachable,
+        Answer::Refused | Answer::Unexpected => &shared.counters.beneath.refused,
     };
     Counters::add(counter, 1);
     if answer == Answer::Opened {

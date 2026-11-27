@@ -718,13 +718,22 @@ pub struct Counters {
     blocking_holds: AtomicU64,
     proxy_associations: AtomicU64,
     proxy_relays_elsewhere: AtomicU64,
-    beneath_tries: AtomicU64,
-    beneath_opened: AtomicU64,
-    beneath_refused: AtomicU64,
-    beneath_password: AtomicU64,
-    beneath_unreachable: AtomicU64,
-    beneath_named: AtomicU64,
-    beneath_stale: AtomicU64,
+    /// The network's own proxy's (the proxy record's unit S2), behind a pointer of their own: inline, their 56 bytes
+    /// moved the tunnels' table in [`Shared`] past the 4,095 bytes an arm64 `add` reaches at once, and the packet
+    /// path's `Loop::forward` and the tunnels' carry took an instruction more at each of its uses.
+    beneath: Box<BeneathCounters>,
+}
+
+/// The counters of the network's own proxy (S2), in the order of [`Counters::snapshot`].
+#[derive(Debug, Default)]
+struct BeneathCounters {
+    tries: AtomicU64,
+    opened: AtomicU64,
+    refused: AtomicU64,
+    password: AtomicU64,
+    unreachable: AtomicU64,
+    named: AtomicU64,
+    stale: AtomicU64,
 }
 
 impl Counters {
@@ -904,13 +913,13 @@ impl Counters {
             &self.blocking_holds,
             &self.proxy_associations,
             &self.proxy_relays_elsewhere,
-            &self.beneath_tries,
-            &self.beneath_opened,
-            &self.beneath_refused,
-            &self.beneath_password,
-            &self.beneath_unreachable,
-            &self.beneath_named,
-            &self.beneath_stale,
+            &self.beneath.tries,
+            &self.beneath.opened,
+            &self.beneath.refused,
+            &self.beneath.password,
+            &self.beneath.unreachable,
+            &self.beneath.named,
+            &self.beneath.stale,
         ]
     }
 }
