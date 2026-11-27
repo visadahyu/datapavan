@@ -5507,7 +5507,9 @@ fn through_a_required_proxy(name: &str, with: &'static str) -> Outcome {
 /// network's proxy and works. Only after three distinct servers so (`beneath_failures`), with no direct success
 /// between, does the proxy come first, and the next connection goes through it at once. The plan's first connection
 /// alone taught it; the audit's C2 asks for several servers, so that a hostile proxy that answers every request
-/// never captures a network whose direct connections pass.
+/// never captures a network whose direct connections pass. Then a fourth server the proxy cannot reach (`502`): the
+/// direct try after its answer has `beneath_direct` alone, and the app sees "host unreachable" within about that,
+/// not after the minute of `connect_timeout` (S2's review, minor 1).
 #[test]
 #[ignore = "needs an unprivileged network namespace; scripts/check.sh rust runs it"]
 fn on_a_network_that_drops_the_proxy_comes_first_after_three_servers() -> Outcome {
@@ -5523,10 +5525,16 @@ fn on_a_network_that_drops_the_proxy_comes_first_after_three_servers() -> Outcom
             let silent: Vec<SocketAddr> = (1..=3)
                 .map(|i| SocketAddr::from((Ipv4Addr::new(203, 0, 113, i), server.port())))
                 .collect();
+            let fourth = SocketAddr::from((Ipv4Addr::new(203, 0, 113, 4), server.port()));
+            let closed = TcpListener::bind((SERVER, 0)).await?.local_addr()?;
             let proxy = connect_proxy(
                 OTHER.into(),
                 ConnectSettings {
-                    remap: silent.iter().map(|&to| (to, server)).collect(),
+                    remap: silent
+                        .iter()
+                        .map(|&to| (to, server))
+                        .chain([(fourth, closed)])
+                        .collect(),
                     ..ConnectSettings::default()
                 },
             )
@@ -5558,6 +5566,18 @@ fn on_a_network_that_drops_the_proxy_comes_first_after_three_servers() -> Outcom
                 "the proxy came first, yet it took {took:?}"
             );
             assert_eq!(proxy.requests().len(), 4);
+            let began = std::time::Instant::now();
+            let refused = app_try(fourth).await?;
+            let took = began.elapsed();
+            assert!(
+                matches!(&refused, Err(error) if error.kind() == io::ErrorKind::HostUnreachable),
+                "{refused:?}"
+            );
+            assert!(
+                took < limits.beneath_direct * 2,
+                "after the proxy's 502 it took {took:?}"
+            );
+            assert_eq!(proxy.requests().len(), 5);
             Ok(())
         },
     )

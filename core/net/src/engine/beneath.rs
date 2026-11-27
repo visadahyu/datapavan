@@ -36,8 +36,11 @@
 //!
 //! **What the app sees** (M6): the proxy's `2xx` opens the flow through it. When both ways fail, the app sees the
 //! direct way's outcome, a reset for a direct refusal, whatever the proxy answered. A direct try that ran out of its
-//! share, or a proxy that came first and opened nothing, hands the rest of `Limits::connect_timeout` to a direct try,
-//! so that a stale setting (a debugging proxy since switched off) never costs a slow server its connection.
+//! share, or a proxy that came first and opened nothing, goes on to one more direct try: a proxy that gave no answer
+//! hands it the rest of `Limits::connect_timeout`, so that a stale setting (a debugging proxy since switched off) never
+//! costs a slow server its connection; a proxy that answered, by its policy or because it could not reach the server,
+//! gives it `Limits::beneath_direct` alone, after which the app sees that answer, a reset for a refusal and an ICMP
+//! error for a `5xx`, rather than a minute of silence on a network that drops (S2's review, minor 1).
 //!
 //! **By address, then by name** (C1, M1, decision 2): the authority is the address the app connected to. A request by
 //! name follows, on a new connection, only after the proxy refused the address with a `4xx` other than `407`, and only
@@ -86,9 +89,6 @@ pub const PREFERRED: Duration = Duration::from_secs(600);
 /// The most addresses of a proxy kept, as `NetworkProxy.MAX_ADDRESSES`.
 pub const MAX_ADDRESSES: usize = 2;
 
-/// The longest exclusion list kept, in bytes: a longer one is cut after its last whole entry within it.
-pub const MAX_EXCLUSIONS: usize = 4_096;
-
 /// The network beneath's own proxy, as the network part settled it, and what the engines learned of it.
 #[derive(Debug)]
 pub struct Beneath {
@@ -96,7 +96,8 @@ pub struct Beneath {
     network: i64,
     /// The proxy's usable addresses, at most [`MAX_ADDRESSES`], in the order given.
     proxies: Vec<SocketAddr>,
-    /// The exclusion list, comma-separated entries, at most [`MAX_EXCLUSIONS`] bytes.
+    /// The exclusion list, comma-separated entries, whole, as the resolver's twin reads it on the Kotlin side: a list
+    /// cut would send the hosts past the cut to the proxy (S2's review, minor 3).
     exclusions: String,
     /// Whether the network has IPv4: without, an IPv4 destination never goes through the proxy (audit C2).
     ipv4: bool,
@@ -146,16 +147,6 @@ impl Beneath {
         if kept.is_empty() {
             return None;
         }
-        let mut exclusions = exclusions;
-        if exclusions.len() > MAX_EXCLUSIONS {
-            let mut cut = MAX_EXCLUSIONS;
-            while !exclusions.is_char_boundary(cut) {
-                cut -= 1;
-            }
-            exclusions = exclusions[..cut]
-                .rsplit_once(',')
-                .map_or("", |(whole, _)| whole);
-        }
         Some(Self {
             network,
             proxies: kept,
@@ -170,7 +161,9 @@ impl Beneath {
 
     /// This setting as the engines should hold it, beside `held`, the one held now: `held` itself when it is the same
     /// proxy (the same network, the same set of addresses, the same exclusions) and the same choice, so that what was
-    /// learned of it stays; a new one with what was learned when only the user's choice changed; else this one.
+    /// learned of it stays; a new one with what was learned when only the user's choice or the network's families
+    /// changed, the probe free in it, since a probe in flight gives it back to `held` alone (S2's review, minor 2); else
+    /// this one.
     #[must_use]
     pub fn kept(self, held: Option<&Arc<Self>>) -> Arc<Self> {
         let Some(held) = held.filter(|held| held.same(&self)) else {
@@ -180,7 +173,10 @@ impl Beneath {
             return Arc::clone(held);
         }
         Arc::new(Self {
-            order: Mutex::new(lock(&held.order).clone()),
+            order: Mutex::new(Order {
+                probing: false,
+                ..lock(&held.order).clone()
+            }),
             password: AtomicBool::new(held.password.load(Ordering::Relaxed)),
             ..self
         })
@@ -193,12 +189,16 @@ impl Beneath {
             && self.proxies.iter().all(|p| other.proxies.contains(p))
     }
 
-    /// What was learned of the proxy at `now`, in time since the phone started.
+    /// What was learned of the proxy at `now`, in time since the phone started: the proxy first as [`Order::start`]
+    /// reads it, within [`PREFERRED`] of its learning or while a probe runs (S2's review, note 2).
     #[must_use]
     pub fn state(&self, now: Duration) -> BeneathState {
         let order = lock(&self.order);
         BeneathState {
-            proxy_first: self.always || order.proxy_since.is_some_and(|_| now != Duration::MAX),
+            proxy_first: self.always
+                || order
+                    .proxy_since
+                    .is_some_and(|since| now.saturating_sub(since) < PREFERRED || order.probing),
             names_first: order.names_first,
             password: self.password.load(Ordering::Relaxed),
         }
@@ -503,7 +503,7 @@ fn onward_steps(
             probe,
         } = onward;
         let limits = shared.limits;
-        match through(shared, &beneath, uid, destination, began).await {
+        let failure = match through(shared, &beneath, uid, destination, began).await {
             Ok(stream) => {
                 if direct.is_some() {
                     lock(&beneath.order).proxy_opened(
@@ -516,15 +516,22 @@ fn onward_steps(
                 return (Ok(stream), true);
             }
             Err(failure) if beneath.always => return (Err(failure.error()), false),
-            Err(_) => {}
-        }
+            Err(failure) => failure,
+        };
         if let Some((error, false)) = direct {
             // Both ways failed: the app sees the direct way's own outcome (M6).
             return (Err(error), false);
         }
         let left = limits.connect_timeout.saturating_sub(began.elapsed());
-        let result = match tokio::time::timeout(left, connect_tcp(shared, target)).await {
+        let answered = matches!(failure, Failure::Answered(_));
+        let wait = if answered {
+            limits.beneath_direct.min(left)
+        } else {
+            left
+        };
+        let result = match tokio::time::timeout(wait, connect_tcp(shared, target)).await {
             Ok(result) => result,
+            Err(_) if answered => Err(failure.error()),
             Err(_) => Err(io::ErrorKind::TimedOut.into()),
         };
         if result.is_ok() {
@@ -612,21 +619,23 @@ async fn ask(
         return Err(Failure::Silent(error));
     }
     socket.set_keepalive(true).map_err(Failure::Silent)?;
-    let mut stream = match tokio::time::timeout(
-        limits.beneath_direct.min(left()),
-        socket.connect(proxy),
-    )
-    .await
-    {
-        Ok(Ok(stream)) => stream,
-        failed => {
-            beneath.unreachable(proxy);
-            return Err(Failure::Silent(match failed {
-                Ok(Err(error)) => error,
-                _ => io::ErrorKind::TimedOut.into(),
-            }));
-        }
-    };
+    // The proxy's other address comes first after this one refused, or ran out of the whole of its own share; not
+    // after a timeout that only the flow's own time cut short (S2's review, note 3).
+    let share = left();
+    let mut stream =
+        match tokio::time::timeout(limits.beneath_direct.min(share), socket.connect(proxy)).await {
+            Ok(Ok(stream)) => stream,
+            Ok(Err(error)) => {
+                beneath.unreachable(proxy);
+                return Err(Failure::Silent(error));
+            }
+            Err(_) => {
+                if share >= limits.beneath_direct {
+                    beneath.unreachable(proxy);
+                }
+                return Err(Failure::Silent(io::ErrorKind::TimedOut.into()));
+            }
+        };
     Counters::add(&shared.counters.beneath.tries, 1);
     let status = match tokio::time::timeout(
         limits.beneath_answer.min(left()),
@@ -674,7 +683,7 @@ async fn head(stream: &mut TcpStream) -> io::Result<Vec<u8>> {
         }
         let before = head.len();
         head.extend_from_slice(&peeked[..n]);
-        match connect::head_end(&head) {
+        match connect::head_end_after(&head, before) {
             Ok(Some(end)) => {
                 head.truncate(end);
                 stream.read_exact(&mut peeked[..end - before]).await?;
@@ -1137,8 +1146,10 @@ pub(super) mod tests {
         ] {
             assert!(!other.state(Duration::ZERO).names_first);
         }
+        // A list past 4 KiB is read whole, as the resolver's twin reads it: its last entry still keeps its host from
+        // the proxy (S2's review, minor 3).
         let long = format!("{},last.example", "x.example,".repeat(500));
-        let Some(cut) = Beneath::new(
+        let Some(whole) = Beneath::new(
             NETWORK,
             &[at("203.0.113.80:3128")],
             &long,
@@ -1147,7 +1158,48 @@ pub(super) mod tests {
         ) else {
             unreachable!("a proxy kept")
         };
-        assert!(cut.exclusions.len() <= MAX_EXCLUSIONS && cut.exclusions.ends_with("x.example"));
+        assert!(long.len() > 4_096 && whole.exclusions == long);
+        let ip = IpAddr::from([198, 51, 100, 7]);
+        assert!(!takes(&whole, ip, false, Some("last.example")));
+        assert!(takes(&whole, ip, false, Some("first.example")));
+    }
+
+    /// S2's review, minor 2: a setting kept beside one whose probe is in flight starts with the probe free, so that it
+    /// probes again once [`PREFERRED`] ran out; and note 2, its state says the proxy comes first only within
+    /// [`PREFERRED`] of its learning, or while a probe runs, as [`Order::start`] reads it.
+    #[test]
+    fn a_setting_kept_beside_a_probe_in_flight_probes_again() {
+        let new = |ipv6| {
+            Beneath::new(NETWORK, &[at("203.0.113.80:3128")], "", (true, ipv6), false)
+                .unwrap_or_else(|| unreachable!("a proxy kept"))
+        };
+        let held = new(true).kept(None);
+        let since = Duration::from_secs(10);
+        lock(&held.order).proxy_since = Some(since);
+        assert!(
+            held.state(since + PREFERRED.saturating_sub(Duration::from_secs(1)))
+                .proxy_first
+        );
+        assert!(
+            !held.state(since + PREFERRED).proxy_first,
+            "PREFERRED ran out"
+        );
+        assert_eq!(
+            lock(&held.order).start(since + PREFERRED, false),
+            Start::Probe
+        );
+        assert!(
+            held.state(since + PREFERRED).proxy_first,
+            "while a probe runs"
+        );
+        let next = new(false).kept(Some(&held));
+        assert!(!Arc::ptr_eq(&next, &held));
+        // The probe's flow ends, and gives it back to the setting it started with.
+        drop(Probe(Arc::clone(&held)));
+        assert_eq!(
+            lock(&next.order).start(since + PREFERRED * 3, false),
+            Start::Probe
+        );
     }
 
     /// C2: the order learns "proxy first" only from distinct servers that failed directly and opened through the
@@ -1341,7 +1393,7 @@ pub(super) mod tests {
             looked_up(shared, UID, name, [198, 51, 100, 7]);
             looked_up(shared, OTHER, name, [198, 51, 100, 7]);
         };
-        let cases: [Case; 9] = [
+        let cases: [Case; 10] = [
             (
                 "a handed tool",
                 |s| {
@@ -1423,6 +1475,16 @@ pub(super) mod tests {
                 "ECH",
                 |s| {
                     lock(&s.names).insert_hidden("site.example", None, 300, Instant::now());
+                },
+                Some(UID),
+            ),
+            (
+                "the app's own resolver naming the address otherwise (S2's review, minor 4)",
+                |s| {
+                    s.learn(
+                        &super::super::tests::dns_answer("own.example", [198, 51, 100, 7]),
+                        Some(UID),
+                    );
                 },
                 Some(UID),
             ),
@@ -1566,6 +1628,156 @@ pub(super) mod tests {
         )?;
         assert!(next.answers_uncached(), "held from the start");
         next.stop();
+        Ok(())
+    }
+
+    /// S2's review, minor 1: once the proxy came first and answered, by its policy (`403`) or because it could not reach
+    /// the server (`502`), the direct try after it has `Limits::beneath_direct` alone, and then the app sees that
+    /// answer, a reset or an ICMP error, rather than the rest of `Limits::connect_timeout` of a direct way that drops.
+    #[tokio::test(flavor = "current_thread")]
+    async fn after_the_proxy_answered_the_direct_try_has_its_share_alone() -> io::Result<()> {
+        for (reply, seen) in [
+            (
+                b"HTTP/1.1 403 Forbidden\r\n\r\n".as_slice(),
+                io::ErrorKind::ConnectionRefused,
+            ),
+            (
+                b"HTTP/1.1 502 Bad Gateway\r\n\r\n",
+                io::ErrorKind::HostUnreachable,
+            ),
+        ] {
+            let proxy = Proxy::new(Reply::Bytes(reply)).await?;
+            let lab = Lab {
+                slow: Duration::from_millis(1_500),
+                ..Lab::default()
+            };
+            let (shared, _) = engine(lab, proxy.at);
+            lock(&held(&shared).order).proxy_since = Some(shared.clock.since_boot());
+            let server = echo_server().await?;
+            let began = Instant::now();
+            let (stream, through) = open(&shared, UID, server, server).await;
+            assert_eq!(stream.err().map(|e| e.kind()), Some(seen));
+            assert!(!through);
+            assert!(
+                began.elapsed() < Duration::from_secs(1),
+                "{:?}",
+                began.elapsed()
+            );
+        }
+        Ok(())
+    }
+
+    /// S2's review, minor 4: a name whose answer carried an ECH configuration, learned from that answer as the lookups'
+    /// paths learn it (an HTTPS record with `ech=`), never goes to the proxy, where the same answer without it does.
+    #[tokio::test(flavor = "current_thread")]
+    async fn a_name_learned_with_ech_from_its_answer_never_reaches_the_proxy() -> io::Result<()> {
+        let destination = at("93.184.216.34:443");
+        for (answer, by_name) in [
+            (crate::dns::tests::with_https("cover.example"), false),
+            (
+                super::super::tests::dns_answer("www.example.com", [93, 184, 216, 34]),
+                true,
+            ),
+        ] {
+            let proxy = Proxy::new(Reply::NamesOnly).await?;
+            let (shared, _) = engine(
+                Lab {
+                    refuses: true,
+                    ..Lab::default()
+                },
+                proxy.at,
+            );
+            shared.learn(&answer, None);
+            shared.passed(Some(UID), &answer);
+            let (stream, through) = open(&shared, UID, destination, destination).await;
+            assert_eq!(stream.is_ok() && through, by_name);
+            assert_eq!(proxy.heads().len(), if by_name { 2 } else { 1 });
+            assert_eq!(
+                proxy.heads().iter().any(|h| h.contains("www.example.com")),
+                by_name
+            );
+        }
+        Ok(())
+    }
+
+    /// S2's review, minor 4: a proxy that wants a password (`407`) gets no request by name after it, though the
+    /// address has the flow's own sole name: one request alone.
+    #[tokio::test(flavor = "current_thread")]
+    async fn after_a_password_wanted_no_request_by_name_follows() -> io::Result<()> {
+        let proxy = Proxy::new(Reply::Bytes(
+            b"HTTP/1.1 407 Proxy Authentication Required\r\nProxy-Authenticate: Basic realm=\"x\"\r\n\r\n",
+        ))
+        .await?;
+        let (shared, _) = engine(
+            Lab {
+                refuses: true,
+                ..Lab::default()
+            },
+            proxy.at,
+        );
+        looked_up(&shared, UID, "site.example", [198, 51, 100, 7]);
+        let destination = at("198.51.100.7:443");
+        let (stream, through) = open(&shared, UID, destination, destination).await;
+        assert!(stream.is_err() && !through);
+        assert_eq!(proxy.heads().len(), 1);
+        assert!(held(&shared).state(Duration::ZERO).password);
+        Ok(())
+    }
+
+    /// The user's choice, with the proxy's two addresses, the first a closed port: [`ask`] turns to the other, so that
+    /// the next flow opens through it (S2's review, minor 4); and it does not turn where the proxy only ran out of the
+    /// time the flow had left, short of its own share (note 3), here a port whose queue is full.
+    #[tokio::test(flavor = "current_thread")]
+    async fn ask_turns_to_the_proxys_other_address_after_a_refusal_alone() -> io::Result<()> {
+        let proxy = Proxy::new(Reply::Bytes(OPENED)).await?;
+        let closed = closed_port().await?;
+        let (shared, _) = engine(Lab::default(), proxy.at);
+        let two = |first: SocketAddr| {
+            let mut beneath =
+                Beneath::new(NETWORK, &[at("203.0.113.80:3128")], "", (true, true), true)
+                    .unwrap_or_else(|| unreachable!("a proxy kept"));
+            beneath.proxies = vec![first, proxy.at];
+            *lock(&shared.beneath) = Some(Arc::new(beneath));
+        };
+        two(closed);
+        let destination = at("198.51.100.7:443");
+        let (stream, through) = open(&shared, UID, destination, destination).await;
+        assert!(stream.is_err() && !through, "the closed port");
+        let (stream, through) = open(&shared, UID, destination, destination).await;
+        assert!(through, "the other address");
+        echoes(&mut stream?).await?;
+        // A port that takes no more connections, its queue full: a connect there waits.
+        let full = TcpSocket::new_v4()?;
+        full.bind((std::net::Ipv4Addr::LOCALHOST, 0).into())?;
+        let full = full.listen(0)?;
+        let waiting = full.local_addr()?;
+        let mut queued = Vec::new();
+        for _ in 0..2 {
+            if let Ok(Ok(stream)) =
+                tokio::time::timeout(Duration::from_millis(100), TcpStream::connect(waiting)).await
+            {
+                queued.push(stream);
+            }
+        }
+        let mut short = shared_with(Arc::new(Lab::default()) as Arc<dyn Platform>);
+        short.limits.beneath_direct = Duration::from_millis(300);
+        short.limits.beneath_answer = Duration::from_millis(300);
+        short.limits.connect_timeout = Duration::from_millis(150);
+        let short = Arc::new(short);
+        *lock(&short.beneath) = lock(&shared.beneath).clone();
+        let mut beneath = Beneath::new(NETWORK, &[at("203.0.113.80:3128")], "", (true, true), true)
+            .unwrap_or_else(|| unreachable!("a proxy kept"));
+        beneath.proxies = vec![waiting, proxy.at];
+        let beneath = Arc::new(beneath);
+        *lock(&short.beneath) = Some(Arc::clone(&beneath));
+        let (stream, _) = open(&short, UID, destination, destination).await;
+        assert!(stream.is_err());
+        assert_eq!(
+            beneath.proxy(),
+            waiting,
+            "the flow's own time ran out, not the proxy's share"
+        );
+        drop((queued, full));
         Ok(())
     }
 

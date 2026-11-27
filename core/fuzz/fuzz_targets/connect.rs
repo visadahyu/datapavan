@@ -3,6 +3,7 @@
 //! and any list a network's settings can name. The invariants:
 //! - a head's end is within the bytes and within `MAX_HEAD`, and the bytes cut at any point give none, or the whole
 //!   bytes' answer: what comes after the head never changes it;
+//! - read on from a cut that held no end (`head_end_after`), the bytes give the whole bytes' answer;
 //! - a status read from the whole bytes is the one read from the head alone;
 //! - the exclusion rule ends for any host and list, and an empty entry adds nothing.
 //!
@@ -26,7 +27,7 @@ fuzz_target!(|data: &[u8]| {
         data.len().min(MAX_HEAD - 1),
     ] {
         match connect::head_end(&data[..cut]) {
-            Ok(None) => {}
+            Ok(None) => assert_eq!(connect::head_end_after(data, cut), whole),
             part => assert_eq!(part, whole),
         }
     }
