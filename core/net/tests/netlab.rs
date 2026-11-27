@@ -6355,7 +6355,8 @@ async fn reset_after(to: SocketAddr, request: &[u8]) -> Outcome {
 }
 
 /// The forwarder's network lab, rows 5 to 8 and the audit's m12, the first heads it does not carry: `Content-Length`
-/// with `Transfer-Encoding`, a `Host` no answer gave the address (a server the proxy knows by it waits), a `Host` port
+/// with `Transfer-Encoding`, a `Host` no answer gave the address (a server the proxy knows by it waits), a first
+/// request's trailer come with its head (hardening 1b: as a head the forwarder may not carry), a `Host` port
 /// that is not the flow's, the app's own absolute form, and `Upgrade`. Each flow is opened and reset; the first was
 /// rescued after its two `CONNECT`s, each later one sent to the stage by the refusal remembered and tried by `CONNECT`
 /// after its head, which the proxy refused: the proxy got only `CONNECT`s, by address and by the bound name, and no
@@ -6373,10 +6374,12 @@ fn first_heads_the_forwarder_does_not_carry_go_by_connect_and_later_ones_reset()
             let proxy =
                 squid_lab_knowing(&engine, &["example.test"], &[("popular.example", OTHER)])
                     .await?;
-            let firsts: [&[u8]; 5] = [
+            let firsts: [&[u8]; 6] = [
                 b"POST / HTTP/1.1\r\nHost: example.test\r\nContent-Length: 5\r\n\
                   Transfer-Encoding: chunked\r\n\r\n0\r\n\r\n",
                 b"GET / HTTP/1.1\r\nHost: popular.example\r\n\r\n",
+                b"PUT / HTTP/1.1\r\nHost: example.test\r\nTransfer-Encoding: chunked\r\n\r\n\
+                  3\r\nabc\r\n0\r\nChecksum: 1f\r\n\r\n",
                 b"GET / HTTP/1.1\r\nHost: example.test:8080\r\n\r\n",
                 b"GET http://popular.example/ HTTP/1.1\r\nHost: popular.example\r\n\r\n",
                 b"GET /chat HTTP/1.1\r\nHost: example.test\r\nUpgrade: websocket\r\nConnection: Upgrade\r\n\
@@ -6395,7 +6398,7 @@ fn first_heads_the_forwarder_does_not_carry_go_by_connect_and_later_ones_reset()
             );
             assert_eq!(
                 requests.iter().filter(|r| **r == by_address).count(),
-                5,
+                6,
                 "{requests:?}"
             );
             assert_eq!((plain.connections(), fake.connections()), (0, 0));
@@ -6406,7 +6409,7 @@ fn first_heads_the_forwarder_does_not_carry_go_by_connect_and_later_ones_reset()
                     counters[REMEMBERED],
                     counters[FORWARD_RESET]
                 ),
-                (0, 4, 5)
+                (0, 5, 6)
             );
 
             let first = b"GET /1 HTTP/1.1\r\nHost: example.test\r\n\r\n";
@@ -6432,7 +6435,7 @@ fn first_heads_the_forwarder_does_not_carry_go_by_connect_and_later_ones_reset()
             let one = got("GET /1 HTTP/1.1", "example.test", &[], b"");
             assert_eq!(plain.got(), [one.clone(), one]);
             assert_eq!(forwarded(&proxy).len(), 2);
-            assert_eq!(engine.counters()[FORWARD_RESET], 7);
+            assert_eq!(engine.counters()[FORWARD_RESET], 8);
             Ok(())
         },
     )
@@ -6837,6 +6840,84 @@ fn a_forwarded_flow_is_recorded_under_its_host_through_the_proxy_with_no_path_an
                     );
                 }
             }
+            Ok(())
+        },
+    )
+}
+
+/// The audit's m16 at the stage: a `Host` the proxy's exclusion list names, on an address whose last name it does not
+/// name (so that S2 took the flow to the proxy, which refused it), never goes through the proxy: on a network that
+/// requires its proxy, where the direct way failed, the flow is reset, the proxy holding only its `CONNECT`s; in the
+/// same pass a `Host` the list does not name is forwarded.
+#[test]
+#[ignore = "needs an unprivileged network namespace; scripts/check.sh rust runs it"]
+fn an_excluded_host_is_never_forwarded() -> Outcome {
+    lab(
+        "an_excluded_host_is_never_forwarded",
+        &Limits::default(),
+        |engine| async move {
+            let plain = origin((SERVER, 80).into()).await?;
+            let proxy = squid_lab(&engine, &["intranet.example", "example.test"]).await?;
+            set_beneath(&engine, LAB_NETWORK, proxy.address, "intranet.example")?;
+            reset_after(
+                plain.address,
+                b"GET / HTTP/1.1\r\nHost: intranet.example\r\n\r\n",
+            )
+            .await?;
+            let requests = proxy.requests();
+            assert!(
+                !requests.is_empty() && requests.iter().all(|r| r[0].starts_with("CONNECT ")),
+                "{requests:?}"
+            );
+            let mut app = app_connect(plain.address).await?;
+            let request = b"GET /e HTTP/1.1\r\nHost: example.test\r\n\r\n";
+            assert_eq!(
+                fetch(&mut app, request).await?,
+                named("GET /e HTTP/1.1", "example.test", b"")
+            );
+            assert_eq!(
+                forwarded(&proxy),
+                [lines_of(
+                    "GET http://example.test/e HTTP/1.1\r\nHost: example.test\r\n"
+                )]
+            );
+            assert_eq!(plain.got().len(), 1);
+            Ok(())
+        },
+    )
+}
+
+/// F-PLAN's mid-head row: a head the app cut by closing its side, `GET` and half its `Host`, is never written: the
+/// stage's connection reached the proxy and closed with not one byte, and the app saw its connection closed; in the
+/// same pass a whole head is forwarded.
+#[test]
+#[ignore = "needs an unprivileged network namespace; scripts/check.sh rust runs it"]
+fn a_head_cut_by_the_apps_close_reaches_no_proxy() -> Outcome {
+    lab(
+        "a_head_cut_by_the_apps_close_reaches_no_proxy",
+        &Limits::default(),
+        |engine| async move {
+            let plain = origin((SERVER, 80).into()).await?;
+            let proxy = squid_lab(&engine, &["example.test"]).await?;
+            let mut app = app_connect(plain.address).await?;
+            app.write_all(b"GET /p HTTP/1.1\r\nHost: exa").await?;
+            app.shutdown().await?;
+            let (read, _) = read_to_end_or_error(&mut app).await?;
+            assert_eq!(read, Vec::<u8>::new());
+            tokio::time::sleep(Duration::from_millis(200)).await;
+            assert_eq!(
+                proxy.empty(),
+                1,
+                "the stage's connection, closed with no byte"
+            );
+            assert_eq!(forwarded(&proxy), Vec::<Vec<String>>::new());
+            let mut whole = app_connect(plain.address).await?;
+            let request = b"GET /p HTTP/1.1\r\nHost: example.test\r\n\r\n";
+            assert_eq!(
+                fetch(&mut whole, request).await?,
+                named("GET /p HTTP/1.1", "example.test", b"")
+            );
+            assert_eq!(forwarded(&proxy).len(), 1);
             Ok(())
         },
     )

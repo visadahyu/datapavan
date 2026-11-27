@@ -2566,6 +2566,57 @@ pub(super) mod tests {
         Ok(())
     }
 
+    /// The gate's verdict read again at the stage (the audit's m2): a head that reaches the stage unread by the tracker
+    /// gate, as one whose hold ran out does (here the stage is fed directly), with a `Host` tracker blocking refuses for
+    /// the app, is reset and never reaches the proxy; a name the table does not block, on the next flow, is forwarded.
+    #[tokio::test]
+    async fn a_blocked_host_the_gate_let_go_unread_is_reset_at_the_stage() -> io::Result<()> {
+        let proxy = Proxy::new(Reply::Forward).await?;
+        let (shared, _) = engine(
+            Lab {
+                refuses: true,
+                ..Lab::default()
+            },
+            proxy.at,
+        );
+        shared.set_blocking(super::super::BlockSetting {
+            on: true,
+            table: Some(Arc::new(crate::blocking::tests::table(&[(
+                "tracker.example",
+                "block",
+            )]))),
+            covered: vec![UID],
+            ..super::super::BlockSetting::default()
+        });
+        looked_up(&shared, UID, "tracker.example", [198, 51, 100, 9]);
+        let destination = at("198.51.100.9:80");
+        let (stream, _) = open(&shared, UID, destination, destination).await;
+        let mut stream = stream?;
+        let blocked = b"GET /t HTTP/1.1\r\nHost: tracker.example\r\n\r\n";
+        assert!(
+            asked(&mut stream, blocked)
+                .await
+                .map_or(true, |body| body.is_empty()),
+            "reset"
+        );
+        tokio::time::sleep(Duration::from_millis(100)).await;
+        assert!(
+            proxy.heads().iter().all(|h| h.starts_with("CONNECT ")),
+            "{:?}",
+            proxy.heads()
+        );
+        assert_eq!(forwarder(&shared), [0, 0, 1, 0, 0]);
+        looked_up(&shared, UID, "example.test", [198, 51, 100, 9]);
+        let (stream, _) = open(&shared, UID, destination, destination).await;
+        let mut stream = stream?;
+        let allowed = b"GET /e HTTP/1.1\r\nHost: example.test\r\n\r\n";
+        assert_eq!(
+            asked(&mut stream, allowed).await?,
+            "GET http://example.test/e HTTP/1.1"
+        );
+        Ok(())
+    }
+
     /// What the forwarder never carries: a `Host` no answer of Datapavan's own resolvers gave the address (M3's
     /// binding), and on a forwarded connection a later head with another `Host`, after which the proxy holds only the
     /// first request.
