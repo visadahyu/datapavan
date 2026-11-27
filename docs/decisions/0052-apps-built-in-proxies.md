@@ -429,17 +429,21 @@ chaining is, and must follow the same switch.
       app's into its tunnel, before any of this. Never through the proxy: loopback, link-local, multicast and broadcast
       destinations; one within the network's on-link prefixes (`OnLink::on_link`), while a private address on another
       subnet may go through it, as Android would send it; a stand-in and the tunnel's DNS address; the proxy's own
-      addresses and any of Android's setting, so that a proxy is never put in front of a proxy; an IPv6 destination on a
-      network without IPv6 (a `2000::/3` address and an IPv6 default route); and a destination the proxy's exclusion
+      addresses and any of Android's setting, so that a proxy is never put in front of a proxy; a destination of a family
+      the network has not, from the setting (IPv4: an IPv4 address of its own, not link-local, and an IPv4 default
+      route; IPv6: a `2000::/3` address and an IPv6 default route); and a destination the proxy's exclusion
       list names, by its address written out or by its name from Android's resolver's answers. UDP never: no HTTP proxy
       carries it.
     - **The exclusion list** is read by Android's rules in twins, `connect::excluded` and `NetworkProxy.excluded`, held
       to one table (`core/net/testdata/proxy-exclusions.tsv`): comma-separated entries, `*` matching any run, a leading
       `.` taking the subdomains, ASCII letters alone folded, and only the code points up to U+0020 trimmed, alike on
-      both sides, so that the resolver and the engine never send one server two ways. At most 4 KiB of it is kept.
+      both sides, so that the resolver and the engine never send one server two ways. Both read the list whole, as
+      Android gives it (the engine's cut at 4 KiB is gone since S2's review).
     - **The order** (the maintainer's decision 1; the plan audit's C2 and M6). Directly first, within
-      `Limits::beneath_direct` (3 s). "No route of that family" (`ENETUNREACH`, `EADDRNOTAVAIL`) is the app's error at
-      once and goes nowhere else; any other failure, a server's own refusal among them, goes on to the proxy. The proxy
+      `Limits::beneath_direct` (3 s). No address of that family (`EADDRNOTAVAIL`) is the app's error at once and goes
+      nowhere else; "network unreachable" (`ENETUNREACH`), which a network that lets out only its proxy may answer by
+      ICMP, goes on to the proxy, as any other failure does, a server's own refusal among them (S2's review of the
+      engine, M1). The proxy
       comes first only once `Limits::beneath_failures` (3) distinct servers failed directly and opened through it
       within `Limits::beneath_window` (60 s), with no direct success between, so that a hostile proxy that answers
       `200` to everything never captures a network that lets direct connections through. A direct success ends it at
@@ -467,8 +471,12 @@ chaining is, and must follow the same switch.
       is unreachable.
     - **By name** (the maintainer's decision 2; the plan audit's C1 and M1). Only after the proxy refused the address
       with a `4xx` other than `407`, on a new connection, and only with the flow's own name: the address's sole name in
-      Android's resolver's answers (`Names::sole`), the one that names the app's flow, never a name whose answer
-      carried an ECH configuration, nor one tracker blocking refuses for the app. Never by name for a circumvention
+      Android's resolver's answers (`Names::sole`), the one that names the app's flow, and only where that app's own
+      lookup was given it (S2's review of the engine, M2): the name keeps the UIDs of the latest four apps it was given
+      to, so that an app that connects by an address it carries, or got from a resolver the engine cannot read, goes by
+      address alone; never a name whose answer carried an ECH configuration, nor one tracker blocking refuses for the
+      app. While the proxy is held, the network part's DNS answers go to the apps with a time to live of 0, as while a
+      chain or a tunnel is on, so that Android's one cache for a network never answers an app the engine did not see. Never by name for a circumvention
       tool's flow (the chain's tool or any tool handed), nor for any flow of an app whose route is the tool or a
       tunnel, nor for a flow whose app Android did not name, whatever any log switch says. Once a name opened where its
       address was refused, names come first through that proxy while the setting holds.
@@ -723,6 +731,16 @@ chaining is, and must follow the same switch.
       the network's owner wants the proxy used, unless the user turns "Send apps through this proxy" on.
     - *A network that drops* costs each of the first few servers the 3 s direct share before the proxy comes first
       (measured: 3.6 to 3.9 s for each, then 0.75 to 0.89 s).
+    - *One app can turn the order.* The three servers that teach "proxy first" may all be one app's, in one burst, and
+      the order then holds for every app on that network until a direct success ends it.
+    - *The exclusion list by name* is checked against the address's latest name in Android's resolver's answers alone:
+      an address that answers for several names, one of them excluded, may go through the proxy under another.
+    - *By name fails closed under an ECH flood* (S2's review of the engine, M3). An app on the phone whose own
+      resolver answers with many ECH configurations pushes names out of the table of names that carried one; once a
+      live name is pushed out, the guard closes until that name's hold would have ended, and meanwhile no flow of any
+      app goes to the proxy by name, only by address.
+    - *Memory:* the apps a name was given to add 16 bytes to each address entry of Android's resolver's table, 128
+      KiB at most ([ADR 0044](0044-udp-mapping-and-budgets.md)'s figure for the names).
     - *Android 17's local-network grant.* On Android 17's emulator (`dp-api37-16k`), with Datapavan's grant revoked and
       the VPN restarted, the engine's connection to the Wi-Fi proxy at 10.0.2.2 and the resolver's both opened (S2's
       review, M2; measurements 7, its fix round), so neither way withholds a proxy on the local network for want of the
@@ -777,7 +795,15 @@ chaining is, and must follow the same switch.
   functions for the carry task likewise, at the same count). On both ABIs `Shared::learn` differs, its public names'
   insertion now out of line, shared with the names whose answers carried ECH and called only for an answer with an ECH
   configuration; and so does `Engine::start_with`'s loop, whose sweep calls hashbrown's `erase` for the names' tables
-  out of line, a third table of that type being there now.
+  out of line, a third table of that type being there now. The fix round of the unit's review (`a9b9459b`), built and
+  stripped the same way: x86_64 2,091,184 bytes against `99a09d27`'s 2,088,136 (3,048 more; 26,712 more than
+  `adcdd7f9`), arm64-v8a 1,872,872 against 1,870,000 (2,872 more; 27,112 more than `adcdd7f9`). The x86_64 library
+  Gradle builds is then about 2,091,360 bytes, 5,792 under the 2 MiB gate and so below the plan's 8 KiB stop line:
+  unit S2 is therefore pushed together with the third size pass, which frees about 26.6 to 31.8 KB, as the plan's
+  stop says. The hot set against `99a09d27`: `Loop::forward` differs by one call only (`looked_up` becomes `passed`),
+  the event loop by offsets on x86_64, and arm64's `tunnels::carry` poll by `adrp` and `add` for a panic path's
+  constant; `Shared::learn` and `Names::insert`'s merge differ, as the fix round's names (the askers and the closed
+  ECH guard) need.
 - **Frontier research, open:** Telegram's fake-TLS hello across versions, told from the device without a JA4 database;
   encapsulated handshakes seen from the device (Xue et al., USENIX Security 2024) for Signal and WhatsApp; and how
   people read "read from the connection" against "inferred", with real users.

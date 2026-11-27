@@ -70,8 +70,9 @@
 #   through those from PROXY, an address of the namespace's own where the test's proxy listens and from which it
 #   connects onward (the engine's connections to the proxy come from it too, as the kernel's source for a local
 #   address is that address), and those from the tunnel's address, the apps' into tun0 and the engine's listener's
-#   answers. A reset, not "unreachable": Linux reports ENETUNREACH for an ICMP net-unreachable, which the engine reads
-#   as a network without that family and never takes to the proxy. It needs iptables in the namespace; without it, it
+#   answers. The lab's tests of ICMP rejections (net- and host-unreachable, which Linux reports as ENETUNREACH and
+#   EHOSTUNREACH, and which the engine takes to the proxy as it does a reset) replace its IPv4 reset inside the
+#   namespace (core/net/tests/netlab.rs, require_proxy_rejecting). It needs iptables in the namespace; without it, it
 #   says so and fails, so that the test fails rather than pass with direct connections open. Its IPv6 twin (S2's review,
 #   n4) refuses the namespace's new IPv6 TCP connections alike but the tunnel's, where ip6tables takes the rule; where it
 #   cannot (no ip6tables, or a REJECT module the namespace cannot load), it says on standard error that IPv6 direct

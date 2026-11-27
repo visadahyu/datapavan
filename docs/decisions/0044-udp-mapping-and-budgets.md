@@ -105,6 +105,9 @@ path at the field's standard. Its findings 18 to 21 say why. The maintainer made
        longest: by what the tables ask of the allocator, an app's full tables take up to about 270 KB, so 32 apps
        about 8.5 MB, beside Android's about 3.7 MB, or about half that with names of 15 bytes (115 KB, 3.6 MB and 1.7
        MB; review 4, nit 4). An app that sends no plain DNS of its own, past the tunnel's resolver, takes nothing.
+       Since the fix round of the proxy record's unit S2 ([ADR 0052](0052-apps-built-in-proxies.md), decision 11, "By
+       name"), each address entry of Android's resolver's table also keeps the UIDs of the latest four apps its name
+       was given to, 16 bytes more an entry, 128 KiB at most.
      - A DNS name stands beside the connection's own only while it is current: a name from an answer is kept, to name
        flows, on the monotonic clock, and through a night it would show W5's users a difference that is only its age,
        so it stands beside another only while the answer that named the flow when it started is held in time since the
