@@ -92,7 +92,9 @@ pub fn reserve(buffer: &mut Zeroizing<Vec<u8>>, more: usize) {
     *buffer = grown;
 }
 
-/// `bytes` written at the end of `out`, grown by [`reserve`].
+/// `bytes` written at the end of `out`, grown by [`reserve`]. Out of line: the framer
+/// puts in six places (the forwarder's size pass).
+#[inline(never)]
 fn put(out: &mut Zeroizing<Vec<u8>>, bytes: &[u8]) {
     reserve(out, bytes.len());
     out.extend_from_slice(bytes);

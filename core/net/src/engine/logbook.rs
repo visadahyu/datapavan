@@ -322,6 +322,13 @@ impl Lookups {
     }
 }
 
+/// Whether two flows' ends are the same, out of line: [`Shared::tcp_flow_of`] compares two of them per live flow,
+/// each an inlined copy of `SocketAddr`'s comparison otherwise (the forwarder's size pass).
+#[inline(never)]
+fn same(a: (SocketAddr, SocketAddr), b: (SocketAddr, SocketAddr)) -> bool {
+    a == b
+}
+
 impl Shared {
     /// The wall clock now, for the log, once every open segment and each app's lookups are cut at the
     /// quarter hours it passed since the last cut, back or forward ([`cut`]). Every path that counts a
@@ -565,8 +572,7 @@ impl Shared {
             .iter()
             .filter(|(_, live)| {
                 live.flow.protocol == TCP
-                    && live.flow.app == app
-                    && live.flow.destination == destination
+                    && same((live.flow.app, live.flow.destination), (app, destination))
             })
             .map(|(id, _)| *id)
             .max()
