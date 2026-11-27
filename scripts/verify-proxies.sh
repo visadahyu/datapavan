@@ -99,17 +99,43 @@ owner_do() {
     echo "${line:-$1 no-answer}"
 }
 wifi_connected() { adb shell cmd wifi status | tr -d '\r' | grep -q 'Wifi is connected to "AndroidWifi"'; }
+wifi_enabled() {
+    local status
+    status=$(adb shell cmd wifi status 2>/dev/null | tr -d '\r') || return 1
+    grep -qx 'Wifi is enabled' <<<"$status"
+}
+# Wi-Fi's own state, as scripts/emulator-networks.sh names it.
+wifi_state() {
+    adb shell cmd wifi status 2>/dev/null | tr -d '\r' | grep -E '^Wifi is (enabled|disabled|connected|not connected)' |
+        paste -sd ';' || true
+}
 wifi_default() {
     local dc default
     dc=$(adb shell dumpsys connectivity | tr -d '\r')
     default=$(sed -n 's/^Active default network: //p' <<<"$dc" | head -1)
     [ -n "$default" ] && grep -qE "network\{$default\} +handle\{[0-9]+\} +ni\{WIFI" <<<"$dc"
 }
-# Wi-Fi off and on, so that the saved network's proxy reaches its link (scripts/measure-proxy-settings.sh).
+# The saved network's state for auto-join as Android's Wi-Fi service dumps it: NETWORK_SELECTION_ENABLED, or its status
+# and why it is disabled (as NETWORK_SELECTION_TEMPORARY_DISABLED NETWORK_SELECTION_DISABLED_NO_INTERNET_TEMPORARY).
+wifi_selection() {
+    local dumped
+    dumped=$(adb shell dumpsys wifi 2>/dev/null | tr -d '\r') || true
+    sed -n '/Configured networks Begin/,/Configured networks End/{
+        s/^ *\(NetworkSelectionStatus\|mNetworkSelectionDisableReason\) \(.*\)/\2/p
+    }' <<<"$dumped" | paste -sd ' ' || true
+}
+# Wi-Fi off and on, so that the saved network's proxy reaches its link (scripts/measure-proxy-settings.sh), then told to
+# join the emulator's own network by name, as a user's tap does, not left to Android's auto-join: behind the recorder,
+# whose certificate fails Android's HTTPS probe, Android disables the saved network for auto-join (the row's note
+# says how), and on CI run 46052462725 Wi-Fi came back on, scanned twice in 60 s and joined nothing, as on 2026-11-19
+# (scripts/emulator-networks.sh). The join enables the network and keeps its proxy, which the shell's configuration
+# leaves unassigned. Once, and the network's state is named where it fails.
 wifi_again() {
     adb shell svc wifi disable
     sleep 2
     adb shell svc wifi enable
+    within 20 wifi_enabled || return 1
+    adb shell cmd wifi connect-network AndroidWifi open >/dev/null 2>&1 || true
     within 60 wifi_connected && within 30 wifi_default
 }
 # Every connection out of the emulator rejected but on the loopback, into the VPN's interface and to the recorder's
@@ -693,7 +719,7 @@ for host in sys.argv[1:]:
 PY
 }
 beneath_row() {
-    local line base flows dest unreachable
+    local line base flows dest unreachable selection
     unreachable=$(runner_reach | paste -sd ' ')
     if [ -n "$unreachable" ]; then
         echo "SKIPPED: the network's own proxy's row: this computer cannot reach $unreachable, the runner's outage, not the engine's"
@@ -752,7 +778,8 @@ PY
     line=$(owner_do wifi-proxy --es host "$HOST" --es port "$base")
     [[ $line == "wifi-proxy ok "* ]] || fail "the device owner did not set the Wi-Fi network's proxy: $line"
     WIFI_PROXY_SET=1
-    wifi_again || fail "Wi-Fi did not come back as the default network after its proxy was set"
+    wifi_again ||
+        fail "Wi-Fi did not come back as the default network after its proxy was set ($(wifi_state); the saved network: $(wifi_selection))"
     beneath_held() { grep -qE "^ *beneath-proxy ${HOST//./\\.}:$base network " <<<"$(dump beneath-proxy)"; }
     within 20 beneath_held || fail "the engine was not handed the Wi-Fi network's proxy: $(dump beneath-proxy | grep 'beneath-proxy' || echo none)"
     beneath_egress -I || fail "the emulator's iptables took no rule"
@@ -790,9 +817,16 @@ PY
 
     beneath_egress -D || fail "the emulator's iptables rules could not be taken out"
     EGRESS_SET=""
+    # Behind the recorder, Android's HTTP probe answered and its HTTPS probe failed on the recorder's certificate, and
+    # Android disabled the network for auto-join (DISABLED_NO_INTERNET_TEMPORARY on this computer's runs): said here,
+    # before wifi_again joins it by name.
+    selection=$(wifi_selection)
+    [ "$selection" = NETWORK_SELECTION_ENABLED ] ||
+        echo "  note: before the proxy at proxy.invalid, Android held the saved network as ${selection:-(not dumped)} for auto-join"
     line=$(owner_do wifi-proxy --es host proxy.invalid --es port "$base")
     [[ $line == "wifi-proxy ok "* ]] || fail "the device owner did not set the Wi-Fi network's proxy to proxy.invalid: $line"
-    wifi_again || fail "Wi-Fi did not come back as the default network after its proxy was set to proxy.invalid"
+    wifi_again ||
+        fail "Wi-Fi did not come back as the default network after its proxy was set to proxy.invalid ($(wifi_state); the saved network: $(wifi_selection))"
     beneath_unresolved() { grep -qE '^ *beneath-proxy none unresolved ' <<<"$(dump beneath-proxy)"; }
     within 30 beneath_unresolved || fail "the engine's setting is not proxy.invalid's, unresolved: $(dump beneath-proxy | grep 'beneath-proxy' || echo none)"
     line=$(dump proxy-through on | sed -n 's/^ *\(proxy-through .*\)/\1/p')
