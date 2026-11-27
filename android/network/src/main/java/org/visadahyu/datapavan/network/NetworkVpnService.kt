@@ -881,19 +881,26 @@ class NetworkVpnService : VpnService() {
                 // A proxy at one of the tunnel's own addresses moves the tunnel to its other set, as a gateway there does.
                 main.post { if ((forced ?: TunnelAddresses.choose(networksBeneath())) !== addresses) setUpAgain() }
             }
+            val key = if (setting != null && facts != null) {
+                org.visadahyu.datapavan.network.proxy.ThroughProxy.key(facts.transport, setting.host, setting.port)
+            } else {
+                null
+            }
+            val always = key != null && org.visadahyu.datapavan.network.proxy.ThroughProxy.of(this).on(key)
             handBeneath(
                 if (setting == null || facts == null || engine.isEmpty()) {
                     null
                 } else {
-                    BeneathProxy(
-                        facts.network,
-                        engine,
-                        setting.exclusions.joinToString(","),
-                        facts.ipv6,
-                        org.visadahyu.datapavan.network.proxy.ThroughProxy.of(this)
-                            .on(org.visadahyu.datapavan.network.proxy.ThroughProxy.key(facts.transport, setting.host, setting.port)),
-                    )
+                    BeneathProxy(facts.network, engine, setting.exclusions.joinToString(","), facts.ipv6, always)
                 },
+            )
+            // For "Now"'s line (S2): a proxy on the local network, and a proxy on the phone itself at a port that a
+            // circumvention tool installed is known to use (decision 3), which the chain carries apps through instead.
+            val local = engineWhy == org.visadahyu.datapavan.network.dns.NetworkProxy.Why.LOCAL_NO_GRANT ||
+                engine.any { org.visadahyu.datapavan.network.activity.ProxyFacts.isLocal(it.address) }
+            val tool = if (engineWhy == org.visadahyu.datapavan.network.dns.NetworkProxy.Why.LOOPBACK && setting != null) toolAt(setting.port) else null
+            org.visadahyu.datapavan.network.proxy.ProxyContext.publishBeneath(
+                org.visadahyu.datapavan.network.proxy.ProxyContext.Beneath(engineWhy, key, always, local, tool),
             )
             val held = resolverProxy
             // The same proxy, its addresses in whatever order, of the same setting, keeps what it learned of which way
@@ -907,6 +914,20 @@ class NetworkVpnService : VpnService() {
             }
         }
         if (changed) exchanger.proxyChanged()
+    }
+
+    /**
+     * The name of a circumvention tool installed that the tools' table knows to listen at [port] on the phone (W6's
+     * table; the proxy record's unit S2, decision 3), or null: a port is only a hint, so "Now" says no more than that.
+     */
+    private fun toolAt(port: Int): String? {
+        val installed = org.visadahyu.datapavan.network.proxy.ProxyContext.state.value.tools.values.toSet()
+        return try {
+            org.visadahyu.datapavan.network.chain.Tools.table(this)
+                .firstOrNull { tool -> tool.name in installed && tool.listeners.any { it.port == port } }?.name
+        } catch (e: IOException) {
+            null
+        }
     }
 
     /** The network's own proxy as `Engine.nativeBeneathProxy` takes it (S2). */

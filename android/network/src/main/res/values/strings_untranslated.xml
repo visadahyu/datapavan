@@ -25,7 +25,12 @@
     tool" only of the chain's. Psiphon and the other tools that run only as a VPN are ordinary apps here. None says or
     implies who runs or chose a server. The fix round of unit D's review: the tools' sentences of the switch's note in a
     note of their own (log_switch_note_tools), the tracker exception where a line gives the window, the choice that
-    waits while a tool is not counted, and a tool's own proxy's row in the tool's words (now_tool_proxy_past).
+    waits while a tool is not counted, and a tool's own proxy's row in the tool's words (now_tool_proxy_past). Unit S2's
+    (ADR 0052, decision 4; the maintainer's decisions of 2026-11-26): the network's own proxy, which the engine connects
+    apps through where a direct connection fails, in Now's line (now_proxy_network's new words; its earlier ones stay as
+    now_proxy_network_unused, where the engine does not use the proxy), its other cases (on the local network without
+    the grant, on the phone itself, at a tool's port, asking for a password), the switch "Send apps through this proxy",
+    and the row's and the history's words. None says who set the proxy.
 -->
 <resources xmlns:tools="http://schemas.android.com/tools" tools:ignore="MissingTranslation">
     <!-- In "Now", under a proxy whose address is shown while the switch is off: facts only. "While", not "because":
@@ -85,10 +90,41 @@
     <string name="now_proxy_global">A proxy is set for the whole phone in Android\'s settings: %1$s. Most apps go through it.</string>
     <!-- As above, a PAC file (a proxy auto-config file) set for the whole phone. -->
     <string name="now_proxy_global_pac">A PAC file is set for the whole phone in Android\'s settings. It names a proxy, or none, for each connection.</string>
-    <!-- The current network's own proxy, with none set for the whole phone: %1$s is its host and port. Apps that start
-         inside Datapavan's VPN are not given it; apps left out of the VPN, and apps already running, are. "This network",
-         not "this Wi-Fi network": it may be Ethernet or mobile data. -->
-    <string name="now_proxy_network">This network\'s settings name a proxy: %1$s. Apps that were already running when Datapavan started use it, and so do the apps you left out. Others connect directly.</string>
+    <!-- The current network's own proxy, which the engine uses (the proxy record's unit S2): %1$s is its host and port,
+         %2$s a sentence of where it is (proxy_local, or now_proxy_network_remote). Shown beside the whole phone's line
+         too, since the engine uses the network's proxy whatever the whole phone's is. "This network", not "this Wi-Fi
+         network": it may be Ethernet or mobile data. -->
+    <string name="now_proxy_network">This network\'s settings name a proxy: %1$s. %2$s Where an app cannot connect directly, Datapavan connects it through this proxy, as Android would without Datapavan, and the proxy then sees where it connects.</string>
+    <!-- As above, with the switch now_proxy_send_through on: every app inside the VPN goes through the proxy. -->
+    <string name="now_proxy_network_always">This network\'s settings name a proxy: %1$s. %2$s With the switch below on, Datapavan sends apps through it, as Android would without Datapavan, and the proxy sees where they connect.</string>
+    <!-- Unit S2: %2$s above, for a proxy that is not on the local network. A company's proxy may be on another network. -->
+    <string name="now_proxy_network_remote">It may be outside your network. Who runs it is not known.</string>
+    <!-- Unit S2: the switch under now_proxy_network, off unless the user turns it on (decision 1). -->
+    <string name="now_proxy_send_through">Send apps through this proxy</string>
+    <!-- The current network's own proxy where the engine does not use it (no address of it could be used): %1$s is its
+         host and port. Apps that start inside Datapavan's VPN are not given it; apps left out of the VPN, and apps
+         already running, are. -->
+    <string name="now_proxy_network_unused">This network\'s settings name a proxy: %1$s. Apps that were already running when Datapavan started use it, and so do the apps you left out. Others connect directly.</string>
+    <!-- Unit S2: the network's proxy is on the local network, and Android 17 lets Datapavan reach the local network only
+         with its grant, which it does not have. A button below opens the grant (now_proxy_allow_local). -->
+    <string name="now_proxy_network_no_grant">This network\'s proxy is on your local network, and Datapavan is not allowed to reach your local network. Where an app cannot connect directly here, it cannot connect at all.</string>
+    <!-- The button under now_proxy_network_no_grant: Android's own request, or its page for Datapavan. -->
+    <string name="now_proxy_allow_local">Allow the local network</string>
+    <!-- Unit S2: a proxy on the phone itself (127.0.0.1 or localhost): %1$s is its host and port. -->
+    <string name="now_proxy_network_phone">This network\'s settings name a proxy on this phone itself: %1$s. Datapavan does not send apps through it. Apps that were already running, and the apps you left out, use it.</string>
+    <!-- Unit S2, decision 3: as above, at a port that a circumvention tool installed is known to use: %1$s is the tool's
+         name. A port is only a hint, so it says no more than that. The button below opens the network screen, where the
+         chain sends apps through the tool. -->
+    <string name="now_proxy_network_tool">This network\'s settings name a proxy on this phone itself, at a port %1$s uses. Datapavan does not send apps through it. To send apps through %1$s, set it up as your tool.</string>
+    <!-- The button under now_proxy_network_tool. -->
+    <string name="now_proxy_open_chain">Set up your tool</string>
+    <!-- Unit S2: the network's proxy answered the engine with 407, a password asked for. -->
+    <string name="now_proxy_network_password">This network\'s proxy asks for a password, which Android does not keep for a network. Apps here reach only what the network lets through directly.</string>
+    <!-- Unit S2, on a destination's row in Now and in the history: the connection went through the network's own proxy.
+         The record does not keep which of the two reasons it was. -->
+    <string name="now_destination_network_proxy">Went through this network\'s proxy: a direct connection failed on this network, or the switch to send apps through it is on.</string>
+    <!-- Unit S2, in the history, for such a connection whose destination was not logged (as history_direct_off). -->
+    <string name="history_network_proxy_off">Went through this network\'s proxy, not through your circumvention tool or a WireGuard configuration. Where it connected was not logged, because \"Log where apps connect through your tool, WireGuard or a proxy\" was off.</string>
     <!-- As above, a PAC file in the current network's settings. -->
     <string name="now_proxy_network_pac">This network\'s settings give a PAC file. Apps that start inside Datapavan\'s VPN do not use it.</string>
     <!-- Unit B, on the row and the history of Android's PAC proxy (com.android.proxyhandler), which evaluates a PAC

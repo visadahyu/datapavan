@@ -242,6 +242,7 @@ internal fun HistoryScreen(
                                 marks = marksOf(hosts, appGroup, trackers, companies, entry.proxy?.trackers.orEmpty()),
                                 bytes = bytes,
                                 through = tunnel,
+                                networkProxy = entry.via == org.visadahyu.datapavan.network.log.LogRecord.VIA_NETWORK_PROXY,
                                 proxy = proxy?.let { proxyRow(it, past = true, toolName, choice) },
                                 onLogSwitch = onLogSwitch,
                                 onChoice = choose,
@@ -253,6 +254,10 @@ internal fun HistoryScreen(
                             Text(
                                 when (why) {
                                     History.LeftOut.TUNNEL -> stringResource(R.string.history_through_tunnel_off, tunnel.orEmpty())
+                                    // Counted as direct (S2, audit m3), and said as the way it went.
+                                    History.LeftOut.DIRECT
+                                        if entry.via == org.visadahyu.datapavan.network.log.LogRecord.VIA_NETWORK_PROXY ->
+                                        stringResource(R.string.history_network_proxy_off)
                                     else -> stringResource(leftOutWords(why))
                                 },
                                 style = MaterialTheme.typography.bodyMedium,

@@ -4,6 +4,7 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.update
+import org.visadahyu.datapavan.network.dns.NetworkProxy
 
 /**
  * What the service knows of the proxies around the apps, for "Now" and each app's history (the proxy record's unit B,
@@ -36,6 +37,22 @@ object ProxyContext {
          * tool chosen as the engine has it: none while this is false.
          */
         val handReady: Boolean = false,
+        /** The network beneath's own proxy as the engine has it (the proxy record's unit S2), for "Now"'s line. */
+        val beneath: Beneath = Beneath(),
+    )
+
+    /**
+     * The network's own proxy as the engine has it (the proxy record's unit S2): [why] it has it
+     * ([NetworkProxy.Why.NETWORK]) or none; the key of the user's choice "Send apps through this proxy" ([key],
+     * [ThroughProxy.key]) and the choice ([always]); whether its addresses are on the local network ([local]); and, for
+     * a proxy on the phone itself, the circumvention tool installed whose known port it names ([tool]), if one.
+     */
+    data class Beneath(
+        val why: NetworkProxy.Why = NetworkProxy.Why.NONE,
+        val key: String? = null,
+        val always: Boolean = false,
+        val local: Boolean = false,
+        val tool: String? = null,
     )
 
     private val held = MutableStateFlow(State())
@@ -48,6 +65,9 @@ object ProxyContext {
 
     /** The tools' UIDs, read off the main thread at the tunnel's start and at each change of the apps. Any thread. */
     fun publishTools(tools: Map<Int, String>, carriers: Map<Int, String>) = held.update { it.copy(tools = tools, carriers = carriers) }
+
+    /** The network's own proxy as the engine has it, at each settle (S2). Any thread. */
+    fun publishBeneath(beneath: Beneath) = held.update { it.copy(beneath = beneath) }
 
     /** Whether the hand-over could hand the choices, at each hand-over. Any thread. */
     fun publishReady(ready: Boolean) = held.update { it.copy(handReady = ready) }

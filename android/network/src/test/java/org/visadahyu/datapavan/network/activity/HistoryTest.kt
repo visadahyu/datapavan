@@ -137,6 +137,8 @@ class HistoryTest {
         assertEquals(History.LeftOut.PROXY, why(proxied))
         assertEquals(History.LeftOut.THROUGH_TOOL, why(zeros.copy(via = LogRecord.VIA_TOOL)))
         assertEquals(History.LeftOut.DIRECT, why(zeros.copy(via = LogRecord.VIA_DIRECT)))
+        // Through the network's own proxy (the proxy record's unit S2): the app's own flow, counted as direct (audit m3).
+        assertEquals(History.LeftOut.DIRECT, why(zeros.copy(via = LogRecord.VIA_NETWORK_PROXY)))
         assertEquals(History.LeftOut.TUNNEL, why(zeros.copy(via = LogRecord.VIA_TUNNEL, tunnel = 2)))
         assertEquals(History.LeftOut.NO_ROUTE, why(zeros.copy(via = LogRecord.VIA_UNKNOWN)))
         assertEquals(History.LeftOut.TOOL_SERVERS, why(zeros.copy(via = LogRecord.VIA_DIRECT), tool = true))

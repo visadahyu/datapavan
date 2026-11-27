@@ -80,6 +80,49 @@ import org.visadahyu.datapavan.network.proxy.ProxyChoice
 class NowActivity : ComponentActivity() {
     private val worker = Executors.newSingleThreadExecutor { Thread(it, "network-now") }.asCoroutineDispatcher()
     private val snapshot = mutableStateOf<Snapshot?>(null)
+
+    /** Whether the network's own proxy asked the engine for a password, read with each snapshot (S2). */
+    private val beneathPassword = mutableStateOf(false)
+
+    /**
+     * The network's own proxy's taps (the proxy record's unit S2): the choice "Send apps through this proxy", which the
+     * service hands the engine at once; the local-network grant, asked of Android, with Android's own page where it no
+     * longer asks; and the network screen, whose chain sends apps through a tool (decision 3).
+     */
+    private val networkProxy by lazy {
+        org.visadahyu.datapavan.network.ui.NetworkProxyActions(
+            onThrough = { key, on -> org.visadahyu.datapavan.network.proxy.ThroughProxy.of(this).set(key, on) },
+            onAllowLocal = {
+                if (!askedLocal) {
+                    askedLocal = true
+                    askLocal.launch(NetworkVpnService.LOCAL_NETWORK)
+                } else {
+                    startActivity(
+                        Intent(android.provider.Settings.ACTION_APPLICATION_DETAILS_SETTINGS, android.net.Uri.fromParts("package", packageName, null)),
+                    )
+                }
+            },
+            onChain = { startActivity(Intent(this, MainActivity::class.java).addFlags(org.visadahyu.datapavan.network.ui.LogSwitch.LINK_FLAGS)) },
+        )
+    }
+
+    /** Whether this screen asked Android for the local-network grant already: after a refusal it may not ask again. */
+    private var askedLocal = false
+
+    /** The grant's answer: the service settles the proxy again, which reads the grant at each settle. */
+    private val askLocal = registerForActivityResult(androidx.activity.result.contract.ActivityResultContracts.RequestPermission()) {
+        settleProxyAgain()
+    }
+
+    /** Has the running service settle the network's proxy again (S2), as after the grant may have changed. */
+    private fun settleProxyAgain() {
+        if (!NetworkVpnService.running.value) return
+        try {
+            startService(Intent(this, NetworkVpnService::class.java).setAction(NetworkVpnService.ACTION_APPLY_PROXIES))
+        } catch (e: IllegalStateException) {
+            // The next settle reads it.
+        }
+    }
     private val names = mutableStateMapOf<Int?, AppNames.Named>()
     private val groups = mutableStateMapOf<Int?, String?>()
     private val trackers = mutableStateMapOf<String, List<TrackerMarks.Match>>()
@@ -195,6 +238,8 @@ class NowActivity : ComponentActivity() {
                         paused = paused.value,
                         proxies = proxies,
                         choices = choices.value,
+                        beneathPassword = beneathPassword.value,
+                        networkProxy = networkProxy,
                     ),
                     history = history.value,
                     onPause = { paused.value = !paused.value },
@@ -223,6 +268,8 @@ class NowActivity : ComponentActivity() {
         lifecycleScope.launch {
             withContext(worker) { loadTables(this@NowActivity) }
             repeatOnLifecycle(Lifecycle.State.STARTED) {
+                // Back from Android's page for Datapavan, where the local-network grant may have been given (S2).
+                if (askedLocal) settleProxyAgain()
                 // A history shown when the view left the screen is read again as it comes back.
                 history.value?.takeIf { it.day == null && !it.reading }?.let { showDay(it.index) }
                 while (true) {
@@ -279,6 +326,7 @@ class NowActivity : ComponentActivity() {
         val seen = trackers.keys.toSet()
         val read = withContext(worker) {
             val read = Snapshot.parse(Engine.nativeActivity())
+            val password = (Engine.nativeBeneathState().toIntOrNull() ?: 0) and 4 != 0
             // An SDK Runtime UID's app too, whose name its choice's confirmation shows (unit C).
             val uids = read?.apps.orEmpty().map { it.uid }
             val named = (uids + uids.map { it?.let(ProxyChoice::appOf) }).distinct().filter { it !in known }.associateWith(appNames::of)
@@ -287,7 +335,7 @@ class NowActivity : ComponentActivity() {
             // The rows blocking counted, at port 443, for the marks that group a company's trackers under one allow.
             val rows = blocked.tallies.mapNotNull { blocked.facts?.table?.row(it.host) }.map(RowNames::host)
             val hosts = (read?.apps.orEmpty().flatMap { app -> app.destinations.flatMap(::hostsOf) } + rows).distinct().filter { it !in seen }
-            Fetched(read, named, grouped, matchTrackers(hosts), namesOf(tunnelsOf(read)), blocked, readChoices())
+            Fetched(read, named, grouped, matchTrackers(hosts), namesOf(tunnelsOf(read)), blocked, readChoices(), password)
         }
         tunnelNames.putAll(read.tunnels)
         names.putAll(read.named)
@@ -296,6 +344,7 @@ class NowActivity : ComponentActivity() {
         blocking.value = read.blocking
         choices.value = read.choices
         snapshot.value = read.snapshot
+        beneathPassword.value = read.password
     }
 
     /**
@@ -422,6 +471,8 @@ class NowActivity : ComponentActivity() {
         val tunnels: Map<Long, String>,
         val blocking: BlockingView,
         val choices: ProxyChoices,
+        /** Whether the network's own proxy asked for a password (S2). */
+        val password: Boolean,
     )
 
     /** The tunnels a snapshot names, by number. */

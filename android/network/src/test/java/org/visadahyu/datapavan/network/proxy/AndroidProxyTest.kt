@@ -8,7 +8,8 @@ import org.junit.Test
 import org.visadahyu.datapavan.network.R
 import org.visadahyu.datapavan.network.dns.NetworkProxy
 import org.visadahyu.datapavan.network.ui.ProxyLine
-import org.visadahyu.datapavan.network.ui.androidProxyLine
+import org.visadahyu.datapavan.network.ui.androidProxyLines
+import org.visadahyu.datapavan.ui.isolate
 import org.visadahyu.datapavan.ui.isolateLtr
 
 /** Android's own proxy settings, as the network part reads them and "Now" says them (the proxy record's unit B, B7). */
@@ -33,23 +34,58 @@ class AndroidProxyTest {
     }
 
     /**
-     * B7's lines: the whole phone's proxy first, as Android puts it first; else the network's own, naming this network
-     * and the apps left out; a PAC file's own sentences; and nothing while none is set.
+     * B7's lines: the whole phone's proxy first, as Android puts it first; the network's own beside it (the proxy record's
+     * unit S2), since the engine uses it whatever the whole phone's is, here as the engine not using it yet; a PAC file's
+     * own sentences, the network's only where the whole phone has none; and nothing while none is set.
      */
     @Test
     fun nowSaysWhichSettingIsSetAndNothingWhileNoneIs() {
         val at = listOf(isolateLtr("proxy.example.net:3128"))
-        assertEquals(ProxyLine(R.string.now_proxy_global, args = at), androidProxyLine(AndroidProxy(global = server)))
-        assertEquals(ProxyLine(R.string.now_proxy_global_pac), androidProxyLine(AndroidProxy(global = AndroidProxy.Setting.Pac)))
-        assertEquals(ProxyLine(R.string.now_proxy_network, args = at), androidProxyLine(AndroidProxy(network = server)))
-        assertEquals(ProxyLine(R.string.now_proxy_network_pac), androidProxyLine(AndroidProxy(network = AndroidProxy.Setting.Pac)))
-        // Both set: the whole phone's alone, which apps then follow.
-        assertEquals(R.string.now_proxy_global, androidProxyLine(AndroidProxy(global = server, network = AndroidProxy.Setting.Pac))?.text)
-        assertEquals(R.string.now_proxy_global_pac, androidProxyLine(AndroidProxy(AndroidProxy.Setting.Pac, server))?.text)
+        assertEquals(listOf(ProxyLine(R.string.now_proxy_global, args = at)), androidProxyLines(AndroidProxy(global = server)))
+        assertEquals(listOf(ProxyLine(R.string.now_proxy_global_pac)), androidProxyLines(AndroidProxy(global = AndroidProxy.Setting.Pac)))
+        assertEquals(listOf(ProxyLine(R.string.now_proxy_network_unused, args = at)), androidProxyLines(AndroidProxy(network = server)))
+        assertEquals(listOf(ProxyLine(R.string.now_proxy_network_pac)), androidProxyLines(AndroidProxy(network = AndroidProxy.Setting.Pac)))
+        // Both set: the whole phone's first; the network's PAC file is not said, its proxy is.
+        assertEquals(listOf(R.string.now_proxy_global), androidProxyLines(AndroidProxy(global = server, network = AndroidProxy.Setting.Pac)).map { it.text })
+        assertEquals(
+            listOf(R.string.now_proxy_global_pac, R.string.now_proxy_network_unused),
+            androidProxyLines(AndroidProxy(AndroidProxy.Setting.Pac, server)).map { it.text },
+        )
         // An IPv6 address in brackets, as people write one with its port.
         val v6 = AndroidProxy.Setting.Server("2001:db8::7", 8080)
-        assertEquals(listOf(isolateLtr("[2001:db8::7]:8080")), androidProxyLine(AndroidProxy(network = v6))?.args)
-        assertNull(androidProxyLine(AndroidProxy()))
+        assertEquals(listOf(isolateLtr("[2001:db8::7]:8080")), androidProxyLines(AndroidProxy(network = v6)).single().args)
+        assertEquals(emptyList<ProxyLine>(), androidProxyLines(AndroidProxy()))
+    }
+
+    /**
+     * S2: the network's own proxy's line says what the engine does with it: carries apps through it where a direct
+     * connection fails, with where it is, or always with the switch on, also beside the whole phone's; asking for a
+     * password; on the local network without the grant; on the phone itself, at a tool's known port or another; else
+     * not used.
+     */
+    @Test
+    fun theNetworksProxyLineSaysWhatTheEngineDoesWithIt() {
+        val at = listOf(isolateLtr("proxy.example.net:3128"))
+        val network = AndroidProxy(network = server)
+        fun line(beneath: ProxyContext.Beneath, password: Boolean = false) = androidProxyLines(network, beneath, password).single()
+        val used = ProxyContext.Beneath(NetworkProxy.Why.NETWORK, key = "1 proxy.example.net 3128")
+        assertEquals(ProxyLine(R.string.now_proxy_network, args = at, place = R.string.now_proxy_network_remote), line(used))
+        assertEquals(ProxyLine(R.string.now_proxy_network, args = at, place = R.string.proxy_local), line(used.copy(local = true)))
+        assertEquals(R.string.now_proxy_network_always, line(used.copy(always = true)).text)
+        assertEquals(ProxyLine(R.string.now_proxy_network_password), line(used, password = true))
+        assertEquals(
+            listOf(R.string.now_proxy_global, R.string.now_proxy_network),
+            androidProxyLines(AndroidProxy(global = server, network = server), used).map { it.text },
+        )
+        assertEquals(ProxyLine(R.string.now_proxy_network_no_grant), line(ProxyContext.Beneath(NetworkProxy.Why.LOCAL_NO_GRANT)))
+        assertEquals(ProxyLine(R.string.now_proxy_network_phone, args = at), line(ProxyContext.Beneath(NetworkProxy.Why.LOOPBACK)))
+        assertEquals(
+            ProxyLine(R.string.now_proxy_network_tool, args = listOf(isolate("Orbot"))),
+            line(ProxyContext.Beneath(NetworkProxy.Why.LOOPBACK, tool = "Orbot")),
+        )
+        for (why in listOf(NetworkProxy.Why.UNRESOLVED, NetworkProxy.Why.OWN, NetworkProxy.Why.LINK_LOCAL, NetworkProxy.Why.NONE)) {
+            assertEquals(why.word, ProxyLine(R.string.now_proxy_network_unused, args = at), line(ProxyContext.Beneath(why)))
+        }
     }
 
     /**
@@ -127,9 +163,16 @@ class AndroidProxyTest {
         assertTrue(text("now_proxy_global").contains("for the whole phone in Android\\'s settings"))
         assertTrue(text("now_proxy_global").contains("Most apps go through it."))
         assertTrue(text("now_proxy_network").startsWith("This network\\'s settings name a proxy"))
-        assertTrue(text("now_proxy_network").contains("and so do the apps you left out"))
+        assertTrue(text("now_proxy_network_unused").contains("and so do the apps you left out"))
+        // S2: what the engine does with it, and what the proxy then sees.
+        assertTrue(text("now_proxy_network").contains("Where an app cannot connect directly, Datapavan connects it through this proxy"))
+        assertTrue(text("now_proxy_network").endsWith("and the proxy then sees where it connects."))
+        assertTrue(text("now_proxy_network_password").contains("which Android does not keep for a network"))
+        assertTrue(text("now_proxy_network_no_grant").endsWith("it cannot connect at all."))
         assertTrue(text("now_proxy_network_pac").startsWith("This network\\'s settings give a PAC file."))
-        for (name in listOf("now_proxy_global", "now_proxy_global_pac", "now_proxy_network", "now_proxy_network_pac")) {
+        val names = listOf("now_proxy_global", "now_proxy_global_pac", "now_proxy_network", "now_proxy_network_pac") +
+            listOf("always", "remote", "unused", "no_grant", "phone", "tool", "password").map { "now_proxy_network_$it" }
+        for (name in names) {
             for (word in listOf("Wi-Fi", "every app", "you set", "your proxy", "chose", "admin", "owner")) {
                 assertTrue("$name: $word", !text(name).contains(word, ignoreCase = true))
             }
