@@ -135,8 +135,9 @@ public final class WorkActivity extends Activity {
 
     /**
      * Sends a STUN Binding request (RFC 8489) to each of the two names in [target], "first,second:port",
-     * from one socket, back to back once both names are resolved, so that both stand-ins wait on the
-     * port when the first answer comes back; each one not answered yet is sent again with its transaction
+     * from one socket, back to back once both names are resolved (the test tool's STUN server holds its
+     * answers until it has both, so that both stand-ins wait on the port when the first answer comes back,
+     * verify-chain.sh); each one not answered yet is sent again with its transaction
      * ID as RFC 8489 6.2.1 has a client do over UDP, after 500 ms, then after twice as long each time, 7
      * requests in all, until 16 times 500 ms after the last (fix round 2 of unit 9b: a datagram lost on
      * the emulator's way no longer fails the step). Logs "stun TARGET both after N sendings" once each

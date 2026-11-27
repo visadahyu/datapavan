@@ -652,17 +652,25 @@ echo "ok: the screen says the proxy asks for a password; with UDP allowed, the p
 # 127.0.0.1 and 127.0.0.2, where its STUN server answers on the same port, so the app's two stand-ins
 # both wait on that port when the answers come back through the relay, each from an address the app
 # never saw. Before unit 9b both were dropped, as either name's; now each reaches the app from its own
-# stand-in, told by its transaction ID. The workload app resolves both names before it sends, and sends
-# the two requests back to back, so that the first answer finds both stand-ins waiting: the 48th counter,
-# the answers told by an identifier where the address alone could not tell, must grow by one at least
+# stand-in, told by its transaction ID. The first answer must find both stand-ins waiting: the 48th counter,
+# the answers told by an identifier where the address alone could not tell, must then grow by one at least
 # (the second answer may find the first stand-in bound already). The emulator's first run of this step
 # resolved the second name between the two sends, and passed with the counter at 0, as unit 9 would
-# have: it showed nothing of unit 9b. The app sends each request again until it is answered, with its
+# have: it showed nothing of unit 9b. The workload app resolves both names before it sends, and sends the
+# two requests back to back; that is not enough, since the engine makes a new mapping's destinations
+# stand-ins in whatever order its tasks run once the association is open, and in CI on 2026-11-27 the first
+# answer came back before the second request had left the engine, both answered with the counter at 0
+# (docs/ci-flakes.md). So the tool's STUN server holds its answers until both requests have come, at most
+# 5 s, and says how each hold ended: this attempt's first hold must have had both, which a stand-in makes
+# certain since it waits before its request leaves the engine; one that ended with one request only fails
+# as that, never as unit 9b's failure. The app sends each request again until it is answered, with its
 # transaction ID, as RFC 8489 6.2.1 has a client do, for up to 39.5 s (fix round 2). The counter is read
 # with when the engine's counters began: an engine the network part started afresh between the two reads counted from
 # 0 again, which says nothing of this step either way, so the step runs once more, and a second such
 # start fails the run as that, never as a pass or as unit 9b's failure.
+stun_holds() { tool_log | sed -n 's/^stun hold \([0-9]*\) ended: .*/\1/p' | tail -1; }
 for attempt in 1 2; do
+    holds=$(stun_holds)
     before=$(counter_since 48)
     log=$(WORK_WAIT=45 work --es stun "stun-a.test,stun-b.test:$STUN_PORT")
     after=$(counter_since 48)
@@ -673,13 +681,16 @@ for attempt in 1 2; do
     echo "::warning title=the network part's engine::$restarted"
     [ -z "${GITHUB_STEP_SUMMARY:-}" ] || echo "- verify-chain.sh: $restarted" >>"$GITHUB_STEP_SUMMARY"
 done
+hold=$(tool_log | grep -m1 "^stun hold $((${holds:-0} + 1)) ended: " || true)
+grep -q " ended: both asked " <<<"$hold" ||
+    fail "the tool's STUN server did not have both requests before its first answer (${hold:-no hold ended}): the stand-ins did not both wait, so the step cannot read unit 9b; the app: $log"
 grep -qE "^stun stun-a\.test,stun-b\.test:$STUN_PORT both after [0-9]+ sendings$" <<<"$log" ||
     fail "two STUN requests to two names on one port, from one socket: not both answered: $log; $(tool_log | grep '^stun' | tail -4 | tr '\n' ' ')"
 identified=${before#* }
 told=${after#* }
 [ "$told" -gt "$identified" ] ||
     fail "both STUN answers came, but none was told by its transaction ID (48th counter $identified, then $told, the engine's counters since ${after%% *}): the step did not reach unit 9b"
-echo "ok: two STUN names asked at once on one port through the tool, each answered from its own stand-in, told by their IDs ($identified, then $told; $(sed -n 's/.* both after \([0-9]*\) sendings$/\1/p' <<<"$log") sendings)"
+echo "ok: two STUN names asked at once on one port through the tool, each answered from its own stand-in, told by their IDs ($identified, then $told; $(sed -n 's/.* both after \([0-9]*\) sendings$/\1/p' <<<"$log") sendings; both at the tool before its first answer: $(sed -n 's/.* both asked (\(.*\))$/\1/p' <<<"$hold"))"
 
 # The screen looked for the tool again when the workload app left it. A search that says a listening
 # tool does not answer is W6's open finding (CI, 2026-11-12): not a failure yet, but its steps are shown.

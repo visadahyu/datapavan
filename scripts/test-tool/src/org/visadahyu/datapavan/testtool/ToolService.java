@@ -6,6 +6,7 @@ import android.app.NotificationManager;
 import android.app.Service;
 import android.content.Intent;
 import android.os.IBinder;
+import android.os.SystemClock;
 import android.util.Log;
 
 import java.io.DataInputStream;
@@ -20,8 +21,14 @@ import java.net.InetSocketAddress;
 import java.net.ServerSocket;
 import java.net.Socket;
 import java.net.SocketAddress;
+import java.nio.ByteBuffer;
+import java.nio.channels.DatagramChannel;
+import java.nio.channels.SelectionKey;
+import java.nio.channels.Selector;
 import java.nio.charset.StandardCharsets;
+import java.util.ArrayList;
 import java.util.HashMap;
+import java.util.List;
 import java.util.Map;
 
 /**
@@ -33,7 +40,9 @@ import java.util.Map;
  * With the "stun" extra it also runs, beside the proxy, a STUN server for the check of ADR 0044's unit
  * 9b: at 127.0.0.1 and 127.0.0.2 on that port, two servers on one port the relay reaches at two
  * addresses, as two names a tool resolves. Each answers a Binding request with a success response
- * carrying its transaction ID and the sender's address (RFC 8489), and logs "stun answered ADDRESS".
+ * carrying its transaction ID and the sender's address (RFC 8489), and logs "stun answered ADDRESS". It holds
+ * its answers until both addresses have a request, at most 5 s, so that both of the app's stand-ins wait when
+ * the first answer comes back, and logs how each hold ended ([stun]).
  * It is the check's server, not part of what a tool does; it holds the phone's loopback only.
  *
  * With the "own" extra (HOST:PORT) it opens one TCP connection of its own, as a tool reaches its server (the proxy
@@ -88,11 +97,7 @@ public final class ToolService extends Service {
         }
         new Thread(() -> listen(port), "tool-listen").start();
         int stun = intent.getIntExtra("stun", 0);
-        if (stun > 0) {
-            for (String address : new String[] {"127.0.0.1", "127.0.0.2"}) {
-                new Thread(() -> stun(address, stun), "tool-stun").start();
-            }
-        }
+        if (stun > 0) new Thread(() -> stun(stun), "tool-stun").start();
         return START_NOT_STICKY;
     }
 
@@ -333,42 +338,123 @@ public final class ToolService extends Service {
         }
     }
 
+    /** The STUN server's two addresses, as the "map" extra gives them to stun-a.test and stun-b.test. */
+    private static final String[] STUN_ADDRESSES = {"127.0.0.1", "127.0.0.2"};
+    /** How long, at most, the STUN server holds the answers to one address's requests for a request at the other. */
+    private static final long STUN_HOLD_MS = 5_000;
+
+    /** A STUN response held, with the server it leaves from and where it goes. */
+    private static final class Held {
+        final int server;
+        final ByteBuffer response;
+        final SocketAddress to;
+
+        Held(int server, ByteBuffer response, SocketAddress to) {
+            this.server = server;
+            this.response = response;
+            this.to = to;
+        }
+    }
+
     /**
-     * A STUN server at [address]:[port] that answers each Binding request (type 0x0001, the magic cookie,
-     * no attributes needed) with a Binding success response (0x0101) with the same transaction ID and an
-     * XOR-MAPPED-ADDRESS of the sender, an IPv4 address (RFC 8489 14.2).
+     * The STUN server at [STUN_ADDRESSES] on [port], one thread for both, which answers each Binding request
+     * (type 0x0001, the magic cookie, no attributes needed) with a Binding success response (0x0101) with the
+     * same transaction ID and an XOR-MAPPED-ADDRESS of the sender, an IPv4 address (RFC 8489 14.2).
+     *
+     * It holds its answers until both addresses have a request, at most [STUN_HOLD_MS] after the first came, and
+     * then sends every answer held, in the order the requests came. So both of the app's stand-ins wait on the port
+     * when the first answer comes back, which unit 9b's step reads: the network part's engine makes a new mapping's
+     * destinations peers in whatever order its tasks run once the association is open, not in the order the app
+     * sent, and in CI on 2026-11-27 the first answer came back before the second request had left the engine
+     * (docs/ci-flakes.md). Each hold ends with the line "stun hold N ended: both asked (A, B)", the addresses in the
+     * order their first requests came, or "stun hold N ended: only A asked within 5000 ms", before its answers'
+     * "stun answered ADDRESS" lines.
      */
-    private static void stun(String address, int port) {
-        try (DatagramSocket socket = new DatagramSocket(new InetSocketAddress(InetAddress.getByName(address), port))) {
-            Log.i(TAG, "stun " + address + " " + port);
-            byte[] buffer = new byte[1500];
+    private static void stun(int port) {
+        DatagramChannel[] servers = new DatagramChannel[STUN_ADDRESSES.length];
+        try (Selector selector = Selector.open()) {
+            for (int i = 0; i < servers.length; i++) {
+                servers[i] = DatagramChannel.open();
+                servers[i].bind(new InetSocketAddress(InetAddress.getByName(STUN_ADDRESSES[i]), port));
+                servers[i].configureBlocking(false);
+                servers[i].register(selector, SelectionKey.OP_READ);
+                Log.i(TAG, "stun " + STUN_ADDRESSES[i] + " " + port);
+            }
+            ByteBuffer in = ByteBuffer.allocate(1500);
+            List<Held> held = new ArrayList<>();
+            List<String> asked = new ArrayList<>();
+            long first = 0;
+            int holds = 0;
             while (true) {
-                DatagramPacket packet = new DatagramPacket(buffer, buffer.length);
-                socket.receive(packet);
-                if (packet.getLength() < 20 || buffer[0] != 0 || buffer[1] != 1
-                        || buffer[4] != 0x21 || buffer[5] != 0x12 || buffer[6] != (byte) 0xa4 || buffer[7] != 0x42) continue;
-                byte[] from = packet.getAddress().getAddress();
-                if (from.length != 4) continue;
-                byte[] out = new byte[32];
-                out[1] = 0x01;
-                out[0] = 0x01;
-                out[3] = 12;
-                System.arraycopy(buffer, 4, out, 4, 16);
-                // XOR-MAPPED-ADDRESS: family 1, the port and address each XORed with the magic cookie.
-                out[20] = 0x00;
-                out[21] = 0x20;
-                out[23] = 8;
-                out[25] = 1;
-                int mapped = packet.getPort() ^ 0x2112;
-                out[26] = (byte) (mapped >> 8);
-                out[27] = (byte) mapped;
-                for (int i = 0; i < 4; i++) out[28 + i] = (byte) (from[i] ^ buffer[4 + i]);
-                socket.send(new DatagramPacket(out, out.length, packet.getSocketAddress()));
-                Log.i(TAG, "stun answered " + address);
+                long left = first + STUN_HOLD_MS - SystemClock.elapsedRealtime();
+                if (held.isEmpty()) {
+                    selector.select();
+                } else if (left > 0) {
+                    selector.select(left);
+                }
+                selector.selectedKeys().clear();
+                for (int i = 0; i < servers.length; i++) {
+                    while (true) {
+                        in.clear();
+                        SocketAddress from = servers[i].receive(in);
+                        if (from == null) break;
+                        ByteBuffer response = binding(in, (InetSocketAddress) from);
+                        if (response == null) continue;
+                        if (held.isEmpty()) first = SystemClock.elapsedRealtime();
+                        held.add(new Held(i, response, from));
+                        if (!asked.contains(STUN_ADDRESSES[i])) asked.add(STUN_ADDRESSES[i]);
+                    }
+                }
+                boolean both = asked.size() == STUN_ADDRESSES.length;
+                if (held.isEmpty() || !both && SystemClock.elapsedRealtime() - first < STUN_HOLD_MS) continue;
+                holds++;
+                Log.i(TAG, "stun hold " + holds + " ended: " + (both
+                        ? "both asked (" + String.join(", ", asked) + ")"
+                        : "only " + asked.get(0) + " asked within " + STUN_HOLD_MS + " ms"));
+                for (Held answer : held) {
+                    servers[answer.server].send(answer.response, answer.to);
+                    Log.i(TAG, "stun answered " + STUN_ADDRESSES[answer.server]);
+                }
+                held.clear();
+                asked.clear();
             }
         } catch (IOException e) {
-            Log.i(TAG, "stun " + address + " stopped: " + e);
+            Log.i(TAG, "stun stopped: " + e);
+        } finally {
+            for (DatagramChannel server : servers) {
+                try {
+                    if (server != null) server.close();
+                } catch (IOException ignored) {
+                }
+            }
         }
+    }
+
+    /**
+     * The Binding success response to [request], as received (its position the length), from [from]; null if it is
+     * not a Binding request from an IPv4 address.
+     */
+    private static ByteBuffer binding(ByteBuffer request, InetSocketAddress from) {
+        byte[] buffer = request.array();
+        if (request.position() < 20 || buffer[0] != 0 || buffer[1] != 1
+                || buffer[4] != 0x21 || buffer[5] != 0x12 || buffer[6] != (byte) 0xa4 || buffer[7] != 0x42) return null;
+        byte[] address = from.getAddress().getAddress();
+        if (address.length != 4) return null;
+        byte[] out = new byte[32];
+        out[1] = 0x01;
+        out[0] = 0x01;
+        out[3] = 12;
+        System.arraycopy(buffer, 4, out, 4, 16);
+        // XOR-MAPPED-ADDRESS: family 1, the port and address each XORed with the magic cookie.
+        out[20] = 0x00;
+        out[21] = 0x20;
+        out[23] = 8;
+        out[25] = 1;
+        int mapped = from.getPort() ^ 0x2112;
+        out[26] = (byte) (mapped >> 8);
+        out[27] = (byte) mapped;
+        for (int i = 0; i < 4; i++) out[28 + i] = (byte) (address[i] ^ buffer[4 + i]);
+        return ByteBuffer.wrap(out);
     }
 
     /** A reply with code [code] naming [bound]: version, code, reserved, then the address and port. */
