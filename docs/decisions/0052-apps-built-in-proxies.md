@@ -538,9 +538,14 @@ chaining is, and must follow the same switch.
       answered once a connection of the forwarder's own reached the proxy, so that a proxy gone hands the flow back to
       decision 11's tail; its first request is awaited with no cut but the flow's connection time (the audit's M2:
       `HttpURLConnection`, Chromium and WebView write late); and it goes to the proxy in absolute form (RFC 9112,
-      3.2.2), as Android's HTTP clients send it to a proxy without the VPN. The refusal is kept per proxy and port (at
-      most 16 ports), so that later flows to that port go to the forwarder at once; such a flow whose first bytes are
-      not a request it can forward goes by `CONNECT` after all. Where the proxy carries `CONNECT` to the port, plain
+      3.2.2), as Android's HTTP clients send it to a proxy without the VPN. The refusal is kept per proxy and port as the
+      port's policy, not a site's (the forwarder's review, M1): a port is learned only once the proxy refused two
+      distinct names there at both of decision 11's steps for flows whose first request was then forwarded, within ten
+      minutes of each other, so that a flow with no name of its own, a TLS flow (port 443 is never learned) or one
+      site's `403` teaches nothing. A learned port sends later flows to the forwarder at once for ten minutes from its
+      last confirmation, after which it is tried by `CONNECT` again; a `CONNECT` to it that opens, for any flow,
+      forgets it (at most 16 ports, the oldest giving way), and a flow sent at once whose bytes are no request it can
+      forward goes by `CONNECT` on the forwarder's own connection. Where the proxy carries `CONNECT` to the port, plain
       HTTP is tunnelled as before: the proxy is asked only for the destination and parses nothing, though it carries
       the request in clear and can read it, as any network on the way can (PRIVACY.md: the proxy sees what apps send
       unencrypted).
@@ -581,7 +586,7 @@ chaining is, and must follow the same switch.
       zeros (`:080`) is refused, though both proxies read it as 80; a WebSocket over `ws://` behind such a proxy fails,
       as without the VPN; through tinyproxy, requests pipelined after the first are dropped with the connection, as
       without the VPN, and clients retry them.
-    - **Checked** by 124 shared vectors (`core/net/testdata/forward-requests.tsv`, read by forward.rs's tests whole,
+    - **Checked** by 134 shared vectors (`core/net/testdata/forward-requests.tsv`, read by forward.rs's tests whole,
       cut at every byte and byte by byte, and by the proxy lab, which holds what squid and tinyproxy sent the origin
       for each to two measured columns), a fuzz target compared with httparse, 25 hand mutants each killed, the
       network lab behind a proxy that behaves as squid's default and one that tunnels every port (95 rows: late

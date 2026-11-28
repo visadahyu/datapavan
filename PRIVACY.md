@@ -1,7 +1,7 @@
 # Privacy policy
 
 - **Effective:** 2026-11-07
-- **Updated:** 2026-11-26, with Datapavan Advanced's lines for 0.2.0, which is not yet released
+- **Updated:** 2026-11-28, with Datapavan Advanced's lines for 0.2.0, which is not yet released
 - **Responsible:** the Datapavan maintainer (mehdashti), until the Visadahyu Foundation is established
 
 **Datapavan collects no data about you.**
@@ -169,8 +169,11 @@ reads each request's first line and fields in memory, and keeps only the site's 
 that address, while the connection lasts and in the connection log, if you keep one: never the page's address within
 the site (its path or query). It does this only for a request that names a site Datapavan's resolver gave that app for
 that address, or names none, never for one that carries a password for the proxy or opens a WebSocket, and never for a
-site tracker blocking stops; the later requests of that connection must name the same site. It remembers in memory
-only, for that proxy, the ports it refused, so that later connections there go this way at once. The proxy then sees
+site tracker blocking stops; the later requests of that connection must name the same site. It remembers a port, in
+memory only and for that proxy, only when the proxy refused it for at least two different sites within ten minutes,
+and then for ten minutes at a time, so that later connections there go this way at once; it forgets the port as soon
+as the proxy opens a tunnel to it, and never learns one from a single site's refusal or from encrypted (HTTPS)
+connections. The proxy then sees
 where those apps connect, the names of most sites they open and what they send unencrypted, as a network would, and it
 may tell those sites the phone's address on the network you are on, as it would without Datapavan. It never gets an app's UDP, nothing of an app you send
 through your circumvention tool, nothing that goes through a WireGuard configuration, no connection to an address on

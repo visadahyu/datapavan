@@ -135,7 +135,8 @@ fn sort_indices(order: &mut [usize], cmp: &mut dyn FnMut(usize, usize) -> std::c
 /// `str::parse` of an unsigned integer, out of line: one copy of the integer parser for each of the four types, called
 /// where each place a number is read inlined its own (the cold paths' fourth pass, ADR 0053). For cold paths: a
 /// setting, a table's row, a configuration's line, a proxied flow's first request. A place read per packet, per DNS
-/// query or per answer keeps `parse` (`engine::resolver`'s `is_local`). Public for the JNI bridge.
+/// query or per answer keeps `parse` (`engine::resolver`'s `is_local`), but for `answers::reverse_v4`, a chained app's
+/// IPv4 reverse question, whose call costs a few nanoseconds (the fourth pass's review, m1). Public for the JNI bridge.
 pub trait Number {
     /// `self.parse::<T>()`: the same value or error, called rather than inlined.
     ///

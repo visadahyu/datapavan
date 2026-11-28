@@ -718,7 +718,9 @@ The words of the allow and the pause are checked with real users under ADR 0046'
     proxy settings' ports, the on-link prefixes): −2,048 / −1,792 / −1,536 and −2,240 / −2,304 / −1,280. The bar (the
     plan's audit, m3): the hot set stays the same, and so does every function run per DNS query or per answer, so
     `is_local`, which every DNS query runs, keeps `parse`; a per-flow place may become a call (`proxies::authority`,
-    `route_of_app`).
+    `route_of_app`). One exception, found by the pass's review (m1): `reverse_v4`'s closure, run for every IPv4
+    reverse question of a chained app before `is_stand_in` filters it, became a call to the parser (173 to 114
+    instructions, a few nanoseconds a question); kept, as no hot-set function changed.
 
   In all −32,104 / −31,592 / −30,000 in the steps' builds, which two builds from clean reproduce byte for byte on the
   three ABIs, stripped and not. **The library, from Gradle's own build and AGP's strip, on the pass's tip: 2,062,688
