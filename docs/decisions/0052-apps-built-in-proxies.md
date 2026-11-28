@@ -587,6 +587,16 @@ chaining is, and must follow the same switch.
       were refused, the request reaching the proxy in absolute form with the app's own fields alone
       (`User-Agent,Host,Connection,Accept-Encoding`); the next request to port 80 in 203 ms with no `CONNECT`; port
       8080 likewise; a WebView's page; HTTPS by `CONNECT` as before; no first byte later than 250 ms.
+    - **Size:** against `main` at `47bc14d6`, both built with the size passes' `ndkbuild3.sh` (the `/c` remap, then
+      `llvm-strip --strip-unneeded`), the forwarder's tip `31cef934` takes 26,960 bytes more on x86_64 (2,067,656 to
+      2,094,616), 24,592 on arm64-v8a (1,854,832 to 1,879,424) and 17,576 on armeabi-v7a (1,368,760 to 1,386,336), where
+      its plan expected 16 KB on x86_64 (ADR 0053, the third pass). By Gradle, against `main`'s gate build of 2,067,768
+      bytes on x86_64, 26,960 to 27,024 more (the tip's steps' figure with Gradle's offset of 112 bytes at `main`
+      or of 176 at the fourth pass's tip, since only that tip was built by Gradle): about 2,094,760 bytes, some 2,400
+      under the gate and 5,800 past the 8 KiB stop line the record's plans keep under it. As that stop asks, the
+      forwarder lands on `main` only with the cold paths' fourth pass (ADR 0053), which frees 32,104, 31,592 and 30,000
+      bytes: Gradle's gate build of the two gives 2,062,688 bytes on x86_64, 1,846,736 on arm64-v8a and 1,356,528 on
+      armeabi-v7a, x86_64 34,464 bytes under the gate and 26,272 above the stop.
 
 ## Consequences
 
@@ -895,7 +905,9 @@ chaining is, and must follow the same switch.
   native budget) gives 2,067,768 bytes on x86_64, 1,853,736 on arm64-v8a and 1,369,080 on armeabi-v7a, 25,624, 19,736
   and 19,256 less than S2's tip: x86_64 29,384 bytes under the gate (S2's fix round and hold took 5,080 of the 34,400
   the pass's own base had; the pass frees 64 more here), 13,000 once the forwarder takes its planned 16 KB and 4,808
-  above the 8 KiB stop.
+  above the 8 KiB stop. The forwarder (decision 12) took about 27 KB instead, and lands with the cold paths' fourth
+  pass: Gradle's gate build of the two gives 2,062,688 bytes on x86_64, 1,846,736 on arm64-v8a and 1,356,528 on
+  armeabi-v7a, x86_64 34,464 bytes under the gate and 26,272 above the 8 KiB stop (decision 12, "Size").
 - **Frontier research, open:** Telegram's fake-TLS hello across versions, told from the device without a JA4 database;
   encapsulated handshakes seen from the device (Xue et al., USENIX Security 2024) for Signal and WhatsApp; and how
   people read "read from the connection" against "inferred", with real users.

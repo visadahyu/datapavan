@@ -413,23 +413,37 @@ The words of the allow and the pause are checked with real users under ADR 0046'
   development machine, through curve25519-dalek's AVX2 backend (once per WireGuard handshake and once per ODoH query,
   for HPKE's key pair), a Diffie-Hellman 40 µs either way; ARM phones take the slower serial path, for which the crate
   gives the table about four times the speed (not measured here); it needs GotaTun to depend on `x25519-dalek` without
-  default features, a reviewed step (ADR 0035). For the engine's builder, after the cold paths' three passes below:
+  default features, a reviewed step (ADR 0035). For the engine's builder, after the cold paths' four passes below:
   hashbrown's maps instantiated per type (113 KB on x86_64) and `BTreeMap`'s (64 KB), on the packet path, where each
   change needs a speed measure of its own; tokio's code for each relaying task's type (a kept connection's, an echo's, a
   tunnel's, about 2 KB each on x86_64), which a boxed task type would share at one indirect call more per poll;
   `Shared::give_way`'s selection and `Scope::carried`'s sort (3.4 and 4.1 KB through the shared sort), on the engine's
-  thread and per relayed answer, each waiting for a measure of its own; the `jni` crate's exception machinery (twelve
-  exception matchers of 1.4 to 1.8 KB and the class loader's), which only calling `jni-sys` directly for the upcalls
-  would drop, a change of the bridge with its own review; `opt-level = "z"` for single cold crates (`miniz_oxide` for
-  the packs, `ed25519-compact`, the engine's reader), which only a measure decides, as `z` grew the `jni` crate on
-  x86_64; and `std`'s backtrace symbolizer (67 KB), which only a nightly `build-std` drops. Boxing the largest futures
+  thread and per relayed answer, each waiting for a measure of its own; the `jni` crate's exception machinery (about
+  30 KB on x86_64 in 24 functions: twelve exception matchers of 1.4 to 1.8 KB, the class loader's and the stack
+  trace's), reached from every checked JNI call and the attach guard's detach, which only a bridge on `jni-sys` for
+  every entry point and upcall would drop, a change of the bridge with its own review and new `unsafe`, and the largest
+  lever left on stable off the packet path; hashbrown's code for the cold maps (`reserve_rehash` alone 86,768 bytes in
+  63 instances on x86_64), one map at a time turned into a `Vec` or a sorted `Vec`, about 1.5 to 3 KB each, each with its
+  order and bound read (`owners::parse`'s map of names, the resolvers' two, `blocking`'s `by_host`, `standins`'
+  `by_offset`, the activity's `intervals`); the crypto present twice, each a dependency or backend step of ADR 0035's
+  review (GotaTun's ChaCha20-Poly1305 from aws-lc beside RustCrypto's `chacha20poly1305`, about 14 KB; the QUIC
+  reader's and HPKE's AES-GCM, HKDF and SHA-256 from RustCrypto, about 37 KB, where aws-lc offers its own;
+  `ed25519-compact`, 17 KB, beside curve25519-dalek); `descriptor_limit`'s read of `/proc/self/limits` (2.6 KB in
+  `nativeStart`) through `getrlimit`, which needs nix's `resource` feature; `opt-level = "z"` for single cold crates,
+  measured by the fourth pass's plan on x86_64, each alone on the forwarder's `a251d0a2`: `miniz_oxide` +31,888 bytes,
+  a crate of 12,638 bytes of code, a growth measured and not explained (to be explained before the setting is tried
+  again or given up), `ed25519-compact` +936, `datapavan-engine` +832, and `simd_cesu8` with `simdutf8` −1,344 (the
+  JNI's string conversion, cold but for `route_of_app` and `resolve` per flow named; a build setting, so the
+  maintainer's word; arm64 and armv7 not measured), as `z` grew the `jni` crate on x86_64 too; and `std`'s backtrace
+  symbolizer (67 KB), which only a nightly `build-std` drops. Boxing the largest futures
   of the cold paths (`udp::open_udp`'s, 42 KB, and `Engine::start_with`'s, 29 KB) only moves their bytes (the first
   pass). What the passes took is gone: of `std`'s `RandomState::new` inlined, 620 bytes are left on x86_64, all in
   tokio's and GotaTun's own code and in `keys` itself; the `jni` crate's entry code is one copy per return type and its
-  attach code one copy; `std`'s sort is one copy for the cold paths. A free setting was left for x86_64 after all,
+  attach code one copy; `std`'s sort is one copy for the cold paths; the six tables compiled into the engine are
+  deflated, and the integers the cold paths read take one parser per type. A free setting was left for x86_64 after all,
   crates.io's directory in the panic locations, which the third pass took; what remains is code, GotaTun's table, and
   `-Zlocation-detail=none`, which gives up every panic's file and line (the third pass). Not measured: arm64 and armv7
-  on a phone, which the settings pass did not touch; the three cold-path passes below change their code, and the second
+  on a phone, which the settings pass did not touch; the four cold-path passes below change their code, and the second
   grows arm64-v8a's library by 512 bytes of unwind entries for its JNI entry (stated there).
 - **The cold paths** (2026-11-25, the maintainer's route that day over a review of the gate: room for the proxy record's
   next units, from code that runs once per engine start, per flow opened or question to Android, with no change of
@@ -669,3 +683,72 @@ The words of the allow and the pause are checked with real users under ADR 0046'
   line, which the crash evidence kept with the unwind tables argues against, and `RUSTC_BOOTSTRAP` is unsupported for a
   release; `-Zfmt-debug=none` likewise (not measured); `-Zbuild-std` with `panic_immediate_abort`, which needs
   `rust-src`, a download, and drops every panic's message. Not measured: arm64 and armv7 on a phone.
+- **The cold paths, fourth pass** (2026-11-28, the same route: room for the proxy record's forwarder, decision 12 of
+  [ADR 0052](0052-apps-built-in-proxies.md), which took about 27 KB on x86_64 where it planned 16 and stood past the
+  8 KiB stop, and for the units after it; the pass aimed at 12 KB on x86_64, ideally 16). *Where the bytes were,* by the
+  passes' method and four new readers (text symbols, a generic's instances, BTree instances, who calls a symbol): six
+  tables that `include_str!` compiled whole into `.rodata`, 37,949 bytes on every ABI (the resolvers 14,886, the
+  networks' owners 13,098 and 2,440, the messengers' names 5,970, clients 1,328 and Telegram's ranges 227), after
+  GotaTun's X25519 table the largest thing there; `str::parse` of an integer inlined at about 30 places (7.3 KB on
+  x86_64); and `resolvers::share` built once for each of its two key types. **Kept, one commit each** (stripped bytes of
+  unstripped builds, `ndkbuild3.sh` with the `/c` remap then `llvm-strip --strip-unneeded`, x86_64 / arm64-v8a /
+  armeabi-v7a, against the forwarder's tip `31cef934`: 2,094,616, 1,879,424 and 1,386,336 bytes):
+  - a release measure of the tables' cost (`what_the_bundled_tables_cost`: the three `bundled()` calls of the engine's
+    start, and the bridge's `nativeMessengerClients` without its JNI string), a test only;
+  - the six tables deflated at build time and inflated where each is parsed: `core/net/build.rs` reads them from
+    `CARGO_MANIFEST_DIR`, refuses, failing the build, a table that is not UTF-8, is not below the one limit
+    (`TABLE_LIMIT`, 256 KiB, in `src/table_limit.rs`, which the script and the library both read) or does not inflate
+    back to itself through the library's own call, since Gradle and F-Droid compile no test; it deflates each with
+    `miniz_oxide` 0.9.1 at level 10 (raw DEFLATE: no time, name or path, so the same file gives the same blob in every
+    build) into `OUT_DIR`, as `<dataset>-<file>.deflate`, 10,594 bytes in all, and `include_bytes!` takes them.
+    `miniz_oxide`, the engine's inflater already, is a build-dependency now, so it also runs on the build machine; no
+    crate, version, feature or lock entry is added. A blob that does not inflate at run time, or inflates to bytes that
+    are not UTF-8, stops the engine (`unreachable!`, as ADR 0006 has it for an unknown state; a release build aborts on
+    a panic) rather than leave a table empty, which would run on in silence with blocking by address off, Telegram's own
+    servers taken for a proxy or an app's own DNS unnamed; with the build's checks only a damaged library reaches it.
+    The six round trips and two `#[should_panic]` tests (a blob cut short, one of non-UTF-8 bytes) hold it, and seven
+    hand mutants were each killed, among them a non-UTF-8 byte in `clients.tsv`, which fails the release library's own
+    build: −26,152 / −26,728 / −26,544;
+  - `share`'s body once (`shared_id`, out of line and not generic), tested against the old body on 41,400 sequences of
+    ids: −1,664 / −768 / −640;
+  - one parser per integer type, `datapavan_net::Number` (`text.number::<T>()` is `text.parse::<T>()`, called; `u8`,
+    `u16`, `u32` and `u64` alone, by a marker trait, each copy about 200 bytes), at 13 places in the engine (the tunnel
+    configuration, the ODoH catalogue, the DNS setting, the engine's start, the trackers' table, a proxied flow's first
+    request, a stand-in's reverse question) and 10 in the bridge (the blocking setting, an app's route from Kotlin, the
+    proxy settings' ports, the on-link prefixes): −2,048 / −1,792 / −1,536 and −2,240 / −2,304 / −1,280. The bar (the
+    plan's audit, m3): the hot set stays the same, and so does every function run per DNS query or per answer, so
+    `is_local`, which every DNS query runs, keeps `parse`; a per-flow place may become a call (`proxies::authority`,
+    `route_of_app`).
+
+  In all −32,104 / −31,592 / −30,000 in the steps' builds, which two builds from clean reproduce byte for byte on the
+  three ABIs, stripped and not. **The library, from Gradle's own build and AGP's strip, on the pass's tip: 2,062,688
+  bytes on x86_64, 1,846,736 on arm64-v8a and 1,356,528 on armeabi-v7a; x86_64 has 34,464 bytes left under the gate,
+  26,272 above the 8 KiB stop** (Gradle's figure 176 bytes above the steps' build on x86_64, 1,096 below on arm64-v8a,
+  192 above on armeabi-v7a), 5,080, 7,000 and 12,552 bytes below `main`'s 2,067,768, 1,853,736 and 1,369,080 with the
+  forwarder in. *The speed,* the plan's rule for the one item that adds work: the measure before and after in turn, 24
+  rounds on the development machine pinned to four threads, otherwise idle (load 2.1 to 2.2): the engine start's three
+  tables 85.85 µs before (84.83 to 87.36) and 134.11 after (131.64 to 136.17), +48.3 µs (rank-sum z +5.9), within the
+  rule's 0.2 ms; `nativeMessengerClients`, which Kotlin calls at every hand-over of the proxies on the main thread (the
+  audit, m1), 7.54 µs and 19.72, +12.2 µs a call, no cache needed; the emulator's runs of that measure were not part of
+  the build. The passes' set, `31cef934` and the tip in turn, 24 rounds the same way (load 3.2 to 6.1, other sessions'
+  work): a packet through WireGuard 4.60 and 4.63 µs at 1,280 bytes and 4.38 both at 100, sent directly 4.55 and 4.63
+  and 4.50 and 4.55, a datagram on the down path 3.73 both and 3.59 both, opening a UDP flow directly 36.7 and 37.2 µs
+  of the engine's CPU, a lookup 30.8 and 31.1, through WireGuard 15.9 and 16.0, each rank-sum |z| under 1.7. *The
+  machine code of the packet path* against `31cef934` (`hotdiff.py`, its list with the forwarder's per-chunk functions
+  added: `forwarding::carry`'s poll, `Forward::feed`, `forward::read`, `fields` and `reserve`, `forwarding::stage`'s
+  closure, the audit's m4): x86_64's 111 functions and arm64-v8a's 113 the same after each commit, armeabi-v7a's 114
+  matched names the same size. Across the library (`--all`, by class), on x86_64 19 functions change length, each a
+  place's own or the function it is inlined in (`Engine::start_with` 4,885 to 4,517 instructions, `Organisations::block`
+  1,941 to 72 with the inflater called out of line, the bridge's settings, the readers named above, `proxies::authority`
+  265 to 197, `route_of_app` 186 to 124), `nativeMessengerClients`' closure differs by its call alone (now to
+  `Messengers::bundled`, into which `parse` is inlined), 13 by offsets alone (CPU feature probes and `hash_one`, as
+  static data moved) and five small functions of `std`, `core` and the proxy setting (`decode_error_kind`,
+  `io::Error::new`, `<&u32 as Display>::fmt`, `<&usize as Debug>::fmt`, `ProxySetting`'s `clone`) by trailing `int3`
+  padding alone; on arm64-v8a the same 19 change length, 40 differ by page loads alone and 7 by offsets; on armeabi-v7a
+  76 functions change size, are new or are gone, the same cold set. **Not taken:** `opt-level = "z"` for single crates
+  (measured, three of four growing the library, `miniz_oxide`'s growth not explained: "Proposals for later" above);
+  inflating `clients.tsv` alone for `nativeMessengerClients` (a few hundred bytes of code for microseconds); zlib's form
+  of the blobs with its checksum (the plan's audit, N4: of the six blobs' single-bit flips two thirds inflate to another
+  valid text, as every flip of the text did before; not measured); `is_local`'s parse (per DNS query). Not measured:
+  arm64 and armv7 on a phone; the emulator's shards, the JNI error check and the measure's emulator runs are the
+  coordinator's, after this build.
