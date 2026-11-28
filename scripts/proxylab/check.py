@@ -19,8 +19,11 @@ premise) and plain requests to ports outside its Safe_ports; it keeps the client
 pair in order, makes the origin's Host from the URL (lower case, no trailing dot, no :80) and sends no Upgrade.
 tinyproxy carries a CONNECT to any port as shipped, keeps the Host as the client wrote it but for :80, sends no
 Upgrade, and serves one request a connection: it closes after the first answer and drops a pipelined second. Neither
-reads a request out of the body of an Expect request it refused early (the forwarder's audit, m6), by the target's
-own record of what it got.
+reads a request out of the body of an Expect request (the forwarder's audit, m6), by the target's own record of what
+it got, which a request of each proxy's own shows working first: squid refuses each early (403 to port 81, outside its
+Safe_ports; 417 for an expectation it does not know), and tinyproxy ignores Expect, forwarding the body as a body (204)
+or failing to reach port 81, where the target has no listener (500). That record is read once more at the end, so that
+a request that came late still shows.
 
 The forwarder's own requests: each `forward` row of core/net/testdata/forward-requests.tsv (which forward.rs's tests
 hold the engine to) that the lab can carry (to port 80 or 8080, by the row's address or its name example.test, which
@@ -275,11 +278,13 @@ def lab_head(head, target):
 
 
 def vector_rows():
-    """The table: its header's column names, and its rows as dictionaries, in order."""
+    """The table: its header's column names, its rows as dictionaries, in order, and the numbers of the rows whose
+    cells are not one a column."""
     with open(VECTORS, encoding="utf-8") as table:
         lines = [line.rstrip("\n") for line in table if not line.startswith("#") and line.strip()]
     names = lines[0].split("\t")
-    return names, [dict(zip(names, line.split("\t"))) for line in lines[1:]]
+    uneven = [number for number, line in enumerate(lines[1:], 1) if len(line.split("\t")) != len(names)]
+    return names, [dict(zip(names, line.split("\t"))) for line in lines[1:]], uneven
 
 
 def carried_by_the_lab(row):
@@ -373,6 +378,7 @@ def main(argv):
 
     proxies = (("squid", squid_port), ("shipped-tinyproxy", debian_port), ("tinyproxy-connectport-443", open_port))
     hello_body = b"hello"
+    smuggled = []
     for name, port in proxies:
         answers, _ = exchange(host, port, plain("/fwd?q=1", fields="User-Agent: lab\r\nAccept: */*\r\n"))
         got = [lab(a) for a in answers]
@@ -422,16 +428,26 @@ def main(argv):
         else:
             check(f"{name}-answers-one-request-a-connection-and-closes ({[g[1] for g in got]}, closed {closed})",
                   [g[1] for g in got] == ["GET /pair-1 HTTP/1.1"] and closed)
-        # An Expect request the proxy refuses early, whose body is a whole request (the forwarder's audit, m6): the
-        # target must never get that request.
-        for expect, port_written in (("100-continue", 81), ("x-lab", 80)):
+        # An Expect request whose body is a whole request (the forwarder's audit, m6): the target must never get that
+        # request. Its record is first shown to hold a request of the proxy's own, so that no row passes by an empty
+        # record (the review's m5); each row holds the code measured, and whether the outer request reached the target.
+        control = os.urandom(6).hex()
+        exchange(host, port, plain(f"/control-{control}"))
+        check(f"{name}-the-targets-record-holds-a-request-it-carried",
+              f"GET /control-{control} HTTP/1.1\t{INNER}" in seen(host, seen_port))
+        for expect, port_written, squid_code, tinyproxy_code in (("100-continue", 81, 403, 500), ("x-lab", 80, 417, 204)):
             nonce = os.urandom(6).hex()
+            smuggled.append(nonce)
             inner = plain(f"/smuggled-{nonce}")
-            answers, _ = exchange(host, port, plain("/expect", host=f"{INNER}:{port_written}", method="POST",
+            answers, _ = exchange(host, port, plain(f"/expect-{nonce}", host=f"{INNER}:{port_written}", method="POST",
                                                     fields=f"Expect: {expect}\r\n", body=inner))
             codes = [a[0] for a in answers]
+            wanted = squid_code if name == "squid" else tinyproxy_code
+            record = seen(host, seen_port)
+            outer = f"POST /expect-{nonce} HTTP/1.1" in record
             check(f"{name}-reads-no-request-out-of-the-body-of-an-expect-{expect}-to-port-{port_written} "
-                  f"(answered {codes})", f"smuggled-{nonce}" not in seen(host, seen_port))
+                  f"(answered {codes}, the outer request {'carried' if outer else 'not carried'})",
+                  codes == [wanted] and outer == (wanted == 204) and f"smuggled-{nonce}" not in record)
     for written in (INNER + ":81", INNER + ":25"):
         answers, _ = exchange(host, squid_port, plain("/safe-ports", host=written))
         codes = [a[0] for a in answers]
@@ -441,7 +457,8 @@ def main(argv):
     check(f"tinyproxy-with-a-password-answers-407-to-a-request-in-absolute-form (answered {codes})", codes == [407])
 
     # The forwarder's own requests, from the shared table.
-    names, rows = vector_rows()
+    names, rows, uneven = vector_rows()
+    check(f"the-vectors-have-one-cell-a-column-in-every-row (rows {uneven or 'none'} not)", not uneven)
     write = os.environ.get("PROXYLAB_WRITE_VECTORS")
     if write:
         names += [n for n in ("squid", "tinyproxy") if n not in names]
@@ -461,8 +478,18 @@ def main(argv):
             if write:
                 row[column] = seen_now
             else:
-                check(f"{name}-carries-vector-row-{number} ({seen_now})", seen_now == row[column] and whole)
-    check(f"the-lab-carries-some-vector-rows ({carried})", carried >= 10)
+                check(f"{name}-carries-vector-row-{number} ({seen_now})", seen_now == row.get(column) and whole)
+    # Every row with measured cells is one the lab carried, and every other row's cells are "-" (the review's m10): a
+    # row dropped from the lab by a change of carried_by_the_lab or of the table's names fails here.
+    measured = sum(1 for row in rows if row.get("squid", "-") != "-" or row.get("tinyproxy", "-") != "-")
+    stray = [number for number, row in enumerate(rows, 1) if not carried_by_the_lab(row)
+             and (row.get("squid", "-") != "-" or row.get("tinyproxy", "-") != "-")]
+    check(f"the-lab-carries-every-measured-vector-row-and-no-other ({carried} carried, {measured} measured, "
+          f"rows {stray or 'none'} measured but not carried)", carried == measured and not stray)
+    # The target's record once more, after the vector rows: an Expect row's inner request that came late shows here.
+    late = [nonce for nonce in smuggled if f"smuggled-{nonce}" in seen(host, seen_port)]
+    check(f"no-expect-rows-inner-request-reached-the-target-later ({len(smuggled)} rows, {late or 'none'} reached)",
+          len(smuggled) == 2 * len(proxies) and not late)
     if write:
         with open(VECTORS, encoding="utf-8") as table:
             comments = [line for line in table if line.startswith("#")]
