@@ -27,6 +27,7 @@
 //! matcher is a small automaton run over the name's characters, so a name costs at most its length
 //! times the alternative's, and each alternative's longest literal run is looked for first.
 
+use crate::Number;
 use core::fmt;
 
 /// One element of an alternative.
@@ -135,7 +136,7 @@ impl NetworkSignatures {
             let [id, name, _, website, _, signature] = columns[..] else {
                 return Err(Error::InvalidLine(number));
             };
-            let id = id.parse().map_err(|_| Error::InvalidLine(number))?;
+            let id = id.number().map_err(|_| Error::InvalidLine(number))?;
             if signature.chars().count() <= 3 {
                 continue;
             }
@@ -215,7 +216,7 @@ impl Pattern {
                 let (port, _path) = rest.split_once('/')?;
                 // Digits only: Rust's own reading of a number takes a sign too.
                 let digits = port.bytes().all(|b| b.is_ascii_digit());
-                (host, Some(port.parse().ok().filter(|_| digits)?))
+                (host, Some(port.number().ok().filter(|_| digits)?))
             }
             None => (alternative, None),
         };

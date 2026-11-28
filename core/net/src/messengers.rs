@@ -10,6 +10,7 @@
 //! never fatal: the tables are data, checked by `scripts/check.sh`. A table that does not inflate stops the engine
 //! (`crate::bundled`): that is a damaged library, not data.
 
+use crate::Number;
 use std::net::IpAddr;
 
 const CIDR: &[u8] = include_bytes!(concat!(
@@ -113,7 +114,7 @@ impl Messengers {
             .filter_map(|line| {
                 let (address, length) = line.trim().split_once('/')?;
                 let address: IpAddr = address.parse().ok()?;
-                let length: u8 = length.parse().ok()?;
+                let length: u8 = length.number().ok()?;
                 let most = if address.is_ipv4() { 32 } else { 128 };
                 (length <= most).then_some((address, length))
             })

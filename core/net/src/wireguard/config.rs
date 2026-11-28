@@ -9,6 +9,7 @@
 //! keys are [`Secret`]s: zeroed when dropped, never in a `Debug` output, a refusal, a log line or the
 //! dump. A refusal names a line and a key, never a value.
 
+use crate::Number;
 use std::fmt;
 use std::net::{IpAddr, Ipv4Addr, Ipv6Addr, SocketAddr};
 use zeroize::Zeroize;
@@ -896,7 +897,7 @@ fn number(value: &str) -> Option<u16> {
     if value.is_empty() || value.len() > 5 || !value.bytes().all(|b| b.is_ascii_digit()) {
         return None;
     }
-    value.parse().ok()
+    value.number().ok()
 }
 
 /// A DNS server the network part can send to: unicast, not the unspecified or a loopback address.
@@ -920,7 +921,7 @@ fn network(item: &str, masked: bool) -> Option<Network> {
             {
                 return None;
             }
-            digits.parse::<u8>().ok().filter(|&p| p <= width)?
+            digits.number::<u8>().ok().filter(|&p| p <= width)?
         }
     };
     let network = Network { address, prefix };
@@ -986,7 +987,7 @@ fn fwmark(value: &str) -> Option<u32> {
     }
     let digits =
         !value.is_empty() && value.len() <= 10 && value.bytes().all(|b| b.is_ascii_digit());
-    digits.then(|| value.parse().ok()).flatten()
+    digits.then(|| value.number().ok()).flatten()
 }
 
 fn port_of(port: &str) -> Option<u16> {

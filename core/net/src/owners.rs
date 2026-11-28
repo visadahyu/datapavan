@@ -8,6 +8,7 @@
 //! parse are skipped, never fatal: the tables are data, checked by `scripts/check.sh`. A table that does not inflate
 //! stops the engine (`crate::bundled`): that is a damaged library, not data.
 
+use crate::Number;
 use std::collections::HashMap;
 
 const ENTITIES: &[u8] = include_bytes!(concat!(env!("OUT_DIR"), "/owners-entities.tsv.deflate"));
@@ -63,7 +64,7 @@ impl Owners {
             else {
                 continue;
             };
-            let (Ok(asn), Some(name)) = (asn.parse::<u32>(), names.get(entity)) else {
+            let (Ok(asn), Some(name)) = (asn.number::<u32>(), names.get(entity)) else {
                 continue;
             };
             let kind = match *hosting {

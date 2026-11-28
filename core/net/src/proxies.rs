@@ -35,6 +35,7 @@
 //! Everything is bounded: a request is looked for in the first [`MAX_REQUEST`] bytes, and nothing here may
 //! panic or read outside the slice (`fuzz_targets/proxies.rs`).
 
+use crate::Number;
 use std::net::{IpAddr, Ipv4Addr, Ipv6Addr};
 
 /// The most bytes a proxy request is looked for in: a SOCKS5 greeting, RFC 1929's sub-negotiation and the
@@ -515,7 +516,7 @@ fn authority(text: &[u8], default: Option<u16>) -> Option<(Asked, u16)> {
         Some(digits)
             if !digits.is_empty() && digits.len() <= 5 && digits.iter().all(u8::is_ascii_digit) =>
         {
-            std::str::from_utf8(digits).ok()?.parse::<u16>().ok()?
+            std::str::from_utf8(digits).ok()?.number::<u16>().ok()?
         }
         Some(_) => return None,
     };

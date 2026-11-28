@@ -132,6 +132,34 @@ fn sort_indices(order: &mut [usize], cmp: &mut dyn FnMut(usize, usize) -> std::c
     order.sort_by(|&a, &b| cmp(a, b));
 }
 
+/// `str::parse` of an unsigned integer, out of line: one copy of the integer parser for each of the four types, called
+/// where each place a number is read inlined its own (the cold paths' fourth pass, ADR 0053). For cold paths: a
+/// setting, a table's row, a configuration's line, a proxied flow's first request. A place read per packet, per DNS
+/// query or per answer keeps `parse` (`engine::resolver`'s `is_local`). Public for the JNI bridge.
+pub trait Number {
+    /// `self.parse::<T>()`: the same value or error, called rather than inlined.
+    ///
+    /// # Errors
+    /// `T`'s `FromStr` error, as `parse` gives it.
+    fn number<T: Unsigned>(&self) -> Result<T, T::Err>;
+}
+
+impl Number for str {
+    #[inline(never)]
+    fn number<T: Unsigned>(&self) -> Result<T, T::Err> {
+        self.parse()
+    }
+}
+
+/// The types [`Number::number`] reads, `u8`, `u16`, `u32` and `u64`: one copy of the parser each, so another type
+/// would add one more (`usize`, which the engine's start reads once from `/proc/self/limits`, keeps `parse`).
+pub trait Unsigned: std::str::FromStr {}
+
+impl Unsigned for u8 {}
+impl Unsigned for u16 {}
+impl Unsigned for u32 {}
+impl Unsigned for u64 {}
+
 #[cfg(test)]
 mod tests {
     /// The shared sort gives `std`'s answers: `slice::sort_by`'s, ties in their first order, on lists of every
@@ -174,6 +202,46 @@ mod tests {
             let mut got = one.clone();
             super::sort_by(&mut got, |a, b| a.0.cmp(&b.0));
             assert_eq!(got, one, "ties keep their order");
+        }
+    }
+
+    /// `number` gives `parse`'s value or error, for each of the four types, on the edges of a decimal number: signs,
+    /// leading zeros, spaces, other notations and digits, each type's largest value and the next.
+    #[test]
+    fn a_number_is_what_parse_gives() {
+        use super::Number;
+        let texts = [
+            "",
+            "+",
+            "-",
+            "+0",
+            "-0",
+            "-1",
+            "0",
+            "1",
+            "007",
+            " 1",
+            "1 ",
+            "0x10",
+            "1_000",
+            "1.0",
+            "\u{661}\u{662}",
+            "255",
+            "256",
+            "65535",
+            "65536",
+            "4294967295",
+            "4294967296",
+            "18446744073709551615",
+            "18446744073709551616",
+            "000000000000000000000000000000255",
+            "99999999999999999999999",
+        ];
+        for text in texts {
+            assert_eq!(text.number::<u8>(), text.parse::<u8>(), "{text:?}");
+            assert_eq!(text.number::<u16>(), text.parse::<u16>(), "{text:?}");
+            assert_eq!(text.number::<u32>(), text.parse::<u32>(), "{text:?}");
+            assert_eq!(text.number::<u64>(), text.parse::<u64>(), "{text:?}");
         }
     }
 

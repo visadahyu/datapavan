@@ -9,6 +9,7 @@
 //! RFC 1035 may hold compressed names in their data (RFC 3597); the current ones are read, the obsolete
 //! ones dropped, and every other type is copied as it is.
 
+use crate::Number;
 use crate::dns::{
     CLASS_IN, MAX_JUMPS, TYPE_A, TYPE_AAAA, TYPE_HTTPS, TYPE_OPT, TYPE_SVCB, read_name, u16_at,
 };
@@ -186,7 +187,7 @@ pub fn reverse_v4(name: &str) -> Option<Ipv4Addr> {
         .split('.')
         .map(|p| {
             (!p.is_empty() && p.len() <= 3 && p.bytes().all(|b| b.is_ascii_digit()))
-                .then(|| p.parse().ok())
+                .then(|| p.number().ok())
                 .flatten()
         })
         .collect::<Option<_>>()?;

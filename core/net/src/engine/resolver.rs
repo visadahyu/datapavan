@@ -23,6 +23,7 @@
 use super::chain::Chain;
 use super::upstream::protect;
 use super::{Shared, lock};
+use crate::Number;
 use crate::catalogue::{Catalogue, Endpoint, Protocol, Url, dot_url};
 use crate::dnscache::DnsCache;
 use crate::hygiene::{self, Asked};
@@ -210,7 +211,7 @@ impl DnsConfig {
                 (Some("strict"), Some(on), None, None) => config.strict = on == "1",
                 (Some("only"), Some(on), None, None) => config.only = on == "1",
                 (Some("refresh"), Some(low), Some(high), None) => {
-                    if let (Ok(low), Ok(high)) = (low.parse(), high.parse()) {
+                    if let (Ok(low), Ok(high)) = (low.number(), high.number()) {
                         config.refresh =
                             Some((Duration::from_secs(low), Duration::from_secs(high)));
                     }

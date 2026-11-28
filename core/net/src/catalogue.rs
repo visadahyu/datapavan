@@ -11,6 +11,7 @@
 //! tests below against the files as committed. Every function takes text a pack may carry, so none may panic
 //! (`fuzz_targets/catalogue.rs`).
 
+use crate::Number;
 use crate::odoh::TargetKey;
 use std::net::IpAddr;
 
@@ -38,7 +39,7 @@ impl Url {
             return None;
         }
         let (host, port) = match authority.rsplit_once(':') {
-            Some((host, port)) if !host.contains(':') => (host, port.parse().ok()?),
+            Some((host, port)) if !host.contains(':') => (host, port.number().ok()?),
             _ => (authority, 443),
         };
         if !valid_host(host) || port == 0 {
@@ -270,7 +271,7 @@ fn addresses(v4: &str, v6: &str) -> Vec<IpAddr> {
 fn asns(column: &str) -> Option<Vec<u32>> {
     list(column)
         .into_iter()
-        .map(|a| a.strip_prefix("AS").and_then(|n| n.parse().ok()))
+        .map(|a| a.strip_prefix("AS").and_then(|n| n.number().ok()))
         .collect()
 }
 
@@ -521,7 +522,7 @@ impl Catalogue {
 #[must_use]
 pub fn dot_url(endpoint: &str) -> Option<Url> {
     let (host, port) = match endpoint.rsplit_once(':') {
-        Some((host, port)) => (host, port.parse().ok()?),
+        Some((host, port)) => (host, port.number().ok()?),
         None => (endpoint, 853),
     };
     if !valid_host(host) || port == 0 {
