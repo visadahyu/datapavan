@@ -63,9 +63,9 @@ checks_of() {
         # debug command, so any emulator serves; skipped, and saying so, where Docker does not run, unless
         # DNSLAB_REQUIRED=1, as on CI.
         dns) echo verify-dns.sh ;;
-        # Apps' built-in proxies named (W8, part 2a, ADR 0052): the project's proxy fixture through the proxy lab's
-        # SOCKS5, HTTP and MTProto proxies on this computer, skipped, and saying so, where Docker cannot start the lab,
-        # unless PROXYLAB_REQUIRED=1, as on CI.
+        # Apps' built-in proxies named (W8, part 2a, ADR 0052): the proxy lab's own check, then the project's proxy
+        # fixture through the lab's SOCKS5, HTTP and MTProto proxies on this computer, skipped, and saying so, where
+        # Docker cannot start the lab, unless PROXYLAB_REQUIRED=1, as on CI.
         proxies) echo verify-proxies.sh ;;
         # Tracker blocking and its undo (W8, part 3a, ADR 0053): the project's blocking fixture against the blocking lab
         # on this computer (scripts/blocklab.py, Python's standard library alone), skipped, and saying so, where it cannot

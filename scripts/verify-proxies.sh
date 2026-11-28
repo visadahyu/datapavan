@@ -30,7 +30,9 @@
 #
 # Only where the lab cannot start here at all (no Docker, or Docker not answering) is the check skipped, with a line
 # that says so; with PROXYLAB_REQUIRED=1, which CI sets, that fails. Any other failure of the lab fails the check; its
-# logs then go to build/proxylab/.
+# logs then go to build/proxylab/. Before it serves the lab, the lab's own check runs (scripts/proxylab.sh, its rows in
+# build/proxylab/check.log): squid and tinyproxy as Debian ships them hold the forwarder's shared vectors' measured
+# columns, so that a changed pin, a changed proxy or a row added without measuring fails this shard too.
 #
 #   scripts/verify-proxies.sh [path/to/Datapavan-Advanced-debug.apk]
 set -euo pipefail
@@ -268,6 +270,17 @@ if [ -n "$why_not" ]; then
     [ -z "${GITHUB_ACTIONS:-}" ] || echo "::notice title=W8 part 2a's emulator check skipped::$why_not: nothing was checked on the emulator"
     exit 0
 fi
+# The lab's own check first (the forwarder's review, M2): squid and tinyproxy as Debian ships them, with the forwarder's
+# requests and the two columns of core/net/testdata/forward-requests.tsv the lab measured, so that a changed pin, a
+# changed proxy or a vector row added without measuring fails the shard, here and on CI. It stops the lab when done; its
+# rows go to build/proxylab/check.log.
+mkdir -p "$ROOT/build/proxylab"
+if ! "$ROOT/scripts/proxylab.sh" >"$ROOT/build/proxylab/check.log" 2>&1; then
+    grep -E '^FAIL ' "$ROOT/build/proxylab/check.log" >&2 || tail -n 20 "$ROOT/build/proxylab/check.log" >&2
+    echo "PROXIES CHECK FAILED: the proxy lab's own check failed (build/proxylab/check.log)" >&2
+    exit 1
+fi
+echo "ok: the proxy lab's own check passed, $(grep -c '^PASS ' "$ROOT/build/proxylab/check.log") rows, none failed"
 settings=$("$ROOT/scripts/proxylab.sh" --serve 2>"$WORK/lab.err") ||
     { cat "$WORK/lab.err" >&2; echo "PROXIES CHECK FAILED: the proxy lab did not start, though Docker is here" >&2; exit 1; }
 while IFS= read -r line; do

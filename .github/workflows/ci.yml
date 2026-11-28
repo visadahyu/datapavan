@@ -513,7 +513,8 @@ jobs:
         run: scripts/relaylab.sh
 
       # The proxies shard's lab image, built from pinned sources (scripts/proxylab/Dockerfile) and kept in the Actions
-      # cache, as the WireGuard peers' is: tried twice, a minute apart.
+      # cache, as the WireGuard peers' is: tried twice, a minute apart. The shard's verify-proxies.sh runs the lab's own
+      # check with it (scripts/proxylab.sh) before its emulator rows.
       - name: Docker Buildx for the proxy lab's image
         if: matrix.shard == 'proxies'
         timeout-minutes: 5

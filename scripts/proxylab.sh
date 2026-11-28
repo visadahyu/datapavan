@@ -10,7 +10,8 @@
 #                                  it opens one, refuses one to port 80 and, with its password, answers 407; squid and
 #                                  tinyproxy as Debian ships them read the forwarder's requests in absolute form (the
 #                                  proxy record's forwarder); then the project stops (stop, not down: nothing restarts
-#                                  it)
+#                                  it). The emulator's proxies shard (scripts/verify-proxies.sh) runs it first, on CI
+#                                  too
 #   scripts/proxylab.sh --serve    only start it, and print its settings, one KEY=value a line, for the emulator check
 #                                  (scripts/verify-proxies.sh), which stops it when it is done
 #
