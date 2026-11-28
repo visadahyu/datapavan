@@ -12,6 +12,7 @@ use std::os::fd::{AsRawFd, BorrowedFd, FromRawFd, OwnedFd, RawFd};
 use std::sync::{Arc, Mutex, MutexGuard, PoisonError};
 
 use datapavan_engine::datapack;
+use datapavan_net::Number;
 use datapavan_net::blocking::{Grade, Table};
 use datapavan_net::catalogue::Catalogue;
 use datapavan_net::engine::{Configured, MAX_TUNNELS, TunnelState};
@@ -223,7 +224,7 @@ fn blocking_setting(
         ..BlockSetting::default()
     };
     let until = |ms: &str| {
-        ms.parse::<u64>()
+        ms.number::<u64>()
             .ok()
             .map(|ms| boot.saturating_add(std::time::Duration::from_millis(ms)))
     };
@@ -237,7 +238,7 @@ fn blocking_setting(
             ["covered", ref uids @ ..] => {
                 setting
                     .covered
-                    .extend(uids.iter().filter_map(|u| u.parse::<u32>().ok()));
+                    .extend(uids.iter().filter_map(|u| u.number::<u32>().ok()));
             }
             ["graded", uid, host, grade] => {
                 let grade = match grade {
@@ -245,7 +246,7 @@ fn blocking_setting(
                     "keep" => Grade::Keep,
                     _ => continue,
                 };
-                if let (Ok(uid), Some(entry)) = (uid.parse(), row(host)) {
+                if let (Ok(uid), Some(entry)) = (uid.number(), row(host)) {
                     setting.graded.push((uid, entry, grade));
                 }
             }
@@ -255,12 +256,12 @@ fn blocking_setting(
                 } else {
                     until(ms)
                 };
-                if let (Ok(uid), Some(until)) = (uid.parse(), until) {
+                if let (Ok(uid), Some(until)) = (uid.number(), until) {
                     setting.apps_allowed.push((uid, until));
                 }
             }
             ["entry", uid, host] => {
-                if let (Ok(uid), Some(entry)) = (uid.parse(), row(host)) {
+                if let (Ok(uid), Some(entry)) = (uid.number(), row(host)) {
                     setting.entries_allowed.push((uid, entry));
                 }
             }
@@ -299,7 +300,7 @@ fn app_route(answer: &str) -> Option<AppRoute> {
     let route = match (words.next()?, words.next()) {
         ("direct", None) => AppRoute::Direct,
         ("tool", None) => AppRoute::Tool,
-        ("tunnel", Some(id)) => AppRoute::Tunnel(id.parse().ok().filter(|&id: &u32| id != 0)?),
+        ("tunnel", Some(id)) => AppRoute::Tunnel(id.number().ok().filter(|&id: &u32| id != 0)?),
         _ => return None,
     };
     words.next().is_none().then_some(route)
@@ -1538,7 +1539,7 @@ pub extern "system" fn Java_org_visadahyu_datapavan_network_Engine_nativeBeneath
             .lines()
             .filter_map(|line| {
                 let (address, port) = line.trim().rsplit_once(' ')?;
-                Some(SocketAddr::new(address.parse().ok()?, port.parse().ok()?))
+                Some(SocketAddr::new(address.parse().ok()?, port.number().ok()?))
             })
             .collect();
         let exclusions = exclusions.try_to_string(env)?;
@@ -1622,7 +1623,7 @@ pub extern "system" fn Java_org_visadahyu_datapavan_network_Engine_nativeTracker
             .lines()
             .map(|line| {
                 let (host, port) = line.split_once('\t').unwrap_or((line, ""));
-                let port = port.parse().unwrap_or(0);
+                let port = port.number().unwrap_or(0);
                 table.as_ref().map_or_else(String::new, |table| {
                     let found: Vec<String> = table
                         .matches(host, port)
@@ -1778,7 +1779,7 @@ fn proxy_setting(families: &[i32], uids: &[i32], android: &str) -> ProxySetting 
         .lines()
         .filter_map(|line| {
             let (host, port) = line.trim().rsplit_once(' ')?;
-            let port = port.parse::<u16>().ok().filter(|&p| p != 0)?;
+            let port = port.number::<u16>().ok().filter(|&p| p != 0)?;
             let host = host.trim().trim_start_matches('[').trim_end_matches(']');
             (!host.is_empty() && !host.contains(char::is_whitespace))
                 .then(|| (host.to_ascii_lowercase(), port))
@@ -1817,7 +1818,7 @@ fn on_link_of(lines: &str, transport: jint) -> datapavan_net::local::OnLink {
         .take(4 * datapavan_net::local::MAX_PREFIXES)
         .filter_map(|line| {
             let (address, length) = line.trim().split_once(' ')?;
-            Some((address.trim().parse().ok()?, length.trim().parse().ok()?))
+            Some((address.trim().parse().ok()?, length.trim().number().ok()?))
         });
     datapavan_net::local::OnLink::new(
         prefixes,
