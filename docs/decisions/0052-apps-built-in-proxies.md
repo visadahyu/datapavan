@@ -614,7 +614,10 @@ chaining is, and must follow the same switch.
       under the gate and 5,800 past the 8 KiB stop line the record's plans keep under it. As that stop asks, the
       forwarder lands on `main` only with the cold paths' fourth pass (ADR 0053), which frees 32,104, 31,592 and 30,000
       bytes: Gradle's gate build of the two gives 2,062,688 bytes on x86_64, 1,846,736 on arm64-v8a and 1,356,528 on
-      armeabi-v7a, x86_64 34,464 bytes under the gate and 26,272 above the stop.
+      armeabi-v7a, x86_64 34,464 bytes under the gate and 26,272 above the stop. The forwarder's fix round (its review's
+      M1 and minors) adds 4,760 bytes on x86_64 by the steps' build: Gradle's gate build of the tip that lands
+      (`fb37710d`) gives 2,067,448, 1,850,984 and 1,359,904 bytes, x86_64 29,704 under the gate and 21,512 above the
+      stop, 320 bytes below `main`'s.
 
 ## Consequences
 

@@ -727,12 +727,17 @@ The words of the allow and the pause are checked with real users under ADR 0046'
   bytes on x86_64, 1,846,736 on arm64-v8a and 1,356,528 on armeabi-v7a; x86_64 has 34,464 bytes left under the gate,
   26,272 above the 8 KiB stop** (Gradle's figure 176 bytes above the steps' build on x86_64, 1,096 below on arm64-v8a,
   192 above on armeabi-v7a), 5,080, 7,000 and 12,552 bytes below `main`'s 2,067,768, 1,853,736 and 1,369,080 with the
-  forwarder in. *The speed,* the plan's rule for the one item that adds work: the measure before and after in turn, 24
+  forwarder in. With the forwarder's fix round on top (the tip `fb37710d`, which lands), Gradle's gate build gives
+  2,067,448, 1,850,984 and 1,359,904 bytes: x86_64 29,704 under the gate and 21,512 above the stop, 320 bytes below
+  `main`'s. *The speed,* the plan's rule for the one item that adds work: the measure before and after in turn, 24
   rounds on the development machine pinned to four threads, otherwise idle (load 2.1 to 2.2): the engine start's three
   tables 85.85 µs before (84.83 to 87.36) and 134.11 after (131.64 to 136.17), +48.3 µs (rank-sum z +5.9), within the
   rule's 0.2 ms; `nativeMessengerClients`, which Kotlin calls at every hand-over of the proxies on the main thread (the
-  audit, m1), 7.54 µs and 19.72, +12.2 µs a call, no cache needed; the emulator's runs of that measure were not part of
-  the build. The passes' set, `31cef934` and the tip in turn, 24 rounds the same way (load 3.2 to 6.1, other sessions'
+  audit, m1), 7.54 µs and 19.72, +12.2 µs a call, no cache needed. On the emulator (the plan's 1 ms bar, the pass's
+  review m2; Android 15, `dp-api35-ci` alone on four pinned threads, 16 rounds in turn, the measure built for Android at
+  `2200e658` and at the forwarder's final tip `fb37710d`): the three tables 105.54 µs before and 169.40 after, +63.86 µs
+  (every run after slower than every run before, z +4.82), the messengers' clients 12.68 and 28.89 µs, +16.21 a call:
+  within the bar (strategy repository, `evidence/fourth-pass/emulator/`). The passes' set, `31cef934` and the tip in turn, 24 rounds the same way (load 3.2 to 6.1, other sessions'
   work): a packet through WireGuard 4.60 and 4.63 µs at 1,280 bytes and 4.38 both at 100, sent directly 4.55 and 4.63
   and 4.50 and 4.55, a datagram on the down path 3.73 both and 3.59 both, opening a UDP flow directly 36.7 and 37.2 µs
   of the engine's CPU, a lookup 30.8 and 31.1, through WireGuard 15.9 and 16.0, each rank-sum |z| under 1.7. *The
