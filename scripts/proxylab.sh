@@ -92,13 +92,42 @@ done
 # The lab's own network has no way out: nothing the lab carries can reach the internet.
 [ "$(docker network inspect datapavan-proxylab_lab --format '{{.Internal}}')" = true ] ||
     { echo "the lab's network is not internal" >&2; exit 1; }
-# The proxies take a moment after their containers start.
+# The proxies take a moment after their containers start, squid longest. The front's socat accepts on every published
+# port before the service behind it listens, so the wait is for answers (the forwarder's review, m9): a plain request
+# through squid and each password-less tinyproxy answered 204 by the target, and the target's record answering, up to
+# 30 s; the other ports must take a connection.
+ready() {
+    python3 -I - "$@" <<'PY'
+import socket, sys
+def first_line(port, request):
+    with socket.create_connection(("127.0.0.1", int(port)), 2) as s:
+        s.settimeout(2)
+        s.sendall(request)
+        got = b""
+        while b"\r\n" not in got:
+            chunk = s.recv(256)
+            if not chunk:
+                break
+            got += chunk
+        return got.split(b"\r\n")[0]
+for port in sys.argv[1:4]:
+    line = first_line(port, b"GET http://inner.proxylab.test/ready HTTP/1.1\r\nHost: inner.proxylab.test\r\n"
+                            b"Connection: close\r\n\r\n")
+    if line.split(b" ")[1:2] != [b"204"]:
+        sys.exit(1)
+if first_line(sys.argv[4], b"GET /seen HTTP/1.1\r\nHost: target\r\n\r\n").split(b" ")[1:2] != [b"200"]:
+    sys.exit(1)
+for port in sys.argv[5:]:
+    socket.create_connection(("127.0.0.1", int(port)), 2).close()
+PY
+}
+lab_ports=("$PROXYLAB_PORT_SQUID" "$PROXYLAB_PORT_DEBIAN" "$PROXYLAB_PORT_OPEN" "$PROXYLAB_PORT_SEEN" "$PROXYLAB_PORT"
+    "$PROXYLAB_PORT_HTTP" "$PROXYLAB_PORT_MTG")
 for _ in $(seq 30); do
-    python3 -I -c "import socket,sys; [socket.create_connection(('127.0.0.1', p), 1).close() for p in sys.argv[1:]]" \
-        "$PROXYLAB_PORT" "$PROXYLAB_PORT_HTTP" "$PROXYLAB_PORT_OPEN" "$PROXYLAB_PORT_MTG" "$PROXYLAB_PORT_SQUID" \
-        "$PROXYLAB_PORT_DEBIAN" "$PROXYLAB_PORT_SEEN" 2>/dev/null && break
+    ready "${lab_ports[@]}" 2>/dev/null && break
     sleep 1
 done
+ready "${lab_ports[@]}" 2>/dev/null || { echo "the lab's proxies did not answer through its front within 30 s" >&2; exit 1; }
 
 if [ "$MODE" = --serve ]; then
     printf '%s\n' "PROXYLAB_PORT=$PROXYLAB_PORT" "PROXYLAB_PORT_HTTP=$PROXYLAB_PORT_HTTP" "PROXYLAB_PORT_OPEN=$PROXYLAB_PORT_OPEN" \
