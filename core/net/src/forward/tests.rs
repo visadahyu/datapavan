@@ -107,6 +107,19 @@ type Vector = (
     Vec<u8>,
 );
 
+/// Whether the proxy lab can carry a row of `way` to `destination` with `names`, as its `check.py` reads it
+/// (`carried_by_the_lab`): a forward row, IPv4 to its table's address on port 80 or 8080, by that address or the name
+/// `example.test`.
+fn carried_by_the_lab(way: &str, destination: &str, names: &str) -> bool {
+    let (address, port) = destination.rsplit_once(':').unwrap_or_default();
+    way == "forward"
+        && address == "198.51.100.9"
+        && (port == "80" || port == "8080")
+        && names
+            .split(',')
+            .all(|n| n.is_empty() || n == "example.test")
+}
+
 /// Each vector: its line number, the way, the reason, the destination, the names, the app's bytes and the proxy's.
 fn vectors() -> Vec<Vector> {
     include_str!("../../testdata/forward-requests.tsv")
@@ -117,7 +130,13 @@ fn vectors() -> Vec<Vector> {
         })
         .map(|(n, line)| {
             let c: Vec<&str> = line.split('\t').collect();
-            assert!(c.len() >= 6, "line {}", n + 1);
+            // The proxy lab's two columns too, measured on every forward row it can carry (the other review's M2).
+            assert_eq!(c.len(), 8, "line {}", n + 1);
+            assert!(
+                !carried_by_the_lab(c[0], c[2], c[3]) || (c[6] != "-" && c[7] != "-"),
+                "line {}: a forward row the proxy lab carries, its squid and tinyproxy cells measured",
+                n + 1
+            );
             let way = match c[0] {
                 "forward" => Way::Forward,
                 "connect" => Way::Connect,
@@ -388,4 +407,129 @@ fn a_trailer_is_refused_and_the_last_chunk_held_back() {
         Ok(())
     );
     assert!(out[head_only..].starts_with(b"0\r\n\r\nGET http://example.test/ HTTP/1.1\r\n"));
+}
+
+/// The review's m3: a request line is refused at its first byte that no request line could hold, before its end and
+/// before any blank line, so that a line protocol that speaks first is not awaited until the flow's time runs out;
+/// a line that may still be one is awaited.
+#[test]
+fn a_request_line_is_refused_at_its_first_byte_none_could_hold() {
+    for (bytes, why) in [
+        (&b"NICK a"[..], Why::Target),
+        (b"SET k", Why::Target),
+        (b"USER a 0 * :b", Why::Target),
+        (b"CONNECT a", Why::Target),
+        (b"GET *", Why::Target),
+        (b"OPTIONS *x", Why::Target),
+        (b"GET /a#", Why::Target),
+        (b"GET  ", Why::Target),
+        (b"GET / H2", Why::Version),
+        (b"GET / HTTP/1.2", Why::Version),
+        (b"GET / HTTP/1.1x", Why::Version),
+        (b"GET / HTTP/1.1 ", Why::Line),
+        (b"GET / HTTP/1.\r", Why::Version),
+        (b"GET /\r", Why::Line),
+    ] {
+        assert_eq!(
+            head_end(bytes, 0),
+            Err(why),
+            "{:?}",
+            String::from_utf8_lossy(bytes)
+        );
+    }
+    for bytes in [
+        &b"GET"[..],
+        b"GET ",
+        b"GET /",
+        b"GET /p?q ",
+        b"OPTIONS * HTTP/1.",
+        b"GET / HTTP/1.1\r\n",
+    ] {
+        assert_eq!(
+            head_end(bytes, 0),
+            Ok(None),
+            "{:?}",
+            String::from_utf8_lossy(bytes)
+        );
+    }
+    // A line past its bound is refused once it passed it, and a line within it read once whole.
+    let mut long = b"GET /".to_vec();
+    long.resize(MAX_LINE, b'a');
+    assert_eq!(head_end(&long, 0), Ok(None));
+    long.push(b'a');
+    assert_eq!(head_end(&long, 0), Err(Why::TooLong));
+    long.truncate(MAX_LINE - 9);
+    long.extend_from_slice(b" HTTP/1.1\r\nHost: a\r\n");
+    let read = long.len();
+    long.extend(std::iter::repeat_n(b'b', 2 * MAX_LINE));
+    long.extend_from_slice(b": c\r\n\r\n");
+    assert_eq!(head_end(&long[..read], 0), Ok(None));
+    assert_eq!(head_end(&long, read), Ok(Some(long.len())));
+    assert_eq!(head_end(&long, 0), Ok(Some(long.len())));
+}
+
+/// The review's m2: no size or length this reader takes overflows a proxy's signed 64-bit integer once the CRLF's 2
+/// is added (tinyproxy 1.11.2): a chunk size of 15 hex digits is taken, of 16 refused, leading zeros counted; a
+/// length of 2^63 − 1 is taken, of 2^63 refused.
+#[test]
+fn sizes_and_lengths_stay_within_a_signed_64_bit_integer() {
+    let to = SocketAddr::from(([198, 51, 100, 9], 80));
+    let chunked = b"PUT /t HTTP/1.1\r\nHost: example.test\r\nTransfer-Encoding: chunked\r\n\r\n";
+    for (size, taken) in [
+        (&b"FFFFFFFFFFFFFFF"[..], true),
+        (b"000000000000005", true),
+        (b"FFFFFFFFFFFFFFFF", false),
+        (b"7FFFFFFFFFFFFFFE", false),
+        (b"0000000000000005", false),
+    ] {
+        let mut out = Zeroizing::new(Vec::new());
+        let Ok(first) = first(chunked, to, &mut out) else {
+            unreachable!("a head the reader takes");
+        };
+        let mut framer = first.forward;
+        let mut line = size.to_vec();
+        line.extend_from_slice(b"\r\nhello");
+        let fed = framer.feed(&line, &mut out);
+        assert_eq!(fed.is_ok(), taken, "{:?}", String::from_utf8_lossy(size));
+        if taken {
+            assert!(
+                out.ends_with(&line),
+                "the size line and the data as they came"
+            );
+        } else {
+            assert_eq!(fed, Err(Why::Chunk));
+        }
+    }
+    for (length, taken) in [
+        ("9223372036854775807", true),
+        ("9223372036854775808", false),
+    ] {
+        let head =
+            format!("POST / HTTP/1.1\r\nHost: example.test\r\nContent-Length: {length}\r\n\r\n");
+        let mut out = Zeroizing::new(Vec::new());
+        let read = first(head.as_bytes(), to, &mut out).map(|_| ());
+        assert_eq!(
+            read,
+            if taken { Ok(()) } else { Err(Why::Framing) },
+            "{length}"
+        );
+    }
+}
+
+/// The review's note 3: the stage's first head, read at most to its bound and one byte, grows to that and no further,
+/// where [`reserve`]'s doubling would take twice it.
+#[test]
+fn a_bounded_buffer_grows_no_further_than_its_bound() {
+    let mut held = Zeroizing::new(Vec::new());
+    let mut doubled = Zeroizing::new(Vec::new());
+    while held.len() <= MAX_HEAD {
+        let room = (MAX_HEAD + 1 - held.len()).min(4_096);
+        reserve_within(&mut held, room, MAX_HEAD + 1);
+        held.extend(std::iter::repeat_n(b'a', room));
+        reserve(&mut doubled, room);
+        doubled.extend(std::iter::repeat_n(b'a', room));
+    }
+    assert_eq!(held.len(), MAX_HEAD + 1);
+    assert_eq!(held.capacity(), MAX_HEAD + 1);
+    assert_eq!(doubled.capacity(), 2 * MAX_HEAD);
 }

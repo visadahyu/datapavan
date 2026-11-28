@@ -131,7 +131,9 @@ async fn stage(shared: Arc<Shared>, app: TcpStream, proxy: TcpStream, rescue: Bo
     let mut held = Zeroizing::new(Vec::new());
     let mut chunk = Zeroizing::new(vec![0u8; 4_096]);
     let end = loop {
-        let n = match tokio::time::timeout_at(until, app.read(&mut chunk[..])).await {
+        // Never more than the head's bound and one byte held (the review's note 3).
+        let room = chunk.len().min(forward::MAX_HEAD + 1 - held.len());
+        let n = match tokio::time::timeout_at(until, app.read(&mut chunk[..room])).await {
             // The app closed first: nothing of a head unfinished goes on; the proxy's connection is closed.
             Ok(Ok(0)) => return,
             Ok(Ok(n)) => n,
@@ -142,7 +144,7 @@ async fn stage(shared: Arc<Shared>, app: TcpStream, proxy: TcpStream, rescue: Bo
             Counters::add(&shared.counters.beneath.first_wait, 1);
         }
         let before = held.len();
-        forward::reserve(&mut held, n);
+        forward::reserve_within(&mut held, n, forward::MAX_HEAD + 1);
         held.extend_from_slice(&chunk[..n]);
         match forward::head_end(&held, before) {
             Ok(Some(end)) => break Ok(end),

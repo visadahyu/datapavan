@@ -2661,4 +2661,39 @@ pub(super) mod tests {
         assert_eq!(forwarder(&shared), [1, 0, 2, 0, 1]);
         Ok(())
     }
+
+    /// The review's m3 at the stage: a rescued flow whose first line no request line could hold, as IRC's `NICK`, is
+    /// reset at once, not once the flow's time ran out (3 s here), and the proxy got nothing past its `CONNECT`s.
+    #[tokio::test]
+    async fn a_first_line_no_request_could_be_is_reset_at_once() -> io::Result<()> {
+        let proxy = Proxy::new(Reply::Forward).await?;
+        let (shared, _) = engine(
+            Lab {
+                refuses: true,
+                ..Lab::default()
+            },
+            proxy.at,
+        );
+        looked_up(&shared, UID, "example.test", [198, 51, 100, 9]);
+        let destination = at("198.51.100.9:6667");
+        let (stream, through) = open(&shared, UID, destination, destination).await;
+        let mut stream = stream?;
+        assert!(through);
+        let began = Instant::now();
+        stream.write_all(b"NICK a\r\n").await?;
+        let mut byte = [0u8; 1];
+        let read = tokio::time::timeout(Duration::from_secs(2), stream.read(&mut byte)).await;
+        assert!(matches!(read, Ok(Err(_) | Ok(0))), "{read:?}");
+        assert!(
+            began.elapsed() < Duration::from_secs(1),
+            "{:?}",
+            began.elapsed()
+        );
+        assert!(
+            proxy.heads().iter().all(|h| h.starts_with("CONNECT ")),
+            "{:?}",
+            proxy.heads()
+        );
+        Ok(())
+    }
 }

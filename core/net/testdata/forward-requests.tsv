@@ -48,11 +48,16 @@ connect	NotHttp	198.51.100.9:80	example.test	get / HTTP/1.1\r\nHost: example.tes
 connect	NotHttp	198.51.100.9:80	example.test	SSH-2.0-OpenSSH_9.9\r\n		-	-
 connect	Target	198.51.100.9:80	example.test	GET http://example.test/ HTTP/1.1\r\nHost: example.test\r\n\r\n		-	-
 connect	Target	198.51.100.9:80	example.test	CONNECT example.test:443 HTTP/1.1\r\nHost: example.test:443\r\n\r\n		-	-
-connect	Version	198.51.100.9:80	example.test	PRI * HTTP/2.0\r\n\r\nSM\r\n\r\n		-	-
+connect	Target	198.51.100.9:80	example.test	PRI * HTTP/2.0\r\n\r\nSM\r\n\r\n		-	-
 connect	Target	198.51.100.9:80	example.test	GET * HTTP/1.1\r\nHost: example.test\r\n\r\n		-	-
 connect	Target	198.51.100.9:80	example.test	GET /a#b HTTP/1.1\r\nHost: example.test\r\n\r\n		-	-
 connect	Target	198.51.100.9:80	example.test	GET example.test HTTP/1.1\r\nHost: example.test\r\n\r\n		-	-
-connect	Line	198.51.100.9:80	example.test	GET /a b HTTP/1.1\r\nHost: example.test\r\n\r\n		-	-
+connect	Version	198.51.100.9:80	example.test	GET /a b HTTP/1.1\r\nHost: example.test\r\n\r\n		-	-
+connect	Target	198.51.100.9:80	example.test	NICK a\r\nUSER a 0 * :b\r\n		-	-
+connect	Target	198.51.100.9:80	example.test	SET k v\r\n		-	-
+connect	Target	198.51.100.9:80	example.test	NICK a		-	-
+connect	Line	198.51.100.9:80	example.test	GET / HTTP/1.1 x		-	-
+connect	Version	198.51.100.9:80	example.test	GET / HTTPS/1.1		-	-
 connect	Version	198.51.100.9:80	example.test	GET / HTTP/1.2\r\nHost: example.test\r\n\r\n		-	-
 connect	Version	198.51.100.9:80	example.test	GET / HTTP/2.0\r\nHost: example.test\r\n\r\n		-	-
 connect	Version	198.51.100.9:80	example.test	GET / http/1.1\r\nHost: example.test\r\n\r\n		-	-
@@ -98,6 +103,7 @@ connect	Framing	198.51.100.9:80	example.test	POST / HTTP/1.1\r\nHost: example.te
 connect	Framing	198.51.100.9:80	example.test	POST / HTTP/1.1\r\nHost: example.test\r\nContent-Length: 5, 5\r\n\r\nhello		-	-
 connect	Framing	198.51.100.9:80	example.test	POST / HTTP/1.1\r\nHost: example.test\r\nContent-Length: +5\r\n\r\nhello		-	-
 connect	Framing	198.51.100.9:80	example.test	POST / HTTP/1.1\r\nHost: example.test\r\nContent-Length: 12345678901234567890\r\n\r\n		-	-
+connect	Framing	198.51.100.9:80	example.test	POST / HTTP/1.1\r\nHost: example.test\r\nContent-Length: 9223372036854775808\r\n\r\n		-	-
 connect	Framing	198.51.100.9:80	example.test	POST / HTTP/1.1\r\nHost: example.test\r\nTransfer-Encoding: gzip, chunked\r\n\r\n		-	-
 connect	Framing	198.51.100.9:80	example.test	POST / HTTP/1.1\r\nHost: example.test\r\nTransfer-Encoding: chunked, chunked\r\n\r\n		-	-
 connect	Framing	198.51.100.9:80	example.test	POST / HTTP/1.1\r\nHost: example.test\r\nTransfer-Encoding: chunked\r\nTransfer-Encoding: chunked\r\n\r\n		-	-
@@ -127,6 +133,10 @@ reset	Chunk	198.51.100.9:80	example.test	POST /c HTTP/1.1\r\nHost: example.test\
 reset	Chunk	198.51.100.9:80	example.test	POST /c HTTP/1.1\r\nHost: example.test\r\nTransfer-Encoding: chunked\r\n\r\n0x5\r\nhello\r\n0\r\n\r\n	POST http://example.test/c HTTP/1.1\r\nHost: example.test\r\nTransfer-Encoding: chunked\r\n\r\n	-	-
 reset	Chunk	198.51.100.9:80	example.test	POST /c HTTP/1.1\r\nHost: example.test\r\nTransfer-Encoding: chunked\r\n\r\n5 \r\nhello\r\n0\r\n\r\n	POST http://example.test/c HTTP/1.1\r\nHost: example.test\r\nTransfer-Encoding: chunked\r\n\r\n	-	-
 reset	Chunk	198.51.100.9:80	example.test	POST /c HTTP/1.1\r\nHost: example.test\r\nTransfer-Encoding: chunked\r\n\r\n00000000000000005\r\nhello\r\n0\r\n\r\n	POST http://example.test/c HTTP/1.1\r\nHost: example.test\r\nTransfer-Encoding: chunked\r\n\r\n	-	-
+reset	Chunk	198.51.100.9:80	example.test	POST /c HTTP/1.1\r\nHost: example.test\r\nTransfer-Encoding: chunked\r\n\r\nFFFFFFFFFFFFFFFF\r\nhello\r\n0\r\n\r\n	POST http://example.test/c HTTP/1.1\r\nHost: example.test\r\nTransfer-Encoding: chunked\r\n\r\n	-	-
+reset	Chunk	198.51.100.9:80	example.test	POST /c HTTP/1.1\r\nHost: example.test\r\nTransfer-Encoding: chunked\r\n\r\n7FFFFFFFFFFFFFFE\r\nhello\r\n0\r\n\r\n	POST http://example.test/c HTTP/1.1\r\nHost: example.test\r\nTransfer-Encoding: chunked\r\n\r\n	-	-
+reset	Chunk	198.51.100.9:80	example.test	POST /c HTTP/1.1\r\nHost: example.test\r\nTransfer-Encoding: chunked\r\n\r\n1000000000000000\r\nhello\r\n0\r\n\r\n	POST http://example.test/c HTTP/1.1\r\nHost: example.test\r\nTransfer-Encoding: chunked\r\n\r\n	-	-
+reset	Chunk	198.51.100.9:80	example.test	POST /c HTTP/1.1\r\nHost: example.test\r\nTransfer-Encoding: chunked\r\n\r\n0000000000000005\r\nhello\r\n0\r\n\r\n	POST http://example.test/c HTTP/1.1\r\nHost: example.test\r\nTransfer-Encoding: chunked\r\n\r\n	-	-
 reset	Chunk	198.51.100.9:80	example.test	POST /c HTTP/1.1\r\nHost: example.test\r\nTransfer-Encoding: chunked\r\n\r\n5\nhello\r\n0\r\n\r\n	POST http://example.test/c HTTP/1.1\r\nHost: example.test\r\nTransfer-Encoding: chunked\r\n\r\n	-	-
 reset	Chunk	198.51.100.9:80	example.test	POST /c HTTP/1.1\r\nHost: example.test\r\nTransfer-Encoding: chunked\r\n\r\n5\r\nhelloX\r\n0\r\n\r\n	POST http://example.test/c HTTP/1.1\r\nHost: example.test\r\nTransfer-Encoding: chunked\r\n\r\n5\r\nhello	-	-
 reset	Chunk	198.51.100.9:80	example.test	POST /c HTTP/1.1\r\nHost: example.test\r\nTransfer-Encoding: chunked\r\n\r\n\r\n	POST http://example.test/c HTTP/1.1\r\nHost: example.test\r\nTransfer-Encoding: chunked\r\n\r\n	-	-

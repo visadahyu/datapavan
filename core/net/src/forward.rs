@@ -14,15 +14,26 @@
 //!
 //! **Strict, so that two parsers cannot disagree** about where a request ends (request smuggling): CRLF only, no
 //! `obs-fold`, no white space before a colon, a token for each field name, no control byte but HTAB in a value; one
-//! `Host` (required in 1.1), one `Content-Length` of 1 to 19 digits or one `Transfer-Encoding` that is exactly
-//! `chunked`, never both, never `Transfer-Encoding` in 1.0, no body on `GET` or `HEAD`; chunk sizes of 1 to 16 hex
-//! digits with no extension, each chunk's data followed by CRLF, and no trailer: a proxy that knows none reads its
-//! bytes as the next request (tinyproxy 1.11.2, measured), so the last chunk's line is held until the CRLF that ends
-//! the body, and a trailer in its place is refused with nothing of that line written. Refused too, by exact name: `Upgrade` (a WebSocket goes by `CONNECT`, RFC 6455, 4.1),
-//! `Proxy-Authorization` (the app's credential is never handed to the network's proxy), and a `Connection` field that
+//! `Host` (required in 1.1), one `Content-Length` of 1 to 19 digits below 2^63 or one `Transfer-Encoding` that is
+//! exactly `chunked`, never both, never `Transfer-Encoding` in 1.0, no body on `GET` or `HEAD`; chunk sizes of 1 to 15
+//! hex digits, so that a proxy that reads one into a signed 64-bit integer and adds the CRLF's 2 never overflows
+//! (tinyproxy 1.11.2's `strtol` and `chunklen + 2`, read from its source; the review's m2), with no extension, each
+//! chunk's data followed by CRLF, and no trailer: a proxy that knows none reads its bytes as the next request
+//! (tinyproxy 1.11.2, measured), so the last chunk's line is held until the CRLF that ends the body, and a trailer in
+//! its place is refused with nothing of that line written. Refused too, by exact name: `Upgrade` (a WebSocket goes by
+//! `CONNECT`, RFC 6455, 4.1), `Proxy-Authorization` (the app's credential is never handed to the network's proxy),
+//! and a `Connection` field that
 //! names `Host`, `Content-Length` or `Transfer-Encoding` (the hop-by-hop abuse). `Upgrade-Insecure-Requests` is another
 //! name and goes on. `Expect` goes on too: the proxy lab sent squid 6.13 and tinyproxy 1.11.2 a body holding a whole
-//! request behind an `Expect` each refused early (`403`, `417`), and neither read that request (the audit's m6).
+//! request behind an `Expect` each refused early (`403`, `417`), and neither read that request (the audit's m6). A
+//! limit: a proxy built with a 32-bit `long` (a router's tinyproxy) reads a chunk size from `7FFFFFFE`, and a length
+//! past 2^31 − 1, otherwise than this reader; no client writes either.
+//!
+//! **The request line is read as it comes** ([`head_end`], the review's m3): its first byte that no request line this
+//! reader takes could hold refuses it at once, before its end, so that a line protocol whose client speaks first with
+//! an upper-case word (IRC's `NICK a`) is not awaited to a blank line that never comes: a method of 1 to 20 upper-case
+//! letters and its space, a target in origin form (or `*` after `OPTIONS`) of bytes `0x21` to `0x7E` but `#`, `@` and
+//! `\\`, a space, `HTTP/1.0` or `HTTP/1.1`, all within [`MAX_LINE`].
 //!
 //! **The authority** must be the flow's own: the `Host` port, or 80 without one, equal to the destination's; a literal
 //! equal to the destination's address; a name of letters, digits, `-`, `_` and `.`, 1 to 253 bytes with at most one
@@ -44,6 +55,18 @@ use zeroize::Zeroizing;
 /// The most bytes of a request's head: squid's own default for a request's headers (`request_header_max_size`).
 pub const MAX_HEAD: usize = 64 * 1024;
 
+/// The most bytes of a request line, its CRLF aside: the tracker gate reads a head's first 8 KiB, so that no `Host`
+/// past a longer line is its to read, and squid takes no longer URL (`MAX_URL`). It bounds what [`head_end`] reads
+/// again of a line that comes a byte at a time.
+pub const MAX_LINE: usize = 8 * 1024;
+
+/// The largest `Content-Length` taken: 2^63 − 1, what a proxy's signed 64-bit integer holds (the review's m2).
+const MAX_LENGTH: u64 = (1 << 63) - 1;
+
+/// The most hex digits of a chunk's size: at most 2^60 − 1, so that the CRLF's 2 added in a signed 64-bit integer
+/// never overflows (tinyproxy 1.11.2; the review's m2).
+const MAX_SIZE_DIGITS: usize = 15;
+
 /// Why a head, or a byte of a body's framing, is not forwarded.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum Why {
@@ -64,16 +87,16 @@ pub enum Why {
     Port,
     /// A literal of another address than the flow's.
     Address,
-    /// `Content-Length` and `Transfer-Encoding` together, either twice, a length that is not 1 to 19 digits, a coding
+    /// `Content-Length` and `Transfer-Encoding` together, either twice, a length that is not 1 to 19 digits below 2^63, a coding
     /// other than `chunked`, `Transfer-Encoding` in HTTP/1.0, or a body on `GET` or `HEAD`.
     Framing,
-    /// A chunk size line, or a chunk's end, not as the grammar says.
+    /// A chunk size line, or a chunk's end, not as the grammar says, or a size of more than 15 hex digits.
     Chunk,
     /// A trailer field after the last chunk: a proxy that knows no trailer reads it as the next request.
     Trailers,
     /// `Upgrade`, `Proxy-Authorization`, or a `Connection` field naming `Host` or the framing.
     Meaning,
-    /// A head past [`MAX_HEAD`].
+    /// A head past [`MAX_HEAD`], or a request line past [`MAX_LINE`].
     TooLong,
     /// A later head whose `Host` is not the first one's.
     OtherHost,
@@ -88,12 +111,21 @@ pub enum Why {
 /// Grows `buffer` to hold `more` bytes past its length, by a new allocation the old one is copied into and dropped,
 /// zeroed, so that no copy of a head is left in freed memory.
 pub fn reserve(buffer: &mut Zeroizing<Vec<u8>>, more: usize) {
+    reserve_within(buffer, more, usize::MAX);
+}
+
+/// [`reserve`], the new allocation never past `most` bytes where `more` fits within it: the stage's first head holds
+/// at most [`MAX_HEAD`] and one byte, not twice that (the review's note 3).
+pub fn reserve_within(buffer: &mut Zeroizing<Vec<u8>>, more: usize, most: usize) {
     let wanted = buffer.len() + more;
     if wanted <= buffer.capacity() {
         return;
     }
     let mut grown = Zeroizing::new(Vec::with_capacity(
-        wanted.max(2 * buffer.capacity()).max(256),
+        wanted
+            .max(2 * buffer.capacity())
+            .max(256)
+            .min(most.max(wanted)),
     ));
     grown.extend_from_slice(buffer);
     *buffer = grown;
@@ -123,18 +155,65 @@ fn section_end(bytes: &[u8], from: usize) -> Result<Option<usize>, Why> {
 
 /// Where a request's head that starts `bytes` ends, past its blank line, read on from `from`: `None` while it has
 /// not; refused at once where the start cannot be a request line (1 to 20 upper-case letters and a space, the gate's
-/// own test) or a bare CR or LF came.
+/// own test), at the request line's first byte that no request line could hold ([`line_so_far`]), or where a bare CR
+/// or LF came.
 ///
 /// # Errors
-/// [`Why::NotHttp`] or [`Why::Line`].
+/// [`Why::NotHttp`], [`Why::Line`], [`Why::Target`], [`Why::Version`] or [`Why::TooLong`].
 pub fn head_end(bytes: &[u8], from: usize) -> Result<Option<usize>, Why> {
     let start = &bytes[..bytes.len().min(21)];
     match start.iter().position(|b| !b.is_ascii_uppercase()) {
-        Some(space) if space > 0 && start[space] == b' ' => {}
+        Some(space) if space > 0 && start[space] == b' ' => line_so_far(bytes, space, from)?,
         None if start.len() < 21 => {}
         _ => return Err(Why::NotHttp),
     }
     section_end(bytes, from)
+}
+
+/// Whether the request line that starts `bytes`, its method's space at `space`, may still be one as far as it came
+/// (the module's comment, the review's m3): refused at its first byte that none could hold, a byte's reason as
+/// [`read`] gives it for a whole line, and at its end where its version is not whole. Read again from its start while
+/// `from` is within [`MAX_LINE`]: past it, an earlier call read the line to its end.
+fn line_so_far(bytes: &[u8], space: usize, from: usize) -> Result<(), Why> {
+    if from > MAX_LINE {
+        return Ok(());
+    }
+    let window = &bytes[..bytes.len().min(MAX_LINE + 1)];
+    let end = window.iter().position(|&b| b == b'\r' || b == b'\n');
+    let line = &window[..end.unwrap_or(window.len())];
+    let (method, target) = (&line[..space], space + 1);
+    let mut version = None;
+    for (i, &b) in line.iter().enumerate().skip(target) {
+        let Some(after) = version else {
+            let fine = match b {
+                b' ' if i > target => {
+                    version = Some(i + 1);
+                    continue;
+                }
+                _ if method == b"CONNECT" => false,
+                b'/' if i == target => true,
+                b'*' if i == target => method == b"OPTIONS",
+                _ if i == target || line[target] == b'*' => false,
+                _ => (0x21..=0x7e).contains(&b) && !matches!(b, b'#' | b'@' | b'\\'),
+            };
+            if !fine {
+                return Err(Why::Target);
+            }
+            continue;
+        };
+        match (b, i - after) {
+            (b' ', _) => return Err(Why::Line),
+            (_, at @ 0..7) if b == b"HTTP/1."[at] => {}
+            (b'0' | b'1', 7) => {}
+            _ => return Err(Why::Version),
+        }
+    }
+    match (end, version) {
+        (None, _) if window.len() > MAX_LINE => Err(Why::TooLong),
+        (Some(_), None) => Err(Why::Line),
+        (Some(_), Some(after)) if line.len() - after < 8 => Err(Why::Version),
+        _ => Ok(()),
+    }
 }
 
 /// Whether `b` is a `tchar` (RFC 9110, 5.6.2).
@@ -257,6 +336,9 @@ fn fields(section: &[u8], mut at: usize) -> Result<Fields<'_>, Why> {
                     return Err(Why::Framing);
                 }
                 fields.length = value.iter().fold(0, |n, &d| n * 10 + u64::from(d - b'0'));
+                if fields.length > MAX_LENGTH {
+                    return Err(Why::Framing);
+                }
             }
             Some(Name::Coding) => {
                 fields.codings += 1;
@@ -624,7 +706,9 @@ impl Forward {
                         }
                         (Some(b'\r'), _) => return Err(Why::Chunk),
                         (_, b'\r') if len > 0 => put(&mut self.held, b"\r"),
-                        (_, d) if d.is_ascii_hexdigit() && len < 16 => put(&mut self.held, &[d]),
+                        (_, d) if d.is_ascii_hexdigit() && len < MAX_SIZE_DIGITS => {
+                            put(&mut self.held, &[d]);
+                        }
                         _ => return Err(Why::Chunk),
                     }
                 }
