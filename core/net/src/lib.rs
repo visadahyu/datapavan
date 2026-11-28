@@ -155,4 +155,45 @@ mod tests {
             assert_eq!(got, one, "ties keep their order");
         }
     }
+
+    /// What the tables compiled into the engine cost to read: the engine's start reads three of them
+    /// (`Engine::start_with`: the resolvers, the networks' owners, the messengers), and the JNI bridge's
+    /// `nativeMessengerClients`, which Kotlin calls at every hand-over of the proxies, on the main thread, reads the
+    /// messengers' again for their client packages (here without its JNI string). The median of 400 reads of each,
+    /// printed (the cold paths' fourth pass, ADR 0053). Run it with `cargo test --locked -p datapavan-net --release
+    /// --lib -- --ignored --nocapture what_the_bundled_tables_cost`.
+    #[test]
+    #[ignore = "a measurement, not a check: run it in a release build"]
+    fn what_the_bundled_tables_cost() {
+        use std::time::{Duration, Instant};
+        let median = |mut each: Vec<Duration>| {
+            each.sort_unstable();
+            each[each.len() / 2].as_secs_f64() * 1e6
+        };
+        let start: Vec<Duration> = (0..400)
+            .map(|_| {
+                let started = Instant::now();
+                std::hint::black_box((
+                    crate::resolvers::Resolvers::bundled(),
+                    crate::owners::Owners::bundled(),
+                    crate::messengers::Messengers::bundled(),
+                ));
+                started.elapsed()
+            })
+            .collect();
+        let clients: Vec<Duration> = (0..400)
+            .map(|_| {
+                let started = Instant::now();
+                let table = crate::messengers::Messengers::bundled();
+                let lines: Vec<String> = table
+                    .clients()
+                    .map(|(family, package)| format!("{} {package}", family.code()))
+                    .collect();
+                std::hint::black_box(lines.join("\n"));
+                started.elapsed()
+            })
+            .collect();
+        println!("the engine start's three tables: {:.2} us", median(start));
+        println!("the messengers' clients: {:.2} us", median(clients));
+    }
 }
