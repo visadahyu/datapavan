@@ -734,7 +734,7 @@ for host in sys.argv[1:]:
 PY
 }
 beneath_row() {
-    local line base flows dest unreachable selection
+    local line base flows dest unreachable selection mark host names refused addresses ours target forwarded_before
     unreachable=$(runner_reach | paste -sd ' ')
     if [ -n "$unreachable" ]; then
         echo "SKIPPED: the network's own proxy's row: this computer cannot reach $unreachable, the runner's outage, not the engine's"
@@ -820,22 +820,37 @@ PY
     echo "ok: on a network that requires its proxy, a fresh app reaches example.com through it: CONNECT $dest with no User-Agent, the engine's route network-proxy"
 
     # The forwarder (F-PLAN.md, section 9): the recorder now refuses a CONNECT to any port but 443, as squid's shipped
-    # configuration does. A fresh fixture's plain request to example.com must reach it in absolute form, with the
-    # fixture's own field names and none added, after its CONNECTs to port 80 were refused, and the engine must count
-    # it forwarded (counter 81, the dump's field 82).
+    # configuration does. A fresh fixture's plain request to example.com must reach it in absolute form, under its Host,
+    # with the fixture's Host and User-Agent and none of the fields a proxy or a forwarder adds (Via, Forwarded,
+    # X-Forwarded-*, Proxy-*), after a CONNECT to example.com's port 80, by one of its addresses or by its name, was
+    # refused, and the engine must count it forwarded (counter 81, the dump's field 82). Only the recorder's lines from
+    # this step are read, so that another app's refused CONNECT to port 80 cannot stand in (the review's m6).
     forwarded() { dump | sed -n 's/^ *counters //p' | head -1 | awk '{ print $82 }'; }
     forwarded_before=$(forwarded)
     [ -n "$forwarded_before" ] || fail "the dump has no counter 81 (a build before the forwarder)"
+    mark=$(wc -l <"$WORK/recorder.tsv")
     echo connect-443 >"$WORK/recorder.mode"
     adb shell am force-stop "$FIXTURE"
     fixture "$FIXTURE" get 204 --es url "http://example.com/fwd"
     echo tunnel >"$WORK/recorder.mode"
-    line=$(awk -F'\t' '$2 == "proxy" && $3 == "GET http://example.com/fwd HTTP/1.1" { print $4 " | " $6 }' "$WORK/recorder.tsv" | tail -1)
-    [ -n "$line" ] || fail "the recorder got no plain request in absolute form: $(cut -f2,3 "$WORK/recorder.tsv" | tail -8 | tr '\n' ';')"
-    grep -qE "$(printf '\t')proxy-refused$(printf '\t')REFUSED [^ ]+:80 403 connect-443" "$WORK/recorder.tsv" ||
-        fail "the recorder refused no CONNECT to port 80 before the forwarded request"
+    tail -n +"$((mark + 1))" "$WORK/recorder.tsv" >"$WORK/recorder-forwarder.tsv"
+    line=$(awk -F'\t' '$2 == "proxy" && $3 == "GET http://example.com/fwd HTTP/1.1" { print $4 "\t" $6 }' "$WORK/recorder-forwarder.tsv" | tail -1)
+    [ -n "$line" ] || fail "the recorder got no plain request in absolute form: $(cut -f2,3 "$WORK/recorder-forwarder.tsv" | tail -8 | tr '\n' ';')"
+    host=${line%%$'\t'*}
+    names=${line#*$'\t'}
+    [ "$host" = example.com ] || fail "the forwarded request reached the recorder under the Host $host, not example.com"
+    [[ ,$names, == *,Host,* && ,$names, == *,User-Agent,* ]] || fail "the forwarded request lost the fixture's Host or User-Agent: $names"
+    ! grep -qiE '(^|,)(via|forwarded|x-forwarded-[^,]*|proxy-[^,]*)(,|$)' <<<"$names" ||
+        fail "the forwarded request carries a field a proxy or a forwarder adds: $names"
+    refused=$(awk -F'\t' '$2 == "proxy-refused" && $3 ~ /^REFUSED [^ ]+:80 403 connect-443$/ { split($3, w, " "); print w[2] }' "$WORK/recorder-forwarder.tsv" | sort -u)
+    addresses=$(dump | sed -n 's/^ *flow //p' | awk -v uid="$APP_UID" '$1 == "tcp" && $4 == uid && $3 ~ /:80$/ { print $3 }' | sort -u)
+    ours=""
+    for target in $refused; do
+        { [ "$target" = example.com:80 ] || grep -qxF "$target" <<<"$addresses"; } && ours=$target
+    done
+    [ -n "$ours" ] || fail "the recorder refused no CONNECT to example.com's port 80 before the forwarded request: refused ${refused:-none}, the fixture's flows to port 80 ${addresses:-none}"
     [ "$(forwarded)" -gt "$forwarded_before" ] || fail "the engine counts no flow forwarded: $(forwarded) after $forwarded_before"
-    echo "ok: behind a proxy that refuses CONNECT to port 80, a fresh app's plain request reaches it in absolute form: host and fields $line"
+    echo "ok: behind a proxy that refuses CONNECT to port 80 (refused $ours), a fresh app's plain request reaches it in absolute form: host $host, fields $names"
 
     adb shell am force-stop "$FIXTURE"
     adb logcat -c
