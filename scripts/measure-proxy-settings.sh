@@ -70,10 +70,14 @@
 # the recorder refusing a CONNECT to any port but 443, as squid's default; plain requests to the public target on
 # ports 80 and 8080, a second one to port 80 that the refusal remembered sends with no CONNECT, a WebView, HTTPS by
 # CONNECT as a control, and a blocked plain-HTTP name with blocking on; the recorder logs each forwarded request's line
-# and field names, and the dump's counters 81 to 85 say what the forwarder did. On Android 17 and later, each part also has
-# a copy of the fixture that targets API 37 (M5) fetch the public target and the direct target. SETTINGS names the
-# settings that passes 1 and 3 go through; MEASURE_NAME, a word, starts the output's names, so that two runs (a build
-# before and one after) can go side by side.
+# and field names, and the dump's counters 81 to 85 say what the forwarder did. That blocked row measures tracker
+# blocking's DNS answer alone: the name is stopped at its lookup, so no flow is opened and the forwarder never sees its
+# Host. A blocked Host on a forwarded flow is the network lab's (netlab.rs, the forwarder's row 9: the tracker gate
+# resets it before the stage passes a byte), and the stage's own re-check is the engine's test
+# beneath::a_blocked_host_the_gate_let_go_unread_is_reset_at_the_stage (the forwarder's review, m7).
+# On Android 17 and later, each part also has a copy of the fixture that targets API 37 (M5) fetch the public target
+# and the direct target. SETTINGS names the settings that passes 1 and 3 go through; MEASURE_NAME, a word, starts the
+# output's names, so that two runs (a build before and one after) can go side by side.
 #
 # Emulators only, named by ANDROID_SERIAL=emulator-N (a phone may be attached beside them): the device owner needs a
 # freshly booted emulator with no account, best a read-only instance. Everything it set is taken away at the end: the
@@ -938,7 +942,7 @@ rows_forwarder() {
     say ""
     say "-- tracker blocking on: a blocked plain-HTTP name"
     say "  $(blocking_switch on)"
-    step "get http://tracker.blocklab.home.arpa/fwd, blocked: no request line at the recorder" fixture_as "$FIXTURE" fresh timed --es url "http://tracker.blocklab.home.arpa/fwd"
+    step "get http://tracker.blocklab.home.arpa/fwd, blocked at its lookup, before any flow: no request line at the recorder" fixture_as "$FIXTURE" fresh timed --es url "http://tracker.blocklab.home.arpa/fwd"
     say "  $(blocking_switch off)"
     step "get http://$PUBLIC/fwd, blocking off" fixture_as "$FIXTURE" fresh timed --es url "http://$PUBLIC/fwd"
     say "  the forwarder's counters: $(forward_counts)"
