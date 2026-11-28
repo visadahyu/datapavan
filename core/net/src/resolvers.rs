@@ -3,14 +3,15 @@
 //! them, past the phone's settings (W3, ADR 0045, decision 11): plain DNS to one of its addresses, or DNS over HTTPS
 //! to one of its host names or addresses.
 //!
-//! The table is compiled into the engine. Rows that do not parse are skipped, never fatal: the table
-//! is data, checked by `scripts/check.sh`.
+//! The table is compiled into the engine, deflated (`build.rs`), and inflated where it is read. Rows that do not parse
+//! are skipped, never fatal: the table is data, checked by `scripts/check.sh`. A table that does not inflate stops the
+//! engine (`crate::bundled`): that is a damaged library, not data.
 
 use std::collections::HashMap;
 use std::net::IpAddr;
 
-/// The table as the build found it.
-const BUNDLED: &str = include_str!("../../../data/resolvers/resolvers.tsv");
+/// The table as the build found it, deflated (`build.rs`).
+const BUNDLED: &[u8] = include_bytes!(concat!(env!("OUT_DIR"), "/resolvers-resolvers.tsv.deflate"));
 
 /// Resolvers by address and by host name, each giving the resolver's id (`google`, `quad9`).
 #[derive(Debug)]
@@ -32,7 +33,7 @@ impl Resolvers {
     /// The table compiled into the engine.
     #[must_use]
     pub fn bundled() -> Self {
-        Self::parse(BUNDLED)
+        Self::parse(&crate::bundled(BUNDLED))
     }
 
     /// Reads a table: `#` comments, then one row per resolver of tab-separated columns id, operator,
@@ -123,6 +124,14 @@ mod tests {
     use super::*;
     use std::net::{Ipv4Addr, Ipv6Addr};
 
+    /// The table's text, as the build found it (`build.rs` deflates it).
+    const TEXT: &str = include_str!("../../../data/resolvers/resolvers.tsv");
+
+    #[test]
+    fn the_deflated_table_inflates_to_the_file() {
+        assert_eq!(crate::bundled(BUNDLED), TEXT);
+    }
+
     #[test]
     fn reads_hosts_and_addresses_and_skips_what_does_not_parse() {
         let table = "# a comment\n\
@@ -161,13 +170,13 @@ mod tests {
 
     #[test]
     fn the_bundled_table_parses_every_row() {
-        let rows = BUNDLED
+        let rows = TEXT
             .lines()
             .filter(|l| !l.starts_with('#') && !l.trim().is_empty())
             .count();
         let resolvers = Resolvers::bundled();
         assert!(rows == 0 || !resolvers.is_empty());
-        for line in BUNDLED
+        for line in TEXT
             .lines()
             .filter(|l| !l.starts_with('#') && !l.trim().is_empty())
         {

@@ -4,13 +4,14 @@
 //! and says whether that network also hosts other companies' servers: then the network is named, not
 //! the service the app used.
 //!
-//! The tables are compiled into the engine. Rows that do not parse are skipped, never fatal: the tables
-//! are data, checked by `scripts/check.sh`.
+//! The tables are compiled into the engine, deflated (`build.rs`), and inflated where they are read. Rows that do not
+//! parse are skipped, never fatal: the tables are data, checked by `scripts/check.sh`. A table that does not inflate
+//! stops the engine (`crate::bundled`): that is a damaged library, not data.
 
 use std::collections::HashMap;
 
-const ENTITIES: &str = include_str!("../../../data/owners/entities.tsv");
-const ASNS: &str = include_str!("../../../data/owners/asns.tsv");
+const ENTITIES: &[u8] = include_bytes!(concat!(env!("OUT_DIR"), "/owners-entities.tsv.deflate"));
+const ASNS: &[u8] = include_bytes!(concat!(env!("OUT_DIR"), "/owners-asns.tsv.deflate"));
 
 /// What the network part knows of a network's owner.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -44,7 +45,7 @@ impl Owners {
     /// The tables compiled into the engine.
     #[must_use]
     pub fn bundled() -> Self {
-        Self::parse(ENTITIES, ASNS)
+        Self::parse(&crate::bundled(ENTITIES), &crate::bundled(ASNS))
     }
 
     /// Reads `entities.tsv` (entity, name, ...) and `asns.tsv` (asn, entity, hosting, ...): `#`
@@ -112,6 +113,16 @@ fn rows_of(table: &str) -> impl Iterator<Item = Vec<&str>> {
 mod tests {
     use super::*;
 
+    /// The tables' text, as the build found it (`build.rs` deflates it).
+    const ENTITIES_TEXT: &str = include_str!("../../../data/owners/entities.tsv");
+    const ASNS_TEXT: &str = include_str!("../../../data/owners/asns.tsv");
+
+    #[test]
+    fn the_deflated_tables_inflate_to_the_files() {
+        assert_eq!(crate::bundled(ENTITIES), ENTITIES_TEXT, "entities.tsv");
+        assert_eq!(crate::bundled(ASNS), ASNS_TEXT, "asns.tsv");
+    }
+
     #[test]
     fn names_the_company_and_whether_it_hosts_others() {
         let entities = "# entity\tname\n\
@@ -138,7 +149,7 @@ mod tests {
 
     #[test]
     fn the_bundled_tables_name_every_listed_network() {
-        let listed = rows_of(ASNS).count();
+        let listed = rows_of(ASNS_TEXT).count();
         assert_eq!(
             Owners::bundled().len(),
             listed,

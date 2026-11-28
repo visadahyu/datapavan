@@ -6,14 +6,18 @@
 //!
 //! The tables are compiled into the engine and kept out of the data pack, as the resolvers are: they are the network
 //! part's alone, and an update of any of them needs an app release (ADR 0052's accepted limits, corrected in the fix
-//! round, S-n4). Rows that do not parse are skipped, never fatal: the tables are data, checked by
-//! `scripts/check.sh`.
+//! round, S-n4). They are deflated (`build.rs`) and inflated where they are read. Rows that do not parse are skipped,
+//! never fatal: the tables are data, checked by `scripts/check.sh`. A table that does not inflate stops the engine
+//! (`crate::bundled`): that is a damaged library, not data.
 
 use std::net::IpAddr;
 
-const CIDR: &str = include_str!("../../../data/messengers/telegram-cidr.txt");
-const CLIENTS: &str = include_str!("../../../data/messengers/clients.tsv");
-const NAMES: &str = include_str!("../../../data/messengers/names.tsv");
+const CIDR: &[u8] = include_bytes!(concat!(
+    env!("OUT_DIR"),
+    "/messengers-telegram-cidr.txt.deflate"
+));
+const CLIENTS: &[u8] = include_bytes!(concat!(env!("OUT_DIR"), "/messengers-clients.tsv.deflate"));
+const NAMES: &[u8] = include_bytes!(concat!(env!("OUT_DIR"), "/messengers-names.tsv.deflate"));
 
 /// A messenger whose proxy is inferred.
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
@@ -93,7 +97,11 @@ impl Messengers {
     /// The tables compiled into the engine.
     #[must_use]
     pub fn bundled() -> Self {
-        Self::parse(CIDR, CLIENTS, NAMES)
+        Self::parse(
+            &crate::bundled(CIDR),
+            &crate::bundled(CLIENTS),
+            &crate::bundled(NAMES),
+        )
     }
 
     /// Reads the three tables: one network in CIDR form a line; then `#` comments and tab-separated rows of
@@ -202,6 +210,24 @@ mod tests {
 
     fn ip(text: &str) -> IpAddr {
         text.parse().unwrap_or(IpAddr::V4(Ipv4Addr::UNSPECIFIED))
+    }
+
+    #[test]
+    fn the_deflated_tables_inflate_to_the_files() {
+        let files = [
+            (
+                CIDR,
+                include_str!("../../../data/messengers/telegram-cidr.txt"),
+            ),
+            (
+                CLIENTS,
+                include_str!("../../../data/messengers/clients.tsv"),
+            ),
+            (NAMES, include_str!("../../../data/messengers/names.tsv")),
+        ];
+        for (blob, text) in files {
+            assert_eq!(crate::bundled(blob), text);
+        }
     }
 
     #[test]

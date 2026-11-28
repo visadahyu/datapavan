@@ -48,6 +48,27 @@ pub use engine::{
 };
 pub use owners::NetworkKind;
 
+mod table_limit;
+
+/// A table compiled into the engine, deflated by `build.rs`: its text, inflated where the engine parses it (the cold
+/// paths' fourth pass, ADR 0053). `build.rs` refused any table that is not UTF-8 or not below `TABLE_LIMIT`
+/// (`table_limit.rs`), and inflated each blob through this same call, so a blob that does not inflate here is a damaged
+/// library, not the one built. Then the engine stops, as ADR 0006 has it for an unknown state (a release build aborts
+/// on a panic, `core/Cargo.toml`): an empty table would run on in silence, and wrongly, no owners turning blocking by
+/// address off, no Telegram ranges taking Telegram's own servers for a proxy, no resolvers leaving an app's own DNS
+/// unnamed.
+#[inline(never)]
+#[must_use]
+pub(crate) fn bundled(deflated: &[u8]) -> String {
+    match miniz_oxide::inflate::decompress_to_vec_with_limit(deflated, table_limit::TABLE_LIMIT)
+        .map(String::from_utf8)
+    {
+        Ok(Ok(text)) => text,
+        // ADR 0006: a crash, not a run in an unknown state.
+        _ => unreachable!("a table compiled into the engine did not inflate"),
+    }
+}
+
 /// A new map's hasher keys: `std`'s `RandomState::new`, out of line. Inlined, it took about 100 bytes of the native
 /// library at each map made, 39 times in the engine's start alone (the cold paths' size pass, ADR 0053). Each map
 /// still gets keys of its own, made in the same order as before. A query ID to an endpoint's resolver takes its
@@ -195,5 +216,26 @@ mod tests {
             .collect();
         println!("the engine start's three tables: {:.2} us", median(start));
         println!("the messengers' clients: {:.2} us", median(clients));
+    }
+
+    /// A table compiled into the engine whose blob ends early stops the engine, never an empty table (the fourth
+    /// pass's audit, M1).
+    #[test]
+    #[should_panic(expected = "did not inflate")]
+    fn a_table_that_does_not_inflate_stops_the_engine() {
+        let text = (0..200u32)
+            .map(|i| format!("row-{i}\t192.0.2.{}\t-\n", i % 250))
+            .collect::<Vec<String>>()
+            .concat();
+        let blob = miniz_oxide::deflate::compress_to_vec(text.as_bytes(), 10);
+        let _ = super::bundled(&blob[..blob.len() / 2]);
+    }
+
+    /// And so does one that inflates to bytes that are not UTF-8.
+    #[test]
+    #[should_panic(expected = "did not inflate")]
+    fn a_table_that_is_not_utf_8_stops_the_engine() {
+        let blob = miniz_oxide::deflate::compress_to_vec(b"row\t\xff\xfe\n", 10);
+        let _ = super::bundled(&blob);
     }
 }
