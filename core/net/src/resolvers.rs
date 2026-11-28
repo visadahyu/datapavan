@@ -99,24 +99,30 @@ impl Resolvers {
 
 /// Gives `key` the id `id`, or the part before a dash that it shares with the id it already has.
 fn share<K: std::hash::Hash + Eq>(map: &mut HashMap<K, String>, key: K, id: &str) {
-    let shared = match map.get(&key) {
-        None => id.to_owned(),
-        Some(old) if old == id => return,
-        Some(old) => {
-            let common: Vec<&str> = old
-                .split('-')
-                .zip(id.split('-'))
-                .take_while(|(a, b)| a == b)
-                .map(|(a, _)| a)
-                .collect();
-            if common.is_empty() {
-                old.clone()
-            } else {
-                common.join("-")
-            }
-        }
+    if let Some(shared) = shared_id(map.get(&key).map(String::as_str), id) {
+        map.insert(key, shared);
+    }
+}
+
+/// The id [`share`] gives a key whose id is `old`, or `None` where the key keeps it: `id` for a key with none; the part
+/// before a dash that `old` and `id` share; nothing new where `old` is `id` or shares no part with it. Out of line and
+/// not generic, so that the map of host names and that of addresses share one copy of it, where each built its own
+/// (the cold paths' fourth pass, ADR 0053).
+#[inline(never)]
+fn shared_id(old: Option<&str>, id: &str) -> Option<String> {
+    let Some(old) = old else {
+        return Some(id.to_owned());
     };
-    map.insert(key, shared);
+    if old == id {
+        return None;
+    }
+    let common: Vec<&str> = old
+        .split('-')
+        .zip(id.split('-'))
+        .take_while(|(a, b)| a == b)
+        .map(|(a, _)| a)
+        .collect();
+    (!common.is_empty()).then(|| common.join("-"))
 }
 
 #[cfg(test)]
@@ -166,6 +172,74 @@ mod tests {
             resolvers.at(IpAddr::V4(Ipv4Addr::new(192, 0, 2, 1))),
             Some("op-b")
         );
+    }
+
+    /// `share` as it was before its body went out of line (the cold paths' fourth pass).
+    fn share_before<K: std::hash::Hash + Eq>(map: &mut HashMap<K, String>, key: K, id: &str) {
+        let shared = match map.get(&key) {
+            None => id.to_owned(),
+            Some(old) if old == id => return,
+            Some(old) => {
+                let common: Vec<&str> = old
+                    .split('-')
+                    .zip(id.split('-'))
+                    .take_while(|(a, b)| a == b)
+                    .map(|(a, _)| a)
+                    .collect();
+                if common.is_empty() {
+                    old.clone()
+                } else {
+                    common.join("-")
+                }
+            }
+        };
+        map.insert(key, shared);
+    }
+
+    /// `share` leaves the map its old body left: every id of one to four dash-separated parts of `a`, `b` and `ab`
+    /// (120) given to a key after every other, in both orders, and every three of the 30 ids of `a` and `b` in turn.
+    #[test]
+    fn a_shared_id_is_the_old_share_s() {
+        let mut ids: Vec<String> = vec![String::new()];
+        let mut all = Vec::new();
+        for _ in 0..4 {
+            ids = ids
+                .iter()
+                .flat_map(|id| {
+                    ["a", "b", "ab"].map(|part| {
+                        if id.is_empty() {
+                            part.to_owned()
+                        } else {
+                            format!("{id}-{part}")
+                        }
+                    })
+                })
+                .collect();
+            all.extend(ids.iter().cloned());
+        }
+        assert_eq!(all.len(), 120);
+        let check = |given: &[&String]| {
+            let (mut before, mut after) = (HashMap::new(), HashMap::new());
+            for id in given {
+                share_before(&mut before, 7u8, id);
+                share(&mut after, 7u8, id);
+                assert_eq!(after, before, "{given:?}");
+            }
+        };
+        for x in &all {
+            for y in &all {
+                check(&[x, y]);
+            }
+        }
+        let short: Vec<&String> = all.iter().filter(|id| !id.contains("ab")).collect();
+        assert_eq!(short.len(), 30);
+        for x in &short {
+            for y in &short {
+                for z in &short {
+                    check(&[x, y, z]);
+                }
+            }
+        }
     }
 
     #[test]
