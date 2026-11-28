@@ -267,6 +267,9 @@ class ProxyFactsTest {
         assertEquals(listOf("67", "68", "69", "70"), release.subList(67, 71))
         assertEquals(List(15) { "-" }, release.subList(71, 86))
         assertEquals("60", release[60])
+        // And nothing else: every other counter, the engine's flow counters 0 to 60 included, stays a number (the
+        // forwarder's review, m8).
+        assertEquals(List(86) { if (it in 61..66 || it in 71..85) "-" else "$it" }, release)
         assertEquals(counters.map { it.toString() }, ProxyFacts.dumpedCounters(counters, debuggable = true))
     }
 }
