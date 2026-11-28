@@ -541,7 +541,9 @@ chaining is, and must follow the same switch.
       3.2.2), as Android's HTTP clients send it to a proxy without the VPN. The refusal is kept per proxy and port (at
       most 16 ports), so that later flows to that port go to the forwarder at once; such a flow whose first bytes are
       not a request it can forward goes by `CONNECT` after all. Where the proxy carries `CONNECT` to the port, plain
-      HTTP is tunnelled as before, and the proxy sees only the destination.
+      HTTP is tunnelled as before: the proxy is asked only for the destination and parses nothing, though it carries
+      the request in clear and can read it, as any network on the way can (PRIVACY.md: the proxy sees what apps send
+      unencrypted).
     - **The rewrite** (`core/net/src/forward.rs`, pure): only the request target changes (`GET /p HTTP/1.1` becomes
       `GET http://<Host>/p HTTP/1.1`, the `Host` value copied; `OPTIONS *` becomes `OPTIONS http://<Host>`, RFC 9112,
       3.2.4; an HTTP/1.0 request with no `Host` takes the destination's address), and a `Transfer-Encoding` read as
@@ -552,10 +554,13 @@ chaining is, and must follow the same switch.
       none, and a proxy that does not could read one as the next request), field names compared exactly. Refused:
       `Upgrade` (a WebSocket goes by `CONNECT`, RFC 6455, 4.1), `Proxy-Authorization` (the app's credential is never
       the network's proxy's), and a `Connection` field that names `Host`, `Content-Length` or `Transfer-Encoding`.
-      `Expect` goes on: squid 6.13 and tinyproxy 1.11.2 each refused early (`403`, `417`, `500`) an `Expect` request
-      whose body held a whole request, and neither read that request (the audit's m6). Every request on a kept-alive
-      connection is framed and rewritten, and must name the first one's `Host`; the proxy's answers and its close pass
-      through unread (tinyproxy answers one request per connection).
+      `Expect` goes on: neither squid 6.13 nor tinyproxy 1.11.2 read a request out of an `Expect` request whose body
+      held a whole one (the audit's m6). squid refused each early (`403` to port 81, outside its
+      `Safe_ports`; `417` for an expectation it does not know); tinyproxy ignores `Expect`, forwarding the request
+      whole with its body as a body (`204` for `Expect: x-lab`) or failing to reach the origin (`500`, port 81 having
+      no listener in the lab), and closes after one answer. Every request on a kept-alive connection is framed and
+      rewritten, and must name the first one's `Host`; the proxy's answers and its close pass through unread (tinyproxy
+      answers one request per connection).
     - **The name** (the audit's M3): the `Host` must be a name Datapavan's own resolvers gave the flow's address, and
       the flow is then named by it; tracker blocking's verdict is read for it again, and a blocked `Host` is reset and
       recorded blocked; an excluded `Host` goes directly where the direct way had not failed and the user did not
@@ -568,25 +573,33 @@ chaining is, and must follow the same switch.
       proxy only. Every buffer that holds the app's bytes is `Zeroizing` and grows only by replacement (m3).
     - **The record:** no format change: route 3 in the log's version 8, the flow under its first `Host`, never a path
       or a query (an end-to-end row of the network lab checks the log, the kept flows and the live view's snapshot).
-      Five debug-only counters follow the 81 (forwarded, by `CONNECT` after all, reset, a first byte later than
-      250 ms, sent at once by a refusal kept), written as `-` in a release's dump.
+      Five debug-only counters, 81 to 85 (forwarded, by `CONNECT` after all, reset, a first byte later than 250 ms,
+      sent at once by a refusal kept), written as `-` in a release's dump.
     - **Limits:** a server-first protocol on a port whose refusal is kept waits for a request that never comes and is
       reset at the flow's connection time, though `CONNECT` there might have worked for another name than the one the
       proxy refused; through both lab proxies `OPTIONS *` reaches the origin as `OPTIONS /`; a `Host` port with leading
       zeros (`:080`) is refused, though both proxies read it as 80; a WebSocket over `ws://` behind such a proxy fails,
-      as without the VPN.
-    - **Checked** by 131 shared vectors (`core/net/testdata/forward-requests.tsv`, read by forward.rs's tests whole,
+      as without the VPN; through tinyproxy, requests pipelined after the first are dropped with the connection, as
+      without the VPN, and clients retry them.
+    - **Checked** by 124 shared vectors (`core/net/testdata/forward-requests.tsv`, read by forward.rs's tests whole,
       cut at every byte and byte by byte, and by the proxy lab, which holds what squid and tinyproxy sent the origin
       for each to two measured columns), a fuzz target compared with httparse, 25 hand mutants each killed, the
       network lab behind a proxy that behaves as squid's default and one that tunnels every port (95 rows: late
-      writers, two names on one address, a 60 KiB head, a WebSocket after a kept-alive request), the proxy lab (squid
-      6.13 and tinyproxy 1.11.2 as Debian ships them, 139 rows), and the emulator's `proxies` shard, whose row of
-      decision 11 now ends with a plain request behind a proxy that refuses `CONNECT` but to 443.
+      writers, two names on one address, a 60 KiB head, a WebSocket after a kept-alive request, a blocked `Host`
+      reset before the stage passes a byte), the proxy lab (squid 6.13 and tinyproxy 1.11.2 as Debian ships them, 144
+      rows, which the `proxies` shard runs before its emulator rows, so that a changed pin, a changed proxy or a vector
+      row added without measuring fails CI), and the emulator's `proxies` shard, whose row of decision 11 now includes
+      a plain request behind a proxy that refuses `CONNECT` but to 443 (under its `Host`, with the app's `Host` and
+      `User-Agent` and no field a proxy adds, after a refused `CONNECT` to that site's port 80).
     - **Measured** on the emulator (Android 15, `scripts/measure-proxy-settings.sh` pass 11, the recorder refusing
-      `CONNECT` but to 443): `http://example.com/fwd` answered in 407 ms after the `CONNECT` by address and by name
-      were refused, the request reaching the proxy in absolute form with the app's own fields alone
-      (`User-Agent,Host,Connection,Accept-Encoding`); the next request to port 80 in 203 ms with no `CONNECT`; port
-      8080 likewise; a WebView's page; HTTPS by `CONNECT` as before; no first byte later than 250 ms.
+      `CONNECT` but to 443): the recorder, as the proxy, answered `http://example.com/fwd` in 407 ms after the
+      `CONNECT` by address and by name were refused, the request reaching it in absolute form with the app's own
+      fields alone (`User-Agent,Host,Connection,Accept-Encoding`); the next request to port 80 in 203 ms with no
+      `CONNECT`; port 8080 likewise; a WebView's page; HTTPS by `CONNECT` as before; no first byte later than 250 ms.
+      Its blocked plain-HTTP name is stopped at its lookup, before any flow, so tracker blocking's DNS answer comes
+      first there and the forwarder never sees that `Host`. A blocked `Host` on a forwarded flow is held by the network
+      lab's row above (the tracker gate resets it before the stage passes a byte), and the stage's own re-check by
+      `beneath::a_blocked_host_the_gate_let_go_unread_is_reset_at_the_stage`, not by the emulator.
     - **Size:** against `main` at `47bc14d6`, both built with the size passes' `ndkbuild3.sh` (the `/c` remap, then
       `llvm-strip --strip-unneeded`), the forwarder's tip `31cef934` takes 26,960 bytes more on x86_64 (2,067,656 to
       2,094,616), 24,592 on arm64-v8a (1,854,832 to 1,879,424) and 17,576 on armeabi-v7a (1,368,760 to 1,386,336), where
