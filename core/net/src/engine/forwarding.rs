@@ -6,11 +6,23 @@
 //! by address and then by the flow's own name, S2's steps) is the flow rescued: its SYN is answered once a connection
 //! of the stage's own reached the proxy ([`beneath::reach`], so that a proxy gone hands the flow back to S2's tail at
 //! the SYN, as M6 of S2's audit built it), and its first head is awaited with no cut but the flow's own
-//! `Limits::connect_timeout` (the audit's M2: `HttpURLConnection`, Chromium and `WebView` write late). The refusal is
-//! remembered per proxy and port ([`Beneath::refuses`]), so that the next flows there come here at once, with no
-//! refused round trip; such a flow's first bytes that are no forwardable head go by S2's `CONNECT` after all, so that a
-//! refusal learned from another flow's name never costs this one its tunnel. Only a flow S2 may name to the proxy is
-//! rescued ([`beneath::may_name`]): an app Android named, no circumvention tool, its route direct.
+//! `Limits::connect_timeout` (the audit's M2: `HttpURLConnection`, Chromium and `WebView` write late). Only a flow S2
+//! may name to the proxy is rescued ([`beneath::may_name`]): an app Android named, no circumvention tool, its route
+//! direct. A forwarded head teaches the order as an opened `CONNECT` does (proxy first once
+//! `Limits::beneath_failures` servers failed directly), and the flow keeps a probe it holds to its end (the review's
+//! m1).
+//!
+//! **The refusal remembered** per proxy and port ([`Beneath::refuses`]; the review's major 1, as the coordinator
+//! decided it within the maintainer's "the refusal remembered per proxy and port"): the port's policy, never one
+//! site's or one app's. A port is learned only once the proxy refused two distinct names there at both of S2's steps
+//! (by address, then by the flow's own name), each for a flow whose first head was then forwarded, within
+//! [`beneath::REMEMBERED`] of each other; a flow with no name of its own, or whose first bytes are no forwardable head,
+//! teaches nothing, so that port 443 (TLS) is never learned. The flows the forwarder may carry then come here at once,
+//! with no refused round trip, for [`beneath::REMEMBERED`] from the last confirmation (a new such refusal); past it the
+//! next flows go by `CONNECT` again, so that a port is tried at most that often. A `CONNECT` to the port that opens,
+//! for any flow, forgets it. A flow sent here by the memory whose first bytes are no forwardable head goes by S2's
+//! `CONNECT` after all, its first request on the stage's own connection to the proxy, so that the memory never costs
+//! a flow its tunnel. At most 16 ports are kept, the one confirmed longest ago giving way.
 //!
 //! **A stage behind the relay** (the audit's M4, option a). The relay takes as its upstream one end of a loopback TCP
 //! pair; this task holds the other end and the connection to the proxy. The relay's poll, `accept`'s task and the
@@ -23,10 +35,14 @@
 //! it, and tracker blocking does not refuse it for the app (the gate's own verdict, read again here for a head whose
 //! gate let it go unread once its hold ran out). Then the flow is named by that `Host` (M3), the head goes to the
 //! proxy rewritten, and every later request is framed and rewritten ([`forward::Forward`]); the proxy's answers are
-//! passed through unread, its close included (tinyproxy answers one request per connection, measured).
+//! passed through unread, its close included (tinyproxy answers one request per connection, measured), and its reset
+//! only after the bytes the stage already took reached the relay, as the relay drains before its own (the review's
+//! m4). A `407` to a forwarded request reaches the app so, unread, and sets no password fact: a proxy that asks a
+//! password for requests and not for `CONNECT` is rare (the review's note 4).
 //!
 //! **What is not forwarded:** on a rescued flow, a reset, its outcome the direct way's where that failed, else
-//! `Refused` (no other way could carry it); on a flow sent here by a refusal remembered, S2's `CONNECT`, and a reset only
+//! `Refused` (no other way could carry it), and the same outcome, with no reset, for a flow its app closed before its
+//! head (the review's m5); on a flow sent here by a refusal remembered, S2's `CONNECT`, and a reset only
 //! if that is refused too; the same for a first request whose trailer came with its head; a later head the framer
 //! refuses, or a trailer once the head went, a reset after the requests before it. An excluded `Host`
 //! goes directly where the direct way had not failed and the user did not choose the proxy, as Android goes for an
@@ -70,7 +86,19 @@ pub(super) struct Rescue {
     pub(super) failed: Option<io::ErrorKind>,
     /// Whether it came by a refusal remembered: what is no forwardable head may still go by `CONNECT`.
     pub(super) remembered: bool,
+    /// The key of the flow's own name, where the proxy refused it after its address ([`beneath::Steps`]): what a
+    /// forwarded head teaches its port ([`Beneath::forwarded`]); `None` for a flow with no name of its own, or sent here
+    /// by a refusal remembered.
+    pub(super) named: Option<u64>,
+    /// Whether the direct way failed first: a forwarded head then teaches the order as an opened `CONNECT` does (the
+    /// review's m1).
+    pub(super) direct: bool,
+    /// The probe the flow holds, kept to its end and given back then (the review's m1).
+    pub(super) probe: Option<beneath::Probe>,
 }
+
+/// What [`rescue`] gives where the proxy cannot be reached now: the error, and the flow's probe, back to S2's tail.
+type Unreached = (io::Error, Option<beneath::Probe>);
 
 /// The rescued flow's upstream for the relay, its proxy reached first; the stage spawned behind it. An error where the
 /// proxy cannot be reached now: S2's tail goes on. Boxed and out of line, as the proxy's other ways.
@@ -79,12 +107,19 @@ pub(super) struct Rescue {
 pub(super) fn rescue(
     shared: &Arc<Shared>,
     rescue: Rescue,
-) -> Pin<Box<dyn Future<Output = io::Result<TcpStream>> + Send + '_>> {
+) -> Pin<Box<dyn Future<Output = Result<TcpStream, Unreached>> + Send + '_>> {
     Box::pin(async move {
-        let proxy = beneath::reach(shared, &rescue.beneath, rescue.began)
-            .await
-            .map_err(beneath::Failure::error)?;
-        let (relayed, staged) = pair().await?;
+        let reached = async {
+            let proxy = beneath::reach(shared, &rescue.beneath, rescue.began)
+                .await
+                .map_err(beneath::Failure::error)?;
+            Ok::<_, io::Error>((proxy, pair().await?))
+        }
+        .await;
+        let (proxy, (relayed, staged)) = match reached {
+            Ok(reached) => reached,
+            Err(error) => return Err((error, rescue.probe)),
+        };
         // One of the engine's boxed tasks (ADR 0053), though it carries bytes: only a rescued flow's, already copied
         // once more over loopback, where one indirect call per poll is nothing beside it (the forwarder's size pass).
         super::spawn_task(stage(Arc::clone(shared), staged, proxy, Box::new(rescue)));
@@ -134,10 +169,14 @@ async fn stage(shared: Arc<Shared>, app: TcpStream, proxy: TcpStream, rescue: Bo
         // Never more than the head's bound and one byte held (the review's note 3).
         let room = chunk.len().min(forward::MAX_HEAD + 1 - held.len());
         let n = match tokio::time::timeout_at(until, app.read(&mut chunk[..room])).await {
-            // The app closed first: nothing of a head unfinished goes on; the proxy's connection is closed.
-            Ok(Ok(0)) => return,
+            // The app closed first: nothing of a head unfinished goes on; the proxy's connection is closed, and the
+            // flow recorded as no way carried it (the review's m5).
+            Ok(Ok(0)) => return unopened(&shared, &rescue),
             Ok(Ok(n)) => n,
-            Ok(Err(_)) => return reset(&[&app, &proxy]),
+            Ok(Err(_)) => {
+                unopened(&shared, &rescue);
+                return reset(&[&app, &proxy]);
+            }
             Err(_) => break Err(Why::TooLong),
         };
         if held.is_empty() && answered.elapsed() > LATE {
@@ -163,8 +202,7 @@ async fn stage(shared: Arc<Shared>, app: TcpStream, proxy: TcpStream, rescue: Bo
         }
         Way::Reset => return reset(&[&app, &proxy]),
         way => {
-            drop(proxy);
-            let Some(other) = other_way(&shared, &app, &rescue, way).await else {
+            let Some(other) = other_way(&shared, &app, &rescue, way, proxy).await else {
                 return;
             };
             (other, held, None, Ok(()))
@@ -244,22 +282,29 @@ fn way(
         shared.forwarded_name(id, name);
     }
     Counters::add(&shared.counters.beneath.forwarded, 1);
+    rescue
+        .beneath
+        .forwarded(rescue, shared.clock.since_boot(), &shared.limits);
     Way::Forward(framer, fed)
 }
 
 /// The connection a flow whose head is not forwarded goes by, its first bytes still to write; `None` once it is
 /// refused ([`refuse`]).
-/// - [`Way::Connect`]: by S2's `CONNECT` where it came by a refusal remembered, and so may still open.
+/// - [`Way::Connect`]: by S2's `CONNECT` where it came by a refusal remembered, and so may still open, its first
+///   request on `proxy`, the stage's own connection (the review's major 1); a `CONNECT` opened forgets the port.
 /// - [`Way::Directly`]: directly, with the flow's time left, where the direct way had not failed and the user did
-///   not choose the proxy, as Android goes for an excluded host (the audit's m16), the flow recorded direct.
+///   not choose the proxy, as Android goes for an excluded host (the audit's m16), the flow recorded direct. Its
+///   success teaches the order nothing: S2 never learns from an excluded destination (the review's note 2).
 async fn other_way(
     shared: &Arc<Shared>,
     app: &TcpStream,
     rescue: &Rescue,
     way: Way,
+    proxy: TcpStream,
 ) -> Option<TcpStream> {
     let (from, destination) = rescue.ends;
     let id = if let Way::Directly(id) = way {
+        drop(proxy);
         if rescue.failed.is_none() && !rescue.beneath.always {
             let left = shared
                 .limits
@@ -268,7 +313,6 @@ async fn other_way(
             if let Ok(Ok(server)) =
                 tokio::time::timeout(left, connect_tcp(shared, rescue.target)).await
             {
-                rescue.beneath.direct_opened();
                 if let Some(id) = id {
                     shared.settle_relayed(id, None, Some(Via::Direct));
                 }
@@ -277,6 +321,10 @@ async fn other_way(
         }
         id
     } else {
+        let mut steps = beneath::Steps {
+            reached: Some(proxy),
+            refused_name: None,
+        };
         if rescue.remembered
             && let Ok(tunnel) = beneath::through(
                 shared,
@@ -284,6 +332,7 @@ async fn other_way(
                 Some(rescue.uid),
                 destination,
                 rescue.began,
+                &mut steps,
             )
             .await
         {
@@ -296,17 +345,33 @@ async fn other_way(
     None
 }
 
-/// A flow no way can carry: reset, its outcome the direct way's where that failed (M6 of S2's audit), else `Refused`,
-/// set without ending it (m14).
-fn refuse(shared: &Shared, app: &TcpStream, rescue: &Rescue, id: Option<u64>) {
-    let outcome = match rescue.failed {
+/// What a rescued flow that no way carried is recorded as: the direct way's outcome where that failed (M6 of S2's
+/// audit), else `Refused`, where it timed out or was not tried (proxy first, or the user's choice).
+fn outcome_of(failed: Option<io::ErrorKind>) -> Outcome {
+    match failed {
         Some(io::ErrorKind::ConnectionRefused) | None => Outcome::Refused,
         Some(kind) if is_unreachable(&io::Error::from(kind)) => Outcome::Unreachable,
         Some(_) => Outcome::Failed,
-    };
-    if let Some(id) = id {
-        shared.settle_relayed(id, Some(outcome), None);
     }
+}
+
+/// The flow `id`, recorded as no way carried it ([`outcome_of`]), set without ending it (m14).
+fn settle(shared: &Shared, rescue: &Rescue, id: Option<u64>) {
+    if let Some(id) = id {
+        shared.settle_relayed(id, Some(outcome_of(rescue.failed)), None);
+    }
+}
+
+/// The flow `rescue` names, its app gone before its head: recorded as no way carried it, with no reset for a close
+/// (the review's m5).
+fn unopened(shared: &Shared, rescue: &Rescue) {
+    let (from, destination) = rescue.ends;
+    settle(shared, rescue, shared.tcp_flow_of(from, destination));
+}
+
+/// A flow no way can carry: reset, recorded as such.
+fn refuse(shared: &Shared, app: &TcpStream, rescue: &Rescue, id: Option<u64>) {
+    settle(shared, rescue, id);
     Counters::add(&shared.counters.beneath.forward_reset, 1);
     reset(&[app]);
 }
@@ -341,6 +406,10 @@ async fn pump(
         }
     };
     if failed {
+        // The bytes each side was already given reach it first, as the relay waits for them before its own reset
+        // (the review's m4): a reset never cuts the end of an answer the stage already took from the proxy.
+        super::tcp::drain(&app).await;
+        super::tcp::drain(&other).await;
         reset(&[&app, &other]);
     }
 }
@@ -381,4 +450,27 @@ async fn carry(
     }
     let _ = to.shutdown().await;
     true
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    /// A rescued flow no way carried is recorded by the direct way's failure, and `Refused` where the direct way ran out
+    /// or was not tried, proxy first or the user's choice (the review's m6, the lab's chance kill made a test).
+    #[test]
+    fn a_flow_no_way_carried_is_recorded_by_its_direct_failure_else_refused() {
+        for (failed, outcome) in [
+            (None, Outcome::Refused),
+            (Some(io::ErrorKind::ConnectionRefused), Outcome::Refused),
+            (
+                Some(io::ErrorKind::NetworkUnreachable),
+                Outcome::Unreachable,
+            ),
+            (Some(io::ErrorKind::HostUnreachable), Outcome::Unreachable),
+            (Some(io::ErrorKind::PermissionDenied), Outcome::Failed),
+        ] {
+            assert_eq!(outcome_of(failed), outcome, "{failed:?}");
+        }
+    }
 }

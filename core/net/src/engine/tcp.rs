@@ -1125,7 +1125,7 @@ const DRAIN: Duration = Duration::from_secs(2);
 
 /// Waits until `stream` holds no unsent bytes, or its peer is gone, or [`DRAIN`] passes. With
 /// `TCP_NOTSENT_LOWAT` at 1, the kernel reports the socket writable only once nothing waits to be sent.
-async fn drain(stream: &TcpStream) {
+pub(super) async fn drain(stream: &TcpStream) {
     if socket2::SockRef::from(stream)
         .set_tcp_notsent_lowat(1)
         .is_err()
@@ -1438,7 +1438,17 @@ mod tests {
             port,
         };
         let pending: Pending = Arc::new(Mutex::new(crate::map()));
-        open(held, waiting, tun, Arc::clone(shared), nat, pending).await;
+        // Kept, as the listener's accept keeps it, so that the upstream lives on while the flow is read: a rescued
+        // flow's stage records a flow whose app went before its head as no way carried it (the review's m5).
+        open(
+            held,
+            waiting,
+            tun,
+            Arc::clone(shared),
+            nat,
+            Arc::clone(&pending),
+        )
+        .await;
         let mut answer = vec![0u8; 2_048];
         let n = tokio::time::timeout(Duration::from_secs(2), tunnel.recv(&mut answer)).await??;
         answer.truncate(n);
@@ -1446,6 +1456,7 @@ mod tests {
             .back()
             .cloned()
             .unwrap_or_else(|| unreachable!("a flow kept"));
+        drop(pending);
         Ok((flow, answer))
     }
 

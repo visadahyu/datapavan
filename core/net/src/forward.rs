@@ -155,7 +155,7 @@ fn section_end(bytes: &[u8], from: usize) -> Result<Option<usize>, Why> {
 
 /// Where a request's head that starts `bytes` ends, past its blank line, read on from `from`: `None` while it has
 /// not; refused at once where the start cannot be a request line (1 to 20 upper-case letters and a space, the gate's
-/// own test), at the request line's first byte that no request line could hold ([`line_so_far`]), or where a bare CR
+/// own test), at the request line's first byte that no request line could hold (`line_so_far`), or where a bare CR
 /// or LF came.
 ///
 /// # Errors

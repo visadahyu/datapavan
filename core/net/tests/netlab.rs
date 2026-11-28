@@ -6357,10 +6357,9 @@ async fn reset_after(to: SocketAddr, request: &[u8]) -> Outcome {
 /// The forwarder's network lab, rows 5 to 8 and the audit's m12, the first heads it does not carry: `Content-Length`
 /// with `Transfer-Encoding`, a `Host` no answer gave the address (a server the proxy knows by it waits), a first
 /// request's trailer come with its head (hardening 1b: as a head the forwarder may not carry), a `Host` port
-/// that is not the flow's, the app's own absolute form, and `Upgrade`. Each flow is opened and reset; the first was
-/// rescued after its two `CONNECT`s, each later one sent to the stage by the refusal remembered and tried by `CONNECT`
-/// after its head, which the proxy refused: the proxy got only `CONNECT`s, by address and by the bound name, and no
-/// server was reached. Then the same framing and a WebSocket handshake in a later head, on connections whose first
+/// that is not the flow's, the app's own absolute form, and `Upgrade`. Each flow is opened and reset, rescued after
+/// its two `CONNECT`s: none forwarded a head, so that none taught the port (the review's major 1), and the proxy got
+/// only `CONNECT`s, by address and by the bound name, and no server was reached. Then the same framing and a WebSocket handshake in a later head, on connections whose first
 /// request was forwarded and answered: reset, the origin holding only the first requests.
 #[test]
 #[ignore = "needs an unprivileged network namespace; scripts/check.sh rust runs it"]
@@ -6409,7 +6408,7 @@ fn first_heads_the_forwarder_does_not_carry_go_by_connect_and_later_ones_reset()
                     counters[REMEMBERED],
                     counters[FORWARD_RESET]
                 ),
-                (0, 5, 6)
+                (0, 0, 6)
             );
 
             let first = b"GET /1 HTTP/1.1\r\nHost: example.test\r\n\r\n";
@@ -6888,8 +6887,9 @@ fn an_excluded_host_is_never_forwarded() -> Outcome {
 }
 
 /// F-PLAN's mid-head row: a head the app cut by closing its side, `GET` and half its `Host`, is never written: the
-/// stage's connection reached the proxy and closed with not one byte, and the app saw its connection closed; in the
-/// same pass a whole head is forwarded.
+/// stage's connection reached the proxy and closed with not one byte, the app saw its connection closed, and the flow
+/// is recorded as no way carried it, `Refused` as its direct try was (the review's m5), never opened through the proxy;
+/// in the same pass a whole head is forwarded.
 #[test]
 #[ignore = "needs an unprivileged network namespace; scripts/check.sh rust runs it"]
 fn a_head_cut_by_the_apps_close_reaches_no_proxy() -> Outcome {
@@ -6911,6 +6911,14 @@ fn a_head_cut_by_the_apps_close_reaches_no_proxy() -> Outcome {
                 "the stage's connection, closed with no byte"
             );
             assert_eq!(forwarded(&proxy), Vec::<Vec<String>>::new());
+            let cut = flow_to(&engine, plain.address, |f| {
+                f.outcome != datapavan_net::Outcome::Opened
+            })
+            .await?;
+            assert_eq!(
+                (cut.outcome, cut.via),
+                (datapavan_net::Outcome::Refused, Via::NetworkProxy)
+            );
             let mut whole = app_connect(plain.address).await?;
             let request = b"GET /p HTTP/1.1\r\nHost: example.test\r\n\r\n";
             assert_eq!(

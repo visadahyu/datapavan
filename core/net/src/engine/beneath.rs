@@ -65,6 +65,14 @@
 //! network directly"), nor for a flow whose app Android did not name, whatever any log switch says. Once a name opened
 //! where its address was refused, names come first through that proxy while the setting holds.
 //!
+//! **The forwarder** ([`forwarding`], the maintainer's decision of 2026-11-27): a flow S2 may name ([`may_name`])
+//! whose `CONNECT` the proxy refused with a `4xx` other than `407` is rescued, its plain HTTP forwarded. The refusal is
+//! remembered per proxy and port as the port's policy, not a site's ([`Beneath::refuses`]): learned only from two
+//! distinct names refused at both steps above for flows whose first head was then forwarded, within [`REMEMBERED`] of
+//! each other (never from a flow with no name of its own, nor from TLS, so that port 443 is never learned); held
+//! [`REMEMBERED`] from its last confirmation, after which the port goes by `CONNECT` again; forgotten once a `CONNECT`
+//! to the port opens for any flow; at most [`REFUSED_PORTS`] ports.
+//!
 //! **The answer** is read with `peek` and then exactly what was peeked, the head's end looked for in what was read so
 //! far with the peeked bytes after it (m1), so that nothing after the blank line is taken: a server that speaks first
 //! reaches the app whole through the relay. The head is never kept or logged.
@@ -102,9 +110,16 @@ pub const PREFERRED: Duration = Duration::from_secs(600);
 /// The most addresses of a proxy kept, as `NetworkProxy.MAX_ADDRESSES`.
 pub const MAX_ADDRESSES: usize = 2;
 
-/// The most ports whose `CONNECT` a proxy refused are remembered for it ([`Beneath::refuses`]): a proxy that refuses
-/// every port fills no more than this, and a flow to a port past it is still rescued after its own refusal.
+/// The most ports whose `CONNECT` a proxy refused are remembered for it ([`Beneath::refuses`]), those learned and those
+/// refused for one name so far: past it, the one confirmed longest ago gives way (the review's note 1), and a flow to a
+/// port not kept is still rescued after its own refusal.
 const REFUSED_PORTS: usize = 16;
+
+/// How long a port learned as refused ([`Beneath::refuses`]) sends the flows the forwarder may carry to it at once,
+/// from its last confirmation: past it the port's flows go by `CONNECT` again, so that it is tried at most this often,
+/// and one refused as the port was learned confirms it (the coordinator's rule within the maintainer's "the refusal
+/// remembered per proxy and port", 2026-11-28). Two names refused there must come within it too.
+pub const REMEMBERED: Duration = Duration::from_secs(600);
 
 /// How often a flow the switch's hold keeps waiting looks at the setting again: the most its SYN waits once the setting
 /// came.
@@ -241,26 +256,30 @@ impl Beneath {
         self.proxies[lock(&self.order).next % self.proxies.len()]
     }
 
-    /// Whether the proxy refused a `CONNECT` to `port` while this setting holds: a flow the forwarder may carry goes to
-    /// it at once ([`forwarding`]; the maintainer's decision of 2026-11-27).
-    pub(super) fn refuses(&self, port: u16) -> bool {
-        let order = lock(&self.order);
-        order.refused[..order.refused_count].contains(&port)
+    /// Whether the proxy's refusal of `port` is remembered at `now`, in time since the phone started: a flow the
+    /// forwarder may carry goes to it at once ([`forwarding`]; the module's comment).
+    pub(super) fn refuses(&self, port: u16, now: Duration) -> bool {
+        lock(&self.order).refuses(port, now)
     }
 
-    /// The proxy refused a `CONNECT` to `port`: remembered, up to [`REFUSED_PORTS`] ports.
-    fn refused(&self, port: u16) {
+    /// A rescued flow's first head went to the proxy at `now` ([`forwarding`]): its port refused once more, where the
+    /// proxy refused the flow's own name there ([`Rescue::named`]), and the server failed directly and then opened
+    /// through the proxy, as a `CONNECT` opened teaches the order ([`Order::proxy_opened`]; the review's m1), its probe
+    /// kept by the flow until it ends.
+    pub(super) fn forwarded(&self, rescue: &Rescue, now: Duration, limits: &Limits) {
+        let (_, destination) = rescue.ends;
         let mut order = lock(&self.order);
-        let count = order.refused_count;
-        if !order.refused[..count].contains(&port) && count < REFUSED_PORTS {
-            order.refused[count] = port;
-            order.refused_count = count + 1;
+        if let Some(name) = rescue.named {
+            order.refused_by_name(destination.port(), name, now);
         }
-    }
-
-    /// A direct connection opened after all: the direct way comes first again ([`Order::direct_opened`]).
-    pub(super) fn direct_opened(&self) {
-        lock(&self.order).direct_opened();
+        if rescue.direct {
+            order.proxy_opened(
+                destination.ip().to_canonical(),
+                now,
+                limits,
+                rescue.probe.is_some(),
+            );
+        }
     }
 
     /// The proxy at `proxy` could not be reached: its other address is tried next, if it has one.
@@ -307,12 +326,32 @@ struct Order {
     names_first: bool,
     /// Which of the proxy's addresses is tried now, turned when one cannot be reached.
     next: usize,
-    /// The ports whose `CONNECT` the proxy refused (a `4xx` other than `407`), at most [`REFUSED_PORTS`]: later flows
-    /// the forwarder may carry go to it at once ([`Beneath::refuses`]); the first `refused_count`. A list of its own
-    /// size, so that `Order` holds no second `Vec` to clone and drop (the forwarder's size pass).
-    refused: [u16; REFUSED_PORTS],
+    /// The ports whose `CONNECT` the proxy refused by the flow's address and then by its own name, for a flow whose
+    /// first head was then forwarded (the module's comment), at most [`REFUSED_PORTS`]: the first `refused_count`. A
+    /// list of its own size, so that `Order` holds no second `Vec` to clone and drop (the forwarder's size pass).
+    refused: [Refusal; REFUSED_PORTS],
     /// How many of `refused` are ports.
     refused_count: usize,
+}
+
+/// A port of [`Order::refused`].
+#[derive(Clone, Copy, Debug, Default)]
+struct Refusal {
+    port: u16,
+    /// The first name refused there, as [`name_key`] gives it: another name refused there teaches the port.
+    name: u64,
+    /// Whether the port is learned: two names were refused there.
+    learned: bool,
+    /// When its first name was refused, or it was learned, or last confirmed, in time since the phone started.
+    at: Duration,
+}
+
+/// A key of the name `name`, so that two names are told apart without keeping either (FNV-1a): two names of one key
+/// count as one, which can only keep a port from being learned.
+fn name_key(name: &str) -> u64 {
+    name.bytes().fold(0xcbf2_9ce4_8422_2325, |key, b| {
+        (key ^ u64::from(b)).wrapping_mul(0x0100_0000_01b3)
+    })
 }
 
 /// How a flow begins.
@@ -348,6 +387,64 @@ impl Order {
         self.failed.clear();
     }
 
+    /// Where `port` is in [`Order::refused`].
+    fn refusal(&self, port: u16) -> Option<usize> {
+        self.refused[..self.refused_count]
+            .iter()
+            .position(|refusal| refusal.port == port)
+    }
+
+    /// Whether `port` is learned and confirmed within [`REMEMBERED`] of `now`.
+    fn refuses(&self, port: u16, now: Duration) -> bool {
+        self.refusal(port).is_some_and(|i| {
+            let refusal = self.refused[i];
+            refusal.learned && now.saturating_sub(refusal.at) < REMEMBERED
+        })
+    }
+
+    /// The proxy refused a `CONNECT` to `port` by address and then by the name whose key is `name`, for a flow whose
+    /// head was then forwarded, at `now`: a port learned is confirmed, a port refused for another name within
+    /// [`REMEMBERED`] is learned, any other refusal is that port's first. A clock that cannot be read teaches nothing.
+    fn refused_by_name(&mut self, port: u16, name: u64, now: Duration) {
+        if now == Duration::MAX {
+            return;
+        }
+        if let Some(i) = self.refusal(port) {
+            let refusal = &mut self.refused[i];
+            let fresh = now.saturating_sub(refusal.at) < REMEMBERED;
+            if refusal.learned || (fresh && refusal.name != name) {
+                refusal.learned = true;
+                refusal.at = now;
+            } else if !fresh {
+                refusal.name = name;
+                refusal.at = now;
+            }
+            return;
+        }
+        let i = if self.refused_count < REFUSED_PORTS {
+            self.refused_count += 1;
+            self.refused_count - 1
+        } else {
+            (0..REFUSED_PORTS)
+                .min_by_key(|&i| self.refused[i].at)
+                .unwrap_or(0)
+        };
+        self.refused[i] = Refusal {
+            port,
+            name,
+            learned: false,
+            at: now,
+        };
+    }
+
+    /// A `CONNECT` to `port` opened, for any flow: the port is forgotten, learned or not.
+    fn connect_opened(&mut self, port: u16) {
+        if let Some(i) = self.refusal(port) {
+            self.refused_count -= 1;
+            self.refused[i] = self.refused[self.refused_count];
+        }
+    }
+
     /// The server at `server` failed directly, and the proxy then opened its tunnel, at `now`; `probe` when the flow
     /// held the probe. A clock that cannot be read (the longest time there is) teaches nothing.
     fn proxy_opened(&mut self, server: IpAddr, now: Duration, limits: &Limits, probe: bool) {
@@ -379,8 +476,9 @@ impl Order {
     }
 }
 
-/// The probe a flow holds, given back when the flow ends, however it ends (audit m8).
-struct Probe(Arc<Beneath>);
+/// The probe a flow holds, given back when the flow ends, however it ends (audit m8): a rescued flow's stage holds it
+/// to its end (the review's m1).
+pub(super) struct Probe(Arc<Beneath>);
 
 impl Drop for Probe {
     fn drop(&mut self) {
@@ -571,21 +669,23 @@ fn onward_steps(
             target,
             began,
             direct,
-            probe,
+            mut probe,
         } = onward;
         if beneath.holds() {
             return held(shared, &beneath, target, uid, (app, destination)).await;
         }
         let limits = shared.limits;
-        // The forwarder (the maintainer's decision of 2026-11-27): a flow it may carry, to a port whose `CONNECT` the
-        // proxy refused before, goes to it at once; one whose `CONNECT` it refuses now is rescued.
+        // The forwarder (the maintainer's decision of 2026-11-27): a flow it may carry, to a port whose refusal is
+        // remembered (the module's comment), goes to it at once; one whose `CONNECT` it refuses now is rescued.
         let forwards = may_name(shared, uid);
-        let remembered = forwards.is_some() && beneath.refuses(destination.port());
+        let remembered =
+            forwards.is_some() && beneath.refuses(destination.port(), shared.clock.since_boot());
+        let mut steps = Steps::default();
         let mut failure = if remembered {
             Counters::add(&shared.counters.beneath.remembered, 1);
             Failure::Answered(Answer::Refused)
         } else {
-            match through(shared, &beneath, uid, destination, began).await {
+            match through(shared, &beneath, uid, destination, began, &mut steps).await {
                 Ok(stream) => {
                     if direct.is_some() {
                         lock(&beneath.order).proxy_opened(
@@ -603,7 +703,6 @@ fn onward_steps(
         if let Some(uid) = forwards
             && matches!(failure, Failure::Answered(Answer::Refused))
         {
-            beneath.refused(destination.port());
             let rescue = Rescue {
                 beneath: Arc::clone(&beneath),
                 target,
@@ -614,12 +713,19 @@ fn onward_steps(
                     .as_ref()
                     .and_then(|(error, out)| (!out).then(|| error.kind())),
                 remembered,
+                named: steps.refused_name,
+                direct: direct.is_some(),
+                probe: probe.take(),
             };
             match forwarding::rescue(shared, rescue).await {
                 Ok(stream) => return (Ok(stream), true),
-                // Not reached: S2's tail, as for a proxy that gave no answer where none came this time.
-                Err(error) if remembered => failure = Failure::Silent(error),
-                Err(_) => {}
+                Err((error, back)) => {
+                    probe = back;
+                    // Not reached: S2's tail, as for a proxy that gave no answer where none came this time.
+                    if remembered {
+                        failure = Failure::Silent(error);
+                    }
+                }
             }
         }
         if beneath.always {
@@ -686,31 +792,63 @@ async fn held(
     }
 }
 
+/// What [`through`] starts from and learns: the stage's connection to the proxy, for its first request (the review's
+/// major 1), and the key of the flow's own name where the proxy refused it ([`Order::refused_by_name`]).
+#[derive(Default)]
+pub(super) struct Steps {
+    pub(super) reached: Option<TcpStream>,
+    pub(super) refused_name: Option<u64>,
+}
+
 /// Through the proxy to `destination`: by address, then by the flow's own name where the proxy refused the address,
-/// or by name first once names came first.
+/// or by name first once names came first; the first request on `steps`' connection where it holds one.
 pub(super) async fn through(
     shared: &Arc<Shared>,
     beneath: &Beneath,
     uid: Option<u32>,
     destination: SocketAddr,
     began: Instant,
+    steps: &mut Steps,
 ) -> Result<TcpStream, Failure> {
     let names_first = lock(&beneath.order).names_first;
     if names_first && let Some(named) = own_name(shared, uid, destination) {
-        Counters::add(&shared.counters.beneath.named, 1);
-        return ask(shared, beneath, &named, began).await;
+        return by_name(shared, beneath, &named, began, steps).await;
     }
-    match ask(shared, beneath, &Target::Address(destination), began).await {
+    let reached = steps.reached.take();
+    match ask(
+        shared,
+        beneath,
+        &Target::Address(destination),
+        began,
+        reached,
+    )
+    .await
+    {
         Err(Failure::Answered(Answer::Refused)) if !names_first => {}
         other => return other,
     }
     let Some(named) = own_name(shared, uid, destination) else {
         return Err(Failure::Answered(Answer::Refused));
     };
-    Counters::add(&shared.counters.beneath.named, 1);
-    let opened = ask(shared, beneath, &named, began).await;
+    let opened = by_name(shared, beneath, &named, began, steps).await;
     if opened.is_ok() {
         lock(&beneath.order).names_first = true;
+    }
+    opened
+}
+
+/// [`through`]'s request by the flow's own name `named`, its key kept in `steps` where the proxy refused it.
+async fn by_name(
+    shared: &Arc<Shared>,
+    beneath: &Beneath,
+    named: &Target,
+    began: Instant,
+    steps: &mut Steps,
+) -> Result<TcpStream, Failure> {
+    Counters::add(&shared.counters.beneath.named, 1);
+    let opened = ask(shared, beneath, named, began, steps.reached.take()).await;
+    if let (Err(Failure::Answered(Answer::Refused)), Target::Name(name, _)) = (&opened, named) {
+        steps.refused_name = Some(name_key(name));
     }
     opened
 }
@@ -746,17 +884,22 @@ fn own_name(shared: &Shared, uid: Option<u32>, destination: SocketAddr) -> Optio
     Target::name(&name, destination.port())
 }
 
-/// One `CONNECT` for `target` to the proxy, on a socket of its own bound to the network: the stream just past the
-/// answer's head on a `2xx`.
+/// One `CONNECT` for `target` to the proxy, on `reached` where the stage opened it, else on a socket of its own bound
+/// to the network: the stream just past the answer's head on a `2xx`, the port of `target` then forgotten as refused
+/// ([`Order::connect_opened`]).
 async fn ask(
     shared: &Arc<Shared>,
     beneath: &Beneath,
     target: &Target,
     began: Instant,
+    reached: Option<TcpStream>,
 ) -> Result<TcpStream, Failure> {
     let limits = shared.limits;
     let left = || limits.connect_timeout.saturating_sub(began.elapsed());
-    let mut stream = reach(shared, beneath, began).await?;
+    let mut stream = match reached {
+        Some(stream) => stream,
+        None => reach(shared, beneath, began).await?,
+    };
     Counters::add(&shared.counters.beneath.tries, 1);
     let status = match tokio::time::timeout(
         limits.beneath_answer.min(left()),
@@ -780,6 +923,11 @@ async fn ask(
     };
     Counters::add(counter, 1);
     if answer == Answer::Opened {
+        let port = match target {
+            Target::Address(address) => address.port(),
+            Target::Name(_, port) => *port,
+        };
+        lock(&beneath.order).connect_opened(port);
         Ok(stream)
     } else {
         Err(Failure::Answered(answer))
@@ -916,7 +1064,15 @@ pub(super) mod tests {
         /// `403` to every `CONNECT`, as squid's default to port 80; each request in absolute form answered `200` with
         /// its request line as the body, the connection kept (the forwarder).
         Forward,
+        /// [`Reply::Forward`], but a `CONNECT` to this name opened, and an echo of what its tunnel carries.
+        ForwardOpening(&'static str),
+        /// [`Reply::Forward`], but the first request answered with [`LARGE`] bytes of body, then, once they left the
+        /// proxy's socket, a reset (the review's m4).
+        ForwardLarge,
     }
+
+    /// The body of [`Reply::ForwardLarge`]'s answer.
+    const LARGE: usize = 1 << 20;
 
     /// What the test proxy keeps: each request's head, and what the tunnel carried up past it.
     type Kept = (Arc<Mutex<Vec<String>>>, Arc<Mutex<Vec<u8>>>);
@@ -927,6 +1083,8 @@ pub(super) mod tests {
         heads: Arc<Mutex<Vec<String>>>,
         /// What the tunnel carried up, past each head.
         after: Arc<Mutex<Vec<u8>>>,
+        /// How many connections it accepted.
+        accepted: Arc<AtomicUsize>,
     }
 
     impl Proxy {
@@ -936,13 +1094,25 @@ pub(super) mod tests {
             let heads = Arc::new(Mutex::new(Vec::new()));
             let after = Arc::new(Mutex::new(Vec::new()));
             let kept = (Arc::clone(&heads), Arc::clone(&after));
+            let accepted = Arc::new(AtomicUsize::new(0));
+            let counted = Arc::clone(&accepted);
             tokio::spawn(async move {
                 while let Ok((stream, _)) = listener.accept().await {
+                    counted.fetch_add(1, Ordering::SeqCst);
                     let kept = (Arc::clone(&kept.0), Arc::clone(&kept.1));
                     tokio::spawn(serve(stream, reply, kept));
                 }
             });
-            Ok(Self { at, heads, after })
+            Ok(Self {
+                at,
+                heads,
+                after,
+                accepted,
+            })
+        }
+
+        pub(in crate::engine) fn accepted(&self) -> usize {
+            self.accepted.load(Ordering::SeqCst)
         }
 
         pub(in crate::engine) fn heads(&self) -> Vec<String> {
@@ -964,8 +1134,11 @@ pub(super) mod tests {
                 _ => return,
             }
         }
-        if matches!(reply, Reply::Forward) {
-            return forward_mode(stream, head, &heads).await;
+        if matches!(
+            reply,
+            Reply::Forward | Reply::ForwardOpening(_) | Reply::ForwardLarge
+        ) {
+            return forward_mode(stream, head, &heads, reply).await;
         }
         let head = String::from_utf8_lossy(&head).into_owned();
         let by_name = head.starts_with("CONNECT ")
@@ -985,7 +1158,9 @@ pub(super) mod tests {
                 tokio::time::sleep(Duration::from_secs(30)).await;
                 return;
             }
-            Reply::Closed | Reply::Forward => return,
+            Reply::Closed | Reply::Forward | Reply::ForwardOpening(_) | Reply::ForwardLarge => {
+                return;
+            }
         };
         if stream.write_all(bytes).await.is_err()
             || !bytes.starts_with(b"HTTP/1.1 200") && !bytes.starts_with(b"HTTP/1.0 200")
@@ -1002,13 +1177,33 @@ pub(super) mod tests {
         }
     }
 
-    /// [`Reply::Forward`]'s proxy, its first head read: each head recorded, a `CONNECT` refused, a request answered
-    /// with its line, its body read by its length.
-    async fn forward_mode(mut stream: TcpStream, mut head: Vec<u8>, heads: &Mutex<Vec<String>>) {
+    /// [`Reply::Forward`]'s proxy and its kin, its first head read: each head recorded, a `CONNECT` refused (or opened,
+    /// to [`Reply::ForwardOpening`]'s name), a request answered with its line, its body read by its length.
+    async fn forward_mode(
+        mut stream: TcpStream,
+        mut head: Vec<u8>,
+        heads: &Mutex<Vec<String>>,
+        reply: Reply,
+    ) {
         loop {
             let text = String::from_utf8_lossy(&head).into_owned();
             lock(heads).push(text.clone());
-            if text.starts_with("CONNECT ") {
+            if let Some(authority) = text.strip_prefix("CONNECT ") {
+                if let Reply::ForwardOpening(name) = reply
+                    && authority
+                        .strip_prefix(name)
+                        .is_some_and(|r| r.starts_with(':'))
+                {
+                    let mut buffer = [0u8; 1_024];
+                    let mut open = stream.write_all(OPENED).await.is_ok();
+                    while open {
+                        open = match stream.read(&mut buffer).await {
+                            Ok(n) if n > 0 => stream.write_all(&buffer[..n]).await.is_ok(),
+                            _ => false,
+                        };
+                    }
+                    return;
+                }
                 let _ = stream
                     .write_all(b"HTTP/1.1 403 Forbidden\r\nContent-Length: 0\r\n\r\n")
                     .await;
@@ -1022,6 +1217,16 @@ pub(super) mod tests {
             let mut body = vec![0u8; length];
             let line = text.lines().next().unwrap_or_default().to_owned();
             if stream.read_exact(&mut body).await.is_err() {
+                return;
+            }
+            if matches!(reply, Reply::ForwardLarge) {
+                let mut answer =
+                    format!("HTTP/1.1 200 OK\r\nContent-Length: {LARGE}\r\n\r\n").into_bytes();
+                answer.resize(answer.len() + LARGE, b'x');
+                if stream.write_all(&answer).await.is_ok() {
+                    super::super::tcp::drain(&stream).await;
+                    let _ = stream.set_zero_linger();
+                }
                 return;
             }
             let answer = format!(
@@ -2515,10 +2720,11 @@ pub(super) mod tests {
 
     /// The forwarder (the maintainer's decision of 2026-11-27): a proxy that refuses `CONNECT` to port 80, as squid's
     /// default, has the flow rescued, its head forwarded in absolute form with every other byte as the app wrote it,
-    /// two requests on one connection both rewritten; the refusal is remembered, so the next flow sends no `CONNECT`;
-    /// a head written late is forwarded, never cut (M2), and counted.
+    /// two requests on one connection both rewritten; one name refused teaches the port nothing, a second one does
+    /// (the review's major 1), so that the next flow sends no `CONNECT`; a head written late is forwarded, never cut
+    /// (M2), and counted.
     #[tokio::test]
-    async fn a_refused_port_is_rescued_its_requests_forwarded_and_the_refusal_remembered()
+    async fn a_refused_port_is_rescued_its_requests_forwarded_and_two_names_refused_remembered()
     -> io::Result<()> {
         let proxy = Proxy::new(Reply::Forward).await?;
         let (shared, _) = engine(
@@ -2553,7 +2759,15 @@ pub(super) mod tests {
             heads[2],
             "GET http://example.test/p?q HTTP/1.1\r\nHost: example.test\r\nX-A: 1\r\n\r\n"
         );
-        assert!(held(&shared).refuses(80));
+        assert!(!held(&shared).refuses(80, shared.clock.since_boot()));
+        looked_up(&shared, UID, "other.example", [198, 51, 100, 8]);
+        let other = at("198.51.100.8:80");
+        assert_eq!(
+            forward_one(&shared, UID, other, "other.example").await?,
+            "GET http://other.example/x HTTP/1.1"
+        );
+        assert_eq!(proxy.heads().len(), 7, "{:?}", proxy.heads());
+        assert!(held(&shared).refuses(80, shared.clock.since_boot()));
         let (stream, _) = open(&shared, UID, destination, destination).await;
         let mut late = stream?;
         tokio::time::sleep(Duration::from_millis(400)).await;
@@ -2561,9 +2775,34 @@ pub(super) mod tests {
             asked(&mut late, one).await?,
             "GET http://example.test/p?q HTTP/1.1"
         );
-        assert_eq!(proxy.heads().len(), 5, "no CONNECT for a remembered port");
-        assert_eq!(forwarder(&shared), [2, 0, 0, 1, 1]);
+        assert_eq!(proxy.heads().len(), 8, "no CONNECT for a remembered port");
+        assert_eq!(forwarder(&shared), [3, 0, 0, 1, 1]);
         Ok(())
+    }
+
+    /// A flow of `uid` to `destination` through the proxy, its request to `host` written: the answer's body, the
+    /// request line as the forwarding proxy got it.
+    async fn forward_one(
+        shared: &Arc<Shared>,
+        uid: u32,
+        destination: SocketAddr,
+        host: &str,
+    ) -> io::Result<String> {
+        let (stream, through) = open(shared, uid, destination, destination).await;
+        let mut stream = stream?;
+        assert!(through);
+        let request = format!("GET /x HTTP/1.1\r\nHost: {host}\r\n\r\n");
+        asked(&mut stream, request.as_bytes()).await
+    }
+
+    /// The heads `proxy` got that are `CONNECT`s to `authority`.
+    fn connects(proxy: &Proxy, authority: &str) -> usize {
+        let line = format!("CONNECT {authority} ");
+        proxy
+            .heads()
+            .iter()
+            .filter(|h| h.starts_with(&line))
+            .count()
     }
 
     /// The gate's verdict read again at the stage (the audit's m2): a head that reaches the stage unread by the tracker
@@ -2642,6 +2881,23 @@ pub(super) mod tests {
             "reset"
         );
         assert_eq!(proxy.heads().len(), 2, "only the two CONNECTs");
+        // M3's binding reads only the answers of Datapavan's own resolvers: a name the app's own resolver alone gave
+        // the address is never forwarded (the review's m6).
+        shared.learn(
+            &super::super::tests::dns_answer("own.example", [198, 51, 100, 10]),
+            Some(UID),
+        );
+        let own_only = at("198.51.100.10:80");
+        let (stream, _) = open(&shared, UID, own_only, own_only).await;
+        let mut stream = stream?;
+        let own = b"GET / HTTP/1.1\r\nHost: own.example\r\n\r\n";
+        assert!(
+            asked(&mut stream, own)
+                .await
+                .map_or(true, |body| body.is_empty()),
+            "reset"
+        );
+        assert_eq!(proxy.heads().len(), 3, "only the CONNECTs");
         let (stream, _) = open(&shared, UID, destination, destination).await;
         let mut stream = stream?;
         let one = b"GET /1 HTTP/1.1\r\nHost: example.test\r\n\r\n";
@@ -2657,8 +2913,8 @@ pub(super) mod tests {
             "reset"
         );
         tokio::time::sleep(Duration::from_millis(100)).await;
-        assert_eq!(proxy.heads().len(), 3, "{:?}", proxy.heads());
-        assert_eq!(forwarder(&shared), [1, 0, 2, 0, 1]);
+        assert_eq!(proxy.heads().len(), 6, "{:?}", proxy.heads());
+        assert_eq!(forwarder(&shared), [1, 0, 3, 0, 0]);
         Ok(())
     }
 
@@ -2694,6 +2950,445 @@ pub(super) mod tests {
             "{:?}",
             proxy.heads()
         );
+        Ok(())
+    }
+
+    /// The memory's rule, by itself (the review's major 1, as the coordinator decided it): one name refused teaches a
+    /// port nothing, the same name again nothing; another name within [`REMEMBERED`] learns it; it holds
+    /// [`REMEMBERED`] from its last confirmation, and once past it one refusal confirms it; a `CONNECT` opened forgets
+    /// it, learned or not; an unreadable clock teaches nothing; past [`REFUSED_PORTS`] the oldest gives way.
+    #[test]
+    fn the_refusal_memory_learns_a_port_from_two_names_and_forgets_it() {
+        let s = Duration::from_secs;
+        let mut order = Order::default();
+        let (one, two) = (name_key("a.example"), name_key("b.example"));
+        assert_ne!(one, two);
+        order.refused_by_name(80, one, s(100));
+        assert!(!order.refuses(80, s(100)), "one name");
+        order.refused_by_name(80, one, s(101));
+        assert!(!order.refuses(80, s(101)), "the same name again");
+        order.refused_by_name(80, two, s(102));
+        assert!(order.refuses(80, s(102)), "two names");
+        assert!(!order.refuses(8080, s(102)), "its port alone");
+        assert!(order.refuses(80, s(101) + REMEMBERED));
+        assert!(!order.refuses(80, s(102) + REMEMBERED), "expired");
+        order.refused_by_name(80, one, s(102) + REMEMBERED);
+        assert!(
+            order.refuses(80, s(102) + REMEMBERED),
+            "confirmed by one refusal"
+        );
+        order.connect_opened(80);
+        assert!(!order.refuses(80, s(102) + REMEMBERED), "forgotten");
+        order.refused_by_name(80, one, s(1_000));
+        assert!(!order.refuses(80, s(1_000)), "forgotten: two names again");
+        // Two names further apart than REMEMBERED: the first counts no more.
+        order.refused_by_name(80, two, s(1_000) + REMEMBERED);
+        assert!(!order.refuses(80, s(1_000) + REMEMBERED));
+        order.refused_by_name(81, one, Duration::MAX);
+        order.refused_by_name(81, two, Duration::MAX);
+        assert_eq!(order.refusal(81), None, "an unreadable clock");
+        // Sixteen ports held, a seventeenth takes the place of the one confirmed longest ago.
+        let mut order = Order::default();
+        for port in 1..=17u16 {
+            let at = s(u64::from(port));
+            order.refused_by_name(port, one, at);
+            order.refused_by_name(port, two, at);
+            assert!(order.refuses(port, at), "port {port}");
+        }
+        assert_eq!(order.refused_count, REFUSED_PORTS);
+        assert!(!order.refuses(1, s(17)), "the oldest gave way");
+        assert!((2..=17).all(|port| order.refuses(port, s(17))));
+        order.connect_opened(5);
+        assert_eq!(order.refused_count, REFUSED_PORTS - 1);
+        assert!(!order.refuses(5, s(17)) && order.refuses(17, s(17)));
+    }
+
+    /// The review's major 1 at the engine: one name refused at both of S2's steps and forwarded teaches its port
+    /// nothing, so that another app's flow there goes by `CONNECT` by address and by name as on a fresh engine; a
+    /// second name does, and then a flow of either app goes to the forwarder at once.
+    #[tokio::test]
+    async fn one_refused_name_teaches_nothing_and_a_second_teaches_the_port() -> io::Result<()> {
+        let proxy = Proxy::new(Reply::Forward).await?;
+        let (shared, _) = engine(
+            Lab {
+                refuses: true,
+                ..Lab::default()
+            },
+            proxy.at,
+        );
+        let now = || shared.clock.since_boot();
+        looked_up(&shared, UID, "a.example", [198, 51, 100, 7]);
+        looked_up(&shared, OTHER, "b.example", [198, 51, 100, 8]);
+        let (a, b) = (at("198.51.100.7:80"), at("198.51.100.8:80"));
+        assert_eq!(
+            forward_one(&shared, UID, a, "a.example").await?,
+            "GET http://a.example/x HTTP/1.1"
+        );
+        assert!(!held(&shared).refuses(80, now()), "one name");
+        assert_eq!(
+            forward_one(&shared, OTHER, b, "b.example").await?,
+            "GET http://b.example/x HTTP/1.1"
+        );
+        assert_eq!(
+            (
+                connects(&proxy, "198.51.100.8:80"),
+                connects(&proxy, "b.example:80")
+            ),
+            (1, 1),
+            "the other app's flow by S2's two steps"
+        );
+        assert!(held(&shared).refuses(80, now()), "two names");
+        let before = proxy.heads().len();
+        assert_eq!(
+            forward_one(&shared, UID, a, "a.example").await?,
+            "GET http://a.example/x HTTP/1.1"
+        );
+        assert_eq!(proxy.heads().len(), before + 1, "no CONNECT");
+        assert_eq!(forwarder(&shared)[4], 1);
+        Ok(())
+    }
+
+    /// A site's refusal teaches its port nothing: flows to one name refused, its policy's `403`, however many, leave
+    /// the port to `CONNECT`; and a flow with no name of its own (a literal address) teaches nothing either, so that
+    /// on a proxy that carries names (the review's own case) a later flow by a name goes by its tunnel, and no request
+    /// line in absolute form reaches the proxy for it.
+    #[tokio::test]
+    async fn a_sites_refusal_or_a_literals_teaches_its_port_nothing() -> io::Result<()> {
+        let proxy = Proxy::new(Reply::Forward).await?;
+        let (shared, _) = engine(
+            Lab {
+                refuses: true,
+                ..Lab::default()
+            },
+            proxy.at,
+        );
+        looked_up(&shared, UID, "a.example", [198, 51, 100, 7]);
+        let a = at("198.51.100.7:80");
+        for _ in 0..3 {
+            forward_one(&shared, UID, a, "a.example").await?;
+        }
+        assert_eq!(connects(&proxy, "a.example:80"), 3);
+        assert!(!held(&shared).refuses(80, shared.clock.since_boot()));
+
+        let proxy = Proxy::new(Reply::NamesOnly).await?;
+        let (shared, _) = engine(
+            Lab {
+                refuses: true,
+                ..Lab::default()
+            },
+            proxy.at,
+        );
+        for last in [6, 7] {
+            let literal = SocketAddr::from(([198, 51, 100, last], 80));
+            let host = literal.ip().to_string();
+            let (stream, through) = open(&shared, UID, literal, literal).await;
+            assert!(through);
+            let request = format!("GET /secret HTTP/1.1\r\nHost: {host}\r\n\r\n");
+            let _ = asked(&mut stream?, request.as_bytes()).await;
+        }
+        assert!(!held(&shared).refuses(80, shared.clock.since_boot()));
+        looked_up(&shared, OTHER, "b.example", [198, 51, 100, 8]);
+        let b = at("198.51.100.8:80");
+        let (stream, through) = open(&shared, OTHER, b, b).await;
+        assert!(through);
+        echoes(&mut stream?).await?;
+        assert_eq!(connects(&proxy, "b.example:80"), 1);
+        assert!(
+            !proxy.heads().iter().any(|h| h.contains("http://b.example")),
+            "{:?}",
+            proxy.heads()
+        );
+        Ok(())
+    }
+
+    /// A flow sent at once by the memory whose first bytes are no forwardable head goes by `CONNECT` after all, its
+    /// first request on the connection the stage already opened (one connection to the proxy more, the by-name step's,
+    /// not two), and the `CONNECT` that opens forgets the port.
+    #[tokio::test]
+    async fn a_connect_opened_on_the_stages_own_connection_forgets_the_port() -> io::Result<()> {
+        let proxy = Proxy::new(Reply::ForwardOpening("b.example")).await?;
+        let (shared, _) = engine(
+            Lab {
+                refuses: true,
+                ..Lab::default()
+            },
+            proxy.at,
+        );
+        let now = || shared.clock.since_boot();
+        for (name, last) in [("a.example", 7), ("c.example", 9)] {
+            looked_up(&shared, UID, name, [198, 51, 100, last]);
+            let to = SocketAddr::from(([198, 51, 100, last], 80));
+            forward_one(&shared, UID, to, name).await?;
+        }
+        assert!(held(&shared).refuses(80, now()));
+        looked_up(&shared, UID, "b.example", [198, 51, 100, 8]);
+        let b = at("198.51.100.8:80");
+        let before = proxy.accepted();
+        let (stream, through) = open(&shared, UID, b, b).await;
+        assert!(through);
+        let mut stream = stream?;
+        stream.write_all(b"\x16\x03\x01\x00\x05hello").await?;
+        let mut back = [0u8; 10];
+        tokio::time::timeout(Duration::from_secs(2), stream.read_exact(&mut back)).await??;
+        assert_eq!(&back, b"\x16\x03\x01\x00\x05hello");
+        assert_eq!(
+            proxy.accepted(),
+            before + 2,
+            "the stage's own and the by-name step's"
+        );
+        assert_eq!(
+            (
+                connects(&proxy, "198.51.100.8:80"),
+                connects(&proxy, "b.example:80")
+            ),
+            (1, 1)
+        );
+        assert!(!held(&shared).refuses(80, now()), "forgotten");
+        assert_eq!(forwarder(&shared)[1], 1, "by CONNECT after all");
+        Ok(())
+    }
+
+    /// A port learned is remembered [`REMEMBERED`] from its last confirmation: past it the next flow goes by `CONNECT`
+    /// again, and one refusal of it as it was learned confirms it for as long again.
+    #[tokio::test]
+    async fn a_remembered_port_expires_and_one_refusal_confirms_it() -> io::Result<()> {
+        let proxy = Proxy::new(Reply::Forward).await?;
+        let (shared, _, clock) = engine_clocked(
+            Lab {
+                refuses: true,
+                ..Lab::default()
+            },
+            proxy.at,
+        );
+        for (name, last) in [("a.example", 7), ("c.example", 9)] {
+            looked_up(&shared, UID, name, [198, 51, 100, last]);
+            let to = SocketAddr::from(([198, 51, 100, last], 80));
+            forward_one(&shared, UID, to, name).await?;
+        }
+        assert!(held(&shared).refuses(80, clock.since_boot()));
+        clock.pass(u64::try_from(REMEMBERED.as_millis()).unwrap_or(u64::MAX));
+        assert!(!held(&shared).refuses(80, clock.since_boot()));
+        let a = at("198.51.100.7:80");
+        forward_one(&shared, UID, a, "a.example").await?;
+        assert_eq!(connects(&proxy, "a.example:80"), 2, "by CONNECT again");
+        assert!(held(&shared).refuses(80, clock.since_boot()), "confirmed");
+        let before = proxy.heads().len();
+        forward_one(&shared, UID, a, "a.example").await?;
+        assert_eq!(proxy.heads().len(), before + 1, "at once again");
+        Ok(())
+    }
+
+    /// Port 443 is never learned in practice: a TLS flow's first bytes are no forwardable head, so that however many
+    /// names the proxy refuses there by policy, every HTTPS flow keeps S2's way.
+    #[tokio::test]
+    async fn port_443_is_never_learned() -> io::Result<()> {
+        let proxy = Proxy::new(Reply::Forward).await?;
+        let (shared, _) = engine(
+            Lab {
+                refuses: true,
+                ..Lab::default()
+            },
+            proxy.at,
+        );
+        for (name, last) in [("a.example", 7), ("b.example", 8), ("c.example", 9)] {
+            looked_up(&shared, UID, name, [198, 51, 100, last]);
+            let to = SocketAddr::from(([198, 51, 100, last], 443));
+            let (stream, through) = open(&shared, UID, to, to).await;
+            assert!(through);
+            assert!(rescued(stream).await);
+        }
+        assert_eq!(connects(&proxy, "b.example:443"), 1);
+        assert!(!held(&shared).refuses(443, shared.clock.since_boot()));
+        assert_eq!(forwarder(&shared), [0, 0, 3, 0, 0]);
+        Ok(())
+    }
+
+    /// The review's m1: a forwarded flow teaches the order as an opened `CONNECT` does, so that on a network that
+    /// drops direct traffic behind a proxy that carries no `CONNECT` three servers forwarded put the proxy first; and
+    /// the probe after [`PREFERRED`], failed directly and forwarded, keeps the proxy first, its probe held until the
+    /// flow ends.
+    #[tokio::test]
+    async fn forwarded_flows_put_the_proxy_first_and_keep_their_probe() -> io::Result<()> {
+        let proxy = Proxy::new(Reply::Forward).await?;
+        let (shared, lab, clock) = engine_clocked(
+            Lab {
+                refuses: true,
+                ..Lab::default()
+            },
+            proxy.at,
+        );
+        for (name, last) in [("a.example", 7), ("b.example", 8), ("c.example", 9)] {
+            looked_up(&shared, UID, name, [198, 51, 100, last]);
+            let to = SocketAddr::from(([198, 51, 100, last], 80));
+            forward_one(&shared, UID, to, name).await?;
+            assert_eq!(
+                held(&shared).state(clock.since_boot()).proxy_first,
+                last == 9
+            );
+        }
+        clock.pass(u64::try_from(PREFERRED.as_millis()).unwrap_or(u64::MAX));
+        assert!(!held(&shared).state(clock.since_boot()).proxy_first);
+        let before = lab.protects.load(Ordering::SeqCst);
+        let a = at("198.51.100.7:80");
+        let (stream, through) = open(&shared, UID, a, a).await;
+        assert!(through);
+        let mut stream = stream?;
+        assert_eq!(lab.protects.load(Ordering::SeqCst), before + 1, "the probe");
+        assert!(lock(&held(&shared).order).probing, "held by the stage");
+        asked(&mut stream, b"GET /x HTTP/1.1\r\nHost: a.example\r\n\r\n").await?;
+        assert!(held(&shared).state(clock.since_boot()).proxy_first);
+        drop(stream);
+        let until = Instant::now() + Duration::from_secs(2);
+        while lock(&held(&shared).order).probing && Instant::now() < until {
+            tokio::time::sleep(Duration::from_millis(10)).await;
+        }
+        assert!(!lock(&held(&shared).order).probing, "given back at its end");
+        assert!(held(&shared).state(clock.since_boot()).proxy_first);
+        Ok(())
+    }
+
+    /// The review's m6: a later head the framer refuses within the app's first write (another `Host` pipelined behind
+    /// the first) resets the flow at once, before any answer, and never reaches the proxy.
+    #[tokio::test]
+    async fn another_host_pipelined_in_the_first_write_resets_at_once() -> io::Result<()> {
+        let proxy = Proxy::new(Reply::Forward).await?;
+        let (shared, _) = engine(
+            Lab {
+                refuses: true,
+                ..Lab::default()
+            },
+            proxy.at,
+        );
+        looked_up(&shared, UID, "example.test", [198, 51, 100, 9]);
+        let destination = at("198.51.100.9:80");
+        let (stream, _) = open(&shared, UID, destination, destination).await;
+        let mut stream = stream?;
+        stream
+            .write_all(
+                b"GET /1 HTTP/1.1\r\nHost: example.test\r\n\r\nGET /2 HTTP/1.1\r\nHost: other.example\r\n\r\n",
+            )
+            .await?;
+        let mut read = Vec::new();
+        let ended =
+            tokio::time::timeout(Duration::from_secs(2), stream.read_to_end(&mut read)).await;
+        assert!(matches!(ended, Ok(Err(_) | Ok(0))), "{ended:?}");
+        assert!(read.is_empty(), "{:?}", String::from_utf8_lossy(&read));
+        assert!(!proxy.heads().iter().any(|h| h.contains("other.example")));
+        assert_eq!(forwarder(&shared)[2], 1);
+        Ok(())
+    }
+
+    /// The review's m6: a remembered flow whose proxy cannot be reached now has S2's tail for a proxy that gave no
+    /// answer, the rest of the flow's time for its direct try, so that a slow server still opens directly.
+    #[tokio::test]
+    async fn a_remembered_flow_whose_proxy_is_gone_still_opens_a_slow_server() -> io::Result<()> {
+        let gone = closed_port().await?;
+        let (shared, _, clock) = engine_clocked(
+            Lab {
+                slow: Duration::from_millis(500),
+                ..Lab::default()
+            },
+            gone,
+        );
+        {
+            let beneath = held(&shared);
+            let mut order = lock(&beneath.order);
+            order.proxy_since = Some(clock.since_boot());
+            order.refused_by_name(80, 1, clock.since_boot());
+            order.refused_by_name(80, 2, clock.since_boot());
+        }
+        let server = echo_server().await?;
+        let destination = at("198.51.100.9:80");
+        let (stream, through) = open(&shared, UID, destination, server).await;
+        assert!(!through);
+        echoes(&mut stream?).await?;
+        assert_eq!(forwarder(&shared)[4], 1, "sent by the memory");
+        Ok(())
+    }
+
+    /// The review's m6 and note 2: an excluded `Host` goes directly only where the direct way had not failed, with no
+    /// second direct try after it failed, and its direct success teaches the order nothing (S2 never learns from an
+    /// excluded destination).
+    #[tokio::test]
+    async fn an_excluded_host_goes_directly_only_once_and_teaches_nothing() -> io::Result<()> {
+        let request = b"GET / HTTP/1.1\r\nHost: intranet.example\r\n\r\n";
+        let names = |shared: &Shared| {
+            looked_up(shared, UID, "intranet.example", [198, 51, 100, 9]);
+            looked_up(shared, UID, "example.test", [198, 51, 100, 9]);
+        };
+        let proxy = Proxy::new(Reply::Forward).await?;
+        let (shared, lab) = engine(
+            Lab {
+                refuses: true,
+                ..Lab::default()
+            },
+            proxy.at,
+        );
+        set(&shared, proxy.at, "intranet.example");
+        names(&shared);
+        let destination = at("198.51.100.9:80");
+        let (stream, through) = open(&shared, UID, destination, destination).await;
+        assert!(through);
+        assert!(
+            asked(&mut stream?, request)
+                .await
+                .map_or(true, |b| b.is_empty())
+        );
+        assert_eq!(
+            lab.protects.load(Ordering::SeqCst),
+            1,
+            "no second direct try"
+        );
+
+        let (shared, _, clock) = engine_clocked(Lab::default(), proxy.at);
+        set(&shared, proxy.at, "intranet.example");
+        names(&shared);
+        lock(&held(&shared).order).proxy_since = Some(clock.since_boot());
+        let server = echo_server().await?;
+        let (stream, through) = open(&shared, UID, destination, server).await;
+        assert!(through);
+        let mut stream = stream?;
+        stream.write_all(request).await?;
+        let mut back = vec![0u8; request.len()];
+        tokio::time::timeout(Duration::from_secs(2), stream.read_exact(&mut back)).await??;
+        assert_eq!(&back[..], &request[..], "directly, to the echo");
+        assert!(held(&shared).state(clock.since_boot()).proxy_first);
+        Ok(())
+    }
+
+    /// The review's m4: the proxy's large answer, then its reset, reach the app whole before the reset, though the app
+    /// reads slowly: the stage drains what it already took toward the relay before its own reset.
+    #[tokio::test]
+    async fn a_reset_after_a_large_answer_cuts_none_of_it() -> io::Result<()> {
+        let proxy = Proxy::new(Reply::ForwardLarge).await?;
+        let (shared, _) = engine(
+            Lab {
+                refuses: true,
+                ..Lab::default()
+            },
+            proxy.at,
+        );
+        looked_up(&shared, UID, "example.test", [198, 51, 100, 9]);
+        let destination = at("198.51.100.9:80");
+        let (stream, _) = open(&shared, UID, destination, destination).await;
+        let mut stream = stream?;
+        stream
+            .write_all(b"GET /big HTTP/1.1\r\nHost: example.test\r\n\r\n")
+            .await?;
+        tokio::time::sleep(Duration::from_millis(200)).await;
+        let mut got = 0;
+        let mut chunk = vec![0u8; 4_096];
+        let ended = loop {
+            match tokio::time::timeout(Duration::from_secs(3), stream.read(&mut chunk)).await? {
+                Ok(0) => break None,
+                Ok(n) => got += n,
+                Err(error) => break Some(error.kind()),
+            }
+            tokio::time::sleep(Duration::from_millis(1)).await;
+        };
+        let head = format!("HTTP/1.1 200 OK\r\nContent-Length: {LARGE}\r\n\r\n").len();
+        assert_eq!(got, head + LARGE, "every byte");
+        assert_eq!(ended, Some(io::ErrorKind::ConnectionReset));
         Ok(())
     }
 }
